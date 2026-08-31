@@ -19,7 +19,7 @@ use tinyteams_hive::{
     step,
 };
 
-const MEMBERS: [&str; 4] = ["planner", "scout", "critic", "archivist"];
+const MEMBERS: [&str; 5] = ["planner", "scout", "critic", "archivist", "auditor"];
 
 fn main() {
     let members: Vec<RosterMember> = MEMBERS
@@ -43,30 +43,23 @@ fn main() {
     };
 
     // The host owns the journal. The library never appends to it.
-    let mut journal = vec![SessionMessage {
-        sequence: Sequence(1),
-        author: SessionAuthor::Operator,
-        content: "How should we roll this out?".into(),
-    }];
-
-    // Two proposals, a grounded objection that silences one advocate, and the
-    // room settles on the survivor.
-    let mut scripts: Vec<(&str, VecDeque<&str>)> = vec![
-        ("planner", ["!propose #stage Stage it behind a flag."].into()),
-        ("scout", ["!propose #ship Ship it all at once."].into()),
-        (
-            "critic",
-            [
-                "!support #stage ^2 Staging bounds the blast radius.",
-                "!object >3 ^2 That precedent was a different system.",
-            ]
-            .into(),
-        ),
-        (
-            "archivist",
-            ["!support #ship ^3 We have shipped like this before."].into(),
-        ),
+    //
+    // The room already holds a genuine tie: two proposals, two grounded
+    // supporters each. An additive vote cannot break this, which is the point.
+    let mut journal = vec![
+        message(1, SessionAuthor::Operator, "How should we roll this out?"),
+        speech(2, "planner", "!propose #stage Stage it behind a flag."),
+        speech(3, "scout", "!propose #ship Ship it all at once."),
+        speech(4, "critic", "!support #stage ^2 Staging bounds the blast radius."),
+        speech(5, "archivist", "!support #ship ^3 We have shipped like this before."),
     ];
+
+    // Only auditor has backed neither side, so only auditor can break the tie —
+    // and it does so by objecting to an *advocate*, not to an option.
+    let mut scripts: Vec<(&str, VecDeque<&str>)> = vec![(
+        "auditor",
+        ["!object >5 ^2 That precedent was a different system."].into(),
+    )];
 
     let policy = EpisodePolicy {
         turn_budget: 10,
@@ -139,14 +132,27 @@ fn main() {
             journal.len(),
         );
 
-        journal.push(SessionMessage {
-            sequence: Sequence(journal.len() as u64 + 1),
-            author: SessionAuthor::Agent {
-                id: turn.agent_id.clone(),
-                label: turn.agent_id.clone(),
-            },
-            content: content.to_owned(),
-        });
+        let next = u64::try_from(journal.len()).unwrap_or(u64::MAX).saturating_add(1);
+        journal.push(speech(next, &turn.agent_id, content));
         state = turn.next_state;
     }
+}
+
+fn message(sequence: u64, author: SessionAuthor, content: &str) -> SessionMessage {
+    SessionMessage {
+        sequence: Sequence(sequence),
+        author,
+        content: content.to_owned(),
+    }
+}
+
+fn speech(sequence: u64, id: &str, content: &str) -> SessionMessage {
+    message(
+        sequence,
+        SessionAuthor::Agent {
+            id: id.to_owned(),
+            label: id.to_owned(),
+        },
+        content,
+    )
 }
