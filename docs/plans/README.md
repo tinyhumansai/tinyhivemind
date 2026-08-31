@@ -30,3 +30,4 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a test-first sample
   initialization.
 - [`continuous-sharing.md`](continuous-sharing.md) — P5 watermark-based
   continuous transcript sharing.
+- [`responders.md`](responders.md) — P6 responder ladder and selector port.

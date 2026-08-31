@@ -4,7 +4,7 @@
 
 use serde_json::{Value, json};
 
-use super::{Desk, DeskMember, DeskOrder, DeskSet};
+use super::{Desk, DeskMember, DeskOrder, DeskSet, ResponderMode};
 use crate::error::Error;
 
 fn desk(id: &str, name: &str, members: &[&str]) -> Desk {
@@ -13,6 +13,7 @@ fn desk(id: &str, name: &str, members: &[&str]) -> Desk {
         name: name.into(),
         description: None,
         members: members.iter().map(|member| (*member).into()).collect(),
+        responder_mode: ResponderMode::Lead,
     }
 }
 
@@ -33,6 +34,7 @@ fn desk_wire_form_is_exact_and_round_trips() {
         name: "Engineering".into(),
         description: Some("Builds the product".into()),
         members: vec!["alice".into(), "bob".into()],
+        responder_mode: ResponderMode::Lead,
     };
     let expected = json!({
         "id": "engineering",
@@ -58,6 +60,15 @@ fn desk_description_accepts_explicit_null() {
         serde_json::from_value::<Desk>(value).unwrap(),
         desk("engineering", "Engineering", &["alice"])
     );
+}
+
+#[test]
+fn auto_responder_mode_has_a_pinned_wire_form() {
+    let mut desk = desk("engineering", "Engineering", &["alice", "bob"]);
+    desk.responder_mode = ResponderMode::Auto;
+    let value = serde_json::to_value(&desk).unwrap();
+    assert_eq!(value["responder_mode"], "auto");
+    assert_eq!(serde_json::from_value::<Desk>(value).unwrap(), desk);
 }
 
 #[test]

@@ -52,6 +52,12 @@ fn errors_are_typed_standard_errors_with_lowercase_unpunctuated_messages() {
             desk_id: "d".into(),
             missing_agent_id: "a".into(),
         },
+        Error::DuplicateSelectorCandidate {
+            agent_id: "a".into(),
+        },
+        Error::NoActiveResponder {
+            agent_id: "a".into(),
+        },
     ];
 
     for error in errors {

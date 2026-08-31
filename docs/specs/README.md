@@ -34,3 +34,5 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a complete sample.
   ephemeral team initialization.
 - [`continuous-sharing.md`](continuous-sharing.md) — caller-owned watermarks
   and stateless attributed transcript deltas.
+- [`responders.md`](responders.md) — deterministic one-responder selection and
+  the model selector boundary.

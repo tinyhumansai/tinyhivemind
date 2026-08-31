@@ -48,6 +48,7 @@ pub struct Desk {
     pub name: String,
     pub description: Option<String>,
     pub members: Vec<String>,
+    pub responder_mode: ResponderMode,
 }
 
 pub struct DeskMember {
@@ -61,9 +62,11 @@ pub struct DeskOrder {
 }
 ```
 
-Their JSON object keys are exactly `id`, `name`, `description`, `members`,
-`desk_id`, `agent_id`, and `ordered` as applicable. No field is skipped and no
-default is supplied by the type.
+Their JSON object keys are `id`, `name`, `description`, `members`,
+`responder_mode`, `desk_id`, `agent_id`, and `ordered` as applicable. P6 added
+`ResponderMode::{Lead, Auto}`: `Lead` is the default and its field is skipped,
+preserving P2's exact four-field desk wire form. `Auto` serializes as
+`"responder_mode": "auto"`. All original P2 fields remain required.
 
 ## Borrowed desk set
 

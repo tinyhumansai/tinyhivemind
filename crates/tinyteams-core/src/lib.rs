@@ -25,9 +25,10 @@
 //! dependency arrow pointing one way: a crate that cannot call out cannot grow
 //! a path back into its host. `.github/scripts/assert-pure.sh` asserts it.
 //!
-//! The stateful half — the paging walk over a session log, the responder
-//! ladder, and the mention-dispatch edge — lives in the sibling `tinyteams`
-//! crate, which owns the ports a host implements.
+//! The waiting half — the paging walk over a session log, the optional model
+//! selector call, and the mention-dispatch edge — lives in the sibling
+//! `tinyteams` crate, which owns the ports a host implements. The responder
+//! ladder's decisions remain pure here.
 //!
 //! # Layout
 //!
@@ -45,6 +46,7 @@
 //! - [`error`] — typed failures from malformed records or unresolved desks.
 //! - [`mention`] — authored mention parsing and pure routing choices.
 //! - [`roster`] — borrowed agent and person identity snapshots.
+//! - [`responder`] — deterministic selection of one agent for one message.
 //!
 //! # Example
 //!
@@ -58,13 +60,14 @@
 //! // Everything else compares verbatim.
 //! assert!(!same_conversation(Some("engineering"), Some("Engineering")));
 //!
-//! use tinyteams_core::desk::{Desk, DeskSet};
+//! use tinyteams_core::desk::{Desk, DeskSet, ResponderMode};
 //!
 //! let desks = [Desk {
 //!     id: "engineering".into(),
 //!     name: "Engineering".into(),
 //!     description: Some("Build the product".into()),
 //!     members: vec!["alice".into(), "bob".into()],
+//!     responder_mode: ResponderMode::Lead,
 //! }];
 //! let set = DeskSet::new(&desks, &[], &[], &[], &[]);
 //! assert_eq!(set.lead("Engineering")?, Some("alice"));
@@ -94,4 +97,5 @@ pub mod chat;
 pub mod desk;
 pub mod error;
 pub mod mention;
+pub mod responder;
 pub mod roster;

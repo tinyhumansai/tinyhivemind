@@ -8,7 +8,7 @@
 //! ```
 
 use tinyteams_core::chat::{is_general_chat, same_conversation};
-use tinyteams_core::desk::{Desk, DeskMember, DeskOrder, DeskSet};
+use tinyteams_core::desk::{Desk, DeskMember, DeskOrder, DeskSet, ResponderMode};
 use tinyteams_core::error::Result;
 
 fn main() -> Result<()> {
@@ -38,6 +38,7 @@ fn main() -> Result<()> {
         name: "Engineering".into(),
         description: Some("Build the product".into()),
         members: vec!["alice".into(), "bob".into()],
+        responder_mode: ResponderMode::Lead,
     }];
     let additions = [DeskMember {
         desk_id: "engineering".into(),

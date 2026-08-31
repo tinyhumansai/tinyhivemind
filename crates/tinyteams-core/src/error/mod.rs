@@ -99,6 +99,18 @@ pub enum Error {
         /// The first omitted agent id in final-member order.
         missing_agent_id: String,
     },
+    /// Selector details repeat one canonical agent id.
+    #[error("duplicate selector candidate `{agent_id}`")]
+    DuplicateSelectorCandidate {
+        /// The repeated candidate id.
+        agent_id: String,
+    },
+    /// A reached ladder fallback names no active agent.
+    #[error("no active responder `{agent_id}`")]
+    NoActiveResponder {
+        /// The inactive or unknown fallback id.
+        agent_id: String,
+    },
 }
 
 /// The crate-wide result type for fallible collaboration algebra.

@@ -2,6 +2,17 @@
 
 use serde::{Deserialize, Deserializer, Serialize};
 
+/// How a desk chooses a responder when no active agent is mentioned directly.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ResponderMode {
+    /// Choose the first effective active desk member.
+    #[default]
+    Lead,
+    /// Ask the runtime selector when at least two effective members exist.
+    Auto,
+}
+
 /// A declared or operator-added group conversation.
 ///
 /// Member ids are ordered: the first non-retired member is the desk lead
@@ -18,6 +29,9 @@ pub struct Desk {
     pub description: Option<String>,
     /// Founding agent ids in their declared order.
     pub members: Vec<String>,
+    /// The desk's responder policy; omitted for the backward-compatible lead mode.
+    #[serde(default, skip_serializing_if = "is_lead_mode")]
+    pub responder_mode: ResponderMode,
 }
 
 /// One host-owned membership addition applied after founding members.
@@ -45,4 +59,8 @@ where
     D: Deserializer<'de>,
 {
     Option::<String>::deserialize(deserializer)
+}
+
+const fn is_lead_mode(mode: &ResponderMode) -> bool {
+    matches!(mode, ResponderMode::Lead)
 }

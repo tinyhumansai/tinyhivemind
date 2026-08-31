@@ -4,7 +4,7 @@
 
 use super::{Mention, MentionAuthor, MentionTarget, direct_responder, mentioned_members, resolve};
 use crate::{
-    desk::{Desk, DeskSet},
+    desk::{Desk, DeskSet, ResponderMode},
     roster::{Person, Roster, RosterMember},
 };
 use serde_json::json;
@@ -22,6 +22,7 @@ fn desk(id: &str, name: &str, members: &[&str]) -> Desk {
         name: name.into(),
         description: None,
         members: members.iter().map(|id| (*id).to_owned()).collect(),
+        responder_mode: ResponderMode::Lead,
     }
 }
 

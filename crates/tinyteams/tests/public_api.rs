@@ -3,6 +3,7 @@
 use tinyteams::{
     Conversation, PAGE_SIZE, PRESENT_SET_LIMIT, SCAN_LIMIT, SESSION_WINDOW, Sequence,
     SessionAuthor, SessionMessage, initialized_state, note_present,
+    responder::{ResponderRung, SelectionDisposition},
 };
 
 #[test]
@@ -40,4 +41,9 @@ fn root_exports_continuous_sharing_state() {
 #[test]
 fn root_reexports_the_core_algebra() {
     assert!(tinyteams::chat::same_conversation(None, Some("General")));
+    assert_eq!(ResponderRung::DeskDefault, ResponderRung::DeskDefault);
+    assert_eq!(
+        SelectionDisposition::Unavailable,
+        SelectionDisposition::Unavailable
+    );
 }

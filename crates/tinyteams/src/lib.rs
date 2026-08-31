@@ -1,8 +1,9 @@
 //! Runtime-neutral session coordination for agent group chats.
 //!
 //! `tinyteams` re-exports the pure [`tinyteams_core`] algebra and adds the
-//! boundaries that must wait on a host: currently a [`SessionLog`] paging port,
-//! attributed transcript projection, and ephemeral team initialization.
+//! boundaries that must wait on a host: a [`SessionLog`] paging port,
+//! attributed transcript projection, ephemeral team initialization, and the
+//! narrow [`Selector`] port used by model-assisted responder choice.
 //! The host remains responsible for storage, transports, model clients, and
 //! choosing an async executor.
 //!
@@ -27,11 +28,13 @@
 
 pub mod briefing;
 pub mod error;
+pub mod responder;
 pub mod session;
 pub mod sharing;
 
 pub use briefing::{BriefedTeammate, SessionInitialization, TeamBriefing, initialize_session};
 pub use error::{Error, Result};
+pub use responder::{BoxError, Selector, SelectorFuture, choose_responder};
 pub use session::{
     Conversation, LogMessage, PAGE_SIZE, SCAN_LIMIT, SESSION_WINDOW, Sequence, SessionAuthor,
     SessionFuture, SessionLog, SessionMessage, SessionPage, SessionQuery, SourceError,

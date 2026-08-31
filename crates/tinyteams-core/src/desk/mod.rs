@@ -5,7 +5,7 @@ mod test;
 
 mod types;
 
-pub use types::{Desk, DeskMember, DeskOrder};
+pub use types::{Desk, DeskMember, DeskOrder, ResponderMode};
 
 use crate::{
     chat::{GENERAL_DESK, MAIN_THREAD_ID},

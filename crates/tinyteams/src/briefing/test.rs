@@ -8,7 +8,7 @@ use crate::{
 };
 use std::io;
 use tinyteams_core::{
-    desk::{Desk, DeskMember, DeskOrder},
+    desk::{Desk, DeskMember, DeskOrder, ResponderMode},
     roster::{Person, RosterMember},
 };
 
@@ -47,6 +47,7 @@ fn desk_records() -> Vec<Desk> {
         name: "Engineering".into(),
         description: Some("Build".into()),
         members: vec!["bob".into(), "unknown".into(), "alice".into()],
+        responder_mode: ResponderMode::Lead,
     }]
 }
 

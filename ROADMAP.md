@@ -17,8 +17,8 @@ dependency direction is enforced by construction.
 | P3 | The `@` grammar, `Mention`/`MentionTarget`, and resolution over `Roster`/`Person` | **done** |
 | P4 | `crates/tinyteams`: the `SessionLog` port, the paging walk, and the **attributed** transcript projection | **done** |
 | P5 | Continuous sharing — re-seed on a watermark rather than only on a rebind | **done** |
-| P6 | The responder ladder, with the model-backed rung behind a `Selector` port | next |
-| P7 | The mention-dispatch edge, bounded by a host-supplied finite configurable `max_hops` (OpenCompany defaults to 2), with no library hard cap, and shipped behind a flag | |
+| P6 | The responder ladder, with the model-backed rung behind a `Selector` port | **done** |
+| P7 | The mention-dispatch edge, bounded by a host-supplied finite configurable `max_hops` (OpenCompany defaults to 2), with no library hard cap, and shipped behind a flag | next |
 
 ## The two defects P4 and P5 fix
 

@@ -9,7 +9,7 @@
 
 use tinyteams_core::chat::{GENERAL_DESK, MAIN_THREAD_ID, is_general_chat, same_conversation};
 use tinyteams_core::{
-    desk::{Desk, DeskMember, DeskOrder, DeskSet},
+    desk::{Desk, DeskMember, DeskOrder, DeskSet, ResponderMode},
     error::Error,
     mention::{MentionAuthor, MentionTarget, direct_responder, mentioned_members, resolve},
     roster::{Person, Roster, RosterMember},
@@ -43,6 +43,7 @@ fn desk_overlays_are_available_to_consumers_under_the_desk_module() {
         name: "Engineering".into(),
         description: None,
         members: vec!["alice".into(), "bob".into()],
+        responder_mode: ResponderMode::Lead,
     }];
     let additions = [DeskMember {
         desk_id: "engineering".into(),
@@ -94,6 +95,7 @@ fn roster_and_mention_decisions_are_available_to_consumers() {
         name: "Engineering".into(),
         description: None,
         members: vec!["alice".into(), "bob".into()],
+        responder_mode: ResponderMode::Lead,
     }];
     let roster = Roster::new(&members, &people, &[]);
     let desks = DeskSet::new(&declared, &[], &[], &[], &[]);
