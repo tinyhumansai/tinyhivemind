@@ -162,6 +162,11 @@ Supporting commands:
 - `cargo test -p tinyhivemind-core` — run one crate's suite.
 - `cargo run -p tinyhivemind-core --example basic` — run the bundled example.
 - `cargo run -p tinyhivemind-hive --example hive` — print one deliberation episode.
+- `cargo run --release -p tinyhivemind-hive --example bench` — simulate and
+  benchmark deliberation against the responder ladder and a matched-budget
+  vote; `-- --sweep` tunes the episode policy, `-- --trace` prints one episode,
+  and `-- --agent-cmd "opencode run"` drives one through a real agent CLI. See
+  `crates/tinyhivemind-hive/examples/bench/README.md`.
 - `.github/scripts/assert-pure.sh` — assert the pure crates took on no
   runtime, transport, or web-framework dependency.
 - `cargo doc --no-deps --all-features` — build the rustdoc CI also builds with

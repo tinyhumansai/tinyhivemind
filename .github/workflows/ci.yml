@@ -59,6 +59,7 @@ jobs:
         run: |
           cargo run -p tinyhivemind-core --example basic
           cargo run -p tinyhivemind-hive --example hive
+          cargo run -p tinyhivemind-hive --example bench -- --episodes 25
 
       # `tinyhivemind-core` is what a host links on the hot path of every agent
       # turn, in its default build. Keeping it free of runtimes and transports
