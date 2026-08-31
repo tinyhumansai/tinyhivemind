@@ -189,20 +189,33 @@ impl SimAgent {
     fn compose(&mut self, turn: &HiveTurn, visible: &[&SessionMessage]) -> String {
         let view = View::fold(visible);
 
-        // A commit turn records what the room actually carried, not what this
-        // member would have preferred. Refusing to record it is how a room
-        // spends its whole budget without terminating.
-        if turn.phase == Phase::Commit {
-            if let Some((topic, grounds)) = view.leading(self) {
-                return format!("!commit #{topic} ^{grounds} Recording the decision the room reached.");
-            }
-        }
-
         // Real participants do not speak the grammar on every turn. Modelling
         // that is the difference between benchmarking the protocol and
         // benchmarking a formatter.
         if self.rng.chance(NONCOMPLIANCE) {
             return format!("Thinking about this; {} still looks strongest to me.", self.favourite);
+        }
+
+        // Two options are both carrying, which is the one state no amount of
+        // further support can resolve: a room does not settle by adding weight
+        // to one side, because both sides stay above the threshold. Cross-
+        // inhibition is the mechanism the library provides for exactly this —
+        // object to a *message*, which silences its author as an advocate of
+        // whatever it advocated there. That is why the objection is checked
+        // before the commit: a member that records a decision into a tie
+        // spends the budget without ever reaching one.
+        if let Some((topic, target, grounds)) = view.weaker_contender(self) {
+            return format!(
+                "!object >{target} ^{grounds} I rate {topic} below the other option carrying here."
+            );
+        }
+
+        // A commit turn records what the room actually carried, not what this
+        // member would have preferred.
+        if turn.phase == Phase::Commit
+            && let Some((topic, grounds)) = view.leading(self)
+        {
+            return format!("!commit #{topic} ^{grounds} Recording the decision the room reached.");
         }
 
         // Back the best option currently on the floor, weighing this member's
@@ -217,17 +230,6 @@ impl SimAgent {
                 "!support #{topic} ^{grounds} It scores highest once I weigh the room against my own read."
             );
             return line;
-        }
-
-        // Two options are carrying at once and the room cannot settle while
-        // both do. Cross-inhibition is the mechanism the library provides for
-        // exactly this: object to a *message*, which silences its author as an
-        // advocate rather than debiting the option. Subtracting from a score
-        // could not break a tie between two equally supported options.
-        if let Some((topic, target, grounds)) = view.weaker_contender(self) {
-            return format!(
-                "!object >{target} ^{grounds} I rate {topic} below the other option carrying here."
-            );
         }
 
         // Nothing worth backing is on the floor, so put an option there.
@@ -311,13 +313,13 @@ impl View {
         agent.score(topic).saturating_add(peers.saturating_mul(SOCIAL_WEIGHT))
     }
 
-    /// A genuine tie at the top: two options carrying *equal* backing, one of
-    /// which this participant rates below the other. Returns the message to
-    /// object to and the grounds to cite.
+    /// Two or more options carrying at once, and this participant rates one of
+    /// them below another: the message to object to, and the grounds to cite.
     ///
-    /// The tie is the precondition on purpose. Objecting while one option is
-    /// simply ahead would fight a race the room is already winning; objecting
-    /// into a tie is the only move that can break one.
+    /// "Carrying" is deliberately read the way the library reads it — a topic
+    /// at or above the quorum threshold — because that is the condition that
+    /// deadlocks an episode. A weaker option that is merely behind needs no
+    /// objection; the room is already settling it.
     fn weaker_contender(&self, agent: &SimAgent) -> Option<(&TopicId, Sequence, Sequence)> {
         let mut contenders: Vec<(&TopicId, usize)> = Vec::new();
         for trace in &self.traces {
@@ -338,17 +340,9 @@ impl View {
         if contenders.len() < 2 {
             return None;
         }
-        let leading = contenders.iter().map(|(_, backing)| *backing).max()?;
-        let mut tied: Vec<&(&TopicId, usize)> = contenders
-            .iter()
-            .filter(|(_, backing)| *backing == leading)
-            .collect();
-        if tied.len() < 2 {
-            return None;
-        }
-        tied.sort_by_key(|(topic, _)| std::cmp::Reverse(self.posterior(agent, topic)));
-        let best = tied.first()?;
-        let worst = tied.last()?;
+        contenders.sort_by_key(|(topic, _)| std::cmp::Reverse(self.posterior(agent, topic)));
+        let best = contenders.first()?;
+        let worst = contenders.last()?;
         if self.posterior(agent, worst.0) >= self.posterior(agent, best.0) {
             return None;
         }
