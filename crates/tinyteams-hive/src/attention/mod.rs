@@ -91,10 +91,14 @@ pub fn bids(context: &BidContext<'_>) -> Result<Vec<Bid>> {
             urge -= DOMINANCE_PENALTY;
         }
 
+        // The threshold competes rather than merely gating: a member that has
+        // just spoken is measurably harder to rouse than one that has been
+        // quiet. Gating alone would let the first speaker hold the floor for
+        // the whole episode, because urges dwarf any plausible threshold.
         if urge >= threshold.threshold {
             bids.push(Bid {
                 agent_id: (*member).to_owned(),
-                urge,
+                urge: urge.saturating_sub(threshold.threshold),
                 reason,
             });
         }

@@ -74,7 +74,7 @@ pub enum BidReason {
 pub struct Bid {
     /// Canonical agent id.
     pub agent_id: String,
-    /// Fixed-point urge, in thousandths.
+    /// Fixed-point urge in thousandths, net of the member's own threshold.
     pub urge: i64,
     /// The dominant reason for the bid.
     pub reason: BidReason,
