@@ -20,11 +20,7 @@ use crate::{
     quorum::{ConsensusState, consensus, standings},
     trace::read,
 };
-use tinyteams::{
-    SessionAuthor, SessionMessage,
-    desk::DeskSet,
-    roster::Roster,
-};
+use tinyteams::{SessionAuthor, SessionMessage, desk::DeskSet, roster::Roster};
 
 /// How much a speaker's threshold rises after taking the floor.
 const SPEAK_COST: i64 = 500;
@@ -231,11 +227,7 @@ fn visibility(
 ///
 /// Speaking costs; silence accrues standing. That is what turns two scalars per
 /// member into emergent specialisation rather than a fixed priority order.
-fn charged(
-    thresholds: &[AgentThreshold],
-    members: &[&str],
-    speaker: &str,
-) -> Vec<AgentThreshold> {
+fn charged(thresholds: &[AgentThreshold], members: &[&str], speaker: &str) -> Vec<AgentThreshold> {
     members
         .iter()
         .map(|member| {

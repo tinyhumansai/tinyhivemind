@@ -112,18 +112,11 @@ pub fn bids(context: &BidContext<'_>) -> Result<Vec<Bid>> {
 /// the choice is deterministic for a given roster and transcript.
 #[must_use]
 pub fn floor_holder(bids: &[Bid]) -> Option<&Bid> {
-    bids.iter().reduce(|held, next| {
-        if next.urge > held.urge {
-            next
-        } else {
-            held
-        }
-    })
+    bids.iter()
+        .reduce(|held, next| if next.urge > held.urge { next } else { held })
 }
 
-fn index_thresholds(
-    thresholds: &[AgentThreshold],
-) -> Result<BTreeMap<&str, &AgentThreshold>> {
+fn index_thresholds(thresholds: &[AgentThreshold]) -> Result<BTreeMap<&str, &AgentThreshold>> {
     let mut indexed = BTreeMap::new();
     for threshold in thresholds {
         if indexed

@@ -10,9 +10,9 @@ mod test;
 
 mod types;
 
-pub use types::{Trace, TraceKind, TopicId};
+pub use types::{TopicId, Trace, TraceKind};
 
-use tinyteams::{SessionAuthor, SessionMessage, Sequence};
+use tinyteams::{Sequence, SessionAuthor, SessionMessage};
 
 /// Maximum number of traces read from one message body.
 ///
@@ -75,7 +75,10 @@ fn extract(body: &str, author: &SessionAuthor, sequence: Sequence) -> Vec<Trace>
     for line in body.split_inclusive('\n') {
         let start = offset;
         offset += line.len();
-        if fenced.iter().any(|(from, to)| *from <= start && start < *to) {
+        if fenced
+            .iter()
+            .any(|(from, to)| *from <= start && start < *to)
+        {
             continue;
         }
         let trimmed = line.trim_end_matches(['\n', '\r']);

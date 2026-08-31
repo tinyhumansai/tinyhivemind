@@ -49,7 +49,8 @@ fn three_agents_deliberate_over_one_shared_transcript_and_converge() -> Result<(
     let state = EpisodeState::opened(harness.conversation(), harness.watermark());
 
     let mut planner = ScriptedAgent::new("planner", ["!propose #stage Stage the rollout."]);
-    let mut critic = ScriptedAgent::new("critic", ["!support #stage ^2 It bounds the blast radius."]);
+    let mut critic =
+        ScriptedAgent::new("critic", ["!support #stage ^2 It bounds the blast radius."]);
     let mut scout = ScriptedAgent::new("scout", ["!question What is the rollback path?"]);
 
     let (outcome, steps) = harness.run(
@@ -128,11 +129,8 @@ fn an_episode_stops_at_its_budget_rather_than_running_on() -> Result<(), String>
         .collect();
     let (a, rest) = agents.split_at_mut(1);
     let (b, c) = rest.split_at_mut(1);
-    let (outcome, steps) = harness.run(
-        state,
-        &policy(5),
-        &mut [&mut a[0], &mut b[0], &mut c[0]],
-    )?;
+    let (outcome, steps) =
+        harness.run(state, &policy(5), &mut [&mut a[0], &mut b[0], &mut c[0]])?;
 
     assert_eq!(outcome, Outcome::Exhausted { spent: 5 });
     assert_eq!(steps.len(), 5);
@@ -230,7 +228,10 @@ fn cross_inhibition_is_what_breaks_a_tie() -> Result<(), String> {
     let mut scout = ScriptedAgent::new("scout", ["!propose #ship"]);
     let mut critic = ScriptedAgent::new(
         "critic",
-        ["!support #stage ^2 Reversible.", "!object >3 ^2 That precedent differs."],
+        [
+            "!support #stage ^2 Reversible.",
+            "!object >3 ^2 That precedent differs.",
+        ],
     );
     let mut archivist = ScriptedAgent::new("archivist", ["!support #ship ^3 We shipped before."]);
 

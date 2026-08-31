@@ -76,9 +76,7 @@ impl HiveAgent for OpenRouterAgent {
             .collect::<Vec<_>>()
             .join("\n");
         let sight = match turn.visibility {
-            Visibility::Blind => {
-                "You cannot yet see your peers' positions. Form your own first."
-            }
+            Visibility::Blind => "You cannot yet see your peers' positions. Form your own first.",
             Visibility::Full => "You can see the whole room.",
         };
 
@@ -174,11 +172,12 @@ fn live_agents_deliberate_and_the_episode_terminates_within_its_budget() -> Resu
         &model,
     );
 
-    let mut harness =
-        HiveHarness::new("engineering", "Engineering", &["planner", "critic", "archivist"]);
-    harness.operator(
-        "We must choose one rollout strategy for a risky migration. Decide together.",
+    let mut harness = HiveHarness::new(
+        "engineering",
+        "Engineering",
+        &["planner", "critic", "archivist"],
     );
+    harness.operator("We must choose one rollout strategy for a risky migration. Decide together.");
     let state = EpisodeState::opened(harness.conversation(), harness.watermark());
     let policy = EpisodePolicy {
         turn_budget: 6,

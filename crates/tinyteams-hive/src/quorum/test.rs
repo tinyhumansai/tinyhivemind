@@ -44,7 +44,11 @@ fn deadlocked_transcript() -> Vec<SessionMessage> {
         said(1, "planner", "!propose #stage Stage the rollout."),
         said(2, "scout", "!propose #ship Ship it at once."),
         said(3, "critic", "!support #stage ^1 Bounds the blast radius."),
-        said(4, "archivist", "!support #ship ^2 We have shipped this before."),
+        said(
+            4,
+            "archivist",
+            "!support #ship ^2 We have shipped this before.",
+        ),
     ]
 }
 
@@ -138,7 +142,10 @@ fn distinct_supporters_carry_a_topic_and_repeat_support_does_not() {
         &policy(2),
     );
     assert_eq!(standing(&repeated, "stage").supporters, ["planner"]);
-    assert_eq!(consensus(&repeated, &policy(2)), ConsensusState::Deliberating);
+    assert_eq!(
+        consensus(&repeated, &policy(2)),
+        ConsensusState::Deliberating
+    );
 
     let distinct = fold(
         &[
@@ -172,7 +179,10 @@ fn an_ungrounded_support_moves_neither_the_supporters_nor_the_weight() {
         ..policy(2)
     };
     let permissive = fold(&transcript, &lax);
-    assert_eq!(standing(&permissive, "stage").supporters, ["planner", "critic"]);
+    assert_eq!(
+        standing(&permissive, "stage").supporters,
+        ["planner", "critic"]
+    );
 }
 
 #[test]
@@ -261,7 +271,10 @@ fn an_objection_cannot_silence_its_own_author() {
         said(1, "planner", "!propose #stage"),
         said(2, "planner", "!object >1 ^1 Second thoughts."),
     ];
-    assert_eq!(standing(&fold(&transcript, &policy(2)), "stage").supporters, ["planner"]);
+    assert_eq!(
+        standing(&fold(&transcript, &policy(2)), "stage").supporters,
+        ["planner"]
+    );
 }
 
 #[test]
@@ -281,7 +294,11 @@ fn an_objection_at_an_unknown_or_absent_target_silences_nobody() {
         said(2, "critic", "!object >99 ^1"),
         said(3, "critic", "!object ^1"),
     ];
-    assert!(standing(&fold(&transcript, &policy(2)), "stage").silenced.is_empty());
+    assert!(
+        standing(&fold(&transcript, &policy(2)), "stage")
+            .silenced
+            .is_empty()
+    );
 }
 
 #[test]
@@ -291,7 +308,10 @@ fn a_repeated_objection_records_an_advocate_once() {
         said(2, "critic", "!object >1 ^0"),
         said(3, "scout", "!object >1 ^0"),
     ];
-    assert_eq!(standing(&fold(&transcript, &policy(2)), "stage").silenced, ["planner"]);
+    assert_eq!(
+        standing(&fold(&transcript, &policy(2)), "stage").silenced,
+        ["planner"]
+    );
 }
 
 // --- Fold discipline ---
@@ -337,7 +357,10 @@ fn standings_are_idempotent_over_duplicated_traces() {
 fn an_empty_medium_is_deliberating() {
     let standings = standings(&[], Sequence(0), &policy(2)).expect("folds");
     assert!(standings.is_empty());
-    assert_eq!(consensus(&standings, &policy(2)), ConsensusState::Deliberating);
+    assert_eq!(
+        consensus(&standings, &policy(2)),
+        ConsensusState::Deliberating
+    );
 }
 
 #[test]

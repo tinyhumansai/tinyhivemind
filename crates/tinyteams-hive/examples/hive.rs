@@ -11,8 +11,8 @@
 use std::collections::VecDeque;
 
 use tinyteams_hive::{
-    Conversation, EpisodePolicy, EpisodeState, HiveStep, QuorumPolicy, SessionAuthor,
-    SessionMessage, Sequence, Visibility,
+    Conversation, EpisodePolicy, EpisodeState, HiveStep, QuorumPolicy, Sequence, SessionAuthor,
+    SessionMessage, Visibility,
     desk::{Desk, DeskSet, ResponderMode},
     project_for,
     roster::{Roster, RosterMember},
@@ -50,8 +50,16 @@ fn main() {
         message(1, SessionAuthor::Operator, "How should we roll this out?"),
         speech(2, "planner", "!propose #stage Stage it behind a flag."),
         speech(3, "scout", "!propose #ship Ship it all at once."),
-        speech(4, "critic", "!support #stage ^2 Staging bounds the blast radius."),
-        speech(5, "archivist", "!support #ship ^3 We have shipped like this before."),
+        speech(
+            4,
+            "critic",
+            "!support #stage ^2 Staging bounds the blast radius.",
+        ),
+        speech(
+            5,
+            "archivist",
+            "!support #ship ^3 We have shipped like this before.",
+        ),
     ];
 
     // Only auditor has backed neither side, so only auditor can break the tie —
@@ -61,9 +69,18 @@ fn main() {
             "auditor",
             ["!object >5 ^2 That precedent was a different system."].into(),
         ),
-        ("planner", ["!evidence ^2 The flag is already wired up."].into()),
-        ("scout", ["!evidence ^3 The last big-bang release held."].into()),
-        ("archivist", ["!question Fair — what is the rollback path?"].into()),
+        (
+            "planner",
+            ["!evidence ^2 The flag is already wired up."].into(),
+        ),
+        (
+            "scout",
+            ["!evidence ^3 The last big-bang release held."].into(),
+        ),
+        (
+            "archivist",
+            ["!question Fair — what is the rollback path?"].into(),
+        ),
         ("critic", ["!evidence ^2 Rollback is one flag flip."].into()),
     ];
 
@@ -78,7 +95,11 @@ fn main() {
     };
     let mut state = EpisodeState::opened(conversation, Sequence(1));
 
-    println!("Engineering desk — {} members, budget {} turns\n", MEMBERS.len(), policy.turn_budget);
+    println!(
+        "Engineering desk — {} members, budget {} turns\n",
+        MEMBERS.len(),
+        policy.turn_budget
+    );
 
     loop {
         let roster = Roster::new(&members, &[], &[]);
@@ -141,7 +162,9 @@ fn main() {
             journal.len(),
         );
 
-        let next = u64::try_from(journal.len()).unwrap_or(u64::MAX).saturating_add(1);
+        let next = u64::try_from(journal.len())
+            .unwrap_or(u64::MAX)
+            .saturating_add(1);
         journal.push(speech(next, &turn.agent_id, content));
         state = turn.next_state;
     }

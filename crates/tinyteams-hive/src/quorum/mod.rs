@@ -46,7 +46,11 @@ use tinyteams::Sequence;
 ///
 /// Returns [`Error::ZeroQuorumThreshold`] or [`Error::ZeroQuorumWindow`] when
 /// the policy would make the count meaningless.
-pub fn standings(traces: &[Trace], at: Sequence, policy: &QuorumPolicy) -> Result<Vec<TopicStanding>> {
+pub fn standings(
+    traces: &[Trace],
+    at: Sequence,
+    policy: &QuorumPolicy,
+) -> Result<Vec<TopicStanding>> {
     if policy.threshold == 0 {
         return Err(Error::ZeroQuorumThreshold);
     }

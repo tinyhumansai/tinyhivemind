@@ -1,7 +1,7 @@
 //! Stable trace payloads deposited in the shared transcript.
 
 use serde::{Deserialize, Deserializer, Serialize};
-use tinyteams::{SessionAuthor, Sequence};
+use tinyteams::{Sequence, SessionAuthor};
 
 /// A proposal identity that support and objection attach to.
 #[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]

@@ -163,7 +163,10 @@ fn a_marker_parses_its_topic_target_and_citations() {
 
 #[test]
 fn a_repeated_citation_is_recorded_once() {
-    assert_eq!(only("!support #a ^3 ^3 ^4").cites, [Sequence(3), Sequence(4)]);
+    assert_eq!(
+        only("!support #a ^3 ^3 ^4").cites,
+        [Sequence(3), Sequence(4)]
+    );
 }
 
 #[test]

@@ -21,10 +21,7 @@ impl ScriptedAgent {
     pub(crate) fn new<'a>(id: &str, lines: impl IntoIterator<Item = &'a str>) -> Self {
         Self {
             id: id.to_owned(),
-            lines: lines
-                .into_iter()
-                .map(|line| Ok(line.to_owned()))
-                .collect(),
+            lines: lines.into_iter().map(|line| Ok(line.to_owned())).collect(),
             calls: Vec::new(),
             filler: "!question Nothing further from me.".to_owned(),
         }

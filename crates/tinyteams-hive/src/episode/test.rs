@@ -372,9 +372,12 @@ fn a_grounded_objection_carries_the_room_through_a_deadlock() {
     };
     assert_eq!(turn.phase, Phase::Commit);
 
-    let HiveStep::Converged { topic, .. } =
-        run(&room, &turn.next_state, &transcript, &EpisodePolicy::DEFAULT)
-    else {
+    let HiveStep::Converged { topic, .. } = run(
+        &room,
+        &turn.next_state,
+        &transcript,
+        &EpisodePolicy::DEFAULT,
+    ) else {
         panic!("expected convergence")
     };
     assert_eq!(topic, TopicId("stage".into()));

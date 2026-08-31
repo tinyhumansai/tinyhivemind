@@ -7,10 +7,11 @@
 
 #![allow(dead_code)]
 
-use tinyteams::{Conversation, SessionAuthor, SessionMessage, Sequence};
+use tinyteams::{Conversation, Sequence, SessionAuthor, SessionMessage};
 use tinyteams_hive::{
-    EpisodePolicy, EpisodeState, HiveStep, HiveTurn, project_for,
+    EpisodePolicy, EpisodeState, HiveStep, HiveTurn,
     desk::{Desk, DeskSet, ResponderMode},
+    project_for,
     quorum::TopicStanding,
     roster::{Roster, RosterMember},
     trace::TopicId,

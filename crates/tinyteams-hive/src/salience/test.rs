@@ -118,8 +118,13 @@ fn a_very_old_trace_decays_to_nothing_rather_than_overflowing() {
         relevance: 0,
         half_life: 1,
     };
-    let score = salience(&trace(0, TraceKind::Propose), Sequence(u64::MAX), &only_recency, 0)
-        .expect("scores");
+    let score = salience(
+        &trace(0, TraceKind::Propose),
+        Sequence(u64::MAX),
+        &only_recency,
+        0,
+    )
+    .expect("scores");
     assert_eq!(score.0, 0);
 }
 
@@ -131,8 +136,13 @@ fn a_trace_newer_than_the_decision_point_does_not_decay() {
         relevance: 0,
         half_life: 10,
     };
-    let score = salience(&trace(50, TraceKind::Propose), Sequence(10), &only_recency, 0)
-        .expect("scores");
+    let score = salience(
+        &trace(50, TraceKind::Propose),
+        Sequence(10),
+        &only_recency,
+        0,
+    )
+    .expect("scores");
     assert_eq!(score.0, 1_000);
 }
 

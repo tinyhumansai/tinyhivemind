@@ -9,7 +9,7 @@ use crate::{
     salience::SalienceWeights,
     trace::read,
 };
-use tinyteams::{SessionAuthor, SessionMessage, Sequence};
+use tinyteams::{Sequence, SessionAuthor, SessionMessage};
 
 const MEMBERS: [&str; 3] = ["planner", "critic", "scout"];
 
@@ -97,7 +97,10 @@ fn a_threshold_and_bid_pin_their_wire_forms() {
         value,
         serde_json::json!({ "agent_id": "planner", "urge": 1_200, "reason": "dissent" }),
     );
-    assert_eq!(serde_json::from_value::<Bid>(value).expect("deserializes"), bid);
+    assert_eq!(
+        serde_json::from_value::<Bid>(value).expect("deserializes"),
+        bid
+    );
 }
 
 #[test]
@@ -138,8 +141,8 @@ fn a_duplicate_threshold_record_is_rejected() {
         AgentThreshold::new("planner", 5),
     ];
     let weights = SalienceWeights::DEFAULT;
-    let error = bids(&context(&fixture, &MEMBERS, &thresholds, &weights))
-        .expect_err("duplicate threshold");
+    let error =
+        bids(&context(&fixture, &MEMBERS, &thresholds, &weights)).expect_err("duplicate threshold");
     assert_eq!(error.to_string(), "duplicate agent threshold `planner`");
 }
 
@@ -215,7 +218,10 @@ fn a_member_whose_message_was_cited_or_objected_to_bids_addressed() {
         said(2, "critic", "!object >1 ^0"),
     ]);
     let objected_bids = bids(&context(&objected, &MEMBERS, &[], &weights)).expect("bids");
-    assert_eq!(bid_for(&objected_bids, "planner").reason, BidReason::Addressed);
+    assert_eq!(
+        bid_for(&objected_bids, "planner").reason,
+        BidReason::Addressed
+    );
 }
 
 #[test]
