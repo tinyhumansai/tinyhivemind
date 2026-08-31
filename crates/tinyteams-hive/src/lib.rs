@@ -46,7 +46,7 @@
 //! - [`episode`] — the pure state machine, and the visibility filter.
 //! - [`error`] — typed failures from malformed inputs.
 //! - [`quorum`] — standings, cross-inhibition, and the consensus predicate.
-//! - [`salience`] — recency decay, importance, and relevance.
+//! - [`mod@salience`] — recency decay, importance, and relevance.
 //! - [`trace`] — the stigmergic grammar and its read.
 //!
 //! # Example
