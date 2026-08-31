@@ -45,5 +45,18 @@
 //!
 //! - [`chat`] — conversation identity: which stored chat id names which
 //!   conversation, and the four spellings that mean the default desk.
+//!
+//! # Example
+//!
+//! ```
+//! use tinyteams_core::chat::{is_general_chat, same_conversation};
+//!
+//! // All four stored spellings of the default desk are one conversation.
+//! assert!(is_general_chat(None));
+//! assert!(same_conversation(Some("main"), Some("General")));
+//!
+//! // Everything else compares verbatim.
+//! assert!(!same_conversation(Some("engineering"), Some("Engineering")));
+//! ```
 
 pub mod chat;
