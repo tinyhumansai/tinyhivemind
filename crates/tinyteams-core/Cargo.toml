@@ -24,11 +24,8 @@ serde = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+# Unit tests and the opt-in OpenRouter harness both exercise JSON wire forms.
 serde_json = { workspace = true }
-
-[dev-dependencies]
-# Live-test request and response bodies use OpenRouter's JSON wire format.
-serde_json = "1"
 
 [features]
 default = []
