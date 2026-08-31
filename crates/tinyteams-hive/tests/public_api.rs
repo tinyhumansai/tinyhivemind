@@ -169,8 +169,18 @@ fn a_blind_turn_withholds_a_peer_position_through_the_public_api() {
 #[test]
 fn the_default_policy_bounds_every_episode() {
     // A finite budget is what makes termination a property rather than a hope.
-    assert_eq!(EpisodePolicy::DEFAULT.turn_budget, 12);
-    assert_eq!(EpisodePolicy::DEFAULT.blind_round, true);
-    assert_eq!(QuorumPolicy::DEFAULT.threshold, 2);
-    assert_eq!(QuorumPolicy::DEFAULT.require_grounded, true);
+    assert_eq!(
+        (
+            EpisodePolicy::DEFAULT.turn_budget,
+            EpisodePolicy::DEFAULT.blind_round,
+        ),
+        (12, true),
+    );
+    assert_eq!(
+        (
+            QuorumPolicy::DEFAULT.threshold,
+            QuorumPolicy::DEFAULT.require_grounded,
+        ),
+        (2, true),
+    );
 }
