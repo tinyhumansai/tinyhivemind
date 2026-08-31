@@ -142,6 +142,26 @@ fn a_marker_inside_a_fenced_block_is_masked() {
 }
 
 #[test]
+fn a_marker_inside_a_tilde_fenced_block_is_masked() {
+    // `~~~` is a valid CommonMark fence just as ``` ``` ``` is; a marker
+    // inside one must not be extracted as a real vote.
+    let body = "before\n~~~\n!propose #hidden\n~~~\n!propose #real";
+    let traces = resolve(body, None, &agent("a"), Sequence(1));
+    assert_eq!(traces.len(), 1);
+    assert_eq!(traces[0].topic, Some(TopicId("real".into())));
+}
+
+#[test]
+fn a_fence_only_closes_on_the_same_character_that_opened_it() {
+    // A `~~~` line inside a ``` ``` ``` block does not close it (and vice
+    // versa) -- CommonMark requires the closing fence to match the opener.
+    let body = "```\n~~~\n!propose #hidden\n```\n!propose #real";
+    let traces = resolve(body, None, &agent("a"), Sequence(1));
+    assert_eq!(traces.len(), 1);
+    assert_eq!(traces[0].topic, Some(TopicId("real".into())));
+}
+
+#[test]
 fn an_unclosed_fence_masks_to_the_end_of_the_body() {
     let body = "```\n!propose #hidden\n!support #hidden ^1";
     assert!(resolve(body, None, &agent("a"), Sequence(1)).is_empty());
