@@ -46,7 +46,7 @@ fn main() {
     //
     // The room already holds a genuine tie: two proposals, two grounded
     // supporters each. An additive vote cannot break this, which is the point.
-    let mut journal = vec![
+    let journal = vec![
         message(1, SessionAuthor::Operator, "How should we roll this out?"),
         speech(2, "planner", "!propose #stage Stage it behind a flag."),
         speech(3, "scout", "!propose #ship Ship it all at once."),
@@ -64,7 +64,7 @@ fn main() {
 
     // Only auditor has backed neither side, so only auditor can break the tie —
     // and it does so by objecting to an *advocate*, not to an option.
-    let mut scripts: Vec<(&str, VecDeque<&str>)> = vec![
+    let scripts: Vec<(&str, VecDeque<&str>)> = vec![
         (
             "auditor",
             ["!object >5 ^2 That precedent was a different system."].into(),
@@ -93,18 +93,35 @@ fn main() {
         },
         ..EpisodePolicy::DEFAULT
     };
-    let mut state = EpisodeState::opened(conversation, Sequence(1));
 
     println!(
         "Engineering desk — {} members, budget {} turns\n",
         MEMBERS.len(),
         policy.turn_budget
     );
+    run(
+        &members,
+        &desks,
+        journal,
+        scripts,
+        EpisodeState::opened(conversation, Sequence(1)),
+        &policy,
+    );
+}
 
+/// Drive the episode to termination, printing one line per turn.
+fn run(
+    members: &[RosterMember],
+    desks: &[Desk],
+    mut journal: Vec<SessionMessage>,
+    mut scripts: Vec<(&str, VecDeque<&str>)>,
+    mut state: EpisodeState,
+    policy: &EpisodePolicy,
+) {
     loop {
-        let roster = Roster::new(&members, &[], &[]);
-        let desk_set = DeskSet::new(&desks, &[], &[], &[], &[]);
-        let decision = match step(&state, &journal, &roster, &desk_set, &policy) {
+        let roster = Roster::new(members, &[], &[]);
+        let desk_set = DeskSet::new(desks, &[], &[], &[], &[]);
+        let decision = match step(&state, &journal, &roster, &desk_set, policy) {
             Ok(decision) => decision,
             Err(error) => {
                 eprintln!("episode failed: {error}");
@@ -112,35 +129,11 @@ fn main() {
             }
         };
 
-        let turn = match decision {
-            HiveStep::Speak { turn } => *turn,
-            HiveStep::Converged { topic, standing } => {
-                println!(
-                    "\n  converged on #{topic} — carried by {}",
-                    standing.supporters.join(", "),
-                );
-                if !standing.silenced.is_empty() {
-                    println!("  silenced by objection: {}", standing.silenced.join(", "));
-                }
-                println!("\n  The room started tied. No vote was subtracted from a");
-                println!("  proposal; one objection silenced a rival's *advocate*,");
-                println!("  and the survivor carried.");
-                return;
-            }
-            HiveStep::Deadlocked { topics } => {
-                let names: Vec<String> = topics.iter().map(ToString::to_string).collect();
-                println!("\n  deadlocked between #{}", names.join(" and #"));
-                return;
-            }
-            HiveStep::Exhausted { spent } => {
-                println!("\n  budget exhausted after {spent} turns, no decision");
-                return;
-            }
-            HiveStep::Idle => {
-                println!("\n  nobody had anything to say");
-                return;
-            }
+        let HiveStep::Speak { turn } = decision else {
+            report(&decision);
+            return;
         };
+        let turn = *turn;
 
         let visible = project_for(&turn, &journal);
         let content = scripts
@@ -149,15 +142,14 @@ fn main() {
             .and_then(|(_, script)| script.pop_front())
             .unwrap_or("!question Nothing further from me.");
 
-        let sight = match turn.visibility {
-            Visibility::Blind => "blind",
-            Visibility::Full => "full",
-        };
         println!(
             "  {:>9}  {:<9} {:<5} saw {}/{}  {content}",
             turn.agent_id,
             format!("{:?}", turn.reason).to_lowercase(),
-            sight,
+            match turn.visibility {
+                Visibility::Blind => "blind",
+                Visibility::Full => "full",
+            },
             visible.len(),
             journal.len(),
         );
@@ -167,6 +159,33 @@ fn main() {
             .saturating_add(1);
         journal.push(speech(next, &turn.agent_id, content));
         state = turn.next_state;
+    }
+}
+
+/// Explain how the room finished.
+fn report(step: &HiveStep) {
+    match step {
+        HiveStep::Converged { topic, standing } => {
+            println!(
+                "\n  converged on #{topic} — carried by {}",
+                standing.supporters.join(", "),
+            );
+            if !standing.silenced.is_empty() {
+                println!("  silenced by objection: {}", standing.silenced.join(", "));
+            }
+            println!("\n  The room started tied. No vote was subtracted from a");
+            println!("  proposal; one objection silenced a rival's *advocate*,");
+            println!("  and the survivor carried.");
+        }
+        HiveStep::Deadlocked { topics } => {
+            let names: Vec<String> = topics.iter().map(ToString::to_string).collect();
+            println!("\n  deadlocked between #{}", names.join(" and #"));
+        }
+        HiveStep::Exhausted { spent } => {
+            println!("\n  budget exhausted after {spent} turns, no decision");
+        }
+        HiveStep::Idle => println!("\n  nobody had anything to say"),
+        HiveStep::Speak { .. } => unreachable!("a speaking step is not terminal"),
     }
 }
 
