@@ -37,7 +37,8 @@ pub mod sharing;
 
 pub use briefing::{BriefedTeammate, SessionInitialization, TeamBriefing, initialize_session};
 pub use dispatch::{
-    EnqueueOutcome, MentionDispatchOutcome, MentionTurnFuture, MentionTurnQueue, dispatch_mention,
+    EnqueueOutcome, EnqueueRefusal, MentionDispatchOutcome, MentionTurnFuture, MentionTurnQueue,
+    dispatch_mention,
 };
 pub use error::{Error, Result};
 pub use responder::{BoxError, Selector, SelectorFuture, choose_responder};

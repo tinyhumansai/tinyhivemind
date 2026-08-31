@@ -1,8 +1,9 @@
 //! Public API regression tests for the runtime crate.
 
 use tinyteams::{
-    Conversation, EnqueueOutcome, MentionDispatchOutcome, PAGE_SIZE, PRESENT_SET_LIMIT, SCAN_LIMIT,
-    SESSION_WINDOW, Sequence, SessionAuthor, SessionMessage, initialized_state, note_present,
+    Conversation, EnqueueOutcome, EnqueueRefusal, MentionDispatchOutcome, PAGE_SIZE,
+    PRESENT_SET_LIMIT, SCAN_LIMIT, SESSION_WINDOW, Sequence, SessionAuthor, SessionMessage,
+    initialized_state, note_present,
     responder::{ResponderRung, SelectionDisposition},
 };
 
@@ -63,4 +64,13 @@ fn root_exports_dispatch_outcomes_and_conversation_mapping() {
         MentionDispatchOutcome::Enqueued
     );
     assert_eq!(EnqueueOutcome::Already, EnqueueOutcome::Already);
+    assert_eq!(EnqueueRefusal::Unauthorized, EnqueueRefusal::Unauthorized);
+
+    let general = tinyteams::dispatch::DispatchConversation::from(&Conversation {
+        desk_id: "MAIN".into(),
+        desk_name: "General".into(),
+        thread_root: Some(Sequence(12)),
+    });
+    assert_eq!(general.desk_id, tinyteams::chat::GENERAL_DESK);
+    assert_eq!(general.thread_root, Some(12));
 }

@@ -8,7 +8,7 @@ use std::{
     io,
     sync::{
         Mutex,
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
 };
 use tinyteams_core::{
@@ -23,23 +23,45 @@ use tinyteams_core::{
 #[derive(Default)]
 struct AtomicQueue {
     calls: AtomicUsize,
-    keys: Mutex<HashSet<(DispatchConversation, DispatchKey)>>,
+    fail_before_commit: AtomicBool,
+    durable: Mutex<DurableQueueState>,
+}
+
+#[derive(Default)]
+struct DurableQueueState {
+    keys: HashSet<(DispatchConversation, DispatchKey)>,
+    children: Vec<MentionTurnRequest>,
+}
+
+impl AtomicQueue {
+    fn failing_once_before_commit() -> Self {
+        Self {
+            fail_before_commit: AtomicBool::new(true),
+            ..Self::default()
+        }
+    }
+
+    fn durable_counts(&self) -> (usize, usize) {
+        let durable = self.durable.lock().unwrap();
+        (durable.keys.len(), durable.children.len())
+    }
 }
 
 impl MentionTurnQueue for AtomicQueue {
     fn enqueue_once(&self, request: MentionTurnRequest) -> MentionTurnFuture<'_> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         Box::pin(async move {
-            let inserted = self
-                .keys
-                .lock()
-                .unwrap()
-                .insert((request.conversation, request.key));
-            Ok(if inserted {
-                EnqueueOutcome::Enqueued
-            } else {
-                EnqueueOutcome::Already
-            })
+            if self.fail_before_commit.swap(false, Ordering::SeqCst) {
+                return Err(Box::new(io::Error::other("failed before commit")) as BoxError);
+            }
+            let key = (request.conversation.clone(), request.key);
+            let mut durable = self.durable.lock().unwrap();
+            if durable.keys.contains(&key) {
+                return Ok(EnqueueOutcome::Already);
+            }
+            durable.keys.insert(key);
+            durable.children.push(request);
+            Ok(EnqueueOutcome::Enqueued)
         })
     }
 }
@@ -130,21 +152,27 @@ async fn a_decision_calls_once_and_maps_every_expected_outcome() {
         (EnqueueOutcome::Enqueued, MentionDispatchOutcome::Enqueued),
         (EnqueueOutcome::Already, MentionDispatchOutcome::Already),
         (
-            EnqueueOutcome::Unauthorized,
+            EnqueueOutcome::Refused {
+                reason: EnqueueRefusal::Unauthorized,
+            },
             MentionDispatchOutcome::Refused {
-                outcome: EnqueueOutcome::Unauthorized,
+                reason: EnqueueRefusal::Unauthorized,
             },
         ),
         (
-            EnqueueOutcome::TargetUnavailable,
+            EnqueueOutcome::Refused {
+                reason: EnqueueRefusal::TargetUnavailable,
+            },
             MentionDispatchOutcome::Refused {
-                outcome: EnqueueOutcome::TargetUnavailable,
+                reason: EnqueueRefusal::TargetUnavailable,
             },
         ),
         (
-            EnqueueOutcome::FeatureDisabled,
+            EnqueueOutcome::Refused {
+                reason: EnqueueRefusal::FeatureDisabled,
+            },
             MentionDispatchOutcome::Refused {
-                outcome: EnqueueOutcome::FeatureDisabled,
+                reason: EnqueueRefusal::FeatureDisabled,
             },
         ),
     ] {
@@ -199,6 +227,42 @@ async fn concurrent_duplicate_requests_enqueue_exactly_once() {
         ]
     );
     assert_eq!(queue.calls.load(Ordering::SeqCst), 2);
+    assert_eq!(queue.durable_counts(), (1, 1));
+
+    assert_eq!(
+        dispatch_mention(&queue, policy(), &input, &roster)
+            .await
+            .unwrap(),
+        MentionDispatchOutcome::Already
+    );
+    assert_eq!(queue.durable_counts(), (1, 1));
+}
+
+#[tokio::test]
+async fn retry_after_failure_before_atomic_commit_creates_one_key_and_one_child() {
+    let (members, input) = fixture();
+    let roster = Roster::new(&members, &[], &[]);
+    let queue = AtomicQueue::failing_once_before_commit();
+
+    assert!(
+        dispatch_mention(&queue, policy(), &input, &roster)
+            .await
+            .is_err()
+    );
+    assert_eq!(queue.durable_counts(), (0, 0));
+    assert_eq!(
+        dispatch_mention(&queue, policy(), &input, &roster)
+            .await
+            .unwrap(),
+        MentionDispatchOutcome::Enqueued
+    );
+    assert_eq!(
+        dispatch_mention(&queue, policy(), &input, &roster)
+            .await
+            .unwrap(),
+        MentionDispatchOutcome::Already
+    );
+    assert_eq!(queue.durable_counts(), (1, 1));
 }
 
 #[tokio::test]
@@ -230,11 +294,94 @@ async fn idempotency_key_is_bound_to_conversation_scope() {
 
 #[test]
 fn pins_runtime_outcome_wire_forms() {
-    assert_eq!(
-        serde_json::to_value(MentionDispatchOutcome::Refused {
-            outcome: EnqueueOutcome::Unauthorized
-        })
-        .unwrap(),
-        serde_json::json!({"status": "refused", "outcome": "unauthorized"})
+    fn assert_wire<T>(value: &T, expected: serde_json::Value)
+    where
+        T: serde::Serialize + serde::de::DeserializeOwned + Eq + std::fmt::Debug,
+    {
+        assert_eq!(serde_json::to_value(value).unwrap(), expected);
+        assert_eq!(serde_json::from_value::<T>(expected).unwrap(), *value);
+    }
+
+    fn assert_requires_every_field<T>(wire: &serde_json::Value)
+    where
+        T: serde::de::DeserializeOwned,
+    {
+        let keys = wire
+            .as_object()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
+        for key in keys {
+            let mut missing = wire.clone();
+            missing.as_object_mut().unwrap().remove(&key);
+            assert!(
+                serde_json::from_value::<T>(missing).is_err(),
+                "{key} must be required"
+            );
+        }
+    }
+
+    for (refusal, wire) in [
+        (EnqueueRefusal::Unauthorized, "unauthorized"),
+        (EnqueueRefusal::TargetUnavailable, "target_unavailable"),
+        (EnqueueRefusal::FeatureDisabled, "feature_disabled"),
+    ] {
+        assert_wire(&refusal, serde_json::json!(wire));
+        let enqueue_wire = serde_json::json!({"status": "refused", "reason": wire});
+        assert_wire(
+            &EnqueueOutcome::Refused { reason: refusal },
+            enqueue_wire.clone(),
+        );
+        assert_requires_every_field::<EnqueueOutcome>(&enqueue_wire);
+        let dispatch_wire = serde_json::json!({"status": "refused", "reason": wire});
+        assert_wire(
+            &MentionDispatchOutcome::Refused { reason: refusal },
+            dispatch_wire.clone(),
+        );
+        assert_requires_every_field::<MentionDispatchOutcome>(&dispatch_wire);
+    }
+    for (outcome, wire) in [
+        (
+            EnqueueOutcome::Enqueued,
+            serde_json::json!({"status": "enqueued"}),
+        ),
+        (
+            EnqueueOutcome::Already,
+            serde_json::json!({"status": "already"}),
+        ),
+    ] {
+        assert_wire(&outcome, wire.clone());
+        assert_requires_every_field::<EnqueueOutcome>(&wire);
+    }
+    for (outcome, wire) in [
+        (
+            MentionDispatchOutcome::Enqueued,
+            serde_json::json!({"status": "enqueued"}),
+        ),
+        (
+            MentionDispatchOutcome::Already,
+            serde_json::json!({"status": "already"}),
+        ),
+    ] {
+        assert_wire(&outcome, wire.clone());
+        assert_requires_every_field::<MentionDispatchOutcome>(&wire);
+    }
+    let not_dispatched_wire = serde_json::json!({"status": "not_dispatched", "reason": "disabled"});
+    assert_wire(
+        &MentionDispatchOutcome::NotDispatched {
+            reason: tinyteams_core::dispatch::NoDispatchReason::Disabled,
+        },
+        not_dispatched_wire.clone(),
+    );
+    assert_requires_every_field::<MentionDispatchOutcome>(&not_dispatched_wire);
+    assert!(
+        serde_json::from_value::<EnqueueOutcome>(serde_json::json!({"status": "refused"})).is_err()
+    );
+    assert!(
+        serde_json::from_value::<MentionDispatchOutcome>(serde_json::json!({
+            "status": "not_dispatched"
+        }))
+        .is_err()
     );
 }

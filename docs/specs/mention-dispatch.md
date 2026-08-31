@@ -42,20 +42,25 @@ one canonical `MentionTurnRequest` whose child hop is the parent hop plus one.
 Dispatch keys bind the committed trigger sequence. The request also binds the
 conversation (`desk_id` and optional thread root), source id, target id,
 content, and child hop. The runtime `MentionTurnQueue::enqueue_once` port
-receives that single owned request and returns `Enqueued`, `Already`, or an
-expected refusal (`Unauthorized`, `TargetUnavailable`, or `FeatureDisabled`).
+receives that single owned request and returns `Enqueued`, `Already`, or
+`Refused { reason }`. `EnqueueRefusal` contains only the expected
+`Unauthorized`, `TargetUnavailable`, and `FeatureDisabled` reasons, so a
+successful enqueue cannot be represented as a refusal.
 `dispatch_mention` invokes it zero or one time, returns refusals as outcomes,
 and returns unexpected host failure as a typed error with its source. It never
 retries or considers another mention.
 
 All public payload fields are required in JSON. Enum tags and variants use
 snake case. A host maps its richer runtime conversation to the pure dispatch
-conversation; this is a snapshot, not a host type or callback.
+conversation; this is a snapshot, not a host type or callback. The runtime
+adapter canonicalizes every General alias to `GENERAL_DESK`, while named desk
+ids remain exact and case-sensitive. Thread roots remain exact, including the
+difference between a desk channel and each individual thread.
 
 ## Invariants and constraints
 
 - One committed message creates at most one turn.
-- The host owns storage and the only idempotency record.
+- The host owns storage, child-turn records, and the only idempotency record.
 - `enqueue_once` must atomically re-read and validate the committed reply,
   current policy, authorization, target availability, and conversation binding,
   then durably enqueue at most once under the conversation-and-trigger key.
@@ -70,8 +75,8 @@ conversation; this is a snapshot, not a host type or callback.
   large limit, `u32::MAX`, inactive/self targets, reading order, quiet and
   non-agent mentions, and exactly-one decisions.
 - Runtime tests prove zero-or-one queue calls, refusal mapping, source-preserved
-  host failure, bound-scope keys, and concurrent duplicate enqueue producing
-  one `enqueued` and one `already` result.
+  host failure, canonical bound-scope keys, and concurrent/retried duplicate
+  enqueue producing exactly one durable key and one durable child turn.
 - The queue contract documents the required atomic host transaction.
 - Host integration tests revalidate stored rows and transaction rollback.
   A later live test proves two agents exchange at least one attributed turn

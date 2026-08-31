@@ -5,12 +5,23 @@ use tinyteams_core::dispatch::NoDispatchReason;
 
 /// Result returned by a host's atomic enqueue transaction.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(tag = "status", rename_all = "snake_case")]
 pub enum EnqueueOutcome {
     /// This request durably created its one child turn.
     Enqueued,
     /// The bound conversation-and-trigger key was already enqueued.
     Already,
+    /// The transaction refused the request after live revalidation.
+    Refused {
+        /// Final, expected reason for refusing the enqueue.
+        reason: EnqueueRefusal,
+    },
+}
+
+/// An expected host refusal after atomic live revalidation.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EnqueueRefusal {
     /// Current authorization no longer permits this source-target edge.
     Unauthorized,
     /// The target is no longer available for a turn.
@@ -35,6 +46,6 @@ pub enum MentionDispatchOutcome {
     /// The host atomically refused the request after revalidation.
     Refused {
         /// Expected refusal returned by the host.
-        outcome: EnqueueOutcome,
+        reason: EnqueueRefusal,
     },
 }

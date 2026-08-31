@@ -50,32 +50,117 @@ fn decide(policy: MentionDispatchPolicy, input: &MentionDispatchInput) -> Mentio
     mention_dispatch(policy, input, &roster).unwrap()
 }
 
+fn assert_wire<T>(value: &T, expected: serde_json::Value)
+where
+    T: serde::Serialize + serde::de::DeserializeOwned + Eq + std::fmt::Debug,
+{
+    assert_eq!(serde_json::to_value(value).unwrap(), expected);
+    assert_eq!(serde_json::from_value::<T>(expected).unwrap(), *value);
+}
+
+fn assert_requires_every_field<T>(wire: &serde_json::Value)
+where
+    T: serde::de::DeserializeOwned,
+{
+    let keys = wire
+        .as_object()
+        .unwrap()
+        .keys()
+        .cloned()
+        .collect::<Vec<_>>();
+    for key in keys {
+        let mut missing = wire.clone();
+        missing.as_object_mut().unwrap().remove(&key);
+        assert!(
+            serde_json::from_value::<T>(missing).is_err(),
+            "{key} must be required"
+        );
+    }
+}
+
 #[test]
-fn pins_exact_payload_wire_forms_and_requires_nullable_scope_field() {
+fn pins_every_payload_wire_form_round_trip_and_required_field() {
+    let policy = MentionDispatchPolicy {
+        enabled: true,
+        max_hops: 2,
+    };
+    let key = DispatchKey {
+        trigger_sequence: 41,
+    };
+    let conversation = DispatchConversation {
+        desk_id: "eng".into(),
+        thread_root: Some(7),
+    };
+    let value = input(vec![mention("bob", 0)], 0);
     let request = match decide(
         MentionDispatchPolicy {
             enabled: true,
             max_hops: 2,
         },
-        &input(vec![mention("bob", 0)], 0),
+        &value,
     ) {
         MentionDispatchDecision::One { request } => request,
         other @ MentionDispatchDecision::None { .. } => {
             panic!("expected request, got {other:?}")
         }
     };
-    assert_eq!(
-        serde_json::to_value(&request).unwrap(),
-        json!({
-            "key": {"trigger_sequence": 41}, "source_id": "alice", "target_id": "bob",
-            "content": "handoff", "conversation": {"desk_id": "eng", "thread_root": 7},
-            "child_hop": 1
-        })
-    );
-    assert_eq!(
-        serde_json::to_value(NoDispatchReason::Disabled).unwrap(),
-        json!("disabled")
-    );
+    let policy_wire = json!({"enabled": true, "max_hops": 2});
+    let key_wire = json!({"trigger_sequence": 41});
+    let conversation_wire = json!({"desk_id": "eng", "thread_root": 7});
+    let input_wire = json!({
+        "key": {"trigger_sequence": 41},
+        "conversation": {"desk_id": "eng", "thread_root": 7},
+        "author_id": "alice",
+        "content": "handoff",
+        "mentions": [{
+            "target": {"kind": "agent", "id": "bob"},
+            "text": "@bob",
+            "offset": 0
+        }],
+        "hop": 0
+    });
+    let request_wire = json!({
+        "key": {"trigger_sequence": 41}, "source_id": "alice", "target_id": "bob",
+        "content": "handoff", "conversation": {"desk_id": "eng", "thread_root": 7},
+        "child_hop": 1
+    });
+    assert_wire(&policy, policy_wire.clone());
+    assert_wire(&key, key_wire.clone());
+    assert_wire(&conversation, conversation_wire.clone());
+    assert_wire(&value, input_wire.clone());
+    assert_wire(&request, request_wire.clone());
+    assert_requires_every_field::<MentionDispatchPolicy>(&policy_wire);
+    assert_requires_every_field::<DispatchKey>(&key_wire);
+    assert_requires_every_field::<DispatchConversation>(&conversation_wire);
+    assert_requires_every_field::<MentionDispatchInput>(&input_wire);
+    assert_requires_every_field::<MentionTurnRequest>(&request_wire);
+
+    let no_dispatch_reasons = [
+        (NoDispatchReason::Disabled, "disabled"),
+        (NoDispatchReason::HopLimitReached, "hop_limit_reached"),
+        (NoDispatchReason::SourceInactive, "source_inactive"),
+        (
+            NoDispatchReason::NoDirectAgentMention,
+            "no_direct_agent_mention",
+        ),
+        (NoDispatchReason::SelfMention, "self_mention"),
+        (NoDispatchReason::TargetInactive, "target_inactive"),
+        (NoDispatchReason::HopOverflow, "hop_overflow"),
+    ];
+    for (reason, wire) in no_dispatch_reasons {
+        assert_wire(&reason, json!(wire));
+        let decision = MentionDispatchDecision::None { reason };
+        let decision_wire = json!({"kind": "none", "reason": wire});
+        assert_wire(&decision, decision_wire.clone());
+        assert_requires_every_field::<MentionDispatchDecision>(&decision_wire);
+    }
+    let decision = MentionDispatchDecision::One {
+        request: request.clone(),
+    };
+    let decision_wire = json!({"kind": "one", "request": request_wire});
+    assert_wire(&decision, decision_wire.clone());
+    assert_requires_every_field::<MentionDispatchDecision>(&decision_wire);
+
     assert_eq!(
         serde_json::from_value::<DispatchConversation>(json!({
             "desk_id": "eng",
@@ -86,7 +171,6 @@ fn pins_exact_payload_wire_forms_and_requires_nullable_scope_field() {
         None
     );
     assert!(serde_json::from_value::<DispatchConversation>(json!({"desk_id": "eng"})).is_err());
-    assert!(serde_json::from_value::<MentionDispatchPolicy>(json!({"enabled": true})).is_err());
 }
 
 #[test]

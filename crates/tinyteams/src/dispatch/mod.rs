@@ -5,7 +5,7 @@ mod test;
 
 mod types;
 
-pub use types::{EnqueueOutcome, MentionDispatchOutcome};
+pub use types::{EnqueueOutcome, EnqueueRefusal, MentionDispatchOutcome};
 
 use crate::{BoxError, Result};
 use std::{future::Future, pin::Pin};
@@ -26,8 +26,9 @@ pub type MentionTurnFuture<'a> =
 /// re-read the stored committed agent reply and verify its source, content,
 /// conversation and sequence; revalidate the live feature policy,
 /// authorization and target availability; and durably enqueue at most one
-/// child turn. A duplicate returns [`EnqueueOutcome::Already`]. Transaction
-/// rollback must leave neither an idempotency record nor a child turn.
+/// child turn. A duplicate returns [`EnqueueOutcome::Already`], and an expected
+/// live rejection returns [`EnqueueOutcome::Refused`]. Transaction rollback
+/// must leave neither an idempotency record nor a child turn.
 ///
 /// This port is the only idempotency boundary. `tinyteams` owns no journal and
 /// does not retry a failure or refusal.
@@ -66,8 +67,6 @@ pub async fn dispatch_mention(
     Ok(match outcome {
         EnqueueOutcome::Enqueued => MentionDispatchOutcome::Enqueued,
         EnqueueOutcome::Already => MentionDispatchOutcome::Already,
-        outcome @ (EnqueueOutcome::Unauthorized
-        | EnqueueOutcome::TargetUnavailable
-        | EnqueueOutcome::FeatureDisabled) => MentionDispatchOutcome::Refused { outcome },
+        EnqueueOutcome::Refused { reason } => MentionDispatchOutcome::Refused { reason },
     })
 }

@@ -222,6 +222,54 @@ fn session_records_pin_their_wire_shape() {
 }
 
 #[test]
+fn dispatch_scope_canonicalizes_every_general_alias_and_preserves_exact_threads() {
+    use tinyteams_core::{chat::GENERAL_DESK, dispatch::DispatchConversation};
+
+    let aliases = ["", "main", "MAIN", "General", "GENERAL"];
+    for alias in aliases {
+        for (desk_id, desk_name) in [(alias, "Ordinary label"), ("opaque-id", alias)] {
+            let conversation = Conversation {
+                desk_id: desk_id.into(),
+                desk_name: desk_name.into(),
+                thread_root: Some(Sequence(17)),
+            };
+            assert_eq!(
+                DispatchConversation::from(&conversation),
+                DispatchConversation {
+                    desk_id: GENERAL_DESK.into(),
+                    thread_root: Some(17),
+                }
+            );
+        }
+    }
+
+    let channel = DispatchConversation::from(&Conversation {
+        desk_id: "main".into(),
+        desk_name: "General".into(),
+        thread_root: None,
+    });
+    let first_thread = DispatchConversation::from(&Conversation {
+        desk_id: "General".into(),
+        desk_name: "General".into(),
+        thread_root: Some(Sequence(17)),
+    });
+    let second_thread = DispatchConversation::from(&Conversation {
+        desk_id: "MAIN".into(),
+        desk_name: "General".into(),
+        thread_root: Some(Sequence(18)),
+    });
+    assert_ne!(channel, first_thread);
+    assert_ne!(first_thread, second_thread);
+
+    let named = DispatchConversation::from(&Conversation {
+        desk_id: "Engineering".into(),
+        desk_name: "engineering".into(),
+        thread_root: Some(Sequence(17)),
+    });
+    assert_eq!(named.desk_id, "Engineering");
+}
+
+#[test]
 fn session_wire_records_require_every_field() {
     assert!(
         serde_json::from_value::<Conversation>(serde_json::json!({

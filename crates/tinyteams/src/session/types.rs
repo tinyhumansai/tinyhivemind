@@ -50,8 +50,16 @@ impl Conversation {
 
 impl From<&Conversation> for tinyteams_core::dispatch::DispatchConversation {
     fn from(conversation: &Conversation) -> Self {
+        use tinyteams_core::chat::{GENERAL_DESK, is_general_chat};
+
+        let is_general = is_general_chat(Some(&conversation.desk_id))
+            || is_general_chat(Some(&conversation.desk_name));
         Self {
-            desk_id: conversation.desk_id.clone(),
+            desk_id: if is_general {
+                GENERAL_DESK.into()
+            } else {
+                conversation.desk_id.clone()
+            },
             thread_root: conversation.thread_root.map(|sequence| sequence.0),
         }
     }
