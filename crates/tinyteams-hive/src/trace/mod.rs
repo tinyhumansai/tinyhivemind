@@ -25,9 +25,15 @@ pub const TRACE_CAP: usize = 16;
 
 /// Read traces from an authored body, or revalidate a supplied list.
 ///
-/// `None` extracts from `body`; `Some`, including an empty vector, is
-/// authoritative and is revalidated against the body. A body carrying no
-/// marker yields no trace: ordinary conversation is never coerced into a vote.
+/// `None` extracts from `body`; `Some`, including an empty vector, *selects*
+/// from what extraction finds there. Parsing is fully determined by `body` --
+/// unlike `mention::resolve`, there is no host-side resolution step a
+/// supplied trace could legitimately carry -- so a supplied entry can only
+/// name which extracted trace to keep, by `(offset, kind)`; anything else it
+/// claims (a different topic, target, citation, or text) is discarded in
+/// favor of what the body actually says, and a repeated offset is rejected
+/// rather than selecting its trace twice. A body carrying no marker yields no
+/// trace: ordinary conversation is never coerced into a vote.
 ///
 /// Extraction recognises a marker only at the start of a line, ignoring
 /// leading whitespace, and only outside a fenced code block. Inline backticks
@@ -98,19 +104,21 @@ fn revalidate(
     sequence: Sequence,
 ) -> Vec<Trace> {
     let extracted = extract(body, author, sequence);
-    supplied
-        .into_iter()
-        .filter(|trace| {
-            extracted
-                .iter()
-                .any(|found| found.offset == trace.offset && found.kind == trace.kind)
-        })
-        .map(|mut trace| {
-            trace.author = author.clone();
-            trace.sequence = sequence;
-            trace
-        })
-        .collect()
+    let mut seen_offsets: Vec<usize> = Vec::new();
+    let mut traces = Vec::new();
+    for trace in supplied {
+        if seen_offsets.contains(&trace.offset) {
+            continue;
+        }
+        seen_offsets.push(trace.offset);
+        if let Some(found) = extracted
+            .iter()
+            .find(|found| found.offset == trace.offset && found.kind == trace.kind)
+        {
+            traces.push(found.clone());
+        }
+    }
+    traces
 }
 
 fn parse_line(
