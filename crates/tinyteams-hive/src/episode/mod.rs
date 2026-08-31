@@ -222,7 +222,8 @@ fn has_free_dissenter(
 ) -> bool {
     members.iter().any(|member| {
         !standings.iter().any(|standing| {
-            topics.contains(&standing.topic) && standing.supporters.iter().any(|held| held == member)
+            topics.contains(&standing.topic)
+                && standing.supporters.iter().any(|held| held == member)
         })
     })
 }
