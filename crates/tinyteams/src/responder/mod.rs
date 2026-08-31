@@ -25,7 +25,7 @@ pub type SelectorFuture<'a> =
 /// and the bounded effective candidates assembled by the pure core.
 pub trait Selector: Send + Sync {
     /// Return text intended to name one candidate id.
-    fn select(&self, request: &SelectionRequest) -> SelectorFuture<'_>;
+    fn select<'a>(&'a self, request: &'a SelectionRequest) -> SelectorFuture<'a>;
 }
 
 /// Choose exactly one responder, invoking the selector at most once.

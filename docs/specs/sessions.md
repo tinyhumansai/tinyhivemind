@@ -71,10 +71,11 @@ unset; hosts may construct richer validated records directly.
 `TeamBriefing::system_text` deterministically identifies the viewer and desk,
 lists teammate `@id` handles with optional metadata, and states that peer
 messages remain attributed and are not the viewer's replies. It also states
-that `@everyone` is context only and never fan-out, and that mentions remain
-context only until dispatch is introduced in P7. `initialize_session` returns
-the briefing and projected history as separate values; the briefing is never
-stored, sequenced, or counted against the history window.
+that a direct agent mention may start at most one bounded child turn only when
+host policy enables mention dispatch. Everyone, desk, and person mentions are
+context only and never fan out. `initialize_session` returns the briefing and
+projected history as separate values; the briefing is never stored, sequenced,
+or counted against the history window.
 
 ## Invariants and constraints
 
