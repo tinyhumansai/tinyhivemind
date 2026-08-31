@@ -41,7 +41,7 @@ pub(crate) enum Outcome {
 }
 
 /// One recorded step of an episode, for assertions and for the example.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct Step {
     pub(crate) agent_id: String,
     pub(crate) reason: tinyteams_hive::BidReason,

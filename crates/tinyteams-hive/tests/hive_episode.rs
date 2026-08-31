@@ -10,10 +10,6 @@ mod hive_harness;
 #[path = "support/scripted_agent.rs"]
 mod scripted_agent;
 
-mod support {
-    pub(crate) use super::hive_harness;
-}
-
 use hive_harness::{HiveAgent, HiveHarness, Outcome};
 use scripted_agent::ScriptedAgent;
 use tinyteams_hive::{
@@ -130,8 +126,8 @@ fn an_episode_stops_at_its_budget_rather_than_running_on() -> Result<(), String>
         .iter()
         .map(|id| ScriptedAgent::new(id, ["!question still thinking"]))
         .collect();
-    let (mut a, rest) = agents.split_at_mut(1);
-    let (mut b, mut c) = rest.split_at_mut(1);
+    let (a, rest) = agents.split_at_mut(1);
+    let (b, c) = rest.split_at_mut(1);
     let (outcome, steps) = harness.run(
         state,
         &policy(5),

@@ -97,3 +97,8 @@ pub use error::{Error, Result};
 pub use quorum::{ConsensusState, QuorumPolicy, TopicStanding, consensus, standings};
 pub use salience::{Salience, SalienceWeights, salience};
 pub use trace::{TRACE_CAP, TopicId, Trace, TraceKind, read, resolve};
+// A host that wants group deliberation takes this crate alone and gets the
+// session runtime and the pure algebra with it, so the types it hands to
+// `step` are the *same* types rather than structural twins. This crate's own
+// `error`, `Error` and `Result` deliberately shadow the runtime's.
+pub use tinyteams::*;
