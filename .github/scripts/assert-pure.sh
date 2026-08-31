@@ -18,7 +18,13 @@ pure_crates=("tinyteams-core")
 # `tinyteams` (the session runtime) is exempt from `tokio`/`futures`/
 # `async-trait`, which it needs for its ports — but not from the rest. It is
 # listed separately once it exists.
-forbidden_pure='tokio|futures|async-trait|axum|hyper|reqwest|ureq|anyhow|rusqlite|git2'
+#
+# This is a maintained blocklist of known offenders, not an exhaustive
+# allowlist: it names every async runtime, transport, HTTP client, database
+# client, and VCS binding this repository has needed to reject so far, plus
+# `anyhow` (AGENTS.md requires the crate error type instead). Extend it — do
+# not work around it — the day a new one shows up in the tree.
+forbidden_pure='tokio|futures|async-trait|axum|hyper|reqwest|ureq|curl|anyhow|rusqlite|git2'
 
 status=0
 for crate in "${pure_crates[@]}"; do
@@ -28,8 +34,11 @@ for crate in "${pure_crates[@]}"; do
     exit 1
   fi
 
-  found="$(cargo tree -p "$crate" -e normal,build --all-features --prefix none \
-    | grep -Ei "$forbidden_pure" || true)"
+  tree="$(cargo tree -p "$crate" -e normal,build --all-features --prefix none)" || {
+    echo "assert-pure: cargo tree failed for '$crate'" >&2
+    exit 1
+  }
+  found="$(grep -Ei "$forbidden_pure" <<<"$tree" || true)"
   if [ -n "$found" ]; then
     echo "$crate pulled in a dependency its manifest forbids:" >&2
     echo "$found" >&2
