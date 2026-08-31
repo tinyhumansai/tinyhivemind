@@ -18,7 +18,11 @@ dependency direction is enforced by construction.
 | P4 | `crates/tinyteams`: the `SessionLog` port, the paging walk, and the **attributed** transcript projection | **done** |
 | P5 | Continuous sharing — re-seed on a watermark rather than only on a rebind | **done** |
 | P6 | The responder ladder, with the model-backed rung behind a `Selector` port | **done** |
-| P7 | The mention-dispatch edge, bounded by a host-supplied finite configurable `max_hops` (OpenCompany defaults to 2), with no library hard cap, and shipped behind a flag | next |
+| P7 | The mention-dispatch edge, bounded by a host-supplied finite configurable `max_hops` (OpenCompany defaults to 2), with no library hard cap, and explicitly enabled by host policy | **done** |
+
+The next work is the paired OpenCompany adapter integration, followed by a
+gated live-provider verification in which two agents exchange an attributed
+turn. The adapter initially remains disabled and uses two hops when enabled.
 
 ## The two defects P4 and P5 fix
 

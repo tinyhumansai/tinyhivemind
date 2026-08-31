@@ -10,6 +10,10 @@
 use tinyteams_core::chat::{GENERAL_DESK, MAIN_THREAD_ID, is_general_chat, same_conversation};
 use tinyteams_core::{
     desk::{Desk, DeskMember, DeskOrder, DeskSet, ResponderMode},
+    dispatch::{
+        DispatchConversation, DispatchKey, MentionDispatchDecision, MentionDispatchInput,
+        MentionDispatchPolicy, mention_dispatch,
+    },
     error::Error,
     mention::{MentionAuthor, MentionTarget, direct_responder, mentioned_members, resolve},
     roster::{Person, Roster, RosterMember},
@@ -124,5 +128,50 @@ fn roster_and_mention_decisions_are_available_to_consumers() {
     assert_eq!(
         mentions[0].target,
         MentionTarget::Agent { id: "alice".into() }
+    );
+}
+
+#[test]
+fn bounded_dispatch_decision_is_available_to_consumers() {
+    let members = [
+        RosterMember {
+            id: "alice".into(),
+            name: None,
+        },
+        RosterMember {
+            id: "bob".into(),
+            name: None,
+        },
+    ];
+    let roster = Roster::new(&members, &[], &[]);
+    let input = MentionDispatchInput {
+        key: DispatchKey {
+            trigger_sequence: 8,
+        },
+        conversation: DispatchConversation {
+            desk_id: "engineering".into(),
+            thread_root: None,
+        },
+        author_id: "alice".into(),
+        content: "@bob".into(),
+        mentions: vec![tinyteams_core::mention::Mention {
+            target: MentionTarget::Agent { id: "bob".into() },
+            text: "@bob".into(),
+            offset: 0,
+            quiet: false,
+        }],
+        hop: 0,
+    };
+    let decision = mention_dispatch(
+        MentionDispatchPolicy {
+            enabled: true,
+            max_hops: 2,
+        },
+        &input,
+        &roster,
+    )
+    .unwrap();
+    assert!(
+        matches!(decision, MentionDispatchDecision::One { request } if request.target_id == "bob")
     );
 }

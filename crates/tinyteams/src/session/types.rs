@@ -48,6 +48,15 @@ impl Conversation {
     }
 }
 
+impl From<&Conversation> for tinyteams_core::dispatch::DispatchConversation {
+    fn from(conversation: &Conversation) -> Self {
+        Self {
+            desk_id: conversation.desk_id.clone(),
+            thread_root: conversation.thread_root.map(|sequence| sequence.0),
+        }
+    }
+}
+
 /// The preserved author of a host log row.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]

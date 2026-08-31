@@ -4,6 +4,8 @@
 //! boundaries that must wait on a host: a [`SessionLog`] paging port,
 //! attributed transcript projection, ephemeral team initialization, and the
 //! narrow [`Selector`] port used by model-assisted responder choice.
+//! Mention dispatch remains pure until one canonical request reaches the
+//! host-owned atomic [`MentionTurnQueue`] boundary.
 //! The host remains responsible for storage, transports, model clients, and
 //! choosing an async executor.
 //!
@@ -27,12 +29,16 @@
 //! ```
 
 pub mod briefing;
+pub mod dispatch;
 pub mod error;
 pub mod responder;
 pub mod session;
 pub mod sharing;
 
 pub use briefing::{BriefedTeammate, SessionInitialization, TeamBriefing, initialize_session};
+pub use dispatch::{
+    EnqueueOutcome, MentionDispatchOutcome, MentionTurnFuture, MentionTurnQueue, dispatch_mention,
+};
 pub use error::{Error, Result};
 pub use responder::{BoxError, Selector, SelectorFuture, choose_responder};
 pub use session::{

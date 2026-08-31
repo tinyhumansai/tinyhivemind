@@ -1,8 +1,8 @@
 //! Typed runtime failures.
 
-use crate::{Sequence, SourceError};
+use crate::{Sequence, SourceError, responder::BoxError};
 
-/// A session projection or initialization failure.
+/// A runtime coordination failure.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     /// The host-owned session log could not be read.
@@ -94,6 +94,13 @@ pub enum Error {
         /// The precise pure-algebra failure.
         #[source]
         source: tinyteams_core::error::Error,
+    },
+    /// The host-owned mention turn queue failed unexpectedly.
+    #[error("mention turn enqueue failed")]
+    Enqueue {
+        /// The host's original error.
+        #[source]
+        source: BoxError,
     },
 }
 

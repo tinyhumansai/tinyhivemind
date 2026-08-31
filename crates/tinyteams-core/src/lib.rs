@@ -43,6 +43,7 @@
 //! - [`chat`] — conversation identity: which stored chat id names which
 //!   conversation, and the four spellings that mean the default desk.
 //! - [`desk`] — host-compatible desk records and the borrowed overlay fold.
+//! - [`dispatch`] — bounded selection of at most one mentioned child turn.
 //! - [`error`] — typed failures from malformed records or unresolved desks.
 //! - [`mention`] — authored mention parsing and pure routing choices.
 //! - [`roster`] — borrowed agent and person identity snapshots.
@@ -95,6 +96,7 @@
 
 pub mod chat;
 pub mod desk;
+pub mod dispatch;
 pub mod error;
 pub mod mention;
 pub mod responder;

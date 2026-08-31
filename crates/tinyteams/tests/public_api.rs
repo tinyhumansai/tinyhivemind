@@ -1,8 +1,8 @@
 //! Public API regression tests for the runtime crate.
 
 use tinyteams::{
-    Conversation, PAGE_SIZE, PRESENT_SET_LIMIT, SCAN_LIMIT, SESSION_WINDOW, Sequence,
-    SessionAuthor, SessionMessage, initialized_state, note_present,
+    Conversation, EnqueueOutcome, MentionDispatchOutcome, PAGE_SIZE, PRESENT_SET_LIMIT, SCAN_LIMIT,
+    SESSION_WINDOW, Sequence, SessionAuthor, SessionMessage, initialized_state, note_present,
     responder::{ResponderRung, SelectionDisposition},
 };
 
@@ -46,4 +46,21 @@ fn root_reexports_the_core_algebra() {
         SelectionDisposition::Unavailable,
         SelectionDisposition::Unavailable
     );
+}
+
+#[test]
+fn root_exports_dispatch_outcomes_and_conversation_mapping() {
+    let conversation = Conversation {
+        desk_id: "engineering".into(),
+        desk_name: "Engineering".into(),
+        thread_root: Some(Sequence(12)),
+    };
+    let scope = tinyteams::dispatch::DispatchConversation::from(&conversation);
+    assert_eq!(scope.desk_id, "engineering");
+    assert_eq!(scope.thread_root, Some(12));
+    assert_eq!(
+        MentionDispatchOutcome::Enqueued,
+        MentionDispatchOutcome::Enqueued
+    );
+    assert_eq!(EnqueueOutcome::Already, EnqueueOutcome::Already);
 }

@@ -31,3 +31,5 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a test-first sample
 - [`continuous-sharing.md`](continuous-sharing.md) — P5 watermark-based
   continuous transcript sharing.
 - [`responders.md`](responders.md) — P6 responder ladder and selector port.
+- [`mention-dispatch.md`](mention-dispatch.md) — P7 bounded dispatch decision
+  and atomic enqueue port.
