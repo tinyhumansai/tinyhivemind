@@ -78,7 +78,8 @@ output produces the auto-selection rung with a `selected` disposition.
 - Tests cover every ladder rung, collisions, inactive members, selector
   success/failure/absence/invalid output, parsing boundaries, and exactly-one
   decision for messages containing multiple direct mentions and `@everyone`.
-- The runtime selector is called at most once and no dispatch surface exists.
+- The runtime selector is called at most once and has no dispatch capability;
+  P7 exposes dispatch separately behind the atomic host queue port.
 - Core remains accepted by the purity assertion.
 
 ## Open questions

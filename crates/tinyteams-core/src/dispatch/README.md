@@ -7,7 +7,7 @@ The decision order is intentionally observable: disabled policy, exhausted
 hop budget, active source, then the first reading-order nonquiet direct agent
 mention. Once a direct agent mention is reached, a self or inactive target
 stops selection; a later target cannot become a fallback. Person, desk, and
-everyone mentions never dispatch.
+everyone mentions never dispatch, so one committed reply cannot fan out.
 
 `DispatchConversation` is the minimal pure snapshot needed to bind an enqueue
 scope. Runtime hosts map every General alias to `GENERAL_DESK`, preserve named

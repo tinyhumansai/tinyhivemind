@@ -16,6 +16,9 @@ pub use tinyteams_core::responder::{
 pub type BoxError = Box<dyn StdError + Send + Sync + 'static>;
 
 /// The boxed, executor-neutral future returned by [`Selector`].
+///
+/// Its lifetime permits the future to borrow both the selector and its
+/// [`SelectionRequest`]; neither borrow is required to be `'static`.
 pub type SelectorFuture<'a> =
     Pin<Box<dyn Future<Output = std::result::Result<String, BoxError>> + Send + 'a>>;
 
@@ -25,6 +28,10 @@ pub type SelectorFuture<'a> =
 /// and the bounded effective candidates assembled by the pure core.
 pub trait Selector: Send + Sync {
     /// Return text intended to name one candidate id.
+    ///
+    /// The shared lifetime explicitly binds the returned future to both
+    /// `self` and `request`, allowing an implementation to borrow either for
+    /// the duration of this one selection call.
     fn select<'a>(&'a self, request: &'a SelectionRequest) -> SelectorFuture<'a>;
 }
 
