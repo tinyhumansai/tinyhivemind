@@ -142,7 +142,8 @@ fn run(
             .iter_mut()
             .find(|(id, _)| *id == turn.agent_id)
             .and_then(|(_, script)| script.pop_front())
-            .unwrap_or("!question Nothing further from me.");
+            .map(str::to_owned)
+            .unwrap_or_else(|| out_of_script_utterance(&turn, &visible));
 
         println!(
             "  {:>9}  {:<9} {:<5} saw {}/{}  {content}",
@@ -159,7 +160,7 @@ fn run(
         let next = u64::try_from(journal.len())
             .unwrap_or(u64::MAX)
             .saturating_add(1);
-        journal.push(speech(next, &turn.agent_id, content));
+        journal.push(speech(next, &turn.agent_id, &content));
         state = turn.next_state;
     }
 }
