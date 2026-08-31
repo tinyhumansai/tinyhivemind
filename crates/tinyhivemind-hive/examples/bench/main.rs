@@ -135,7 +135,7 @@ impl Options {
                     options.policy.quorum.window = next_number(&mut args).unwrap_or(100);
                 }
                 "--dominance" => {
-                    options.policy.dominance_cap = next_number(&mut args).unwrap_or(40)
+                    options.policy.dominance_cap = next_number(&mut args).unwrap_or(40);
                 }
                 "--repetition" => {
                     options.policy.repetition_cap = next_number(&mut args).unwrap_or(2);
