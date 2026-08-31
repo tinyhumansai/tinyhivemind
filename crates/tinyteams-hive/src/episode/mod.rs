@@ -48,9 +48,8 @@ const SPEAK_COST: i64 = 500;
 /// # Errors
 ///
 /// Returns [`Error::Core`] for a malformed roster or desk snapshot,
-/// [`Error::UnknownThresholdMember`] for a threshold naming a non-member,
-/// [`Error::SpendOverflow`] if the turn counter cannot advance, or a policy
-/// error from the quorum and salience folds.
+/// [`Error::UnknownThresholdMember`] for a threshold naming a non-member, or a
+/// policy error from the quorum and salience folds.
 pub fn step(
     state: &EpisodeState,
     transcript: &[SessionMessage],
@@ -132,10 +131,10 @@ pub fn step(
     } else {
         state.phase
     };
-    let spent = state
-        .spent
-        .checked_add(1)
-        .ok_or(Error::SpendOverflow { spent: state.spent })?;
+    // `spent < turn_budget <= u32::MAX` was established above, so this
+    // addition cannot saturate; the saturating form is used only to keep the
+    // arithmetic total without an unreachable error branch.
+    let spent = state.spent.saturating_add(1);
 
     Ok(HiveStep::Speak {
         turn: Box::new(HiveTurn {

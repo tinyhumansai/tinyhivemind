@@ -13,11 +13,14 @@ use thiserror::Error;
 #[non_exhaustive]
 pub enum Error {
     /// A roster or desk snapshot was structurally invalid.
+    ///
+    /// The pure-algebra failure is carried verbatim rather than flattened,
+    /// because "which desk was unknown" is the whole content of the report.
     #[error("{source}")]
     Core {
         /// The underlying algebra failure.
         #[source]
-        source: tinyteams::error::Error,
+        source: tinyteams_core::error::Error,
     },
     /// A topic identity was empty.
     #[error("topic id must not be empty")]
@@ -45,25 +48,11 @@ pub enum Error {
     /// A quorum window of zero would admit no support at all.
     #[error("quorum window must not be zero")]
     ZeroQuorumWindow,
-    /// The spent-turn counter could not be advanced.
-    #[error("episode spend overflowed at {spent}")]
-    SpendOverflow {
-        /// The counter value that could not be advanced.
-        spent: u32,
-    },
-}
-
-impl From<tinyteams::error::Error> for Error {
-    fn from(source: tinyteams::error::Error) -> Self {
-        Self::Core { source }
-    }
 }
 
 impl From<tinyteams_core::error::Error> for Error {
     fn from(source: tinyteams_core::error::Error) -> Self {
-        Self::Core {
-            source: source.into(),
-        }
+        Self::Core { source }
     }
 }
 
