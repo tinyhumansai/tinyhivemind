@@ -4,8 +4,6 @@
 //! asserted individually rather than through a loop that could pass while
 //! silently testing one case four times.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-
 use super::{GENERAL_DESK, MAIN_THREAD_ID, is_general_chat, same_conversation};
 
 /// Every spelling of the default desk, as a fixture the tests below share.
