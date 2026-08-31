@@ -241,19 +241,14 @@ fn cross_inhibition_is_what_breaks_a_tie() -> Result<(), String> {
         &mut [&mut planner, &mut scout, &mut critic, &mut archivist],
     )?;
 
-    match &outcome {
-        Outcome::Converged { topic, standing } => {
-            assert_eq!(topic, &TopicId("stage".into()));
-            assert!(
-                !standing.supporters.is_empty(),
-                "a carried topic must name who carried it",
-            );
-        }
-        other => assert!(
-            !matches!(other, Outcome::Converged { .. }),
-            "unexpected outcome {other:?}",
-        ),
-    }
+    let Outcome::Converged { topic, standing } = &outcome else {
+        panic!("expected cross-inhibition to converge the room, got {outcome:?}")
+    };
+    assert_eq!(topic, &TopicId("stage".into()));
+    assert!(
+        !standing.supporters.is_empty(),
+        "a carried topic must name who carried it",
+    );
     Ok(())
 }
 
