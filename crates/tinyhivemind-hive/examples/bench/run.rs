@@ -186,6 +186,9 @@ pub(crate) fn run_episode(
 ) -> Result<EpisodeReport, String> {
     let ids = room.member_ids();
     let mut agents: Vec<SimAgent> = room.agents.clone();
+    for agent in &mut agents {
+        agent.set_quorum(policy.quorum);
+    }
     let mut participants: Vec<&mut dyn Participant> = agents
         .iter_mut()
         .map(|agent| agent as &mut dyn Participant)

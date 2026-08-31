@@ -16,7 +16,8 @@
 use std::fmt::Write as _;
 
 use tinyhivemind_hive::{
-    HiveTurn, Phase, Sequence, SessionMessage,
+    HiveTurn, Phase, QuorumPolicy, Sequence, SessionMessage,
+    quorum::{TopicStanding, standings},
     trace::{TopicId, Trace, TraceKind, resolve},
 };
 
@@ -132,6 +133,11 @@ pub(crate) struct SimAgent {
     favourite: TopicId,
     /// Drives noncompliance only; never the private evaluations.
     rng: Rng,
+    /// The room's quorum rule, which is public: a participant is entitled to
+    /// know how many grounded supporters settle a question, and reads the
+    /// medium through the library's own fold rather than a private imitation
+    /// of it.
+    quorum: QuorumPolicy,
 }
 
 impl SimAgent {
@@ -166,7 +172,13 @@ impl SimAgent {
             evals,
             favourite,
             rng: Rng::seeded(mix(seed, 0xA11C_E ^ index as u64)),
+            quorum: QuorumPolicy::DEFAULT,
         }
+    }
+
+    /// Tell the participant which quorum rule the room is running.
+    pub(crate) fn set_quorum(&mut self, quorum: QuorumPolicy) {
+        self.quorum = quorum;
     }
 
     /// The option this participant would pick with no deliberation at all.
@@ -187,7 +199,7 @@ impl SimAgent {
 
     /// Produce the body of one turn, seeing exactly what the turn authorized.
     fn compose(&mut self, turn: &HiveTurn, visible: &[&SessionMessage]) -> String {
-        let view = View::fold(visible);
+        let view = View::fold(visible, self.quorum);
 
         // Real participants do not speak the grammar on every turn. Modelling
         // that is the difference between benchmarking the protocol and
@@ -266,13 +278,21 @@ impl SimAgent {
     }
 }
 
-/// The traces one turn can actually see, folded once.
+/// What one turn can actually see, folded once through the library's own reads.
+///
+/// The participant does not reimplement the fold. It calls [`resolve`] to read
+/// the traces out of the messages it was shown and [`standings`] to see who is
+/// still counted as a supporter after cross-inhibition — the same two functions
+/// the episode uses. A participant that guessed at the standings instead would
+/// be benchmarking the guess.
 struct View {
     traces: Vec<Trace>,
+    standings: Vec<TopicStanding>,
+    threshold: usize,
 }
 
 impl View {
-    fn fold(visible: &[&SessionMessage]) -> Self {
+    fn fold(visible: &[&SessionMessage], quorum: QuorumPolicy) -> Self {
         let mut traces: Vec<Trace> = visible
             .iter()
             .flat_map(|message| {
@@ -280,7 +300,15 @@ impl View {
             })
             .collect();
         traces.sort_by_key(|trace| (trace.sequence, trace.offset));
-        Self { traces }
+        let at = visible
+            .last()
+            .map_or(Sequence(0), |message| message.sequence);
+        let standings = standings(&traces, at, &quorum).unwrap_or_default();
+        Self {
+            traces,
+            standings,
+            threshold: usize::try_from(quorum.threshold).unwrap_or(2),
+        }
     }
 
     /// The sequence that first proposed a topic, if it is on the floor.
@@ -291,18 +319,38 @@ impl View {
             .map(|trace| trace.sequence)
     }
 
-    /// The proposed option this participant rates highest once the room's own
-    /// independent backing is weighed against its private evaluation.
-    fn best_proposal(&self, agent: &SimAgent) -> Option<(&TopicId, Sequence)> {
-        self.traces
-            .iter()
-            .filter(|trace| trace.kind == TraceKind::Propose)
-            .filter_map(|trace| trace.topic.as_ref().map(|topic| (topic, trace.sequence)))
-            .max_by_key(|(topic, _)| self.posterior(agent, topic))
+    /// Every topic on the floor, with the sequence that put it there.
+    fn floor(&self) -> Vec<(&TopicId, Sequence)> {
+        let mut floor: Vec<(&TopicId, Sequence)> = Vec::new();
+        for trace in &self.traces {
+            if trace.kind != TraceKind::Propose {
+                continue;
+            }
+            let Some(topic) = trace.topic.as_ref() else {
+                continue;
+            };
+            if !floor.iter().any(|(held, _)| *held == topic) {
+                floor.push((topic, trace.sequence));
+            }
+        }
+        floor
     }
 
-    /// A participant's private score for an option, updated by how many peers
-    /// independently backed it.
+    /// The supporters the library still counts for a topic.
+    fn backing(&self, topic: &TopicId) -> &[String] {
+        self.standings
+            .iter()
+            .find(|standing| &standing.topic == topic)
+            .map_or(&[][..], |standing| &standing.supporters)
+    }
+
+    /// How many distinct agents the library still counts for a topic.
+    fn backers(&self, topic: &TopicId) -> usize {
+        self.backing(topic).len()
+    }
+
+    /// A participant's private score for an option, updated by how many *other*
+    /// members independently back it.
     fn posterior(&self, agent: &SimAgent, topic: &TopicId) -> i32 {
         let peers = self
             .backing(topic)
@@ -310,106 +358,67 @@ impl View {
             .filter(|backer| **backer != agent.id)
             .count();
         let peers = i32::try_from(peers).unwrap_or(0);
-        agent.score(topic).saturating_add(peers.saturating_mul(SOCIAL_WEIGHT))
+        agent
+            .score(topic)
+            .saturating_add(peers.saturating_mul(SOCIAL_WEIGHT))
+    }
+
+    /// Whether the library still counts this agent as backing a topic.
+    fn has_backed(&self, agent_id: &str, topic: &TopicId) -> bool {
+        self.backing(topic).iter().any(|held| held == agent_id)
+    }
+
+    /// The proposed option this participant rates highest once the room's own
+    /// independent backing is weighed against its private evaluation.
+    fn best_proposal(&self, agent: &SimAgent) -> Option<(&TopicId, Sequence)> {
+        self.floor()
+            .into_iter()
+            .max_by_key(|(topic, _)| self.posterior(agent, topic))
+    }
+
+    /// The topic carrying the most support, breaking ties by this
+    /// participant's own updated evaluation, with a sequence to cite.
+    fn leading(&self, agent: &SimAgent) -> Option<(&TopicId, Sequence)> {
+        self.floor()
+            .into_iter()
+            .max_by_key(|(topic, _)| (self.backers(topic), self.posterior(agent, topic)))
     }
 
     /// Two or more options carrying at once, and this participant rates one of
     /// them below another: the message to object to, and the grounds to cite.
     ///
-    /// "Carrying" is deliberately read the way the library reads it — a topic
-    /// at or above the quorum threshold — because that is the condition that
-    /// deadlocks an episode. A weaker option that is merely behind needs no
-    /// objection; the room is already settling it.
+    /// "Carrying" is read the way the library reads it — at or above the quorum
+    /// threshold, after cross-inhibition — because that is exactly the
+    /// condition that deadlocks an episode. Adding support cannot resolve it:
+    /// both options stay above the threshold no matter how much weight one
+    /// gains. Silencing an advocate can, and that asymmetry is why the
+    /// objection targets a message rather than a topic.
     fn weaker_contender(&self, agent: &SimAgent) -> Option<(&TopicId, Sequence, Sequence)> {
-        let mut contenders: Vec<(&TopicId, usize)> = Vec::new();
-        for trace in &self.traces {
-            if trace.kind != TraceKind::Propose {
-                continue;
-            }
-            let Some(topic) = trace.topic.as_ref() else {
-                continue;
-            };
-            if contenders.iter().any(|(held, _)| *held == topic) {
-                continue;
-            }
-            let backing = self.backers(topic);
-            if backing >= CONTENDER_BACKERS {
-                contenders.push((topic, backing));
-            }
-        }
+        let mut contenders: Vec<&TopicId> = self
+            .standings
+            .iter()
+            .filter(|standing| standing.supporters.len() >= self.threshold)
+            .map(|standing| &standing.topic)
+            .collect();
         if contenders.len() < 2 {
             return None;
         }
-        contenders.sort_by_key(|(topic, _)| std::cmp::Reverse(self.posterior(agent, topic)));
-        let best = contenders.first()?;
-        let worst = contenders.last()?;
-        if self.posterior(agent, worst.0) >= self.posterior(agent, best.0) {
+        contenders.sort_by_key(|topic| std::cmp::Reverse(self.posterior(agent, topic)));
+        let best = *contenders.first()?;
+        let worst = *contenders.last()?;
+        if self.posterior(agent, worst) >= self.posterior(agent, best) {
             return None;
         }
-        // Silence one advocate of the weaker option: someone other than this
-        // participant, who actually advocated it in the message being named.
+        // Silence one advocate of the weaker option: somebody other than this
+        // participant, who is still counted as advocating it.
         let target = self.traces.iter().find(|trace| {
             matches!(trace.kind, TraceKind::Propose | TraceKind::Support)
-                && trace.topic.as_ref() == Some(worst.0)
-                && trace.agent_id().is_some_and(|id| id != agent.id)
+                && trace.topic.as_ref() == Some(worst)
+                && trace
+                    .agent_id()
+                    .is_some_and(|id| id != agent.id && self.has_backed(id, worst))
         })?;
-        let grounds = self.proposal(best.0)?;
-        Some((worst.0, target.sequence, grounds))
-    }
-
-    /// Every distinct agent that advocated a topic.
-    fn backing(&self, topic: &TopicId) -> Vec<&str> {
-        let mut seen: Vec<&str> = Vec::new();
-        for trace in &self.traces {
-            if !matches!(trace.kind, TraceKind::Propose | TraceKind::Support)
-                || trace.topic.as_ref() != Some(topic)
-            {
-                continue;
-            }
-            if let Some(agent) = trace.agent_id()
-                && !seen.contains(&agent)
-            {
-                seen.push(agent);
-            }
-        }
-        seen
-    }
-
-    /// Whether an agent already advocated a topic.
-    fn has_backed(&self, agent_id: &str, topic: &TopicId) -> bool {
-        self.traces.iter().any(|trace| {
-            matches!(trace.kind, TraceKind::Propose | TraceKind::Support)
-                && trace.topic.as_ref() == Some(topic)
-                && trace.agent_id() == Some(agent_id)
-        })
-    }
-
-    /// The topic carrying the most distinct advocates, breaking ties by the
-    /// participant's own evaluation, with a sequence to cite as grounds.
-    fn leading(&self, agent: &SimAgent) -> Option<(&TopicId, Sequence)> {
-        let mut best: Option<(&TopicId, Sequence, usize, i32)> = None;
-        for trace in &self.traces {
-            if trace.kind != TraceKind::Propose {
-                continue;
-            }
-            let Some(topic) = trace.topic.as_ref() else {
-                continue;
-            };
-            let backing = self.backers(topic);
-            let score = self.posterior(agent, topic);
-            let better = best.is_none_or(|(_, _, held_backing, held_score)| {
-                (backing, score) > (held_backing, held_score)
-            });
-            if better {
-                best = Some((topic, trace.sequence, backing, score));
-            }
-        }
-        best.map(|(topic, sequence, _, _)| (topic, sequence))
-    }
-
-    /// How many distinct agents advocated a topic.
-    fn backers(&self, topic: &TopicId) -> usize {
-        self.backing(topic).len()
+        Some((worst, target.sequence, self.proposal(best)?))
     }
 
     /// A message advocating a topic this participant rates below its own
