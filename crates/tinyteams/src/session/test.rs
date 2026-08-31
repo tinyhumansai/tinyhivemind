@@ -244,6 +244,21 @@ async fn rejects_a_cursor_that_is_not_the_oldest_row() {
 }
 
 #[tokio::test]
+async fn rejects_a_page_larger_than_the_requested_limit() {
+    let messages = (0..=PAGE_SIZE as u64)
+        .map(|offset| message(2_000 - offset, Some("other"), None, "row"))
+        .collect();
+    let log = FakeLog::new(vec![page(messages, None)]);
+    assert!(matches!(
+        project_session(&log, &query(1)).await,
+        Err(Error::PageTooLarge {
+            requested: PAGE_SIZE,
+            actual
+        }) if actual == PAGE_SIZE + 1
+    ));
+}
+
+#[tokio::test]
 async fn scan_cap_is_a_successful_partial_projection() {
     let mut pages = Vec::new();
     for page_index in 0_u64..4 {

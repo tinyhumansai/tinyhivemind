@@ -3,7 +3,10 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use super::*;
-use crate::{LogMessage, Sequence, SessionAuthor, SessionFuture, SessionPage, SessionQuery};
+use crate::{
+    LogMessage, Sequence, SessionAuthor, SessionFuture, SessionPage, SessionQuery, SourceError,
+};
+use std::io;
 use tinyteams_core::{
     desk::{Desk, DeskMember, DeskOrder},
     roster::{Person, RosterMember},
@@ -212,6 +215,34 @@ async fn initialization_keeps_briefing_separate_from_history() {
     assert_eq!(initialized.briefing, briefing);
     assert_eq!(initialized.history.len(), 1);
     assert_eq!(initialized.history[0].sequence, Sequence(4));
+}
+
+#[derive(Debug)]
+struct FailingLog;
+
+impl SessionLog for FailingLog {
+    fn read_before(&self, _: Option<Sequence>, _: usize) -> SessionFuture<'_> {
+        Box::pin(async { Err(Box::new(io::Error::other("offline")) as SourceError) })
+    }
+}
+
+#[tokio::test]
+async fn initialization_propagates_projection_errors() {
+    let briefing = TeamBriefing {
+        viewer_id: "alice".into(),
+        desk_id: "engineering".into(),
+        desk_name: "Engineering".into(),
+        teammates: Vec::new(),
+    };
+    let query = SessionQuery {
+        conversation: named_conversation(),
+        before: None,
+        window: 1,
+    };
+    assert!(matches!(
+        initialize_session(&FailingLog, &query, briefing).await,
+        Err(crate::Error::Read { .. })
+    ));
 }
 
 #[test]
