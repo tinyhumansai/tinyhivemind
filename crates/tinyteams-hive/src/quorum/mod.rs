@@ -55,10 +55,17 @@ pub fn standings(traces: &[Trace], at: Sequence, policy: &QuorumPolicy) -> Resul
     }
 
     let floor = at.0.saturating_sub(u64::from(policy.window));
-    let live: Vec<&Trace> = traces
+    let mut live: Vec<&Trace> = traces
         .iter()
         .filter(|trace| trace.sequence.0 >= floor && trace.sequence <= at)
         .collect();
+    // A trace is addressed by where it was authored, so `(sequence, offset)`
+    // identifies it. Sorting and deduplicating on that address is what makes
+    // this fold commutative and idempotent: a redelivered trace, or a caller
+    // that folds an unordered list, lands in exactly the same place as one
+    // that saw the medium in order.
+    live.sort_by_key(|trace| (trace.sequence, trace.offset));
+    live.dedup_by_key(|trace| (trace.sequence, trace.offset));
 
     // Which topic each agent is on record advocating, so an objection aimed at
     // one of their messages knows which supporter set to remove them from.
