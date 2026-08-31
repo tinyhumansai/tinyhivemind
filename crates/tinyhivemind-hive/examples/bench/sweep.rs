@@ -32,11 +32,15 @@ pub(crate) struct Scored {
 impl Scored {
     /// Rank a point: correctness first, then reaching a decision at all, then
     /// spending fewer turns to do it.
-    fn key(&self) -> (i64, i64, i64) {
-        let accuracy = (self.totals.accuracy() * 100.0) as i64;
-        let decided = (self.totals.decision_rate() * 100.0) as i64;
-        let turns = (self.totals.turns_per_episode() * 100.0) as i64;
-        (accuracy, decided, -turns)
+    ///
+    /// The key is integer throughout, so the ordering is exact and the sweep
+    /// reports the same winner on every machine.
+    fn key(&self) -> (u64, u64, i64) {
+        let episodes = u64::from(self.totals.episodes).max(1);
+        let accuracy = u64::from(self.totals.correct) * 10_000 / episodes;
+        let decided = u64::from(self.totals.converged) * 10_000 / episodes;
+        let turns = self.totals.turns * 100 / episodes;
+        (accuracy, decided, -i64::try_from(turns).unwrap_or(i64::MAX))
     }
 }
 
