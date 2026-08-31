@@ -6,7 +6,7 @@
 >
 > This is one of my best works so far and one of the most important libraries that I have worked on: tinyhivemind takes inspiration and learnings from my experience building harnesses, coordinating with agents, and building agents that can solve large, complex problems.
 > 
-> This concept was initially built inside of OpenCompany but had to be later on moved into it's own standalone repo as too important to be inside of OpenCompany and it had to be well-defined, researched, tested, and simulated thoroughly.
+> This concept was initially built inside of OpenCompany but had to be later on moved into it's own standalone repo as it was too important to be left inside of OpenCompany and it had to be well-defined, researched, tested, and simulated thoroughly.
 >
 > I'm excited to share this with you all as an open-source contribution and if you like my work, give me a follow over at https://github.com/senamakel/ 🙌
 
