@@ -67,8 +67,6 @@ const NONCOMPLIANCE: u32 = 60;
 /// Set it to zero and the room degenerates into a plurality of first
 /// impressions, which is exactly the `vote` control arm.
 const SOCIAL_WEIGHT: i32 = 25;
-/// Backers a topic needs before a participant treats it as contending.
-const CONTENDER_BACKERS: usize = 2;
 
 /// One simulated room: the options, which is best, and who is in it.
 #[derive(Clone, Debug)]
