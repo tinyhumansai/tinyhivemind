@@ -9,6 +9,9 @@ accepts the returned messages and current trigger into its agent session, and
 only then commits `next_state` under its own serialization or compare-and-swap.
 A failed acceptance or lost CAS leaves the prior state reusable for a safe
 retry. Reinitialization directs the host back through P4 briefing and history.
+Restored state is validated during deserialization, while every public
+operation independently rejects a manually constructed present set over the
+64-entry bound before reading or mutating anything.
 
 Every raw row counts against the bounded scan even when it belongs to another
 conversation. Sequence gaps are valid because the host sequence is global.

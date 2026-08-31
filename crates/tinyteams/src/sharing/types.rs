@@ -1,11 +1,15 @@
 //! Stable caller-owned continuous-sharing values.
 
 use crate::{Conversation, Sequence, SessionMessage};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
 use std::collections::BTreeSet;
 
 /// Host-owned progress for one initialized agent conversation.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+///
+/// Deserialization rejects a `present_above_watermark` set larger than
+/// [`super::PRESENT_SET_LIMIT`]. Public operations also validate the bound so
+/// manually constructed values cannot bypass it.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct SharingState {
     /// Conversation whose accepted transcript this state describes.
@@ -14,6 +18,35 @@ pub struct SharingState {
     pub watermark: Sequence,
     /// Later rows already accepted through a concurrent path.
     pub present_above_watermark: BTreeSet<Sequence>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+struct SharingStateWire {
+    conversation: Conversation,
+    watermark: Sequence,
+    present_above_watermark: BTreeSet<Sequence>,
+}
+
+impl<'de> Deserialize<'de> for SharingState {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let wire = SharingStateWire::deserialize(deserializer)?;
+        let actual = wire.present_above_watermark.len();
+        if actual > super::PRESENT_SET_LIMIT {
+            return Err(D::Error::custom(format_args!(
+                "present set has {actual} entries but limit is {}",
+                super::PRESENT_SET_LIMIT
+            )));
+        }
+        Ok(Self {
+            conversation: wire.conversation,
+            watermark: wire.watermark,
+            present_above_watermark: wire.present_above_watermark,
+        })
+    }
 }
 
 /// Borrowed inputs for one stateless sharing walk.

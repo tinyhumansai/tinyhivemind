@@ -13,7 +13,8 @@ CAS primitive, responder selection, or mention dispatch.
 1. Add `sharing/types.rs` tests that pin value payload serde and conversation
    equivalence, then define state, query, delta, plan, and reason records.
 2. Add failing pure tests for initialized state and bounded, idempotent
-   `note_present`, then implement them with typed overflow errors.
+   `note_present`, including restored and manually constructed oversized state,
+   then implement them with typed validation and overflow errors.
 3. Add failing tests for changed conversations, regressing/equal bounds, and
    thread/channel identity, then implement early planning decisions.
 4. Add failing one-page and multi-page tests for exclusivity, chronological

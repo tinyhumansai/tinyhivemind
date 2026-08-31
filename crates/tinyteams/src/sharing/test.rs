@@ -223,6 +223,57 @@ fn note_present_overflow_is_typed_and_atomic() {
 }
 
 #[test]
+fn note_present_accepts_a_duplicate_when_the_present_set_is_full() {
+    let mut state = state(10);
+    for sequence in 11..=10 + PRESENT_SET_LIMIT as u64 {
+        note_present(&mut state, Sequence(sequence)).expect("within bound");
+    }
+    let before = state.clone();
+    note_present(&mut state, Sequence(11)).expect("duplicate remains idempotent");
+    assert_eq!(state, before);
+}
+
+#[test]
+fn note_present_rejects_an_already_oversized_manual_state_atomically() {
+    let mut state = state(10);
+    state.present_above_watermark = (11..=11 + PRESENT_SET_LIMIT as u64).map(Sequence).collect();
+    let before = state.clone();
+    assert!(matches!(
+        note_present(&mut state, Sequence(11)),
+        Err(Error::PresentSetTooLarge {
+            limit: 64,
+            actual: 65
+        })
+    ));
+    assert_eq!(state, before);
+}
+
+#[test]
+fn sharing_state_deserialization_rejects_an_oversized_present_set() {
+    let mut value = serde_json::to_value(state(10)).expect("serializes");
+    value["present_above_watermark"] =
+        serde_json::json!((11..=11 + PRESENT_SET_LIMIT as u64).collect::<Vec<_>>());
+    let error = serde_json::from_value::<SharingState>(value).expect_err("rejects 65 entries");
+    assert!(error.to_string().contains("present set has 65 entries"));
+}
+
+#[tokio::test]
+async fn prepare_delta_rejects_an_oversized_manual_state_without_reading() {
+    let log = FakeLog::new(Vec::new());
+    let mut oversized = state(10);
+    oversized.present_above_watermark =
+        (11..=11 + PRESENT_SET_LIMIT as u64).map(Sequence).collect();
+    assert!(matches!(
+        plan(&log, &oversized, 11).await,
+        Err(Error::PresentSetTooLarge {
+            limit: 64,
+            actual: 65
+        })
+    ));
+    assert_eq!(log.calls(), 0);
+}
+
+#[test]
 fn conversation_equivalence_accepts_general_aliases_and_exact_named_identity() {
     assert!(
         conversation("general", "General", None)

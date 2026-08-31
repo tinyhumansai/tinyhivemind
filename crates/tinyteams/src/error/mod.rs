@@ -80,6 +80,14 @@ pub enum Error {
         /// The row that could not be recorded.
         sequence: Sequence,
     },
+    /// Caller-provided sharing state already exceeds the bounded present set.
+    #[error("present set has {actual} entries but limit is {limit}")]
+    PresentSetTooLarge {
+        /// The maximum number of future rows retained.
+        limit: usize,
+        /// The number of entries supplied by the caller.
+        actual: usize,
+    },
     /// Host-supplied pure snapshots were invalid.
     #[error("invalid team snapshot")]
     Core {

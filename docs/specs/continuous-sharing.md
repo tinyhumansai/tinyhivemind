@@ -38,7 +38,10 @@ and current trigger have been accepted by the host session.
 `note_present` records a row the host has already accepted concurrently. A
 sequence at or below the watermark is a no-op; a later sequence is inserted
 idempotently. More than `PRESENT_SET_LIMIT` (64) distinct later sequences is a
-typed error and leaves the state unchanged. It never moves the watermark.
+typed error and leaves the state unchanged. A duplicate remains idempotent when
+the set is exactly full. Deserialization rejects an oversized set, and public
+operations reject an oversized manually constructed state before reading or
+mutating anything. It never moves the watermark.
 
 `SharingQuery` borrows the desired conversation, the host's current
 conversation, and state, and supplies the next turn's exclusive `before`

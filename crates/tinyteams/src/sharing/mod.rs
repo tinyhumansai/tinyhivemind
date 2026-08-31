@@ -33,13 +33,16 @@ pub fn initialized_state(conversation: crate::Conversation, watermark: Sequence)
 ///
 /// # Errors
 ///
-/// Returns [`Error::PresentSetOverflow`] if inserting a new future sequence
-/// would exceed [`PRESENT_SET_LIMIT`]. The state is unchanged in that case.
+/// Returns [`Error::PresentSetTooLarge`] if caller-constructed state already
+/// exceeds [`PRESENT_SET_LIMIT`], or [`Error::PresentSetOverflow`] if inserting
+/// a distinct future sequence would exceed it. The state is unchanged in both
+/// cases.
 pub fn note_present(state: &mut SharingState, sequence: Sequence) -> Result<()> {
+    validate_state(state)?;
     if sequence <= state.watermark || state.present_above_watermark.contains(&sequence) {
         return Ok(());
     }
-    if state.present_above_watermark.len() == PRESENT_SET_LIMIT {
+    if state.present_above_watermark.len() >= PRESENT_SET_LIMIT {
         return Err(Error::PresentSetOverflow {
             limit: PRESENT_SET_LIMIT,
             sequence,
@@ -56,12 +59,14 @@ pub fn note_present(state: &mut SharingState, sequence: Sequence) -> Result<()> 
 ///
 /// # Errors
 ///
-/// Returns [`Error::WatermarkRegression`] for a regressing bound, [`Error::Read`]
-/// for a host read failure, or a P4 page-validation error for malformed pages.
+/// Returns [`Error::PresentSetTooLarge`] for invalid caller-constructed state,
+/// [`Error::WatermarkRegression`] for a regressing bound, [`Error::Read`] for a
+/// host read failure, or a P4 page-validation error for malformed pages.
 pub async fn prepare_delta(
     log: &(dyn SessionLog + '_),
     query: &SharingQuery<'_>,
 ) -> Result<SharingPlan> {
+    validate_state(query.state)?;
     if !query
         .desired_conversation
         .equivalent_to(query.current_conversation)
@@ -144,4 +149,15 @@ pub async fn prepare_delta(
         messages,
         next_state,
     }))
+}
+
+fn validate_state(state: &SharingState) -> Result<()> {
+    let actual = state.present_above_watermark.len();
+    if actual > PRESENT_SET_LIMIT {
+        return Err(Error::PresentSetTooLarge {
+            limit: PRESENT_SET_LIMIT,
+            actual,
+        });
+    }
+    Ok(())
 }
