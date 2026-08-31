@@ -42,10 +42,15 @@ turn, but unable to manufacture a quorum nobody eligible actually holds.
 
 ### Convergence is recorded, not inferred
 
-Reaching quorum flips the phase and buys one commit turn; the episode ends only
-once a `!commit` trace names the carried topic. If nobody records it the
-episode runs on and stops at its budget — bounded either way, and never
-silently converged on a decision nobody wrote down.
+Reaching quorum flips the phase, fixes `commit_boundary` to the sequence
+standings were just folded to, and buys one commit turn; the episode ends only
+once a `!commit` trace names the carried topic at a sequence strictly after
+`commit_boundary`. That boundary is what stops an unrelated `!commit` that
+predates the commit turn — planted speculatively, or left from an earlier
+exchange, and happening to share the carried topic — from being misread as
+this turn's decision. If nobody records it after the boundary, the episode
+runs on and stops at its budget — bounded either way, and never silently
+converged on a decision nobody wrote down.
 
 ### The watermark
 
@@ -80,7 +85,7 @@ That is the whole answer to "but a hive mind needs fan-out". See
 | `step` | The fold. Returns exactly one outcome. |
 | `project_for` | Filters a transcript to what one authorized turn may see. |
 | `EpisodePolicy` | Budget, blind round, dominance and repetition caps, quorum, weights. |
-| `EpisodeState` | Conversation, spend, phase, thresholds, watermark. |
+| `EpisodeState` | Conversation, spend, phase, thresholds, watermark, commit boundary. |
 | `HiveTurn` | The authorized turn, and the state to commit after it lands. |
 | `HiveStep` | `Speak` \| `Converged` \| `Deadlocked` \| `Exhausted` \| `Idle`. |
 | `Phase`, `Visibility` | The two one-turn modes. |
