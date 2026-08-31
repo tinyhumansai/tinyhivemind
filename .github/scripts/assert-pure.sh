@@ -28,7 +28,7 @@ for crate in "${pure_crates[@]}"; do
     exit 1
   fi
 
-  found="$(cargo tree -p "$crate" -e normal,build --prefix none \
+  found="$(cargo tree -p "$crate" -e normal,build --all-features --prefix none \
     | grep -Ei "$forbidden_pure" || true)"
   if [ -n "$found" ]; then
     echo "$crate pulled in a dependency its manifest forbids:" >&2
