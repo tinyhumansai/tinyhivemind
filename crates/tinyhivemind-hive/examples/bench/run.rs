@@ -8,7 +8,8 @@
 use std::time::{Duration, Instant};
 
 use tinyhivemind_hive::{
-    Conversation, EpisodePolicy, EpisodeState, HiveStep, Sequence, SessionAuthor, SessionMessage,
+    Conversation, EpisodePolicy, EpisodeState, HiveStep, HiveTurn, Sequence, SessionAuthor,
+    SessionMessage,
     desk::{Desk, DeskSet, ResponderMode},
     project_for,
     roster::{Roster, RosterMember},
@@ -17,6 +18,23 @@ use tinyhivemind_hive::{
 };
 
 use crate::sim::{Room, SimAgent};
+
+/// Anything that can fill one authorized turn.
+///
+/// Simulated participants and a real agent CLI differ only here, which is the
+/// point: the protocol underneath is the same one either way.
+pub(crate) trait Participant {
+    /// Canonical agent id, matching a desk member.
+    fn id(&self) -> &str;
+
+    /// Produce the body of one turn, given exactly what it may see.
+    ///
+    /// # Errors
+    ///
+    /// Returns a host-side failure, such as an agent process that did not
+    /// answer.
+    fn speak(&mut self, turn: &HiveTurn, visible: &[&SessionMessage]) -> Result<String, String>;
+}
 
 /// The desk every simulated room deliberates on.
 pub(crate) const DESK_ID: &str = "engineering";
@@ -169,10 +187,34 @@ pub(crate) fn run_episode(
     keep_trace: bool,
 ) -> Result<EpisodeReport, String> {
     let ids = room.member_ids();
-    let mut host = Host::new(&ids);
+    let mut agents: Vec<SimAgent> = room.agents.clone();
+    let mut participants: Vec<&mut dyn Participant> = agents
+        .iter_mut()
+        .map(|agent| agent as &mut dyn Participant)
+        .collect();
+    let report = drive(&ids, &mut participants, policy, task, keep_trace)?;
+    Ok(EpisodeReport {
+        correct: report.decided.as_ref() == Some(&room.truth),
+        ..report
+    })
+}
+
+/// Drive one episode to termination against arbitrary participants.
+///
+/// # Errors
+///
+/// Returns the library's error text for a malformed snapshot, or a
+/// participant's own failure.
+pub(crate) fn drive(
+    member_ids: &[&str],
+    agents: &mut [&mut dyn Participant],
+    policy: &EpisodePolicy,
+    task: &str,
+    keep_trace: bool,
+) -> Result<EpisodeReport, String> {
+    let mut host = Host::new(member_ids);
     host.operator(task);
 
-    let mut agents: Vec<SimAgent> = room.agents.clone();
     let mut state = EpisodeState::opened(host.conversation(), host.watermark());
     let mut library_time = Duration::ZERO;
     let mut step_calls = 0_u32;
@@ -189,21 +231,18 @@ pub(crate) fn run_episode(
         library_time += started.elapsed();
         step_calls = step_calls.saturating_add(1);
 
-        let decision = decision.map_err(|error| error.to_string())?;
-        let (ending, decided) = match decision {
+        let (ending, decided) = match decision.map_err(|error| error.to_string())? {
             HiveStep::Speak { turn } => {
                 let turn = *turn;
                 let visible = project_for(&turn, &host.journal);
-                let Some(agent) = agents
-                    .iter_mut()
-                    .find(|agent| agent.id == turn.agent_id)
+                let Some(agent) = agents.iter_mut().find(|agent| agent.id() == turn.agent_id)
                 else {
                     return Err(format!("no agent named {}", turn.agent_id));
                 };
-                let content = agent.speak(&turn, &visible);
+                let content = agent.speak(&turn, &visible)?;
                 if keep_trace {
                     trace.push(format!(
-                        "{:>10}  {:<10} {:<7} saw {:>2}  {content}",
+                        "{:>10}  {:<10} {:<6} saw {:>2}  {content}",
                         turn.agent_id,
                         format!("{:?}", turn.reason).to_lowercase(),
                         format!("{:?}", turn.visibility).to_lowercase(),
@@ -223,11 +262,10 @@ pub(crate) fn run_episode(
             HiveStep::Idle => (Ending::Idle, None),
         };
 
-        let correct = decided.as_ref() == Some(&room.truth);
         return Ok(EpisodeReport {
             ending,
             decided,
-            correct,
+            correct: false,
             turns,
             step_calls,
             library_time,

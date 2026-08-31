@@ -341,3 +341,13 @@ impl View {
             .max_by_key(|(topic, _)| self.backers(topic))
     }
 }
+
+impl crate::run::Participant for SimAgent {
+    fn id(&self) -> &str {
+        &self.id
+    }
+
+    fn speak(&mut self, turn: &HiveTurn, visible: &[&SessionMessage]) -> Result<String, String> {
+        Ok(Self::speak(self, turn, visible))
+    }
+}
