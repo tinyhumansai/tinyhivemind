@@ -1,62 +1,52 @@
-//! A production-ready starting point for an installable `TinyBus` module.
+//! Desks, rosters, mentions and shared session transcripts for agent group
+//! chats — the pure algebra behind a room that several agents share.
 //!
-//! This crate is a template. It ships the layout, lint configuration, error
-//! handling, testing, and documentation conventions described in `AGENTS.md`.
-//! The compiled `cdylib` exports `TinyBus` module ABI v1 and serves the example
-//! [`greet`] behavior over the bus.
+//! This crate answers four questions, and holds no state while doing it:
+//!
+//! - **Who is here?** A roster of teammates and the people signed in with them.
+//! - **What is a desk, and who is on it?** A blueprint-declared group chat
+//!   merged with the operator's runtime additions, retirements and ordering.
+//! - **Who does `@this` mean?** The mention grammar, and the resolution of a
+//!   name against the roster and the desks.
+//! - **What does one participant see of the shared transcript?** The projection
+//!   of a multi-speaker session into one viewer's turn history.
+//!
+//! # No IO, and why it matters
+//!
+//! Everything here is a fold over data the caller already holds. There is no
+//! async, no storage, no journal, no transport, and nothing that returns a
+//! `Result` for an IO reason. The caller does the one roster read and the one
+//! transcript read and hands the results in.
+//!
+//! That is not an aesthetic preference. This crate sits on the hot path of
+//! every agent turn — addressing a message, resolving a mention, projecting a
+//! transcript — so it has to be cheap, and it has to compile in a host's
+//! default build with no feature flags behind it. It is also what keeps the
+//! dependency arrow pointing one way: a crate that cannot call out cannot grow
+//! a path back into its host. `.github/scripts/assert-pure.sh` asserts it.
+//!
+//! The stateful half — the paging walk over a session log, the responder
+//! ladder, and the mention-dispatch edge — lives in the sibling `tinyteams`
+//! crate, which owns the ports a host implements.
 //!
 //! # Layout
-//!
-//! This is the implementation half of a two-crate workspace:
-//!
-//! - [`template_bus`] — the wire contract. Member names, payload types, and the
-//!   contract version, with no transport and no behavior. A host that only
-//!   makes calls depends on that crate alone.
-//! - `template` — this crate. The behavior, the crate-wide error type, and the
-//!   `TinyBus` adapter that serves them, built as both an `rlib` and the
-//!   `cdylib` the loader consumes.
-//!
-//! Within this crate:
 //!
 //! - `src/error/` holds the crate-wide [`Error`] enum and the [`Result`] alias
 //!   returned by every fallible public function.
 //! - Each feature area lives in its own module directory with a `mod.rs`
 //!   module root, an optional `types.rs`, and a `test.rs` holding its unit
 //!   tests.
-//! - Every public item is re-exported from here — including all of
-//!   [`template_bus`] — so downstream users have a single predictable surface
-//!   and `template::GreetRequest` is the *same type* as
-//!   `template_bus::GreetRequest`, not a structural twin.
-//! - `tinybus_module` adapts the public behavior to `TinyBus` and exports the
-//!   module descriptor, embedded manifest, and initialization entrypoint.
+//! - Every public item is re-exported from here, so downstream users have a
+//!   single predictable surface.
 //!
-//! # Example
+//! # Status
 //!
-//! ```
-//! use template::{greet, Error, GreetRequest};
-//!
-//! assert_eq!(greet("Ferris")?, "Hello, Ferris!");
-//! assert_eq!(greet("   ").unwrap_err(), Error::EmptyName);
-//! assert_eq!(GreetRequest::new("Ferris").name, "Ferris");
-//! # Ok::<(), template::Error>(())
-//! ```
-//!
-//! Replace the `greeting` module with the first real feature area, keep the
-//! conventions, and update this documentation to describe the new crate.
+//! The `greeting` module is the tinyteams_core's placeholder. It stays until the
+//! first real feature area lands so the coverage gate has something to measure,
+//! and is deleted then.
 
 mod error;
 mod greeting;
-mod tinybus_module;
 
 pub use error::{Error, Result};
 pub use greeting::greet;
-
-// The wire contract, re-exported by module rather than by item so every path
-// through this crate resolves to the same definitions the contract crate
-// publishes. A host may depend on `template-bus` directly and get exactly these
-// types; nothing here redefines them.
-pub use template_bus;
-pub use template_bus::{
-    CONTRACT_VERSION, GreetRequest, GreetResponse, INTERFACE, METHODS, OBJECT_PATH, is_compatible,
-    names, version,
-};

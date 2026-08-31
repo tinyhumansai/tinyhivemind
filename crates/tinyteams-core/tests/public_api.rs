@@ -7,7 +7,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use template::{Error, greet};
+use tinyteams_core::{Error, greet};
 
 #[test]
 fn greeting_is_available_to_consumers() {

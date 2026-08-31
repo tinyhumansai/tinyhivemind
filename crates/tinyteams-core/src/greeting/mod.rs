@@ -1,4 +1,4 @@
-//! Greeting behavior used to demonstrate the template's module layout.
+//! Greeting behavior used to demonstrate the tinyteams_core's module layout.
 //!
 //! A module root like this one documents the module, wires its pieces
 //! together, and exposes the smallest useful API. Substantial type definitions
@@ -16,9 +16,9 @@ use crate::{Error, Result};
 /// # Examples
 ///
 /// ```
-/// # use template::greet;
+/// # use tinyteams_core::greet;
 /// assert_eq!(greet("  Ferris  ")?, "Hello, Ferris!");
-/// # Ok::<(), template::Error>(())
+/// # Ok::<(), tinyteams_core::Error>(())
 /// ```
 ///
 /// # Errors
