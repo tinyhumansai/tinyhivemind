@@ -142,7 +142,7 @@ fn a_multi_byte_indent_after_multi_byte_content_still_reports_the_bang() {
     let body = "caf\u{e9} \u{2615}\n\u{a0}!propose #a";
     let traces = resolve(body, None, &agent("a"), Sequence(1));
     assert_eq!(traces.len(), 1);
-    assert_eq!(&body[traces[0].offset..traces[0].offset + 1], "!");
+    assert_eq!(&body[traces[0].offset..=traces[0].offset], "!");
 }
 
 #[test]
