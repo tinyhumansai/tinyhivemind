@@ -13,8 +13,9 @@ mod scripted_agent;
 use hive_harness::{HiveHarness, Outcome};
 use scripted_agent::ScriptedAgent;
 use tinyteams_hive::{
-    BidReason, EpisodePolicy, EpisodeState, QuorumPolicy, Visibility, quorum::TopicStanding,
-    trace::TopicId,
+    BidReason, EpisodePolicy, EpisodeState, QuorumPolicy, Visibility,
+    quorum::{TopicStanding, standings},
+    trace::{TopicId, read},
 };
 
 const MEMBERS: [&str; 3] = ["planner", "critic", "scout"];
@@ -222,18 +223,23 @@ fn cross_inhibition_is_what_breaks_a_tie() -> Result<(), String> {
     harness.operator("Pick one.");
     let state = EpisodeState::opened(harness.conversation(), harness.watermark());
 
-    // planner and scout deadlock; critic objects to scout's advocate, which
-    // silences it and lets `stage` carry alone.
+    // planner and scout each propose a rival topic. Rather than letting scout
+    // pile up a second supporter and crystallize into a genuine tie, critic
+    // objects to scout's own proposal early -- silencing scout as ship's
+    // advocate before anyone else ever backs it. `stage` is then the only
+    // topic left standing, and archivist's support alone carries it: no vote
+    // was subtracted from a proposal, an advocate was silenced instead.
     let mut planner = ScriptedAgent::new("planner", ["!propose #stage"]);
     let mut scout = ScriptedAgent::new("scout", ["!propose #ship"]);
     let mut critic = ScriptedAgent::new(
         "critic",
         [
-            "!support #stage ^2 Reversible.",
-            "!object >3 ^2 That precedent differs.",
+            "!object >3 ^1 That precedent differs.",
+            "!support #stage ^1 Bounds the blast radius.",
         ],
     );
-    let mut archivist = ScriptedAgent::new("archivist", ["!support #ship ^3 We shipped before."]);
+    let mut archivist =
+        ScriptedAgent::new("archivist", ["!support #stage ^1 Confirmed safe rollback."]);
 
     let (outcome, _) = harness.run(
         state,
@@ -249,6 +255,31 @@ fn cross_inhibition_is_what_breaks_a_tie() -> Result<(), String> {
         !standing.supporters.is_empty(),
         "a carried topic must name who carried it",
     );
+
+    // Cross-inhibition actually fired: scout, the objected-to advocate, is
+    // silenced out of `ship`'s standing rather than merely outbid.
+    let traces = read(harness.journal());
+    let at = harness
+        .journal()
+        .last()
+        .expect("the journal is non-empty")
+        .sequence;
+    let policy = policy(10);
+    let folded = standings(&traces, at, &policy.quorum).expect("folds");
+    let ship = folded
+        .iter()
+        .find(|standing| standing.topic == TopicId("ship".into()))
+        .expect("ship was proposed and must have a standing");
+    assert_eq!(
+        ship.silenced,
+        ["scout"],
+        "the objection must silence scout as ship's advocate",
+    );
+    assert!(
+        ship.supporters.is_empty(),
+        "a silenced sole advocate leaves no supporters behind",
+    );
+
     Ok(())
 }
 
