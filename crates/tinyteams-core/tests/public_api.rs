@@ -11,6 +11,8 @@ use tinyteams_core::chat::{GENERAL_DESK, MAIN_THREAD_ID, is_general_chat, same_c
 use tinyteams_core::{
     desk::{Desk, DeskMember, DeskOrder, DeskSet},
     error::Error,
+    mention::{MentionAuthor, MentionTarget, direct_responder, mentioned_members, resolve},
+    roster::{Person, Roster, RosterMember},
 };
 
 #[test]
@@ -68,5 +70,57 @@ fn desk_failures_are_available_as_the_crate_error_type() {
         Error::UnknownDesk {
             identity: "unknown".into()
         }
+    );
+}
+
+#[test]
+fn roster_and_mention_decisions_are_available_to_consumers() {
+    let members = [
+        RosterMember {
+            id: "alice".into(),
+            name: Some("Alice".into()),
+        },
+        RosterMember {
+            id: "bob".into(),
+            name: Some("Bob".into()),
+        },
+    ];
+    let people = [Person {
+        id: "person-1".into(),
+        label: "Operator".into(),
+    }];
+    let declared = [Desk {
+        id: "engineering".into(),
+        name: "Engineering".into(),
+        description: None,
+        members: vec!["alice".into(), "bob".into()],
+    }];
+    let roster = Roster::new(&members, &people, &[]);
+    let desks = DeskSet::new(&declared, &[], &[], &[], &[]);
+
+    let mentions = resolve(
+        "@Alice please coordinate with @#Engineering",
+        None,
+        &MentionAuthor::Person {
+            id: "person-1".into(),
+        },
+        &roster,
+        &desks,
+    );
+
+    assert_eq!(direct_responder(&mentions, &roster), Some("alice"));
+    assert_eq!(
+        mentioned_members(
+            &mentions,
+            Some("engineering"),
+            Some("alice"),
+            &roster,
+            &desks
+        ),
+        ["bob"]
+    );
+    assert_eq!(
+        mentions[0].target,
+        MentionTarget::Agent { id: "alice".into() }
     );
 }

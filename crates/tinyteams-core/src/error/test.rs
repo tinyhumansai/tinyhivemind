@@ -7,6 +7,14 @@ fn errors_are_typed_standard_errors_with_lowercase_unpunctuated_messages() {
     fn assert_standard_error(_: &impl std::error::Error) {}
 
     let errors = [
+        Error::EmptyRosterMemberId,
+        Error::DuplicateRosterMemberId {
+            member_id: "a".into(),
+        },
+        Error::EmptyPersonId,
+        Error::DuplicatePersonId {
+            person_id: "p".into(),
+        },
         Error::EmptyDeskId,
         Error::EmptyDeskName {
             desk_id: "d".into(),

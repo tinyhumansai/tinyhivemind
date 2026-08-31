@@ -43,6 +43,8 @@
 //!   conversation, and the four spellings that mean the default desk.
 //! - [`desk`] — host-compatible desk records and the borrowed overlay fold.
 //! - [`error`] — typed failures from malformed records or unresolved desks.
+//! - [`mention`] — authored mention parsing and pure routing choices.
+//! - [`roster`] — borrowed agent and person identity snapshots.
 //!
 //! # Example
 //!
@@ -66,9 +68,30 @@
 //! }];
 //! let set = DeskSet::new(&desks, &[], &[], &[], &[]);
 //! assert_eq!(set.lead("Engineering")?, Some("alice"));
+//!
+//! use tinyteams_core::{
+//!     mention::{MentionAuthor, MentionTarget, direct_responder, resolve},
+//!     roster::{Roster, RosterMember},
+//! };
+//! let members = [RosterMember {
+//!     id: "alice".into(),
+//!     name: Some("Alice".into()),
+//! }];
+//! let roster = Roster::new(&members, &[], &[]);
+//! let mentions = resolve(
+//!     "Could you take this, @Alice?",
+//!     None,
+//!     &MentionAuthor::Other,
+//!     &roster,
+//!     &set,
+//! );
+//! assert_eq!(direct_responder(&mentions, &roster), Some("alice"));
+//! assert_eq!(mentions[0].target, MentionTarget::Agent { id: "alice".into() });
 //! # Ok::<(), tinyteams_core::error::Error>(())
 //! ```
 
 pub mod chat;
 pub mod desk;
 pub mod error;
+pub mod mention;
+pub mod roster;

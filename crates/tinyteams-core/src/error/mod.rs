@@ -6,6 +6,24 @@ mod test;
 /// A typed failure from validating or querying collaboration data.
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum Error {
+    /// An agent roster member has a blank id.
+    #[error("roster member id must not be empty")]
+    EmptyRosterMemberId,
+    /// More than one agent roster member has the same exact id.
+    #[error("duplicate roster member id `{member_id}`")]
+    DuplicateRosterMemberId {
+        /// The duplicated agent id.
+        member_id: String,
+    },
+    /// A person has a blank id.
+    #[error("person id must not be empty")]
+    EmptyPersonId,
+    /// More than one person has the same exact id.
+    #[error("duplicate person id `{person_id}`")]
+    DuplicatePersonId {
+        /// The duplicated person id.
+        person_id: String,
+    },
     /// A desk has no id.
     #[error("desk id must not be empty")]
     EmptyDeskId,

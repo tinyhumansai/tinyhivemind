@@ -44,6 +44,11 @@ impl<'a> DeskSet<'a> {
         }
     }
 
+    /// Iterate declared then operator-added desk records.
+    pub fn iter(&self) -> impl Iterator<Item = &'a Desk> + '_ {
+        self.desks()
+    }
+
     /// Resolve an exact desk id or exact display name to its canonical id.
     ///
     /// Exact ids take precedence over names. Named ids and names compare
