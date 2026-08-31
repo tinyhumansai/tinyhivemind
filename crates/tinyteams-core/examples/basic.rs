@@ -8,6 +8,7 @@
 //! ```
 
 use tinyteams_core::chat::{is_general_chat, same_conversation};
+use tinyteams_core::desk::{Desk, DeskMember, DeskOrder, DeskSet};
 
 fn main() {
     // The default desk has four spellings and one identity.
@@ -29,5 +30,27 @@ fn main() {
     println!(
         "engineering and Engineering are one conversation: {}",
         same_conversation(Some("engineering"), Some("Engineering")),
+    );
+
+    let declared = [Desk {
+        id: "engineering".into(),
+        name: "Engineering".into(),
+        description: Some("Build the product".into()),
+        members: vec!["alice".into(), "bob".into()],
+    }];
+    let additions = [DeskMember {
+        desk_id: "engineering".into(),
+        agent_id: "cara".into(),
+    }];
+    let orders = [DeskOrder {
+        desk_id: "engineering".into(),
+        ordered: vec!["cara".into(), "alice".into(), "bob".into()],
+    }];
+    let desks = DeskSet::new(&declared, &[], &additions, &orders, &[]);
+    println!(
+        "Engineering members: {:?}",
+        desks
+            .members("Engineering")
+            .expect("the example desk overlay is valid"),
     );
 }

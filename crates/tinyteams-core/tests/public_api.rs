@@ -8,6 +8,10 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use tinyteams_core::chat::{GENERAL_DESK, MAIN_THREAD_ID, is_general_chat, same_conversation};
+use tinyteams_core::{
+    desk::{Desk, DeskMember, DeskOrder, DeskSet},
+    error::Error,
+};
 
 #[test]
 fn conversation_identity_is_available_to_consumers() {
@@ -28,4 +32,41 @@ fn conversation_folding_is_available_to_consumers() {
 fn the_general_spellings_are_named_constants() {
     assert_eq!(MAIN_THREAD_ID, "main");
     assert_eq!(GENERAL_DESK, "General");
+}
+
+#[test]
+fn desk_overlays_are_available_to_consumers_under_the_desk_module() {
+    let declared = [Desk {
+        id: "engineering".into(),
+        name: "Engineering".into(),
+        description: None,
+        members: vec!["alice".into(), "bob".into()],
+    }];
+    let additions = [DeskMember {
+        desk_id: "engineering".into(),
+        agent_id: "cara".into(),
+    }];
+    let orders = [DeskOrder {
+        desk_id: "engineering".into(),
+        ordered: vec!["cara".into(), "alice".into(), "bob".into()],
+    }];
+    let desks = DeskSet::new(&declared, &[], &additions, &orders, &[]);
+
+    assert_eq!(desks.resolve_id("Engineering").unwrap(), "engineering");
+    assert_eq!(
+        desks.members("engineering").unwrap(),
+        ["cara", "alice", "bob"]
+    );
+    assert_eq!(desks.lead("Engineering").unwrap(), Some("cara"));
+}
+
+#[test]
+fn desk_failures_are_available_as_the_crate_error_type() {
+    let desks = DeskSet::new(&[], &[], &[], &[], &[]);
+    assert_eq!(
+        desks.resolve_id("unknown").unwrap_err(),
+        Error::UnknownDesk {
+            identity: "unknown".into()
+        }
+    );
 }

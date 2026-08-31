@@ -19,10 +19,9 @@ publish = false
 # runtime, an HTTP client, a web framework, or a native library.
 # `.github/scripts/assert-pure.sh` asserts it.
 #
-# Empty on purpose: conversation identity is `&str` in, `bool` out. `serde`
-# returns in P2 with the desk overlay types, whose attributes are part of a
-# wire format the host stores.
 [dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }
 
 [features]
 default = []

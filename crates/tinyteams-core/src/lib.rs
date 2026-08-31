@@ -37,14 +37,12 @@
 //! crate grows to hold desks, rosters, mentions and session projection, and a
 //! flat root would stop reading as four separable concerns.
 //!
-//! There is no crate-wide `Error` type yet, deliberately: nothing here can
-//! fail. Every function is total — a fold over data the caller already holds.
-//! One arrives in `src/error/` when the first fallible API does.
-//!
 //! # Modules
 //!
 //! - [`chat`] — conversation identity: which stored chat id names which
 //!   conversation, and the four spellings that mean the default desk.
+//! - [`desk`] — host-compatible desk records and the borrowed overlay fold.
+//! - [`error`] — typed failures from malformed records or unresolved desks.
 //!
 //! # Example
 //!
@@ -57,6 +55,20 @@
 //!
 //! // Everything else compares verbatim.
 //! assert!(!same_conversation(Some("engineering"), Some("Engineering")));
+//!
+//! use tinyteams_core::desk::{Desk, DeskSet};
+//!
+//! let desks = [Desk {
+//!     id: "engineering".into(),
+//!     name: "Engineering".into(),
+//!     description: Some("Build the product".into()),
+//!     members: vec!["alice".into(), "bob".into()],
+//! }];
+//! let set = DeskSet::new(&desks, &[], &[], &[], &[]);
+//! assert_eq!(set.lead("Engineering")?, Some("alice"));
+//! # Ok::<(), tinyteams_core::error::Error>(())
 //! ```
 
 pub mod chat;
+pub mod desk;
+pub mod error;
