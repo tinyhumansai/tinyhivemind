@@ -1,7 +1,7 @@
 # 2. Hive episodes are sequential, and visibility is the fan-out knob
 
 - **Status:** Accepted
-- **Date:** 2026-09-01
+- **Date:** 2026-08-31
 
 ## Context
 
