@@ -71,12 +71,18 @@ pub fn standings(
     live.sort_by_key(|trace| (trace.sequence, trace.offset));
     live.dedup_by_key(|trace| (trace.sequence, trace.offset));
 
-    // Which topic each agent is on record advocating, so an objection aimed at
-    // one of their messages knows which supporter set to remove them from.
-    let mut advocacy: BTreeMap<Sequence, (String, TopicId)> = BTreeMap::new();
+    // Every `(agent, topic)` a message advocated, keyed by that message's
+    // sequence. One message can carry several propose/support traces at
+    // different offsets -- one per topic -- so an objection naming that
+    // message must be able to silence the advocate on *every* topic it
+    // advocated there, not just the last one folded.
+    let mut advocacy: BTreeMap<Sequence, Vec<(String, TopicId)>> = BTreeMap::new();
     let mut ordered: Vec<TopicId> = Vec::new();
     let mut supporters: BTreeMap<TopicId, Vec<String>> = BTreeMap::new();
-    let mut weight: BTreeMap<TopicId, i64> = BTreeMap::new();
+    // Weight per topic, per contributing agent, so silencing one advocate can
+    // remove exactly their contribution rather than either leaving the whole
+    // sum untouched or zeroing every other supporter's weight along with it.
+    let mut weight: BTreeMap<TopicId, BTreeMap<String, i64>> = BTreeMap::new();
 
     for trace in &live {
         if !matches!(trace.kind, TraceKind::Propose | TraceKind::Support) {
@@ -91,12 +97,19 @@ pub fn standings(
         if !ordered.contains(topic) {
             ordered.push(topic.clone());
         }
-        advocacy.insert(trace.sequence, (agent.to_owned(), topic.clone()));
+        advocacy
+            .entry(trace.sequence)
+            .or_default()
+            .push((agent.to_owned(), topic.clone()));
         let entry = supporters.entry(topic.clone()).or_default();
         if !entry.iter().any(|held| held == agent) {
             entry.push(agent.to_owned());
         }
-        *weight.entry(topic.clone()).or_default() += importance(trace.kind);
+        *weight
+            .entry(topic.clone())
+            .or_default()
+            .entry(agent.to_owned())
+            .or_default() += importance(trace.kind);
     }
 
     let mut silenced: BTreeMap<TopicId, Vec<String>> = BTreeMap::new();
@@ -108,17 +121,19 @@ pub fn standings(
             continue;
         }
         let Some(target) = trace.target else { continue };
-        let Some((advocate, topic)) = advocacy.get(&target) else {
+        let Some(advocacies) = advocacy.get(&target) else {
             continue;
         };
-        // An objection cannot silence its own author; that would let an agent
-        // retract another's support by objecting to itself.
-        if trace.agent_id() == Some(advocate.as_str()) {
-            continue;
-        }
-        let entry = silenced.entry(topic.clone()).or_default();
-        if !entry.iter().any(|held| held == advocate) {
-            entry.push(advocate.clone());
+        for (advocate, topic) in advocacies {
+            // An objection cannot silence its own author; that would let an
+            // agent retract another's support by objecting to itself.
+            if trace.agent_id() == Some(advocate.as_str()) {
+                continue;
+            }
+            let entry = silenced.entry(topic.clone()).or_default();
+            if !entry.iter().any(|held| held == advocate) {
+                entry.push(advocate.clone());
+            }
         }
     }
 
@@ -132,11 +147,13 @@ pub fn standings(
                 .into_iter()
                 .filter(|agent| !silenced.contains(agent))
                 .collect();
-            let support = if supporters.is_empty() {
-                0
-            } else {
-                weight.get(&topic).copied().unwrap_or_default()
-            };
+            let support: i64 = weight
+                .remove(&topic)
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|(agent, _)| !silenced.contains(agent))
+                .map(|(_, contribution)| contribution)
+                .sum();
             TopicStanding {
                 topic,
                 supporters,
