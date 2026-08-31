@@ -61,7 +61,7 @@ pub fn step(
         return Ok(HiveStep::Exhausted { spent: state.spent });
     }
 
-    let (traces, at) = live_traces(transcript, state, &members);
+    let (live, traces, at) = live_traces(transcript, state, &members);
     let standings = standings(&traces, at, &policy.quorum)?;
 
     match consensus(&standings, &policy.quorum) {
@@ -113,7 +113,7 @@ pub fn step(
         turn: Box::new(HiveTurn {
             agent_id: bid.agent_id.clone(),
             phase,
-            visibility: visibility(policy, &traces, &members),
+            visibility: visibility(policy, &live, &members),
             reason: bid.reason,
             next_state: EpisodeState {
                 conversation: state.conversation.clone(),
@@ -166,7 +166,7 @@ fn live_traces(
     transcript: &[SessionMessage],
     state: &EpisodeState,
     members: &[&str],
-) -> (Vec<crate::trace::Trace>, tinyteams::Sequence) {
+) -> (Vec<SessionMessage>, Vec<crate::trace::Trace>, tinyteams::Sequence) {
     let live: Vec<SessionMessage> = transcript
         .iter()
         .filter(|message| message.sequence > state.watermark)
@@ -182,7 +182,7 @@ fn live_traces(
     let at = live
         .last()
         .map_or(state.watermark, |message| message.sequence);
-    (traces, at)
+    (live, traces, at)
 }
 
 /// The standing to converge on, if the commit turn actually recorded it.
@@ -294,20 +294,24 @@ fn context<'a>(
 }
 
 /// The opening round is blind until every member has been heard once.
-fn visibility(
-    policy: &EpisodePolicy,
-    traces: &[crate::trace::Trace],
-    members: &[&str],
-) -> Visibility {
+///
+/// "Heard" means *authored a live turn*, not *deposited a trace*. A member
+/// that speaks plain prose with no `!marker` still took its turn; counting
+/// only trace authors would keep a room blind forever if any member never
+/// happens to cast a formal vote.
+fn visibility(policy: &EpisodePolicy, live: &[SessionMessage], members: &[&str]) -> Visibility {
     if !policy.blind_round {
         return Visibility::Full;
     }
     let heard = members
         .iter()
         .filter(|member| {
-            traces
-                .iter()
-                .any(|trace| trace.agent_id() == Some(**member))
+            live.iter().any(|message| match &message.author {
+                SessionAuthor::Agent { id, .. } => id == **member,
+                SessionAuthor::Operator
+                | SessionAuthor::Person { .. }
+                | SessionAuthor::System { .. } => false,
+            })
         })
         .count();
     if heard < members.len() {
