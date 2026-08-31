@@ -92,10 +92,9 @@ pub(crate) fn run_ladder(room: &Room, seed: u64) -> Result<ArmReport, String> {
             // Modelling it as a uniform choice is the honest reading: nothing
             // in the ladder knows which member holds the better private signal.
             let mut rng = Rng::seeded(mix(seed, 0x726F_7574));
-            let index = usize::try_from(rng.below(
-                u32::try_from(request.candidates.len()).unwrap_or(1),
-            ))
-            .unwrap_or(0);
+            let index =
+                usize::try_from(rng.below(u32::try_from(request.candidates.len()).unwrap_or(1)))
+                    .unwrap_or(0);
             let named = request
                 .candidates
                 .get(index)

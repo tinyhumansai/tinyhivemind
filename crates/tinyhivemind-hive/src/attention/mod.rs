@@ -149,11 +149,8 @@ fn index_thresholds(thresholds: &[AgentThreshold]) -> Result<BTreeMap<&str, &Age
 /// equality guard exists to damp.
 fn grounded_shares<'a>(context: &BidContext<'a>) -> BTreeMap<&'a str, u32> {
     let floor = context.at.0.saturating_sub(u64::from(context.window));
-    let mut shares: BTreeMap<&str, u32> = context
-        .members
-        .iter()
-        .map(|member| (*member, 0))
-        .collect();
+    let mut shares: BTreeMap<&str, u32> =
+        context.members.iter().map(|member| (*member, 0)).collect();
     for trace in context.traces {
         if trace.sequence.0 < floor || !trace.grounded() {
             continue;

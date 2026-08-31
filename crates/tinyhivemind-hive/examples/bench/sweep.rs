@@ -88,7 +88,15 @@ pub(crate) fn sweep(rooms: &[Room], task: &str) -> Result<Vec<Scored>, String> {
 pub(crate) fn header() -> String {
     format!(
         "{:>7}{:>7}{:>7}{:>7}{:>7}{:>8}{:>11}{:>11}{:>10}",
-        "budget", "quorum", "window", "blind", "domin", "repeat", "decided %", "correct %", "turns/ep"
+        "budget",
+        "quorum",
+        "window",
+        "blind",
+        "domin",
+        "repeat",
+        "decided %",
+        "correct %",
+        "turns/ep"
     )
 }
 
@@ -99,7 +107,11 @@ pub(crate) fn row(point: &Scored) -> String {
         point.policy.turn_budget,
         point.policy.quorum.threshold,
         point.policy.quorum.window,
-        if point.policy.blind_round { "yes" } else { "no" },
+        if point.policy.blind_round {
+            "yes"
+        } else {
+            "no"
+        },
         point.policy.dominance_cap,
         point.policy.repetition_cap,
         point.totals.decision_rate(),

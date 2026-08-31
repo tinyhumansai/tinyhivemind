@@ -145,7 +145,9 @@ impl Host {
     }
 
     fn append(&mut self, author: SessionAuthor, content: String) -> Sequence {
-        let next = u64::try_from(self.journal.len()).unwrap_or(u64::MAX).saturating_add(1);
+        let next = u64::try_from(self.journal.len())
+            .unwrap_or(u64::MAX)
+            .saturating_add(1);
         let sequence = Sequence(next);
         self.journal.push(SessionMessage {
             sequence,

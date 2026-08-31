@@ -62,8 +62,10 @@ pub(crate) fn standing(trace: &Trace, at: Sequence, weights: &SalienceWeights) -
         return Err(Error::ZeroHalfLife);
     }
     let distance = at.0.saturating_sub(trace.sequence.0);
-    Ok(i64::from(weights.recency) * decay(distance, weights.half_life)
-        + i64::from(weights.importance) * importance(trace.kind))
+    Ok(
+        i64::from(weights.recency) * decay(distance, weights.half_life)
+            + i64::from(weights.importance) * importance(trace.kind),
+    )
 }
 
 /// Add one reader's topical relevance to a trace's standing salience.

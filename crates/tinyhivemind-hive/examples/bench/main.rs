@@ -130,7 +130,9 @@ impl Options {
                     options.policy.quorum.threshold = next_number(&mut args).unwrap_or(3);
                 }
                 "--window" => options.policy.quorum.window = next_number(&mut args).unwrap_or(100),
-                "--dominance" => options.policy.dominance_cap = next_number(&mut args).unwrap_or(40),
+                "--dominance" => {
+                    options.policy.dominance_cap = next_number(&mut args).unwrap_or(40)
+                }
                 "--repetition" => {
                     options.policy.repetition_cap = next_number(&mut args).unwrap_or(2);
                 }
@@ -261,10 +263,7 @@ fn compare(options: &Options, rooms: &[Room]) -> Result<(), String> {
 
     println!(
         "\nhive  endings: converged {} · deadlocked {} · exhausted {} · idle {}",
-        hive_default.converged,
-        hive_default.deadlocked,
-        hive_default.exhausted,
-        hive_default.idle,
+        hive_default.converged, hive_default.deadlocked, hive_default.exhausted, hive_default.idle,
     );
     println!(
         "hive+ endings: converged {} · deadlocked {} · exhausted {} · idle {}",

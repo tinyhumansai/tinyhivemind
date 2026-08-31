@@ -101,16 +101,15 @@ pub fn standings(
         if !ordered.contains(&topic) {
             ordered.push(topic);
         }
-        advocacy.entry(trace.sequence).or_default().push((agent, topic));
+        advocacy
+            .entry(trace.sequence)
+            .or_default()
+            .push((agent, topic));
         let entry = supporters.entry(topic).or_default();
         if !entry.contains(&agent) {
             entry.push(agent);
         }
-        *weight
-            .entry(topic)
-            .or_default()
-            .entry(agent)
-            .or_default() += importance(trace.kind);
+        *weight.entry(topic).or_default().entry(agent).or_default() += importance(trace.kind);
     }
 
     let mut silenced: BTreeMap<&TopicId, Vec<&str>> = BTreeMap::new();

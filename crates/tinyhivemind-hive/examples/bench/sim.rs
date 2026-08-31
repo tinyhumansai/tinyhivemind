@@ -105,15 +105,16 @@ impl Room {
         // The truth is placed by the seed rather than at a fixed index, so no
         // arm of the benchmark can score by preferring the first option.
         let truth_index = usize::try_from(mix(seed, 0x7275_7468) % (topics as u64)).unwrap_or(0);
-        let truth = names.get(truth_index).cloned().unwrap_or(TopicId::from("stage"));
+        let truth = names
+            .get(truth_index)
+            .cloned()
+            .unwrap_or(TopicId::from("stage"));
 
         let members = MEMBER_ROLES
             .iter()
             .take(agents)
             .enumerate()
-            .map(|(index, (id, role))| {
-                SimAgent::new(id, *role, seed, index, &names, &truth, noise)
-            })
+            .map(|(index, (id, role))| SimAgent::new(id, *role, seed, index, &names, &truth, noise))
             .collect();
 
         Self {
@@ -213,7 +214,10 @@ impl SimAgent {
         // that is the difference between benchmarking the protocol and
         // benchmarking a formatter.
         if self.rng.chance(NONCOMPLIANCE) {
-            return format!("Thinking about this; {} still looks strongest to me.", self.favourite);
+            return format!(
+                "Thinking about this; {} still looks strongest to me.",
+                self.favourite
+            );
         }
 
         // Two options are both carrying, which is the one state no amount of
@@ -291,7 +295,9 @@ impl SimAgent {
     fn evidence(&self, view: &View) -> String {
         view.proposal(&self.favourite).map_or_else(
             || "!question What would make one of these options clearly safer?".to_owned(),
-            |grounds| format!("!evidence ^{grounds} Prior rollouts of this shape behaved the same way."),
+            |grounds| {
+                format!("!evidence ^{grounds} Prior rollouts of this shape behaved the same way.")
+            },
         )
     }
 }
@@ -313,9 +319,7 @@ impl View {
     fn fold(visible: &[&SessionMessage], quorum: QuorumPolicy) -> Self {
         let mut traces: Vec<Trace> = visible
             .iter()
-            .flat_map(|message| {
-                resolve(&message.content, None, &message.author, message.sequence)
-            })
+            .flat_map(|message| resolve(&message.content, None, &message.author, message.sequence))
             .collect();
         traces.sort_by_key(|trace| (trace.sequence, trace.offset));
         let at = visible
