@@ -103,8 +103,11 @@ pub fn step(
             // below cannot miss; it is written as a match rather than an
             // unwrap so there is no panicking path in library code.
             if state.phase == Phase::Commit
+                && let Some(boundary) = state.commit_boundary
                 && traces.iter().any(|trace| {
-                    trace.kind == TraceKind::Commit && trace.topic.as_ref() == Some(&topic)
+                    trace.kind == TraceKind::Commit
+                        && trace.topic.as_ref() == Some(&topic)
+                        && trace.sequence > boundary
                 })
                 && let Some(standing) = standings
                     .iter()
@@ -153,6 +156,15 @@ pub fn step(
     } else {
         state.phase
     };
+    // Fixed the moment the phase first flips to `Commit`, at the sequence
+    // standings were folded to for that decision, and carried unchanged for
+    // the rest of the episode -- the boundary a converging `!commit` trace
+    // must land strictly after.
+    let commit_boundary = if phase == Phase::Commit {
+        Some(state.commit_boundary.unwrap_or(at))
+    } else {
+        None
+    };
     // `spent < turn_budget <= u32::MAX` was established above, so this
     // addition cannot saturate; the saturating form is used only to keep the
     // arithmetic total without an unreachable error branch.
@@ -170,6 +182,7 @@ pub fn step(
                 phase,
                 thresholds: charged(&state.thresholds, &members, &bid.agent_id),
                 watermark: state.watermark,
+                commit_boundary,
             },
         }),
     })
