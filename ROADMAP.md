@@ -12,8 +12,8 @@ dependency direction is enforced by construction.
 | Phase | What lands | State |
 | --- | --- | --- |
 | P0 | Reshape the TinyBus module template into a plain library workspace | **done** |
-| P1 | Chat identity: `MAIN_THREAD_ID`, `GENERAL_DESK`, `is_general_chat`, `same_conversation` | next |
-| P2 | Desk types, then the membership algebra behind `DeskSet<'a>` | |
+| P1 | Chat identity: `MAIN_THREAD_ID`, `GENERAL_DESK`, `is_general_chat`, `same_conversation` | **done** |
+| P2 | Desk types, then the membership algebra behind `DeskSet<'a>` | next |
 | P3 | The `@` grammar, `Mention`/`MentionTarget`, and resolution over `Roster`/`Person` | |
 | P4 | `crates/tinyteams`: the `SessionLog` port, the paging walk, and the **attributed** transcript projection | |
 | P5 | Continuous sharing — re-seed on a watermark rather than only on a rebind | |
