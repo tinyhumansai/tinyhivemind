@@ -308,6 +308,56 @@ fn an_objection_at_an_unknown_or_absent_target_silences_nobody() {
 }
 
 #[test]
+fn an_objection_silences_every_topic_a_targeted_message_advocated() {
+    // planner's single message advocates two topics at two offsets. An
+    // objection naming that message must silence planner as the advocate of
+    // *both* topics, not just whichever one a sequence-keyed map happened to
+    // remember last.
+    let transcript = vec![
+        said(1, "planner", "!propose #stage\n!propose #ship"),
+        said(2, "critic", "!support #stage ^1 Bounds the blast radius."),
+        said(3, "archivist", "!support #ship ^1 We shipped this before."),
+        said(4, "auditor", "!object >1 ^1 Neither precedent holds."),
+    ];
+    let standings = fold(&transcript, &policy(2));
+
+    let stage = standing(&standings, "stage");
+    assert!(
+        !stage.supporters.contains(&"planner".to_owned()),
+        "planner advocated #stage in the targeted message and must be silenced there too",
+    );
+    assert!(stage.silenced.contains(&"planner".to_owned()));
+
+    let ship = standing(&standings, "ship");
+    assert!(!ship.supporters.contains(&"planner".to_owned()));
+    assert!(ship.silenced.contains(&"planner".to_owned()));
+}
+
+#[test]
+fn silencing_one_of_two_advocates_leaves_only_the_survivors_weight() {
+    // planner proposes (900) and critic supports (500). Objecting to planner
+    // alone must drop planner's 900 from the topic's weight entirely, not
+    // just leave the topic non-empty with both contributions still summed.
+    let transcript = vec![
+        said(1, "planner", "!propose #stage Stage the rollout."),
+        said(2, "critic", "!support #stage ^1 Bounds the blast radius."),
+        said(3, "auditor", "!object >1 ^1 Reconsider the precedent."),
+    ];
+    let standings = fold(&transcript, &policy(2));
+    let stage = standing(&standings, "stage");
+
+    assert_eq!(
+        stage.supporters, ["critic"],
+        "planner is silenced, critic remains",
+    );
+    assert_eq!(
+        stage.support, 500,
+        "the surviving weight must be critic's contribution alone, not \
+         planner's silenced 900 plus critic's 500",
+    );
+}
+
+#[test]
 fn a_repeated_objection_records_an_advocate_once() {
     let transcript = [
         said(1, "planner", "!propose #stage"),
