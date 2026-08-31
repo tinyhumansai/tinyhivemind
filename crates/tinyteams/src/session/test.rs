@@ -1,0 +1,360 @@
+//! Unit tests for validated attributed projection.
+
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
+use super::*;
+use crate::Error;
+use std::{
+    collections::VecDeque,
+    io,
+    sync::{Arc, Mutex},
+};
+
+type Calls = Arc<Mutex<Vec<(Option<Sequence>, usize)>>>;
+
+#[derive(Debug)]
+struct FakeLog {
+    pages: Mutex<VecDeque<std::result::Result<SessionPage, SourceError>>>,
+    calls: Calls,
+}
+
+impl FakeLog {
+    fn new(pages: Vec<SessionPage>) -> Self {
+        Self {
+            pages: Mutex::new(pages.into_iter().map(Ok).collect()),
+            calls: Arc::default(),
+        }
+    }
+
+    fn failing() -> Self {
+        Self {
+            pages: Mutex::new(VecDeque::from([Err(
+                Box::new(io::Error::other("offline")) as SourceError
+            )])),
+            calls: Arc::default(),
+        }
+    }
+
+    fn call_count(&self) -> usize {
+        self.calls.lock().expect("calls lock is not poisoned").len()
+    }
+}
+
+impl SessionLog for FakeLog {
+    fn read_before(&self, before: Option<Sequence>, limit: usize) -> SessionFuture<'_> {
+        self.calls
+            .lock()
+            .expect("calls lock is not poisoned")
+            .push((before, limit));
+        Box::pin(async move {
+            self.pages
+                .lock()
+                .expect("pages lock is not poisoned")
+                .pop_front()
+                .unwrap_or_else(|| Ok(SessionPage::default()))
+        })
+    }
+}
+
+fn conversation() -> Conversation {
+    Conversation {
+        desk_id: "engineering".into(),
+        desk_name: "Engineering".into(),
+        thread_root: None,
+    }
+}
+
+fn query(window: usize) -> SessionQuery {
+    SessionQuery {
+        conversation: conversation(),
+        before: None,
+        window,
+    }
+}
+
+fn message(sequence: u64, chat: Option<&str>, parent: Option<u64>, content: &str) -> LogMessage {
+    LogMessage {
+        sequence: Sequence(sequence),
+        chat_id: chat.map(str::to_owned),
+        parent: parent.map(Sequence),
+        author: SessionAuthor::Agent {
+            id: format!("agent-{sequence}"),
+            label: format!("Agent {sequence}"),
+        },
+        content: content.into(),
+    }
+}
+
+fn page(messages: Vec<LogMessage>, next: Option<u64>) -> SessionPage {
+    SessionPage {
+        messages,
+        next_before: next.map(Sequence),
+    }
+}
+
+#[test]
+fn session_records_pin_their_wire_shape() {
+    let author = SessionAuthor::System {
+        kind: "workflow".into(),
+        label: "Build".into(),
+    };
+    assert_eq!(
+        serde_json::to_value(author).expect("author serializes"),
+        serde_json::json!({"type":"system","kind":"workflow","label":"Build"})
+    );
+    assert_eq!(
+        serde_json::to_value(Sequence(7)).expect("sequence serializes"),
+        serde_json::json!(7)
+    );
+    assert_eq!(Sequence(7).to_string(), "7");
+}
+
+#[test]
+fn session_log_is_object_safe() {
+    fn accepts_object(_: &dyn SessionLog) {}
+    accepts_object(&FakeLog::new(Vec::new()));
+}
+
+#[tokio::test]
+async fn zero_window_performs_no_read() {
+    let log = FakeLog::new(Vec::new());
+    assert!(
+        project_session(&log, &query(0))
+            .await
+            .expect("projects")
+            .is_empty()
+    );
+    assert_eq!(log.call_count(), 0);
+}
+
+#[tokio::test]
+async fn initial_bound_is_exclusive_and_excludes_current_message() {
+    let log = FakeLog::new(vec![page(
+        vec![message(9, Some("engineering"), None, "old")],
+        None,
+    )]);
+    let mut query = query(5);
+    query.before = Some(Sequence(10));
+    let history = project_session(&log, &query).await.expect("projects");
+    assert_eq!(history[0].sequence, Sequence(9));
+    assert_eq!(
+        log.calls.lock().expect("calls lock")[0].0,
+        Some(Sequence(10))
+    );
+}
+
+#[tokio::test]
+async fn reads_multiple_pages_and_returns_chronological_window() {
+    let log = FakeLog::new(vec![
+        page(
+            vec![
+                message(6, Some("engineering"), None, "six"),
+                message(5, Some("other"), None, "other"),
+                message(4, Some("engineering"), None, "four"),
+            ],
+            Some(4),
+        ),
+        page(
+            vec![
+                message(3, Some("engineering"), None, "three"),
+                message(2, Some("engineering"), None, "two"),
+            ],
+            None,
+        ),
+    ]);
+    let history = project_session(&log, &query(4)).await.expect("projects");
+    assert_eq!(
+        history
+            .iter()
+            .map(|item| item.sequence.0)
+            .collect::<Vec<_>>(),
+        vec![2, 3, 4, 6]
+    );
+    assert_eq!(log.call_count(), 2);
+}
+
+#[tokio::test]
+async fn rejects_a_row_at_or_above_the_exclusive_bound() {
+    let log = FakeLog::new(vec![page(
+        vec![message(10, Some("engineering"), None, "bad")],
+        None,
+    )]);
+    let mut query = query(2);
+    query.before = Some(Sequence(10));
+    assert!(matches!(
+        project_session(&log, &query).await,
+        Err(Error::PageOutOfRange { .. })
+    ));
+}
+
+#[tokio::test]
+async fn rejects_rows_that_are_not_strictly_descending() {
+    let log = FakeLog::new(vec![page(
+        vec![message(3, None, None, "a"), message(4, None, None, "b")],
+        None,
+    )]);
+    assert!(matches!(
+        project_session(&log, &query(2)).await,
+        Err(Error::PageNotDescending { .. })
+    ));
+}
+
+#[tokio::test]
+async fn rejects_duplicate_sequences() {
+    let log = FakeLog::new(vec![page(
+        vec![message(3, None, None, "a"), message(3, None, None, "b")],
+        None,
+    )]);
+    assert!(matches!(
+        project_session(&log, &query(2)).await,
+        Err(Error::DuplicateSequence { .. })
+    ));
+}
+
+#[tokio::test]
+async fn rejects_an_empty_page_with_a_cursor() {
+    let log = FakeLog::new(vec![page(Vec::new(), Some(4))]);
+    assert!(matches!(
+        project_session(&log, &query(2)).await,
+        Err(Error::EmptyPageCursor { .. })
+    ));
+}
+
+#[tokio::test]
+async fn rejects_a_cursor_that_does_not_advance() {
+    let log = FakeLog::new(vec![page(vec![message(9, None, None, "a")], Some(10))]);
+    let mut query = query(2);
+    query.before = Some(Sequence(10));
+    assert!(matches!(
+        project_session(&log, &query).await,
+        Err(Error::CursorDidNotAdvance { .. })
+    ));
+}
+
+#[tokio::test]
+async fn rejects_a_cursor_that_is_not_the_oldest_row() {
+    let log = FakeLog::new(vec![page(
+        vec![message(9, None, None, "a"), message(8, None, None, "b")],
+        Some(7),
+    )]);
+    assert!(matches!(
+        project_session(&log, &query(2)).await,
+        Err(Error::CursorDoesNotMatchOldest { .. })
+    ));
+}
+
+#[tokio::test]
+async fn scan_cap_is_a_successful_partial_projection() {
+    let mut pages = Vec::new();
+    for page_index in 0_u64..4 {
+        let high = 3_000 - page_index * PAGE_SIZE as u64;
+        let messages = (0..PAGE_SIZE as u64)
+            .map(|offset| message(high - offset, Some("other"), None, "ignored"))
+            .collect::<Vec<_>>();
+        pages.push(page(messages, Some(high - (PAGE_SIZE as u64 - 1))));
+    }
+    let log = FakeLog::new(pages);
+    assert!(
+        project_session(&log, &query(1))
+            .await
+            .expect("scan cap succeeds")
+            .is_empty()
+    );
+    assert_eq!(log.call_count(), 4);
+}
+
+#[tokio::test]
+async fn filters_by_exact_desk_id_or_name_and_general_aliases() {
+    let log = FakeLog::new(vec![page(
+        vec![
+            message(5, Some("Engineering"), None, "name"),
+            message(4, Some("engineering"), None, "id"),
+            message(3, Some("ENGINEERING"), None, "wrong case"),
+        ],
+        None,
+    )]);
+    let history = project_session(&log, &query(5)).await.expect("projects");
+    assert_eq!(
+        history
+            .iter()
+            .map(|item| item.content.as_str())
+            .collect::<Vec<_>>(),
+        vec!["id", "name"]
+    );
+
+    let general = FakeLog::new(vec![page(vec![message(2, None, None, "general")], None)]);
+    let mut general_query = query(2);
+    general_query.conversation.desk_id = "General".into();
+    general_query.conversation.desk_name = "General".into();
+    assert_eq!(
+        project_session(&general, &general_query)
+            .await
+            .expect("general")
+            .len(),
+        1
+    );
+}
+
+#[tokio::test]
+async fn channel_projection_excludes_thread_replies() {
+    let log = FakeLog::new(vec![page(
+        vec![
+            message(3, Some("engineering"), Some(2), "reply"),
+            message(2, Some("engineering"), None, "channel"),
+        ],
+        None,
+    )]);
+    let history = project_session(&log, &query(3)).await.expect("projects");
+    assert_eq!(history.len(), 1);
+    assert_eq!(history[0].content, "channel");
+}
+
+#[tokio::test]
+async fn thread_keeps_root_and_direct_children_then_stops_at_root() {
+    let log = FakeLog::new(vec![page(
+        vec![
+            message(8, Some("engineering"), Some(6), "nested elsewhere"),
+            message(7, Some("engineering"), Some(5), "child"),
+            message(6, Some("engineering"), Some(5), "child two"),
+            message(5, Some("engineering"), None, "root"),
+            message(4, Some("engineering"), None, "older"),
+        ],
+        None,
+    )]);
+    let mut query = query(8);
+    query.conversation.thread_root = Some(Sequence(5));
+    let history = project_session(&log, &query).await.expect("projects");
+    assert_eq!(
+        history
+            .iter()
+            .map(|item| item.sequence.0)
+            .collect::<Vec<_>>(),
+        vec![5, 6, 7]
+    );
+}
+
+#[tokio::test]
+async fn skips_trim_empty_content_but_preserves_other_bytes_and_author() {
+    let author = SessionAuthor::Person {
+        id: "p1".into(),
+        label: "Pat".into(),
+    };
+    let mut kept = message(4, Some("engineering"), None, "  keep me  \n");
+    kept.author = author.clone();
+    let log = FakeLog::new(vec![page(
+        vec![kept, message(3, Some("engineering"), None, " \n\t ")],
+        None,
+    )]);
+    let history = project_session(&log, &query(3)).await.expect("projects");
+    assert_eq!(history[0].content, "  keep me  \n");
+    assert_eq!(history[0].author, author);
+}
+
+#[tokio::test]
+async fn propagates_source_errors_with_their_source() {
+    let error = project_session(&FakeLog::failing(), &query(2))
+        .await
+        .expect_err("read fails");
+    assert!(matches!(error, Error::Read { .. }));
+    assert!(std::error::Error::source(&error).is_some());
+}

@@ -26,3 +26,5 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a test-first sample
 - [`chat-identity.md`](chat-identity.md) — implemented P1 conversation identity.
 - [`desks.md`](desks.md) — P2 desk DTOs, validation, and membership overlay.
 - [`mentions.md`](mentions.md) — P3 roster and mention resolution.
+- [`sessions.md`](sessions.md) — P4 attributed session projection and team
+  initialization.

@@ -30,3 +30,5 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a complete sample.
   algebra.
 - [`mentions.md`](mentions.md) — roster records, mention grammar, normalization,
   and pure routing decisions.
+- [`sessions.md`](sessions.md) — host-owned paging, attributed projection, and
+  ephemeral team initialization.
