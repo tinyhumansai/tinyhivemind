@@ -12,7 +12,7 @@ each caller performs that merge itself, a mention can resolve a different
 group from the one rendered in the UI, and a partial order can silently drop
 or invent a participant.
 
-The host owns all storage. `tinyteams-core` receives borrowed snapshots and
+The host owns all storage. `tinyhivemind-core` receives borrowed snapshots and
 performs only validation and projection over those arguments.
 
 ## Goals

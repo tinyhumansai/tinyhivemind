@@ -1,7 +1,7 @@
 # Hive mind
 
 **Status:** Accepted
-**Owner:** tinyteams maintainers
+**Owner:** tinyhivemind maintainers
 
 ## Problem
 

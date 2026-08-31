@@ -1,31 +1,31 @@
 #!/usr/bin/env bash
 # Assert that the pure crates stay pure.
 #
-# `tinyteams-core` is linked into the hot path of every agent turn and must
+# `tinyhivemind-core` is linked into the hot path of every agent turn and must
 # compile in a host's default build with no feature flags. That promise is
 # invisible in a diff, because a forbidden dependency arrives transitively
 # through a feature someone enabled one crate away — so it is asserted rather
 # than documented.
 #
-# The FORWARD form is required. `cargo tree -i <crate> -p tinyteams-core`
+# The FORWARD form is required. `cargo tree -i <crate> -p tinyhivemind-core`
 # discards the `-p` scope, prints the whole-workspace inverse tree, and exits 0
 # looking clean even when this crate is the one at fault.
 set -euo pipefail
 
 # Crates that may not depend on a runtime, a transport, or a web framework.
 #
-# `tinyteams-hive` is here rather than in the exempt list below because it
+# `tinyhivemind-hive` is here rather than in the exempt list below because it
 # defines no port of its own: an episode is a pure state machine over a
 # transcript the caller already holds, and every host obligation it needs is
-# already carried by `tinyteams`. See
+# already carried by `tinyhivemind`. See
 # docs/adr/0002-hive-episodes-are-sequential.md.
-pure_crates=("tinyteams-core" "tinyteams-hive")
+pure_crates=("tinyhivemind-core" "tinyhivemind-hive")
 
-# `tinyteams` (the session runtime) is exempt from `tokio`/`futures`/
+# `tinyhivemind` (the session runtime) is exempt from `tokio`/`futures`/
 # `async-trait`, which it needs for its ports — but not from the rest. Its
 # ports are boxed `std::future::Future`s, so today it needs none of the three;
 # the exemption exists so that adding one is not a CI failure.
-exempt_async_crates=("tinyteams")
+exempt_async_crates=("tinyhivemind")
 
 # This is a maintained blocklist of known offenders, not an exhaustive
 # allowlist: it names every async runtime, transport, HTTP client, database

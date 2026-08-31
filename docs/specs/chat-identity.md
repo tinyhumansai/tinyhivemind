@@ -18,8 +18,8 @@ failing to match the `"General"` id it is rendered under, so a threaded
 continuation resumes in the channel instead of its thread.
 
 This behavior already exists, byte-for-byte, in `opencompany`'s
-`src/server/chat_history.rs`. This is a relocation into the `tinyteams-core`
-crate that both `opencompany` and future `tinyteams` consumers can share, not
+`src/server/chat_history.rs`. This is a relocation into the `tinyhivemind-core`
+crate that both `opencompany` and future `tinyhivemind` consumers can share, not
 a redesign.
 
 ## Goals
@@ -47,7 +47,7 @@ a redesign.
 ## Proposed behavior
 
 ```rust
-use tinyteams_core::chat::{GENERAL_DESK, MAIN_THREAD_ID, is_general_chat, same_conversation};
+use tinyhivemind_core::chat::{GENERAL_DESK, MAIN_THREAD_ID, is_general_chat, same_conversation};
 
 assert!(is_general_chat(None));
 assert!(is_general_chat(Some("")));
@@ -62,7 +62,7 @@ assert!(!same_conversation(Some("engineering"), Some("Engineering")));
 
 `MAIN_THREAD_ID` (`"main"`) is the console's default/orchestrator thread id;
 `GENERAL_DESK` (`"General"`) is the default desk's own id and display name.
-Both constants and both functions are public under `tinyteams_core::chat`.
+Both constants and both functions are public under `tinyhivemind_core::chat`.
 
 ## Invariants and constraints
 

@@ -33,10 +33,10 @@ so it can incur OpenRouter usage charges. Like the deterministic legacy
 harness, it manually invokes agents and does not prove P7 mention dispatch.
 
 ```sh
-TINYTEAMS_LIVE_OPENROUTER=1 \
+TINYHIVEMIND_LIVE_OPENROUTER=1 \
 OPENROUTER_API_KEY='<key>' \
 OPENROUTER_MODEL='<provider/model>' \
-cargo test -p tinyteams-core --features e2e --test openrouter_live -- --nocapture
+cargo test -p tinyhivemind-core --features e2e --test openrouter_live -- --nocapture
 ```
 
 The API key is read only by the test process and is never logged. Both the key
@@ -47,7 +47,7 @@ placed in the process argument list.
 
 ## Hive deliberation suite
 
-`crates/tinyteams-hive` carries its own in-memory host under
+`crates/tinyhivemind-hive` carries its own in-memory host under
 `tests/support/hive_harness.rs`: it owns the journal, runs the one turn each
 step authorizes, appends it, and commits the returned state. `hive_episode.rs`
 drives that host through convergence, budget exhaustion, a blind opening round,
@@ -57,16 +57,16 @@ inheriting the votes of the conversation before it.
 The bundled example prints a readable episode trace and needs no model:
 
 ```sh
-cargo run -p tinyteams-hive --example hive
+cargo run -p tinyhivemind-hive --example hive
 ```
 
 The live episode mirrors the OpenRouter suite above and is gated the same way:
 
 ```sh
-TINYTEAMS_LIVE_OPENROUTER=1 \
+TINYHIVEMIND_LIVE_OPENROUTER=1 \
 OPENROUTER_API_KEY='<key>' \
 OPENROUTER_MODEL='<provider/model>' \
-cargo test -p tinyteams-hive --features e2e --test openrouter_hive_live -- --nocapture
+cargo test -p tinyhivemind-hive --features e2e --test openrouter_hive_live -- --nocapture
 ```
 
 It asserts **structure, not quality**: that real models emit parseable traces,

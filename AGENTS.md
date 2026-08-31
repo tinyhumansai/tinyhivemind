@@ -6,7 +6,7 @@ the same instructions.
 
 ## Charter
 
-`tinyteams` is **group chats for agents**: a shared session transcript that
+`tinyhivemind` is **group chats for agents**: a shared session transcript that
 several agents read and write, and the mechanism by which a message triggers the
 right agent to run a turn.
 
@@ -17,7 +17,7 @@ shared transcript.
 Three rules decide what belongs here:
 
 1. **The host owns storage.** This repository never opens a database, a file, or
-   a socket. `crates/tinyteams-core` is a pure algebra; `crates/tinyteams` owns
+   a socket. `crates/tinyhivemind-core` is a pure algebra; `crates/tinyhivemind` owns
    *ports* a host implements, and nothing more. In particular there is no second
    append-only journal: messages are addressed by sequence number across
    surfaces the host owns, so a second log could not be made consistent with the
@@ -30,7 +30,7 @@ Three rules decide what belongs here:
    that could start N turns without an approval in sight is the failure mode the
    whole design avoids.
 
-`crates/tinyteams-core` additionally may not depend on an async runtime, a
+`crates/tinyhivemind-core` additionally may not depend on an async runtime, a
 transport, an HTTP client, a web framework, a SQL database client, a git
 implementation, or `anyhow` (non-exhaustive — see the enumerated list in
 `.github/scripts/assert-pure.sh`, the source of truth): it is linked into the
@@ -50,7 +50,7 @@ the package it holds. There is no root package.
 Cargo.toml              # virtual workspace: members, [workspace.package],
                         # [workspace.dependencies], [workspace.lints]
 crates/
-├── tinyteams-core/     # the pure algebra: no async, no IO, no host types
+├── tinyhivemind-core/     # the pure algebra: no async, no IO, no host types
 │   └── src/
 │       ├── lib.rs      # crate docs + the entire public re-export surface
 │       ├── error/mod.rs      # crate-wide `Error` and `Result<T>`
@@ -58,9 +58,9 @@ crates/
 │           ├── mod.rs        # module docs, wiring, smallest useful public API
 │           ├── types.rs      # substantial type definitions
 │           └── test.rs       # module-local unit tests
-├── tinyteams/          # the session runtime: ports, the paging walk, the
+├── tinyhivemind/          # the session runtime: ports, the paging walk, the
 │                       # responder ladder. Lands in P4; see ROADMAP.md.
-└── tinyteams-hive/     # bounded group deliberation: traces, salience, quorum
+└── tinyhivemind-hive/     # bounded group deliberation: traces, salience, quorum
                         # with cross-inhibition, the attention market, and the
                         # episode state machine. Pure, opt-in; lands in P8.
 docs/
@@ -71,16 +71,16 @@ docs/
 
 ### The two-crate split
 
-`crates/tinyteams-core` holds the algebra: desks and membership, the roster, the
+`crates/tinyhivemind-core` holds the algebra: desks and membership, the roster, the
 mention grammar and its resolution, and the fold that projects a shared
 transcript into one viewer's turn history. Every function there is a fold over
 data the caller already holds. P4 (see `ROADMAP.md`) replaces the
 `(role, content)` pair this fold produces with an attributed `SessionMessage`
-in `crates/tinyteams` — the projection *algorithm* stays here in core, but the
+in `crates/tinyhivemind` — the projection *algorithm* stays here in core, but the
 richer, attributed shape it produces is assembled by the crate that also owns
 the paging walk over a live session log.
 
-`crates/tinyteams` holds the parts that must wait on something — the paging walk
+`crates/tinyhivemind` holds the parts that must wait on something — the paging walk
 over a session log, the responder ladder, the mention-dispatch edge — expressed
 against ports a host implements. It depends on the core crate and re-exports it,
 so a host takes one dependency rather than two and the types are the *same*
@@ -94,7 +94,7 @@ is what keeps the interesting logic testable without a fixture.
 
 ### The hive crate
 
-`crates/tinyteams-hive` is opt-in and answers a different question from the
+`crates/tinyhivemind-hive` is opt-in and answers a different question from the
 other two: not *who responds to this message* but *how does a room of agents
 reach a decision*. It is **pure and defines no port** — an episode is
 `step(state, transcript, roster, desks, policy) -> HiveStep`, a fold over
@@ -140,7 +140,7 @@ broad ones.
 
 Keep public exports centralized in each crate's `src/lib.rs` so downstream users
 have one predictable surface. Put shared error variants in
-`crates/tinyteams-core/src/error/mod.rs` and return the crate-wide `Result<T>` from
+`crates/tinyhivemind-core/src/error/mod.rs` and return the crate-wide `Result<T>` from
 fallible public APIs.
 
 ## Build And Test
@@ -159,9 +159,9 @@ Supporting commands:
 
 - `cargo fmt --all` — format before committing.
 - `cargo test <filter>` — run a focused subset while iterating.
-- `cargo test -p tinyteams-core` — run one crate's suite.
-- `cargo run -p tinyteams-core --example basic` — run the bundled example.
-- `cargo run -p tinyteams-hive --example hive` — print one deliberation episode.
+- `cargo test -p tinyhivemind-core` — run one crate's suite.
+- `cargo run -p tinyhivemind-core --example basic` — run the bundled example.
+- `cargo run -p tinyhivemind-hive --example hive` — print one deliberation episode.
 - `.github/scripts/assert-pure.sh` — assert the pure crates took on no
   runtime, transport, or web-framework dependency.
 - `cargo doc --no-deps --all-features` — build the rustdoc CI also builds with
@@ -214,7 +214,7 @@ add one:
 - gate anything optional behind a Cargo feature, documented in `Cargo.toml`;
 - declare it once in the root `[workspace.dependencies]` when more than one
   crate needs it, and take it with `{ workspace = true }`;
-- never add one to `crates/tinyteams-core` that pulls in a transport, an async
+- never add one to `crates/tinyhivemind-core` that pulls in a transport, an async
   runtime, an HTTP client, a web framework, a SQL database client, a git
   implementation, or `anyhow` (non-exhaustive — see
   `.github/scripts/assert-pure.sh`) — CI fails the build if you do;

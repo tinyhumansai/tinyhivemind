@@ -2,7 +2,7 @@
 resolver = "3"
 # Every crate in this repository lives under `crates/`, one directory per
 # package, each directory named for the package it holds. There is no root
-# package: the crate a host links is `crates/tinyteams-core`, the same as any
+# package: the crate a host links is `crates/tinyhivemind-core`, the same as any
 # other member. Keeping the root virtual is what makes that uniform.
 members = ["crates/*"]
 # `worktrees/` holds `git worktree` checkouts of this same repository; each
@@ -19,26 +19,26 @@ version = "0.2.1"
 edition = "2024"
 rust-version = "1.88"
 license = "GPL-3.0-only"
-repository = "https://github.com/tinyhumansai/tinyteams"
+repository = "https://github.com/tinyhumansai/tinyhivemind"
 
 [workspace.dependencies]
-# The pure half: the desk/roster/mention/session algebra. `crates/tinyteams`
+# The pure half: the desk/roster/mention/session algebra. `crates/tinyhivemind`
 # (the session runtime, added in P4) depends on it and re-exports it, so a host
 # that only needs the algebra takes this crate alone.
 # No `version` requirement on purpose: the workspace version can move on any
 # commit, and a pinned requirement here would stop resolving the moment it did.
 # Nothing in this workspace is published, so the path is the whole address.
-tinyteams-core = { path = "crates/tinyteams-core" }
+tinyhivemind-core = { path = "crates/tinyhivemind-core" }
 # The session runtime: the host ports, attributed projection, and continuous
-# sharing. `crates/tinyteams-hive` folds over its session types and depends on
+# sharing. `crates/tinyhivemind-hive` folds over its session types and depends on
 # it directly; a host that wants group deliberation takes the hive crate and
 # gets both of the others transitively.
-tinyteams = { path = "crates/tinyteams" }
+tinyhivemind = { path = "crates/tinyhivemind" }
 # Bounded group deliberation over a shared desk: traces, salience, quorum with
 # cross-inhibition, and the attention market. Pure, and opt-in — a host that
 # only wants one-responder routing never links it.
-tinyteams-hive = { path = "crates/tinyteams-hive" }
-# Derive macros for the crate-wide error type in `crates/tinyteams-core/src/error/`.
+tinyhivemind-hive = { path = "crates/tinyhivemind-hive" }
+# Derive macros for the crate-wide error type in `crates/tinyhivemind-core/src/error/`.
 # Every dependency entry should carry a comment like this one saying why it is
 # here.
 thiserror = "2"

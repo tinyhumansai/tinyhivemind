@@ -1,7 +1,7 @@
 # Roster and mention resolution
 
 **Status:** Implemented
-**Owner:** tinyteams maintainers
+**Owner:** tinyhivemind maintainers
 
 ## Problem
 
@@ -91,7 +91,7 @@ unaddressed/General conversation.
   desk-only syntax, inline/fenced code, supplied suppression and revalidation,
   self/repeat/cap normalization, retired agents, responder selection, and
   addressed-desk/everyone context expansion.
-- `tinyteams-core` remains accepted by the purity assertion.
+- `tinyhivemind-core` remains accepted by the purity assertion.
 
 ## Open questions
 

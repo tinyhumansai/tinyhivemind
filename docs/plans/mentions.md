@@ -12,7 +12,7 @@ storage, dispatch, or host types.
 
 1. **Roster structure and wire form**
    - Add failing validation and serde tests in
-     `crates/tinyteams-core/src/roster/test.rs`.
+     `crates/tinyhivemind-core/src/roster/test.rs`.
    - Implement `RosterMember`, `Person`, and borrowed `Roster` in the roster
      module, with typed errors in `src/error/mod.rs`.
 2. **Mention payloads and extraction**
@@ -35,8 +35,8 @@ storage, dispatch, or host types.
 
 ```sh
 cargo fmt --all -- --check
-cargo clippy -p tinyteams-core --all-targets --all-features -- -D warnings
-cargo test -p tinyteams-core --all-features
+cargo clippy -p tinyhivemind-core --all-targets --all-features -- -D warnings
+cargo test -p tinyhivemind-core --all-features
 .github/scripts/assert-pure.sh
 ```
 

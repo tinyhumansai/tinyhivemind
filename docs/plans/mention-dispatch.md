@@ -11,11 +11,11 @@ port without adding persistence, retries, fan-out, or host types.
 
 1. Add failing core wire and decision tests; implement dispatch payloads,
    reasons, policy ordering, first-direct-mention fail-closed behavior, and
-   checked child-hop construction in `crates/tinyteams-core/src/dispatch/`.
+   checked child-hop construction in `crates/tinyhivemind-core/src/dispatch/`.
 2. Add failing runtime port tests for no-call, one-call, refusal, failure,
    bound scope, and concurrent idempotency; implement
    `MentionTurnQueue` and `dispatch_mention` in
-   `crates/tinyteams/src/dispatch/`.
+   `crates/tinyhivemind/src/dispatch/`.
 3. Add typed runtime enqueue failure, public exports and crate documentation.
 4. Link the specification and plan, then mark P7 complete with host integration
    and live verification as the next work.

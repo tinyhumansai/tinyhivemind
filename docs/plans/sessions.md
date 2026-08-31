@@ -10,7 +10,7 @@ watermarks, response selection, mention dispatch, storage, or a runtime choice.
 
 ## Test-first tasks
 
-1. Create `crates/tinyteams/src/session/types.rs` and pin the serde forms of
+1. Create `crates/tinyhivemind/src/session/types.rs` and pin the serde forms of
    sequence, conversation, authors, raw rows, pages, projected messages, and
    queries in `session/test.rs` before implementing the records.
 2. Add the object-safe `SessionLog` port and compile a trait-object test before

@@ -1,7 +1,7 @@
 # Attributed session projection and initialization
 
 **Status:** Implemented  
-**Owner:** tinyteams maintainers
+**Owner:** tinyhivemind maintainers
 
 ## Problem
 
@@ -29,7 +29,7 @@ description of its teammates and the rules of the shared room.
 
 ## Proposed behavior
 
-The `tinyteams` runtime crate depends on and re-exports `tinyteams-core`.
+The `tinyhivemind` runtime crate depends on and re-exports `tinyhivemind-core`.
 `Sequence(u64)` identifies host log rows. `Conversation` names a desk by its
 canonical id and display name and optionally names a thread root. `LogMessage`
 contains its sequence, optional stored chat id, optional direct parent,
@@ -53,7 +53,7 @@ rows. Violations are typed errors. Source read errors retain their source.
 Reaching the scan cap is successful and returns the qualifying history found
 so far.
 
-Conversation filtering uses `tinyteams_core::chat::same_conversation` against
+Conversation filtering uses `tinyhivemind_core::chat::same_conversation` against
 both the desk id and display name. Channel projection keeps only rows without a
 parent. Thread projection keeps the root and its direct children, and stops
 scanning once the root row is reached, even if that row has blank content.

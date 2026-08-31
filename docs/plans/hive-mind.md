@@ -14,13 +14,13 @@ a journal, an async dependency, or fan-out.
    [`../adr/0002-hive-episodes-are-sequential.md`](../adr/0002-hive-episodes-are-sequential.md),
    which fixes the sequential-episode decision and the no-new-port claim before
    any code is written.
-2. Create `crates/tinyteams-hive/` with its manifest, `lib.rs` and
+2. Create `crates/tinyhivemind-hive/` with its manifest, `lib.rs` and
    `error/mod.rs`; wire it into `[workspace.dependencies]` and add it to
    `pure_crates` in `.github/scripts/assert-pure.sh`. Close that script's
-   own long-standing gap by giving `tinyteams` the narrower exempt list its
+   own long-standing gap by giving `tinyhivemind` the narrower exempt list its
    comment already calls for.
 3. Add failing wire and grammar tests, then implement `trace/`, mirroring
-   `tinyteams-core`'s `mention/` in its two input modes and preserved spans.
+   `tinyhivemind-core`'s `mention/` in its two input modes and preserved spans.
 4. Add failing decay tests, then implement `salience/` in fixed-point integer
    arithmetic, pinning the shipped weights rather than the published ones.
 5. Add failing standing tests — including the deadlock that only cross-inhibition
@@ -44,7 +44,7 @@ cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo build --all-targets --all-features
 cargo test --all-features
-cargo run -p tinyteams-hive --example hive
+cargo run -p tinyhivemind-hive --example hive
 .github/scripts/assert-pure.sh
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
 cargo test --doc

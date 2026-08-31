@@ -113,18 +113,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "tinyteams"
+name = "tinyhivemind"
 version = "0.2.1"
 dependencies = [
  "serde",
  "serde_json",
  "thiserror",
- "tinyteams-core",
+ "tinyhivemind-core",
  "tokio",
 ]
 
 [[package]]
-name = "tinyteams-core"
+name = "tinyhivemind-core"
 version = "0.2.1"
 dependencies = [
  "serde",
@@ -133,14 +133,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "tinyteams-hive"
+name = "tinyhivemind-hive"
 version = "0.2.1"
 dependencies = [
  "serde",
  "serde_json",
  "thiserror",
- "tinyteams",
- "tinyteams-core",
+ "tinyhivemind",
+ "tinyhivemind-core",
 ]
 
 [[package]]

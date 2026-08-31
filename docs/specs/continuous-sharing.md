@@ -1,7 +1,7 @@
 # Continuous transcript sharing
 
 **Status:** Implemented
-**Owner:** tinyteams maintainers
+**Owner:** tinyhivemind maintainers
 
 ## Problem
 

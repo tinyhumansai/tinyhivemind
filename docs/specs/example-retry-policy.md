@@ -29,7 +29,7 @@ and validation. The crate currently has no retry behavior.
 The public surface is deliberately small:
 
 ```rust
-use tinyteams_core::{RetryPolicy, Result};
+use tinyhivemind_core::{RetryPolicy, Result};
 
 fn policy() -> Result<RetryPolicy> {
     let policy = RetryPolicy::new(3)?;

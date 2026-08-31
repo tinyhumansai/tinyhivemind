@@ -5,7 +5,7 @@
 
 ## Context
 
-`crates/tinyteams-hive` adds group deliberation: a bounded episode in which
+`crates/tinyhivemind-hive` adds group deliberation: a bounded episode in which
 several agents on one desk propose, support, object, and reach a decision. A
 "hive mind" is normally built as fan-out — publish a task, wake N agents, gather
 their replies — and the charter forbids exactly that: *one message, one turn*,
@@ -50,7 +50,7 @@ Independence is bought as **visibility**, not as concurrency. A turn carries a
 blind round — round one formed without sight of peers, then revealed — restores
 the independence condition for the price of a projection flag.
 
-Consequently `tinyteams-hive` is a pure crate. It defines no port and no trait
+Consequently `tinyhivemind-hive` is a pure crate. It defines no port and no trait
 for a host to implement: an episode is `step(state, transcript, …) -> HiveStep`,
 and the host does its waiting through the `SessionLog`, `Selector`, and
 `MentionTurnQueue` ports it already implements for P4 through P7. It is added to

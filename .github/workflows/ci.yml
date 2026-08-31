@@ -53,14 +53,14 @@ jobs:
         run: cargo test
 
       # `cargo build --all-targets` only *compiles* an example. `AGENTS.md`
-      # promises `cargo run -p tinyteams-core --example basic` works, and a
+      # promises `cargo run -p tinyhivemind-core --example basic` works, and a
       # compiled example can still fail on its first line.
       - name: Run the bundled examples
         run: |
-          cargo run -p tinyteams-core --example basic
-          cargo run -p tinyteams-hive --example hive
+          cargo run -p tinyhivemind-core --example basic
+          cargo run -p tinyhivemind-hive --example hive
 
-      # `tinyteams-core` is what a host links on the hot path of every agent
+      # `tinyhivemind-core` is what a host links on the hot path of every agent
       # turn, in its default build. Keeping it free of runtimes and transports
       # is what makes that affordable, and what keeps the dependency arrow
       # pointing one way.
@@ -111,7 +111,7 @@ jobs:
         run: |
           set -euo pipefail
           msrv="$(cargo metadata --format-version 1 --no-deps \
-            | jq -r '.packages[] | select(.name == "tinyteams-core") | .rust_version')"
+            | jq -r '.packages[] | select(.name == "tinyhivemind-core") | .rust_version')"
           if [[ -z "$msrv" || "$msrv" == "null" ]]; then
             echo "workspace.package.rust-version is not set in Cargo.toml" >&2
             exit 1

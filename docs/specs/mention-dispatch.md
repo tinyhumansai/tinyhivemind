@@ -1,7 +1,7 @@
 # Mention dispatch
 
 **Status:** Implemented
-**Owner:** tinyteams maintainers
+**Owner:** tinyhivemind maintainers
 
 ## Problem
 

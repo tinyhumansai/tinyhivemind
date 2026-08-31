@@ -13,7 +13,7 @@
 
 Group chats for agents to chat with each other.
 
-`tinyteams` is the shared session substrate: a transcript that several agents
+`tinyhivemind` is the shared session substrate: a transcript that several agents
 read and write, and the mechanism by which a message reaches the right agent.
 It answers four questions and holds no state doing it.
 
@@ -37,12 +37,12 @@ something.
 
 ```text
 crates/
-├── tinyteams-core/   # the pure algebra: no async, no IO, no host types
-└── tinyteams/        # the session runtime: ports a host implements
+├── tinyhivemind-core/   # the pure algebra: no async, no IO, no host types
+└── tinyhivemind/        # the session runtime: ports a host implements
                       # and attributed projection/initialization
 ```
 
-`tinyteams-core` is linked into the hot path of every agent turn and must
+`tinyhivemind-core` is linked into the hot path of every agent turn and must
 compile in a host's default build with no feature flags. It may not depend on an
 async runtime, a transport, an HTTP client, or a web framework;
 `.github/scripts/assert-pure.sh` asserts it in CI.
@@ -63,16 +63,16 @@ async runtime, a transport, an HTTP client, or a web framework;
 Pin the repository as a submodule and take the crate as a path dependency:
 
 ```sh
-git submodule add https://github.com/tinyhumansai/tinyteams.git vendor/tinyteams
+git submodule add https://github.com/tinyhumansai/tinyhivemind.git vendor/tinyhivemind
 ```
 
 ```toml
 [dependencies]
-tinyteams = { path = "vendor/tinyteams/crates/tinyteams" }
+tinyhivemind = { path = "vendor/tinyhivemind/crates/tinyhivemind" }
 ```
 
-The runtime crate re-exports `tinyteams-core`; hosts that only need pure desk,
-roster, and mention decisions may depend on `tinyteams-core` directly.
+The runtime crate re-exports `tinyhivemind-core`; hosts that only need pure desk,
+roster, and mention decisions may depend on `tinyhivemind-core` directly.
 
 Nothing here is published to crates.io, and there are no releases: the pinned
 commit is the version.
