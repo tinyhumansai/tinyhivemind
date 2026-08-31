@@ -11,8 +11,9 @@ members = ["crates/*"]
 exclude = ["worktrees"]
 
 # Shared package metadata. A member inherits a field with `field.workspace =
-# true`, so the version the release workflow bumps is written in exactly one
-# place and every crate moves together.
+# true`, so the version is written in exactly one place and every crate moves
+# together. There is no release workflow and nothing here is published: a
+# consumer pins a git commit, and that commit is the version.
 [workspace.package]
 version = "0.2.1"
 edition = "2024"
