@@ -85,9 +85,9 @@ pub fn step(
             // still be folded into standings and could manufacture quorum
             // nobody eligible actually holds.
             SessionAuthor::Agent { id, .. } => members.iter().any(|member| *member == id),
-            SessionAuthor::Operator | SessionAuthor::Person { .. } | SessionAuthor::System { .. } => {
-                true
-            }
+            SessionAuthor::Operator
+            | SessionAuthor::Person { .. }
+            | SessionAuthor::System { .. } => true,
         })
         .cloned()
         .collect();
@@ -103,9 +103,9 @@ pub fn step(
             // below cannot miss; it is written as a match rather than an
             // unwrap so there is no panicking path in library code.
             if state.phase == Phase::Commit
-                && traces
-                    .iter()
-                    .any(|trace| trace.kind == TraceKind::Commit && trace.topic.as_ref() == Some(&topic))
+                && traces.iter().any(|trace| {
+                    trace.kind == TraceKind::Commit && trace.topic.as_ref() == Some(&topic)
+                })
                 && let Some(standing) = standings
                     .iter()
                     .find(|standing| standing.topic == topic)
