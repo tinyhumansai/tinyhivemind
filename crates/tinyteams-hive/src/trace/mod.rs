@@ -143,9 +143,9 @@ fn parse_line(
         } else if let Some(value) = word.strip_prefix('^')
             && let Ok(parsed) = value.parse()
         {
-            let cited = Sequence(parsed);
-            if !cites.contains(&cited) {
-                cites.push(cited);
+            let ground = Sequence(parsed);
+            if !cites.contains(&ground) {
+                cites.push(ground);
             }
         }
     }
