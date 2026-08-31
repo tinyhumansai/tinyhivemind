@@ -35,12 +35,27 @@ impl StubSelector {
 }
 
 impl Selector for StubSelector {
-    fn select(&self, _: &SelectionRequest) -> SelectorFuture<'_> {
+    fn select<'a>(&'a self, _: &'a SelectionRequest) -> SelectorFuture<'a> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         Box::pin(async move {
             self.output
                 .map(str::to_owned)
                 .map_err(|()| Box::new(io::Error::other("selector failed")) as BoxError)
+        })
+    }
+}
+
+struct BorrowingSelector;
+
+impl Selector for BorrowingSelector {
+    fn select<'a>(&'a self, request: &'a SelectionRequest) -> SelectorFuture<'a> {
+        Box::pin(async move {
+            tokio::task::yield_now().await;
+            if request.message == "Review this" {
+                Ok("bob".to_owned())
+            } else {
+                Ok("alice".to_owned())
+            }
         })
     }
 }
@@ -110,6 +125,24 @@ async fn valid_selector_output_is_called_once_and_selects_one_agent() {
     assert_eq!(selected.responder_id, "bob");
     assert_eq!(selected.rung, ResponderRung::AutoSelection);
     assert_eq!(selected.disposition, SelectionDisposition::Selected);
+}
+
+#[tokio::test]
+async fn selector_may_borrow_the_request_across_an_await() {
+    let (members, records, request, details) = fixture();
+    let roster = Roster::new(&members, &[], &[]);
+    let desks = DeskSet::new(&records, &[], &[], &[], &[]);
+    let selected = choose_responder(
+        Some(&BorrowingSelector),
+        &request,
+        &roster,
+        &desks,
+        &details,
+    )
+    .await
+    .unwrap();
+    assert_eq!(selected.responder_id, "bob");
+    assert_eq!(selected.rung, ResponderRung::AutoSelection);
 }
 
 #[tokio::test]

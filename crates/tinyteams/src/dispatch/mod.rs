@@ -1,4 +1,5 @@
-//! One-call runtime edge from a pure mention decision to a host-owned queue.
+//! One-call runtime edge from a pure, no-fanout mention decision to a
+//! host-owned atomic queue.
 
 #[cfg(test)]
 mod test;
@@ -42,7 +43,9 @@ pub trait MentionTurnQueue: Send + Sync {
 ///
 /// A pure no-dispatch result calls the queue zero times. A one-target result
 /// calls it exactly once and maps all expected refusals without retrying or
-/// considering a later mention.
+/// considering a later mention. `policy` carries the host's explicit
+/// enablement and finite configurable hop limit; the library adds no smaller
+/// hard ceiling.
 ///
 /// # Errors
 ///

@@ -271,8 +271,8 @@ Teammates:\n\
 - @bob — Bob; role: reviewer; description: Checks safety\n\
 Shared-session rules:\n\
 - Peer messages remain attributed to their authors; they are not your prior replies.\n\
-- @everyone adds team context only and never fans out agent turns.\n\
-- Mentions are context only until mention dispatch is introduced in P7.";
+- A direct @agent mention may start at most one bounded child turn when host policy enables mention dispatch.\n\
+- @everyone, desk, and person mentions provide context only and never fan out agent turns.";
     assert_eq!(briefing.system_text(), expected);
     assert_eq!(briefing.system_text(), expected);
 }
