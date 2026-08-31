@@ -142,8 +142,7 @@ fn run(
             .iter_mut()
             .find(|(id, _)| *id == turn.agent_id)
             .and_then(|(_, script)| script.pop_front())
-            .map(str::to_owned)
-            .unwrap_or_else(|| out_of_script_utterance(&turn, &visible));
+            .map_or_else(|| out_of_script_utterance(&turn, &visible), str::to_owned);
 
         println!(
             "  {:>9}  {:<9} {:<5} saw {}/{}  {content}",
