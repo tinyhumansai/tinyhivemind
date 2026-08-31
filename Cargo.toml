@@ -25,8 +25,8 @@ repository = "https://github.com/tinyhumansai/tinyteams"
 # The pure half: the desk/roster/mention/session algebra. `crates/tinyteams`
 # (the session runtime, added in P4) depends on it and re-exports it, so a host
 # that only needs the algebra takes this crate alone.
-# No `version` requirement on purpose: the workspace version moves on every
-# release, and a pinned requirement here would stop resolving the moment it did.
+# No `version` requirement on purpose: the workspace version can move on any
+# commit, and a pinned requirement here would stop resolving the moment it did.
 # Nothing in this workspace is published, so the path is the whole address.
 tinyteams-core = { path = "crates/tinyteams-core" }
 # Derive macros for the crate-wide error type in `crates/tinyteams-core/src/error/`.
