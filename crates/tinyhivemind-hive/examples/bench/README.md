@@ -66,30 +66,33 @@ so the benchmark measures the protocol rather than a formatter.
 
 ## Results
 
-500 rooms, 5 agents, 4 options, `--noise 90`, on one core:
+5000 rooms, 5 agents, 4 options, `--noise 90`, on one core:
 
 ```text
 arm       turns/ep   decided %   correct %       ns/step    episodes/s
-ladder        1.00       100.0        59.4          1207        828215
-vote         12.00       100.0        81.2             0           inf
-hive          6.12        89.4        75.4          2440         57598
-hive+         6.67        99.2        85.0          2435         53530
+ladder        1.00       100.0        57.6          1086        920481
+vote         12.00       100.0        78.2             0           inf
+hive          6.16        89.7        73.3          2257         61920
+hive+         6.73        98.3        81.5          2222         58249
 ```
 
 Three things are worth reading out of it.
 
 **The deliberation beats the matched-budget control, at half the budget.**
-`hive+` decides correctly 85% of the time in 6.7 turns; the control needs all 12
-and reaches 81%. A single responder — today's behaviour — manages 59%.
+`hive+` decides correctly 81.5% of the time in 6.7 turns; the control needs all
+12 and reaches 78.2%. A single responder — today's behaviour — manages 57.6%.
+The margin over the control is small and it is meant to be: independent
+sampling plus a plurality is most of what a room is for, and a protocol that
+could not clear it would not be worth its budget.
 
 **The quorum threshold is the load-bearing knob.** Five members can put two
 grounded supporters behind each of two options, and an episode where two options
 both carry is deadlocked by definition. A threshold above half the desk makes
-that unreachable: the sweep's best policy takes the deadlock rate from 53/500 to
-zero. Hosts should set `QuorumPolicy::threshold` above half the desk.
+that unreachable: the sweep's best policy takes the deadlock rate from 514/5000
+to zero, and the decision rate from 89.7% to 98.3%. Hosts should set `QuorumPolicy::threshold` above half the desk.
 
 **The blind round is not decoration.** Rerun with `--no-blind` and accuracy
-collapses to 57.7% — below a single agent's — because the room cascades onto
+collapses to 58.0% — level with a single agent — because the room cascades onto
 whatever was proposed first. That is an information cascade, and `Visibility`
 is what prevents it.
 
@@ -101,8 +104,8 @@ has to answer when it configures a desk.
 ## Cost
 
 `ns/step` measures the library alone, with the participants' own time excluded:
-about **2.4 µs** to decide who speaks next over a live transcript, or roughly
-50,000 whole episodes per second on one core. A model turn is six orders of
+about **2.2 µs** to decide who speaks next over a live transcript, or roughly
+58,000 whole episodes per second on one core. A model turn is six orders of
 magnitude more expensive, so the protocol is free in any real deployment.
 
 ## Live mode

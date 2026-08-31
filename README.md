@@ -89,14 +89,14 @@ cargo run --release -p tinyhivemind-hive --example bench
 
 ```text
 arm       turns/ep   decided %   correct %       ns/step    episodes/s
-ladder        1.00       100.0        59.4          1207        828215
-vote         12.00       100.0        81.2             0           inf
-hive          6.12        89.4        75.4          2440         57598
-hive+         6.67        99.2        85.0          2435         53530
+ladder        1.00       100.0        57.6          1086        920481
+vote         12.00       100.0        78.2             0           inf
+hive          6.16        89.7        73.3          2257         61920
+hive+         6.73        98.3        81.5          2222         58249
 ```
 
 The deliberation decides correctly more often than the matched-budget control
-while spending half its turns, and the state machine costs about 2.4 µs per
+while spending half its turns, and the state machine costs about 2.2 µs per
 step — six orders of magnitude below a model turn. `-- --sweep` tunes the
 episode policy over a grid; `-- --agent-cmd "opencode run"` drives one episode
 through a real agent CLI instead of simulated participants. What the numbers do
