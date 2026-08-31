@@ -175,20 +175,30 @@ fn parse_line(
 
 fn fenced_ranges(body: &str) -> Vec<(usize, usize)> {
     let mut ranges = Vec::new();
-    let mut open: Option<usize> = None;
+    // CommonMark recognizes both a backtick and a tilde fence, and a fence
+    // only closes on a line that opens with the *same* character -- a
+    // `~~~` line does not close a ``` block, and vice versa.
+    let mut open: Option<(usize, char)> = None;
     let mut offset = 0;
     for line in body.split_inclusive('\n') {
         let start = offset;
         offset += line.len();
-        if !line.trim_start().starts_with("```") {
-            continue;
-        }
-        match open.take() {
-            None => open = Some(start),
-            Some(from) => ranges.push((from, offset)),
+        let trimmed = line.trim_start();
+        let fence = trimmed
+            .starts_with("```")
+            .then_some('`')
+            .or_else(|| trimmed.starts_with("~~~").then_some('~'));
+        let Some(fence) = fence else { continue };
+        match open {
+            None => open = Some((start, fence)),
+            Some((from, opener)) if opener == fence => {
+                ranges.push((from, offset));
+                open = None;
+            }
+            Some(_) => {}
         }
     }
-    if let Some(from) = open {
+    if let Some((from, _)) = open {
         ranges.push((from, body.len()));
     }
     ranges
