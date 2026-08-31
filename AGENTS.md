@@ -69,9 +69,13 @@ docs/
 ### The two-crate split
 
 `crates/tinyteams-core` holds the algebra: desks and membership, the roster, the
-mention grammar and its resolution, and the projection of a shared transcript
-into one viewer's turn history. Every function there is a fold over data the
-caller already holds.
+mention grammar and its resolution, and the fold that projects a shared
+transcript into one viewer's turn history. Every function there is a fold over
+data the caller already holds. P4 (see `ROADMAP.md`) replaces the
+`(role, content)` pair this fold produces with an attributed `SessionMessage`
+in `crates/tinyteams` — the projection *algorithm* stays here in core, but the
+richer, attributed shape it produces is assembled by the crate that also owns
+the paging walk over a live session log.
 
 `crates/tinyteams` holds the parts that must wait on something — the paging walk
 over a session log, the responder ladder, the mention-dispatch edge — expressed
