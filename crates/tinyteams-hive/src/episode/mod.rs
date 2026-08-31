@@ -18,7 +18,7 @@ use crate::{
     attention::{AgentThreshold, BidContext, bids, floor_holder},
     error::{Error, Result},
     quorum::{ConsensusState, consensus, standings},
-    trace::read,
+    trace::{TraceKind, read},
 };
 use tinyteams::{SessionAuthor, SessionMessage, desk::DeskSet, roster::Roster};
 
@@ -78,6 +78,17 @@ pub fn step(
     let live: Vec<SessionMessage> = transcript
         .iter()
         .filter(|message| message.sequence > state.watermark)
+        .filter(|message| match &message.author {
+            // A trace is only a vote if its author is a current member of
+            // this desk. Without this filter a retired agent, or one from a
+            // different desk, whose message lands after the watermark would
+            // still be folded into standings and could manufacture quorum
+            // nobody eligible actually holds.
+            SessionAuthor::Agent { id, .. } => members.iter().any(|member| *member == id),
+            SessionAuthor::Operator | SessionAuthor::Person { .. } | SessionAuthor::System { .. } => {
+                true
+            }
+        })
         .cloned()
         .collect();
     let traces = read(&live);
@@ -92,6 +103,9 @@ pub fn step(
             // below cannot miss; it is written as a match rather than an
             // unwrap so there is no panicking path in library code.
             if state.phase == Phase::Commit
+                && traces
+                    .iter()
+                    .any(|trace| trace.kind == TraceKind::Commit && trace.topic.as_ref() == Some(&topic))
                 && let Some(standing) = standings
                     .iter()
                     .find(|standing| standing.topic == topic)
@@ -105,13 +119,19 @@ pub fn step(
         }
         ConsensusState::Deadlocked { topics } => {
             // A deadlock is only terminal once nobody is left to break it. A
-            // member that has backed neither side bids `Dissent`, and while one
-            // exists the room gets another turn — whether or not that member is
-            // the one who wins the floor this time.
-            let context = context(&traces, &standings, &members, state, policy, at);
-            let free = bids(&context)?
-                .iter()
-                .any(|bid| bid.reason == crate::attention::BidReason::Dissent);
+            // member that has backed neither tied topic is free to break the
+            // tie — whether or not that member is the one who wins the floor
+            // this time. This is checked directly against the standings
+            // rather than through a bid's `reason`: a member who has also been
+            // cited or objected to is classified `Addressed` ahead of
+            // `Dissent` by bid precedence, which would otherwise mask a real
+            // dissenter and let the episode terminate early.
+            let free = members.iter().any(|member| {
+                !standings.iter().any(|standing| {
+                    topics.contains(&standing.topic)
+                        && standing.supporters.iter().any(|held| held == member)
+                })
+            });
             if !free {
                 return Ok(HiveStep::Deadlocked { topics });
             }
