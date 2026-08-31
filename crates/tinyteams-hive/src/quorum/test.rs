@@ -109,6 +109,12 @@ fn consensus_pins_its_tagged_wire_form() {
 }
 
 #[test]
+fn the_default_policy_is_the_conservative_one() {
+    assert_eq!(QuorumPolicy::default(), QuorumPolicy::DEFAULT);
+    assert_eq!(QuorumPolicy::default().threshold, 2);
+}
+
+#[test]
 fn a_zero_threshold_or_window_is_rejected() {
     let zero_threshold = QuorumPolicy {
         threshold: 0,

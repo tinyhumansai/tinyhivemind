@@ -167,6 +167,13 @@ fn the_policy_and_state_pin_their_wire_forms() {
 }
 
 #[test]
+fn the_default_policy_bounds_the_episode() {
+    // A finite budget is what makes termination a property rather than a hope.
+    assert_eq!(EpisodePolicy::default(), EpisodePolicy::DEFAULT);
+    assert_eq!(EpisodePolicy::default().turn_budget, 12);
+}
+
+#[test]
 fn every_step_pins_its_tagged_wire_form() {
     assert_eq!(
         serde_json::to_value(HiveStep::Idle).expect("serializes"),
