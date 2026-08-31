@@ -178,18 +178,23 @@ pub fn step(
 /// Filter a transcript to what one authorized turn may see.
 ///
 /// Under [`Visibility::Full`] every message is visible. Under
-/// [`Visibility::Blind`] the messages of *peer agents* are withheld, while
-/// operator, person and system messages and the turn-holder's own remain — the
-/// participant still sees the task and its own work, just not the positions it
-/// would otherwise anchor on.
+/// [`Visibility::Blind`] the messages of *peer agents authored within this
+/// episode* are withheld, while operator, person and system messages, the
+/// turn-holder's own, and anything at or below the episode's watermark
+/// remain — the participant still sees the task, its own work, and the
+/// conversation that led into the episode, just not the positions its peers
+/// have taken since the room opened.
 #[must_use]
 pub fn project_for<'a>(turn: &HiveTurn, messages: &'a [SessionMessage]) -> Vec<&'a SessionMessage> {
+    let watermark = turn.next_state.watermark;
     messages
         .iter()
         .filter(|message| match turn.visibility {
             Visibility::Full => true,
             Visibility::Blind => match &message.author {
-                SessionAuthor::Agent { id, .. } => id == &turn.agent_id,
+                SessionAuthor::Agent { id, .. } => {
+                    id == &turn.agent_id || message.sequence <= watermark
+                }
                 SessionAuthor::Operator
                 | SessionAuthor::Person { .. }
                 | SessionAuthor::System { .. } => true,
