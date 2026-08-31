@@ -158,6 +158,7 @@ fn the_policy_and_state_pin_their_wire_forms() {
             "phase": "deliberate",
             "thresholds": [],
             "watermark": 0,
+            "commit_boundary": null,
         }),
     );
     assert_eq!(
