@@ -44,8 +44,15 @@ desk JSON therefore stays byte-for-byte structurally compatible.
 
 Effective desk candidates preserve desk order, exclude retired or absent
 agents, and are deduplicated. Candidate detail is clamped to that set. Missing
-detail uses the member id as its label and `Teammate` as its role; duplicate
-detail ids are structural errors and extra detail is ignored.
+detail uses the member id as its label and `Teammate` as its role. When an
+allowed Auto desk with two or more candidates reaches candidate enrichment,
+duplicate detail for an effective candidate id is a structural error. Extra
+detail is ignored, and metadata is not validated on any rung that does not
+construct a `SelectionRequest`.
+
+All responder payload fields are required in their JSON wire form. The
+`description` and `chat` fields accept explicit `null`; omission remains a
+missing-field error so producer drift cannot silently change a request.
 
 `SelectionRequest` exposes only the raw message, canonical desk id, and the
 bounded candidate descriptions. `Selector` returns text. `accept_selection`

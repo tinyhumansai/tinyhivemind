@@ -1,6 +1,6 @@
 //! Stable responder selection inputs and decisions.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::mention::Mention;
 
@@ -15,6 +15,7 @@ pub struct SelectorCandidate {
     /// Team role supplied to the selector.
     pub role: String,
     /// Optional short capability description.
+    #[serde(deserialize_with = "deserialize_required_option")]
     pub description: Option<String>,
 }
 
@@ -35,6 +36,7 @@ pub struct ResponderRequest {
     /// The raw authored message.
     pub message: String,
     /// Stored chat identity, or no identity for General.
+    #[serde(deserialize_with = "deserialize_required_option")]
     pub chat: Option<String>,
     /// Already-resolved mentions for the message.
     pub mentions: Vec<Mention>,
@@ -116,4 +118,12 @@ pub enum ResponderPlan {
         /// First-candidate fallback for unavailable or invalid selection.
         fallback: ResponderDecision,
     },
+}
+
+fn deserialize_required_option<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer)
 }

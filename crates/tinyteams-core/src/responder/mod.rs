@@ -25,8 +25,9 @@ use crate::{
 ///
 /// # Errors
 ///
-/// Returns a structural roster/desk error, a duplicate candidate-detail error,
-/// or [`Error::NoActiveResponder`] if a reached fallback has no active agent.
+/// Returns a structural roster/desk error, a duplicate effective-candidate
+/// detail error when selector enrichment is reached, or
+/// [`Error::NoActiveResponder`] if a reached fallback has no active agent.
 pub fn responder_plan(
     request: &ResponderRequest,
     roster: &Roster<'_>,
@@ -35,7 +36,6 @@ pub fn responder_plan(
 ) -> Result<ResponderPlan> {
     roster.validate()?;
     desks.validate()?;
-    validate_candidate_details(candidate_details)?;
 
     if let Some(id) = direct_responder(&request.mentions, roster) {
         return Ok(decided(id, ResponderRung::ExplicitMention));
@@ -97,19 +97,6 @@ pub fn accept_selection(output: &str, candidates: &[SelectorCandidate]) -> Optio
     Some(first.id.clone())
 }
 
-fn validate_candidate_details(details: &[SelectorCandidate]) -> Result<()> {
-    let mut ids: Vec<&str> = Vec::new();
-    for detail in details {
-        if ids.contains(&detail.id.as_str()) {
-            return Err(Error::DuplicateSelectorCandidate {
-                agent_id: detail.id.clone(),
-            });
-        }
-        ids.push(&detail.id);
-    }
-    Ok(())
-}
-
 fn desk_plan(
     request: &ResponderRequest,
     roster: &Roster<'_>,
@@ -130,16 +117,13 @@ fn desk_plan(
         return Ok(decided(first, ResponderRung::DeskDefault));
     }
 
-    let candidates = members
-        .into_iter()
-        .map(|id| candidate_for(id, details))
-        .collect();
     let fallback = fallback_decision(first, SelectionDisposition::Unavailable);
     if request.selection_policy == SelectionPolicy::Disabled {
         return Ok(ResponderPlan::Decided {
             decision: fallback_decision(first, SelectionDisposition::Disabled),
         });
     }
+    let candidates = candidates_for(&members, details)?;
     Ok(ResponderPlan::Select {
         request: SelectionRequest {
             message: request.message.clone(),
@@ -150,17 +134,28 @@ fn desk_plan(
     })
 }
 
-fn candidate_for(id: &str, details: &[SelectorCandidate]) -> SelectorCandidate {
-    details
+fn candidates_for(
+    member_ids: &[&str],
+    details: &[SelectorCandidate],
+) -> Result<Vec<SelectorCandidate>> {
+    member_ids
         .iter()
-        .find(|candidate| candidate.id == id)
-        .cloned()
-        .unwrap_or_else(|| SelectorCandidate {
-            id: id.to_owned(),
-            label: id.to_owned(),
-            role: "Teammate".into(),
-            description: None,
+        .map(|id| {
+            let mut matching = details.iter().filter(|candidate| candidate.id == *id);
+            let first = matching.next();
+            if matching.next().is_some() {
+                return Err(Error::DuplicateSelectorCandidate {
+                    agent_id: (*id).to_owned(),
+                });
+            }
+            Ok(first.cloned().unwrap_or_else(|| SelectorCandidate {
+                id: (*id).to_owned(),
+                label: (*id).to_owned(),
+                role: "Teammate".into(),
+                description: None,
+            }))
         })
+        .collect()
 }
 
 fn direct_chat_member<'a>(chat: &str, roster: &'a Roster<'a>) -> Option<&'a RosterMember> {
