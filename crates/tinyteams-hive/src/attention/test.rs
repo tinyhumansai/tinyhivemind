@@ -206,16 +206,16 @@ fn a_member_whose_message_was_cited_or_objected_to_bids_addressed() {
         said(2, "critic", "!support #stage ^1"),
     ]);
     let weights = SalienceWeights::DEFAULT;
-    let bids = bids(&context(&cited, &MEMBERS, &[], &weights)).expect("bids");
-    assert_eq!(bid_for(&bids, "planner").reason, BidReason::Addressed);
-    assert_eq!(bid_for(&bids, "scout").reason, BidReason::Salience);
+    let cited_bids = bids(&context(&cited, &MEMBERS, &[], &weights)).expect("bids");
+    assert_eq!(bid_for(&cited_bids, "planner").reason, BidReason::Addressed);
+    assert_eq!(bid_for(&cited_bids, "scout").reason, BidReason::Salience);
 
     let objected = fixture(&[
         said(1, "planner", "!propose #stage"),
         said(2, "critic", "!object >1 ^0"),
     ]);
-    let bids = bids(&context(&objected, &MEMBERS, &[], &weights)).expect("bids");
-    assert_eq!(bid_for(&bids, "planner").reason, BidReason::Addressed);
+    let objected_bids = bids(&context(&objected, &MEMBERS, &[], &weights)).expect("bids");
+    assert_eq!(bid_for(&objected_bids, "planner").reason, BidReason::Addressed);
 }
 
 #[test]
