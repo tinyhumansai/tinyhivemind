@@ -289,9 +289,22 @@ fn quorum_flips_the_phase_once_and_then_converges() {
     assert_eq!(turn.phase, Phase::Commit);
     assert_eq!(turn.next_state.phase, Phase::Commit);
 
-    // Already committing: the episode reports its decision.
+    // The commit-phase turn speaks, but records nothing: phase alone must
+    // not be read as proof that the room recorded its decision.
+    let mut transcript = converging();
+    assert!(
+        matches!(
+            run(&room, &turn.next_state, &transcript, &policy),
+            HiveStep::Speak { .. },
+        ),
+        "a commit-phase turn that recorded no `!commit` must not converge",
+    );
+
+    // Once the authorized speaker actually commits the carried topic, the
+    // episode reports its decision.
+    transcript.push(said(4, &turn.agent_id, "!commit #stage Locking this in."));
     let HiveStep::Converged { topic, standing } =
-        run(&room, &turn.next_state, &converging(), &policy)
+        run(&room, &turn.next_state, &transcript, &policy)
     else {
         panic!("expected convergence")
     };
@@ -379,6 +392,7 @@ fn a_grounded_objection_carries_the_room_through_a_deadlock() {
     };
     assert_eq!(turn.phase, Phase::Commit);
 
+    transcript.push(said(6, &turn.agent_id, "!commit #stage Locking this in."));
     let HiveStep::Converged { topic, .. } = run(
         &room,
         &turn.next_state,
