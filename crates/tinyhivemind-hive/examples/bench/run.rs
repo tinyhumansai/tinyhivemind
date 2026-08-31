@@ -81,8 +81,6 @@ pub(crate) struct EpisodeReport {
     pub(crate) step_calls: u32,
     /// Time spent inside the library, excluding the simulated agents.
     pub(crate) library_time: Duration,
-    /// The transcript, kept only for the single-episode trace view.
-    pub(crate) journal: Vec<SessionMessage>,
     /// One line per turn, for the trace view.
     pub(crate) trace: Vec<String>,
 }
@@ -269,11 +267,6 @@ pub(crate) fn drive(
             turns,
             step_calls,
             library_time,
-            journal: if keep_trace {
-                host.journal.clone()
-            } else {
-                Vec::new()
-            },
             trace,
         });
     }
