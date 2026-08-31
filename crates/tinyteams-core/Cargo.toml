@@ -24,8 +24,15 @@ publish = false
 # wire format the host stores.
 [dependencies]
 
+[dev-dependencies]
+# Live-test request and response bodies use OpenRouter's JSON wire format.
+serde_json = "1"
+
 [features]
 default = []
+# Compiles opt-in tests that can call external model providers. Live execution
+# still requires the explicit environment switch documented in docs/testing.md.
+e2e = []
 
 [lints]
 workspace = true
