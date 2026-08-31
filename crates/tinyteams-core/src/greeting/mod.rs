@@ -1,11 +1,12 @@
-//! Greeting behavior used to demonstrate the tinyteams_core's module layout.
+//! Greeting behavior used to demonstrate this crate's module layout.
 //!
 //! A module root like this one documents the module, wires its pieces
 //! together, and exposes the smallest useful API. Substantial type definitions
 //! belong in a sibling `types.rs`, and unit tests belong in `test.rs`, wired in
 //! at the bottom of this file.
 //!
-//! Replace this module with the crate's first real feature area.
+//! Placeholder: it stays until the first real feature area lands, so the
+//! coverage gate has something to measure, and is deleted then.
 
 use crate::{Error, Result};
 
