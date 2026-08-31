@@ -104,7 +104,6 @@ pub struct EpisodeState {
     /// commit turn being authorized could be misread as evidence that turn
     /// recorded a decision.
     ///
-    /// [`HiveStep::Converged`]: crate::episode::HiveStep::Converged
     pub commit_boundary: Option<Sequence>,
 }
 
