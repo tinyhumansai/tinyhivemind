@@ -177,7 +177,7 @@ impl SimAgent {
     }
 
     /// Produce the body of one turn, seeing exactly what the turn authorized.
-    pub(crate) fn speak(&mut self, turn: &HiveTurn, visible: &[&SessionMessage]) -> String {
+    fn compose(&mut self, turn: &HiveTurn, visible: &[&SessionMessage]) -> String {
         let view = View::fold(visible);
 
         // A commit turn records what the room actually carried, not what this
@@ -348,6 +348,6 @@ impl crate::run::Participant for SimAgent {
     }
 
     fn speak(&mut self, turn: &HiveTurn, visible: &[&SessionMessage]) -> Result<String, String> {
-        Ok(Self::speak(self, turn, visible))
+        Ok(self.compose(turn, visible))
     }
 }
