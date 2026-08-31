@@ -180,7 +180,7 @@ impl SimAgent {
             role,
             evals,
             favourite,
-            rng: Rng::seeded(mix(seed, 0xA11C_E ^ index as u64)),
+            rng: Rng::seeded(mix(seed, 0x000A_11CE ^ index as u64)),
             quorum: QuorumPolicy::DEFAULT,
         }
     }

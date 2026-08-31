@@ -125,11 +125,15 @@ impl Options {
                 }
                 "--noise" => options.noise = next_number(&mut args).unwrap_or(90),
                 "--seed" => options.seed = u64::from(next_number(&mut args).unwrap_or(1)),
-                "--budget" => options.policy.turn_budget = next_number(&mut args).unwrap_or(12),
+                "--budget" => {
+                    options.policy.turn_budget = next_number(&mut args).unwrap_or(12);
+                }
                 "--quorum" => {
                     options.policy.quorum.threshold = next_number(&mut args).unwrap_or(3);
                 }
-                "--window" => options.policy.quorum.window = next_number(&mut args).unwrap_or(100),
+                "--window" => {
+                    options.policy.quorum.window = next_number(&mut args).unwrap_or(100);
+                }
                 "--dominance" => {
                     options.policy.dominance_cap = next_number(&mut args).unwrap_or(40)
                 }
