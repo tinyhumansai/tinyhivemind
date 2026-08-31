@@ -133,6 +133,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tinyteams-hive"
+version = "0.2.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tinyteams",
+ "tinyteams-core",
+]
+
+[[package]]
 name = "tokio"
 version = "1.53.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
