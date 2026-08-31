@@ -187,7 +187,9 @@ add one:
 - declare it once in the root `[workspace.dependencies]` when more than one
   crate needs it, and take it with `{ workspace = true }`;
 - never add one to `crates/tinyteams-core` that pulls in a transport, an async
-  runtime, an HTTP client, or a web framework — CI fails the build if you do;
+  runtime, an HTTP client, a web framework, a SQL database client, a git
+  implementation, or `anyhow` (non-exhaustive — see
+  `.github/scripts/assert-pure.sh`) — CI fails the build if you do;
 - leave a comment above the entry explaining *why* the crate is needed and what
   uses it — see the existing entries for the expected tone;
 - prefer well-maintained crates with a compatible license.
