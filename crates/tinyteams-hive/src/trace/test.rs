@@ -227,7 +227,14 @@ fn a_body_deposits_at_most_the_trace_cap() {
 }
 
 #[test]
-fn a_supplied_list_is_authoritative_and_revalidated() {
+fn a_supplied_list_only_selects_which_extracted_traces_survive() {
+    // `supplied` cannot carry data of its own: parsing is fully determined by
+    // `body`, so a supplied trace can only *select* one of the traces that
+    // extraction already found there, by `(offset, kind)`. Anything else it
+    // claims -- a different topic, different grounds, a different target --
+    // is discarded in favor of what the text actually says. Otherwise a
+    // caller could manufacture quorum by attaching an invented topic to a
+    // real line.
     let body = "!propose #real";
     let supplied = vec![
         Trace {
@@ -237,7 +244,7 @@ fn a_supplied_list_is_authoritative_and_revalidated() {
             topic: Some(TopicId("rewritten".into())),
             target: None,
             cites: vec![Sequence(5)],
-            text: "!propose #real".into(),
+            text: "not what the body says".into(),
             offset: 0,
         },
         Trace {
@@ -254,12 +261,46 @@ fn a_supplied_list_is_authoritative_and_revalidated() {
 
     let traces = resolve(body, Some(supplied), &agent("planner"), Sequence(7));
 
-    // The unauthored trace is dropped; the authored one keeps its supplied
-    // topic and grounds but is re-attributed to the real author and sequence.
+    // The unauthored trace is dropped; the authored one is returned exactly
+    // as extraction found it -- the authored topic wins, not the supplied
+    // one -- re-attributed to the real author and sequence.
     assert_eq!(traces.len(), 1);
-    assert_eq!(traces[0].topic, Some(TopicId("rewritten".into())));
+    assert_eq!(traces[0].topic, Some(TopicId("real".into())));
+    assert!(traces[0].cites.is_empty(), "the body cites nothing");
     assert_eq!(traces[0].agent_id(), Some("planner"));
     assert_eq!(traces[0].sequence, Sequence(7));
+}
+
+#[test]
+fn a_duplicate_supplied_offset_is_rejected() {
+    // Two supplied entries naming the same offset would otherwise let a
+    // caller select the same real trace twice.
+    let body = "!propose #real";
+    let supplied = vec![
+        Trace {
+            sequence: Sequence(1),
+            author: agent("planner"),
+            kind: TraceKind::Propose,
+            topic: None,
+            target: None,
+            cites: Vec::new(),
+            text: String::new(),
+            offset: 0,
+        },
+        Trace {
+            sequence: Sequence(1),
+            author: agent("planner"),
+            kind: TraceKind::Propose,
+            topic: None,
+            target: None,
+            cites: Vec::new(),
+            text: String::new(),
+            offset: 0,
+        },
+    ];
+
+    let traces = resolve(body, Some(supplied), &agent("planner"), Sequence(1));
+    assert_eq!(traces.len(), 1, "a repeated offset selects its trace once");
 }
 
 #[test]
