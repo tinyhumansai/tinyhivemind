@@ -313,6 +313,25 @@ fn quorum_flips_the_phase_once_and_then_converges() {
 }
 
 #[test]
+fn traces_from_non_members_do_not_manufacture_quorum() {
+    // Neither author here is a member of this desk (or of the roster at
+    // all), so their `!propose`/`!support` traces must not be folded into
+    // standings. If they were, two non-members could manufacture quorum
+    // nobody eligible actually holds.
+    let room = Room::new();
+    let transcript = vec![
+        said(1, "ghost", "!propose #stage Rogue proposal."),
+        said(2, "intruder", "!support #stage ^1 Rogue support."),
+    ];
+    let turn = speaking(run(&room, &state(), &transcript, &EpisodePolicy::DEFAULT));
+    assert_eq!(
+        turn.phase,
+        Phase::Deliberate,
+        "non-member traces must not carry a topic to quorum",
+    );
+}
+
+#[test]
 fn the_commit_phase_is_one_way_when_support_later_decays_out() {
     let room = Room::new();
     let policy = EpisodePolicy {
@@ -363,6 +382,28 @@ fn a_deadlock_a_dissenter_can_still_break_authorizes_one_more_turn() {
         HiveStep::Deadlocked {
             topics: vec![TopicId("stage".into()), TopicId("ship".into())],
         },
+    );
+}
+
+#[test]
+fn addressed_precedence_does_not_mask_an_available_dissenter() {
+    // archivist backs neither tied topic, so the room must stay open — but
+    // archivist's own message is also targeted by a later trace, which would
+    // classify archivist's bid as `Addressed` rather than `Dissent`. The
+    // terminal check must see the dissent structurally, from the standings,
+    // rather than through that bid-reason precedence.
+    let mut room = Room::new();
+    room.members.push(member("archivist"));
+    room.desks[0].members.push("archivist".into());
+
+    let mut transcript = deadlocked();
+    transcript.push(said(5, "archivist", "!question What about latency?"));
+    transcript.push(said(6, "critic", "!object >5 Out of scope."));
+
+    let step = run(&room, &state(), &transcript, &EpisodePolicy::DEFAULT);
+    assert!(
+        matches!(step, HiveStep::Speak { .. }),
+        "archivist is free to break the tie even though addressed, got {step:?}",
     );
 }
 
@@ -482,6 +523,34 @@ fn a_blind_turn_hides_peers_but_keeps_the_task_and_its_own_work() {
         ..turn
     };
     assert_eq!(project_for(&revealed, &transcript).len(), transcript.len());
+}
+
+#[test]
+fn a_blind_turn_preserves_pre_episode_agent_context() {
+    // The watermark sits at sequence 1: everything at or below it is the
+    // conversation the episode opened on top of, not a peer position formed
+    // within this episode, so it must survive a blind projection.
+    let transcript = [
+        said(1, "planner", "Already found the culprit function."),
+        said(2, "planner", "!propose #stage"),
+        said(3, "critic", "!propose #ship"),
+    ];
+    let turn = HiveTurn {
+        agent_id: "critic".into(),
+        phase: Phase::Deliberate,
+        visibility: Visibility::Blind,
+        reason: BidReason::Salience,
+        next_state: EpisodeState::opened(conversation(), Sequence(1)),
+    };
+
+    let blind = project_for(&turn, &transcript);
+    assert_eq!(
+        blind.iter().map(|m| m.sequence.0).collect::<Vec<_>>(),
+        [1, 3],
+        "the pre-episode message at the watermark remains visible even though \
+         a peer authored it; only the later peer proposal formed within the \
+         episode is hidden",
+    );
 }
 
 // --- Thresholds carried across turns ---
