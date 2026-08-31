@@ -1,5 +1,8 @@
 # Documentation
 
+- [`testing.md`](testing.md) — deterministic coordination harness, opt-in
+  OpenRouter tests, and coverage commands.
+
 This directory holds documentation that does not belong in rustdoc: the shape
 of the system, the reasoning behind it, and the constraints a reader needs
 before touching the code. API reference lives in doc comments next to the code,
