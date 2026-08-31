@@ -56,10 +56,16 @@ fn main() {
 
     // Only auditor has backed neither side, so only auditor can break the tie —
     // and it does so by objecting to an *advocate*, not to an option.
-    let mut scripts: Vec<(&str, VecDeque<&str>)> = vec![(
-        "auditor",
-        ["!object >5 ^2 That precedent was a different system."].into(),
-    )];
+    let mut scripts: Vec<(&str, VecDeque<&str>)> = vec![
+        (
+            "auditor",
+            ["!object >5 ^2 That precedent was a different system."].into(),
+        ),
+        ("planner", ["!evidence ^2 The flag is already wired up."].into()),
+        ("scout", ["!evidence ^3 The last big-bang release held."].into()),
+        ("archivist", ["!question Fair — what is the rollback path?"].into()),
+        ("critic", ["!evidence ^2 Rollback is one flag flip."].into()),
+    ];
 
     let policy = EpisodePolicy {
         turn_budget: 10,
@@ -95,6 +101,9 @@ fn main() {
                 if !standing.silenced.is_empty() {
                     println!("  silenced by objection: {}", standing.silenced.join(", "));
                 }
+                println!(
+                    "\n  The room started tied. No vote was subtracted from a proposal;\n                       one objection silenced a rival's *advocate*, and the survivor carried.",
+                );
                 return;
             }
             HiveStep::Deadlocked { topics } => {
