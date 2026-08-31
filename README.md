@@ -65,8 +65,9 @@ commit is the version.
 
 ## Develop
 
-Run every command from the repository root. These four are the contract; CI runs
-exactly them.
+Run every command from the repository root. These four are the contract; CI
+includes them alongside default-feature tests, the bundled example, the purity
+guard, and the coverage gate (see `.github/workflows/ci.yml`).
 
 ```sh
 cargo fmt --all -- --check
