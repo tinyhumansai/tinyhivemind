@@ -1,6 +1,6 @@
 # Desks: declared groups with host-owned overlays
 
-- **Status:** Accepted
+- **Status:** Implemented
 - **Owner:** Maintainers
 - **Plan:** [`../plans/desks.md`](../plans/desks.md)
 

@@ -1,6 +1,6 @@
 # Plan: Desks
 
-- **Status:** In progress
+- **Status:** Implemented
 - **Specification:** [`../specs/desks.md`](../specs/desks.md)
 
 ## Goal
@@ -83,13 +83,14 @@ identity behavior or introducing I/O, async, or host types.
 
 ## Verification
 
-- [ ] Focused red/green desk and error tests
-- [ ] `cargo fmt --all -- --check`
-- [ ] `cargo clippy -p tinyteams-core --all-targets --all-features -- -D warnings`
-- [ ] `cargo test -p tinyteams-core --all-features`
-- [ ] `.github/scripts/assert-pure.sh`
+- [x] Focused red/green desk and error tests
+- [x] `cargo fmt --all -- --check`
+- [x] `cargo clippy -p tinyteams-core --all-targets --all-features -- -D warnings`
+- [x] `cargo test -p tinyteams-core --all-features`
+- [x] `.github/scripts/assert-pure.sh`
 
 ## Completion
 
-In progress. P2 is complete only after the public API, docs, wire tests, error
-paths, membership merge, and stable whole-set ordering all pass verification.
+P2 is implemented. The public API, docs, wire tests, typed error paths,
+membership merge, and stable whole-set ordering pass the verification above;
+P3 may build mention resolution against this desk surface.
