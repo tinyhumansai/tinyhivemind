@@ -20,7 +20,6 @@ publish = false
 # `.github/scripts/assert-pure.sh` asserts it.
 [dependencies]
 serde = { workspace = true }
-thiserror = { workspace = true }
 
 [features]
 default = []

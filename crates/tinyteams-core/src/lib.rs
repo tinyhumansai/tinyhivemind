@@ -31,22 +31,19 @@
 //!
 //! # Layout
 //!
-//! - `src/error/` holds the crate-wide [`Error`] enum and the [`Result`] alias
-//!   returned by every fallible public function.
-//! - Each feature area lives in its own module directory with a `mod.rs`
-//!   module root, an optional `types.rs`, and a `test.rs` holding its unit
-//!   tests.
-//! - Every public item is re-exported from here, so downstream users have a
-//!   single predictable surface.
+//! Each feature area lives in its own module directory with a `mod.rs` module
+//! root, an optional `types.rs`, and a `test.rs` holding its unit tests. The
+//! public surface is namespaced by module rather than flattened here: this
+//! crate grows to hold desks, rosters, mentions and session projection, and a
+//! flat root would stop reading as four separable concerns.
 //!
-//! # Status
+//! There is no crate-wide `Error` type yet, deliberately: nothing here can
+//! fail. Every function is total — a fold over data the caller already holds.
+//! One arrives in `src/error/` when the first fallible API does.
 //!
-//! The `greeting` module is the template scaffold. It stays until the
-//! first real feature area lands so the coverage gate has something to measure,
-//! and is deleted then.
+//! # Modules
+//!
+//! - [`chat`] — conversation identity: which stored chat id names which
+//!   conversation, and the four spellings that mean the default desk.
 
-mod error;
-mod greeting;
-
-pub use error::{Error, Result};
-pub use greeting::greet;
+pub mod chat;

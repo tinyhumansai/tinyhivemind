@@ -4,19 +4,27 @@
 //! Run it with:
 //!
 //! ```sh
-//! cargo run --example basic
+//! cargo run -p tinyteams-core --example basic
 //! ```
 
-use tinyteams_core::{Result, greet};
+use tinyteams_core::chat::{is_general_chat, same_conversation};
 
-fn main() -> Result<()> {
-    println!("{}", greet("Rust")?);
-
-    // Failure modes are part of the public contract; show them too.
-    match greet("   ") {
-        Ok(greeting) => println!("{greeting}"),
-        Err(error) => println!("expected failure: {error}"),
+fn main() {
+    // The default desk has four spellings and one identity.
+    for spelling in [None, Some(""), Some("main"), Some("General")] {
+        println!("{spelling:?} is the General desk: {}", is_general_chat(spelling));
     }
 
-    Ok(())
+    // So an unaddressed message and a reply journaled under "General" belong to
+    // the same transcript, whichever id happened to write them.
+    println!(
+        "None and Some(\"General\") are one conversation: {}",
+        same_conversation(None, Some("General")),
+    );
+
+    // Everything else compares verbatim, case included.
+    println!(
+        "engineering and Engineering are one conversation: {}",
+        same_conversation(Some("engineering"), Some("Engineering")),
+    );
 }
