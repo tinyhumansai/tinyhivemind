@@ -12,7 +12,10 @@ use tinyteams_core::chat::{is_general_chat, same_conversation};
 fn main() {
     // The default desk has four spellings and one identity.
     for spelling in [None, Some(""), Some("main"), Some("General")] {
-        println!("{spelling:?} is the General desk: {}", is_general_chat(spelling));
+        println!(
+            "{spelling:?} is the General desk: {}",
+            is_general_chat(spelling)
+        );
     }
 
     // So an unaddressed message and a reply journaled under "General" belong to
