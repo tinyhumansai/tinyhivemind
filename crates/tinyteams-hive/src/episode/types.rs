@@ -103,7 +103,6 @@ pub struct EpisodeState {
     /// trace that merely happens to share the carried topic and predates the
     /// commit turn being authorized could be misread as evidence that turn
     /// recorded a decision.
-    ///
     pub commit_boundary: Option<Sequence>,
 }
 
