@@ -69,26 +69,6 @@ docs/
 └── adr/                # immutable architecture decision records
 ```
 
-### The hive crate
-
-`crates/tinyteams-hive` is opt-in and answers a different question from the
-other two: not *who responds to this message* but *how does a room of agents
-reach a decision*. It is **pure and defines no port** — an episode is
-`step(state, transcript, roster, desks, policy) -> HiveStep`, a fold over
-arguments the caller already holds, and the host does its waiting through the
-`SessionLog`, `Selector` and `MentionTurnQueue` ports it already implements. It
-is in the `pure_crates` list in `.github/scripts/assert-pure.sh` for that
-reason.
-
-It does not relax the one-message-one-turn rule. `HiveStep::Speak` carries
-exactly one turn and there is no variant that carries two; independence between
-participants is bought as a visibility filter on the projection, never as
-concurrency. See
-[`docs/adr/0002-hive-episodes-are-sequential.md`](docs/adr/0002-hive-episodes-are-sequential.md).
-
-All arithmetic in it is fixed-point integer, so every payload derives `Eq` and
-every fold is reproducible.
-
 ### The two-crate split
 
 `crates/tinyteams-core` holds the algebra: desks and membership, the roster, the
@@ -111,6 +91,26 @@ alone it belongs in the core crate; if it has to await a read, a write, or a
 model call, it belongs behind a port in the runtime crate. When in doubt, put
 the decision in the core crate and the waiting in the runtime crate — that split
 is what keeps the interesting logic testable without a fixture.
+
+### The hive crate
+
+`crates/tinyteams-hive` is opt-in and answers a different question from the
+other two: not *who responds to this message* but *how does a room of agents
+reach a decision*. It is **pure and defines no port** — an episode is
+`step(state, transcript, roster, desks, policy) -> HiveStep`, a fold over
+arguments the caller already holds, and the host does its waiting through the
+`SessionLog`, `Selector` and `MentionTurnQueue` ports it already implements. It
+is in the `pure_crates` list in `.github/scripts/assert-pure.sh` for that
+reason.
+
+It does not relax the one-message-one-turn rule. `HiveStep::Speak` carries
+exactly one turn and there is no variant that carries two; independence between
+participants is bought as a visibility filter on the projection, never as
+concurrency. See
+[`docs/adr/0002-hive-episodes-are-sequential.md`](docs/adr/0002-hive-episodes-are-sequential.md).
+
+All arithmetic in it is fixed-point integer, so every payload derives `Eq` and
+every fold is reproducible.
 
 Add a crate by creating `crates/<name>/` — `members = ["crates/*"]` picks it up
 by existing. Inherit `version`, `edition`, `rust-version`, `license`, and
