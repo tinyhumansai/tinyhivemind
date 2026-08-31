@@ -19,10 +19,33 @@ dependency direction is enforced by construction.
 | P5 | Continuous sharing — re-seed on a watermark rather than only on a rebind | **done** |
 | P6 | The responder ladder, with the model-backed rung behind a `Selector` port | **done** |
 | P7 | The mention-dispatch edge, bounded by a host-supplied finite configurable `max_hops` (OpenCompany defaults to 2), with no library hard cap, and explicitly enabled by host policy | **done** |
+| P8 | `crates/tinyteams-hive`: bounded group deliberation — the trace grammar, salience, quorum with cross-inhibition, the attention market, and the episode state machine | **done** |
 
 The next work is the paired OpenCompany adapter integration, followed by a
 gated live-provider verification in which two agents exchange an attributed
 turn. The adapter initially remains disabled and uses two hops when enabled.
+The hive crate is opt-in and is not part of that first adapter.
+
+## What P8 adds, and what it deliberately does not
+
+P8 answers a question the first seven phases do not: how a *room* of agents
+reaches a decision, rather than how one message finds its one responder. It adds
+a trace grammar over the shared transcript, a decaying salience field, quorum
+counted as distinct grounded supporters, cross-inhibition that silences an
+advocate rather than debiting an option, and an attention market whose argmax
+yields exactly one speaker.
+
+It adds **no port**. An episode is a pure fold, and the host does its waiting
+through `SessionLog`, `Selector` and `MentionTurnQueue` — the ports it already
+implements. `crates/tinyteams-hive` is in the `pure_crates` list in
+`.github/scripts/assert-pure.sh`.
+
+It is also not a claim that group deliberation produces better answers. Almost
+every positive multi-agent result in the literature is confounded by compute,
+and self-consistency at a matched token budget is the honest control. P8 is a
+protocol for bounded deliberation with an auditable termination reason, and
+nothing more. See
+[`docs/adr/0002-hive-episodes-are-sequential.md`](docs/adr/0002-hive-episodes-are-sequential.md).
 
 ## The two defects P4 and P5 fix
 
@@ -44,4 +67,7 @@ consecutive turns in one thread. P5 replaces that gate with a watermark.
   consistent with the first.
 - **A web framework, or HTTP handlers.** Routes stay with the host.
 - **Fan-out.** One message triggers exactly one turn. `@everyone` is a list, not
-  a broadcast — see P7.
+  a broadcast — see P7. P8's deliberation episodes do not relax this: an episode
+  is a bounded *sequence* of single turns, and `HiveStep::Speak` cannot
+  represent two. Independence between participants is bought as a visibility
+  filter on the projection, never as concurrency.

@@ -55,8 +55,10 @@ jobs:
       # `cargo build --all-targets` only *compiles* an example. `AGENTS.md`
       # promises `cargo run -p tinyteams-core --example basic` works, and a
       # compiled example can still fail on its first line.
-      - name: Run the bundled example
-        run: cargo run -p tinyteams-core --example basic
+      - name: Run the bundled examples
+        run: |
+          cargo run -p tinyteams-core --example basic
+          cargo run -p tinyteams-hive --example hive
 
       # `tinyteams-core` is what a host links on the hot path of every agent
       # turn, in its default build. Keeping it free of runtimes and transports

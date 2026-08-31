@@ -29,6 +29,15 @@ repository = "https://github.com/tinyhumansai/tinyteams"
 # commit, and a pinned requirement here would stop resolving the moment it did.
 # Nothing in this workspace is published, so the path is the whole address.
 tinyteams-core = { path = "crates/tinyteams-core" }
+# The session runtime: the host ports, attributed projection, and continuous
+# sharing. `crates/tinyteams-hive` folds over its session types and depends on
+# it directly; a host that wants group deliberation takes the hive crate and
+# gets both of the others transitively.
+tinyteams = { path = "crates/tinyteams" }
+# Bounded group deliberation over a shared desk: traces, salience, quorum with
+# cross-inhibition, and the attention market. Pure, and opt-in — a host that
+# only wants one-responder routing never links it.
+tinyteams-hive = { path = "crates/tinyteams-hive" }
 # Derive macros for the crate-wide error type in `crates/tinyteams-core/src/error/`.
 # Every dependency entry should carry a comment like this one saying why it is
 # here.

@@ -45,6 +45,36 @@ default model or accidental network path in CI. Live execution requires
 `curl`; its request configuration is sent over stdin so the API key is not
 placed in the process argument list.
 
+## Hive deliberation suite
+
+`crates/tinyteams-hive` carries its own in-memory host under
+`tests/support/hive_harness.rs`: it owns the journal, runs the one turn each
+step authorizes, appends it, and commits the returned state. `hive_episode.rs`
+drives that host through convergence, budget exhaustion, a blind opening round,
+a tie that only cross-inhibition breaks, and the watermark that stops an episode
+inheriting the votes of the conversation before it.
+
+The bundled example prints a readable episode trace and needs no model:
+
+```sh
+cargo run -p tinyteams-hive --example hive
+```
+
+The live episode mirrors the OpenRouter suite above and is gated the same way:
+
+```sh
+TINYTEAMS_LIVE_OPENROUTER=1 \
+OPENROUTER_API_KEY='<key>' \
+OPENROUTER_MODEL='<provider/model>' \
+cargo test -p tinyteams-hive --features e2e --test openrouter_hive_live -- --nocapture
+```
+
+It asserts **structure, not quality**: that real models emit parseable traces,
+that exactly one agent speaks per turn, that the episode terminates inside its
+budget by one of its four terminal steps, and that attribution survives. It does
+not assert that the room reached a good answer, and it could not — a matched
+token-budget baseline would be needed to make any such claim.
+
 End-to-end live verification belongs in the future OpenCompany host adapter,
 where a committed agent reply can pass through the real atomic enqueue port and
 trigger one attributed child turn through a live provider. That host work is
