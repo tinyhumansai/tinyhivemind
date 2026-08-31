@@ -509,6 +509,25 @@ fn the_opening_round_is_blind_until_every_member_has_been_heard() {
 }
 
 #[test]
+fn a_marker_less_turn_still_counts_toward_ending_the_blind_round() {
+    // Blindness tracks who has *taken a turn*, not who has cast a vote. A
+    // member that speaks plain prose with no `!marker` deposits no trace, but
+    // must still count as heard -- otherwise a member who never has anything
+    // to formally propose keeps the whole room blind forever.
+    let room = Room::new();
+    let policy = EpisodePolicy::DEFAULT;
+
+    let mut heard = converging();
+    heard.push(said(4, "scout", "Just thinking out loud, no vote yet."));
+    let late = speaking(run(&room, &state(), &heard, &policy));
+    assert_eq!(
+        late.visibility,
+        Visibility::Full,
+        "a member who authored a turn with no marker must still count as heard",
+    );
+}
+
+#[test]
 fn a_disabled_blind_round_is_always_full() {
     let room = Room::new();
     let policy = EpisodePolicy {
