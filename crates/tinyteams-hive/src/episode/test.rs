@@ -235,7 +235,12 @@ fn an_episode_terminates_within_its_budget() {
         ..EpisodePolicy::DEFAULT
     };
     let mut state = state();
-    let transcript = converging();
+    // One proposal only: below quorum, so the room keeps deliberating and the
+    // budget is what stops it rather than a decision.
+    let transcript = [
+        operator(1, "Decide how to roll this out."),
+        said(2, "planner", "!propose #stage Stage the rollout."),
+    ];
     // Every step either terminates or strictly advances the spend, so the loop
     // cannot run past the budget.
     for expected in 1..=policy.turn_budget {
@@ -318,30 +323,27 @@ fn the_commit_phase_is_one_way_when_support_later_decays_out() {
 
 #[test]
 fn a_deadlock_a_dissenter_can_still_break_authorizes_one_more_turn() {
-    let room = Room::new();
-    // planner and scout have each taken a side; critic backs only `stage`, so
-    // it is not free. Retire critic so nobody is left uncommitted.
+    let mut room = Room::new();
+    // A fourth member who has backed neither side is free to break the tie.
+    room.members.push(member("archivist"));
+    room.desks[0].members.push("archivist".into());
+
     let turn = speaking(run(&room, &state(), &deadlocked(), &EpisodePolicy::DEFAULT));
     assert_eq!(
         turn.reason,
         BidReason::Dissent,
         "a member who has backed neither side gets one chance to break the tie",
     );
+    assert_eq!(turn.agent_id, "archivist");
 }
 
 #[test]
 fn a_deadlock_nobody_can_break_is_terminal() {
-    let mut room = Room::new();
-    // Every remaining member has committed to one side or the other.
-    room.desks[0].members = vec!["planner".into(), "scout".into()];
-    room.members = vec![member("planner"), member("scout")];
-    let transcript = [
-        said(1, "planner", "!propose #stage"),
-        said(2, "scout", "!propose #ship"),
-    ];
-
+    // In `deadlocked()` every member has taken a side: planner backs both,
+    // critic backs `stage`, scout backs `ship`. Nobody is left to break it.
+    let room = Room::new();
     assert_eq!(
-        run(&room, &state(), &transcript, &EpisodePolicy::DEFAULT),
+        run(&room, &state(), &deadlocked(), &EpisodePolicy::DEFAULT),
         HiveStep::Deadlocked {
             topics: vec![TopicId("stage".into()), TopicId("ship".into())],
         },
@@ -581,23 +583,24 @@ fn a_malformed_policy_surfaces_from_the_quorum_fold() {
 }
 
 #[test]
-fn a_spend_at_the_ceiling_cannot_overflow() {
+fn the_budget_check_bounds_the_spend_before_it_can_overflow() {
     let room = Room::new();
     let policy = EpisodePolicy {
         turn_budget: u32::MAX,
         ..EpisodePolicy::DEFAULT
     };
+    // One below the ceiling still advances, landing exactly on it...
     let brimming = EpisodeState {
         spent: u32::MAX - 1,
         ..state()
     };
-    let error = step(
-        &brimming,
-        &converging(),
-        &room.roster(),
-        &room.desk_set(),
-        &policy,
-    )
-    .expect_err("spend overflow");
-    assert_eq!(error.to_string(), "episode spend overflowed at 4294967294");
+    let turn = speaking(run(&room, &brimming, &converging(), &policy));
+    assert_eq!(turn.next_state.spent, u32::MAX);
+
+    // ...and at the ceiling the budget check fires first, so the addition is
+    // never reached. That is why there is no overflow error to return.
+    assert_eq!(
+        run(&room, &turn.next_state, &converging(), &policy),
+        HiveStep::Exhausted { spent: u32::MAX },
+    );
 }
