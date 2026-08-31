@@ -54,7 +54,7 @@ without adding a runtime, timers, or new dependencies.
 **Files:** `src/lib.rs`, `tests/public_api.rs`, `README.md`
 
 1. Re-export `RetryPolicy` from `src/lib.rs`.
-2. Add an integration test using only `template::{Error, RetryPolicy}`.
+2. Add an integration test using only `tinyteams_core::{Error, RetryPolicy}`.
 3. Add a runnable README example and rustdoc `# Errors` documentation.
 4. Run `cargo test --doc` and `cargo test --test public_api`.
 
