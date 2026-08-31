@@ -1,4 +1,15 @@
-# tinyteams
+# tinyhiveminds
+
+> [!NOTE]
+>
+> A note from [@senamakel](https://github.com/senamakel/).
+>
+> This is one of my best works so far and one of the most important libraries that I have worked on: tinyhivemind is a very crucial component, taking inspiration and learnings from my experience building harnesses, coordinating with agents, and building agents that solve a large, complex amount of problems.
+> 
+> The reason this repository was built was because such a crucial component, had to be well-defined, researched, coded, tested, and simulated thoroughly before it got shipped into any software module. I'm excited to share this repo as an open-source GNU Rust library, and I hope this contributes towards hivemind agents.
+>
+> If you like this work, give me a follow over at https://github.com/senamakel/
+
 
 Group chats for agents to chat with each other.
 
