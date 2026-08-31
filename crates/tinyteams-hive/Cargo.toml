@@ -1,0 +1,38 @@
+[package]
+name = "tinyteams-hive"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Bounded group deliberation for agent group chats: traces, salience, quorum with cross-inhibition, and the attention market — all pure."
+
+# Deliberately dependency-light, and deliberately port-free. An episode is a
+# pure state machine over a transcript the caller already holds, so this crate
+# adds no host obligation beyond the ports `tinyteams` already defines for P4
+# through P7. `.github/scripts/assert-pure.sh` asserts that it stays that way.
+#
+# It depends on `tinyteams` rather than `tinyteams-core` because it folds over
+# `SessionMessage`, `SessionAuthor`, `Sequence` and `Conversation`, which live
+# in the session runtime. Those are the same types a host already holds, not
+# structural twins of them. `tinyteams` takes no runtime dependency of its own —
+# its `tokio` is a dev-dependency — so depending on it keeps this crate pure.
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }
+tinyteams = { workspace = true }
+
+[dev-dependencies]
+# Pins the exact JSON object shape of every payload type, as elsewhere in the
+# workspace, without adding JSON handling to the runtime dependency graph.
+serde_json = { workspace = true }
+
+[features]
+default = []
+# Compiles the opt-in live episode test. Live execution still requires the
+# explicit environment switch documented in docs/testing.md.
+e2e = []
+
+[lints]
+workspace = true
