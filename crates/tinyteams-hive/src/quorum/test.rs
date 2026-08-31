@@ -347,7 +347,8 @@ fn silencing_one_of_two_advocates_leaves_only_the_survivors_weight() {
     let stage = standing(&standings, "stage");
 
     assert_eq!(
-        stage.supporters, ["critic"],
+        stage.supporters,
+        ["critic"],
         "planner is silenced, critic remains",
     );
     assert_eq!(
