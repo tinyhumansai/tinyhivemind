@@ -67,6 +67,16 @@ const NONCOMPLIANCE: u32 = 60;
 /// Set it to zero and the room degenerates into a plurality of first
 /// impressions, which is exactly the `vote` control arm.
 const SOCIAL_WEIGHT: i32 = 25;
+/// How far below its own choice a participant will still close a decision out.
+///
+/// A room whose members each hold out for a private preference nobody else
+/// shares does not deadlock — it simply runs out of budget with every option
+/// one supporter short. Conceding a near-decision is the move that ends a
+/// deliberation, and bounding it is what keeps that from being a cascade: a
+/// participant closes on the leader only when the leader is not clearly worse
+/// than what it wanted, which is the same 60-point gap that separates the
+/// genuinely best option from the rest.
+const CONCESSION: i32 = 60;
 
 /// One simulated room: the options, which is best, and who is in it.
 #[derive(Clone, Debug)]
@@ -242,6 +252,16 @@ impl SimAgent {
             return line;
         }
 
+        // The room is one supporter short of settling and this member has not
+        // backed the option in front. Closing that out is what ends a
+        // deliberation; holding out for a preference the room does not share
+        // is what spends the budget without deciding anything.
+        if let Some((topic, grounds)) = view.closable(self) {
+            return format!(
+                "!support #{topic} ^{grounds} Close enough to my own read to settle it here."
+            );
+        }
+
         // Nothing worth backing is on the floor, so put an option there.
         if view.proposal(&self.favourite).is_none() {
             return format!(
@@ -380,6 +400,30 @@ impl View {
         self.floor()
             .into_iter()
             .max_by_key(|(topic, _)| (self.backers(topic), self.posterior(agent, topic)))
+    }
+
+    /// The option one supporter short of quorum that this participant has not
+    /// backed, when it is not clearly worse than what this participant did
+    /// back, with grounds to cite.
+    fn closable(&self, agent: &SimAgent) -> Option<(&TopicId, Sequence)> {
+        let short = self.threshold.checked_sub(1)?;
+        let (topic, grounds) = self
+            .floor()
+            .into_iter()
+            .filter(|(topic, _)| self.backers(topic) == short)
+            .filter(|(topic, _)| !self.has_backed(&agent.id, topic))
+            .max_by_key(|(topic, _)| self.posterior(agent, topic))?;
+        let held = self
+            .floor()
+            .into_iter()
+            .filter(|(held, _)| self.has_backed(&agent.id, held))
+            .map(|(held, _)| self.posterior(agent, held))
+            .max()
+            .unwrap_or(i32::MIN);
+        if held != i32::MIN && self.posterior(agent, topic) < held.saturating_sub(CONCESSION) {
+            return None;
+        }
+        Some((topic, grounds))
     }
 
     /// Two or more options carrying at once, and this participant rates one of
