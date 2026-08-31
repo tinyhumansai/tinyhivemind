@@ -1,0 +1,51 @@
+# cargo-deny configuration — run locally with `cargo deny check all`.
+# CI runs the same check in the "Supply chain" job of .github/workflows/ci.yml.
+
+[graph]
+all-features = true
+
+[advisories]
+# Fail on any crate with a security advisory or an unmaintained warning.
+# Add an entry here only with a comment explaining the exposure and the plan.
+ignore = []
+
+[licenses]
+# Licenses accepted for this crate and its dependencies. Keep GPL-3.0-only for
+# the template crate itself; the remaining entries cover compatible dependency
+# licenses commonly encountered by Rust projects.
+allow = [
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "CDLA-Permissive-2.0",
+    "GPL-3.0-only",
+    "ISC",
+    "MIT",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Zlib",
+]
+confidence-threshold = 0.9
+
+[bans]
+# Duplicate versions bloat build times; review them rather than ignoring them.
+multiple-versions = "warn"
+wildcards = "deny"
+# A `version` requirement on a workspace-internal path dependency is a trap: it
+# is a caret range, so the first minor bump past `0.1.x` — or any 1.0 release —
+# stops resolving, and the release workflow discovers it after the tag is
+# pushed. The path is the whole address for a crate that is never published, so
+# those entries carry no version and are wildcards by construction.
+#
+# This exemption is narrow: it applies only to path dependencies on crates whose
+# manifest sets `publish = false`. A wildcard on anything from a registry is
+# still denied, which is what this check exists for.
+allow-wildcard-paths = true
+# Crates that must never enter the dependency graph.
+deny = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

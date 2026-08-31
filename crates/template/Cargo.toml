@@ -1,0 +1,39 @@
+[package]
+name = "template"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "A production-ready template for installable TinyBus modules."
+documentation = "https://docs.rs/template"
+readme = "../../README.md"
+keywords = ["tinybus", "module", "plugin", "template"]
+categories = ["development-tools"]
+publish = false
+
+[lib]
+# Keep the ordinary Rust library for tests and downstream reuse while also
+# producing the native module artifact that TinyBus loads at runtime.
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+# The wire contract: member names, payload types, and the contract version.
+# Re-exported wholesale from `src/lib.rs` so a consumer takes one dependency
+# rather than two, and so `template::GreetRequest` and
+# `template_bus::GreetRequest` are the same type.
+template-bus = { workspace = true }
+tinybus = { workspace = true }
+tinybus-module = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+# The GitHub release verifier passes an explicit empty module configuration.
+serde_json = { workspace = true }
+
+[features]
+default = []
+
+[lints]
+workspace = true

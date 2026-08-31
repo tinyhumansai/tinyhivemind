@@ -1,0 +1,159 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Lint levels live in `[workspace.lints]` in the root Cargo.toml so local and
+  # CI runs agree; don't add a blanket RUSTFLAGS here.
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: Rust
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # This job executes repository code (cargo build/test); don't persist
+          # the token in git config.
+          persist-credentials: false
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Build
+        run: cargo build --all-targets --all-features
+
+      - name: Test
+        run: cargo test --all-features
+
+      - name: Test default features
+        run: cargo test
+
+      # `cargo build --all-targets` only *compiles* an example. `AGENTS.md`
+      # promises `cargo run -p template --example basic` works, and a compiled
+      # example can still fail on its first line.
+      - name: Run the bundled example
+        run: cargo run -p template --example basic
+
+      # `crates/template-bus` exists so a host can name the payload types
+      # without compiling the module. That promise is invisible in a diff,
+      # because a forbidden dependency arrives transitively through a feature
+      # someone enabled one crate away — so it is asserted rather than
+      # documented.
+      #
+      # The FORWARD form is required. `cargo tree -i <crate> -p template-bus`
+      # discards the `-p` scope, prints the whole-workspace inverse tree, and
+      # exits 0 looking clean even when this crate is the one at fault.
+      - name: Assert the contract crate stays transport-free
+        run: |
+          set -euo pipefail
+          forbidden="$(cargo tree -p template-bus -e normal,build --prefix none \
+            | grep -Ei 'tinybus|tokio|reqwest|ureq|hyper|rusqlite|git2' || true)"
+          if [ -n "$forbidden" ]; then
+            echo "template-bus pulled in a dependency its manifest forbids:" >&2
+            echo "$forbidden" >&2
+            echo >&2
+            echo "The contract is what a host compiles against. It must stay free" >&2
+            echo "of transports, async runtimes, HTTP clients and native libraries." >&2
+            exit 1
+          fi
+
+      - name: Require 90% line coverage in every source file
+        run: .github/scripts/check-file-coverage.sh 90 coverage.json
+
+      - name: Upload coverage report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-json
+          path: coverage.json
+          if-no-files-found: ignore
+
+  docs:
+    name: Docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --no-deps --all-features
+
+  msrv:
+    name: Minimum supported Rust version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      # `rust-version` is inherited from `[workspace.package]`, so every member
+      # reports the same value. Read it off the package the module ships as
+      # rather than off `packages[0]`, whose order cargo does not promise.
+      - name: Read rust-version from Cargo.toml
+        id: msrv
+        run: |
+          set -euo pipefail
+          msrv="$(cargo metadata --format-version 1 --no-deps \
+            | jq -r '.packages[] | select(.name == "template") | .rust_version')"
+          if [[ -z "$msrv" || "$msrv" == "null" ]]; then
+            echo "workspace.package.rust-version is not set in Cargo.toml" >&2
+            exit 1
+          fi
+          echo "version=$msrv" >> "$GITHUB_OUTPUT"
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build with the declared MSRV
+        run: cargo build --all-targets --all-features
+
+  supply-chain:
+    name: Supply chain
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Check advisories, licenses, bans, and sources
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check all
