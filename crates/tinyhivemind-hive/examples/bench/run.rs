@@ -240,10 +240,11 @@ pub(crate) fn drive(
                 let content = agent.speak(&turn, &visible)?;
                 if keep_trace {
                     trace.push(format!(
-                        "{:>10}  {:<10} {:<6} saw {:>2}  {content}",
+                        "{:>10}  {:<10} {:<6} {:<11} saw {:>2}  {content}",
                         turn.agent_id,
                         format!("{:?}", turn.reason).to_lowercase(),
                         format!("{:?}", turn.visibility).to_lowercase(),
+                        format!("{:?}", turn.phase).to_lowercase(),
                         visible.len(),
                     ));
                 }
