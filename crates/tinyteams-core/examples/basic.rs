@@ -9,8 +9,9 @@
 
 use tinyteams_core::chat::{is_general_chat, same_conversation};
 use tinyteams_core::desk::{Desk, DeskMember, DeskOrder, DeskSet};
+use tinyteams_core::error::Result;
 
-fn main() {
+fn main() -> Result<()> {
     // The default desk has four spellings and one identity.
     for spelling in [None, Some(""), Some("main"), Some("General")] {
         println!(
@@ -47,10 +48,6 @@ fn main() {
         ordered: vec!["cara".into(), "alice".into(), "bob".into()],
     }];
     let desks = DeskSet::new(&declared, &[], &additions, &orders, &[]);
-    println!(
-        "Engineering members: {:?}",
-        desks
-            .members("Engineering")
-            .expect("the example desk overlay is valid"),
-    );
+    println!("Engineering members: {:?}", desks.members("Engineering")?);
+    Ok(())
 }
