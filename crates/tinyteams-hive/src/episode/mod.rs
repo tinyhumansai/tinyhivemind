@@ -166,7 +166,11 @@ fn live_traces(
     transcript: &[SessionMessage],
     state: &EpisodeState,
     members: &[&str],
-) -> (Vec<SessionMessage>, Vec<crate::trace::Trace>, tinyteams::Sequence) {
+) -> (
+    Vec<SessionMessage>,
+    Vec<crate::trace::Trace>,
+    tinyteams::Sequence,
+) {
     let live: Vec<SessionMessage> = transcript
         .iter()
         .filter(|message| message.sequence > state.watermark)
