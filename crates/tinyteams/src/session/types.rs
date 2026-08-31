@@ -77,7 +77,7 @@ pub struct LogMessage {
 pub struct SessionPage {
     /// Rows in strictly descending sequence order.
     pub messages: Vec<LogMessage>,
-    /// Exclusive cursor for an older page, equal to the oldest row when set.
+    /// Exclusive cursor for an older page, no newer than the oldest row.
     pub next_before: Option<Sequence>,
 }
 

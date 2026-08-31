@@ -34,7 +34,8 @@ The `tinyteams` runtime crate depends on and re-exports `tinyteams-core`.
 canonical id and display name and optionally names a thread root. `LogMessage`
 contains its sequence, optional stored chat id, optional direct parent,
 `SessionAuthor`, and untouched content. `SessionPage` is newest-first and may
-provide `next_before`, an exclusive cursor for an older page.
+provide `next_before`, an exclusive cursor for an older page. That cursor may
+equal or be older than the page's oldest row, but cannot be newer.
 
 `SessionLog::read_before` returns a boxed, sendable future and a boxed,
 sendable source error. It is object-safe and does not select an async runtime.
@@ -46,16 +47,18 @@ excluded by using its sequence.
 
 Each page is validated before use. Rows must be strictly descending, below the
 requested cursor, and unique across the walk. A nonempty page's next cursor
-must equal its oldest row; an empty page cannot advertise another cursor. A
-cursor must move toward older rows. Violations are typed errors. Source read
-errors retain their source. Reaching the scan cap is successful and returns
-the qualifying history found so far.
+must be no newer than its oldest row; an empty page cannot advertise another
+cursor. Relative to the requested cursor it must strictly move toward older
+rows. Violations are typed errors. Source read errors retain their source.
+Reaching the scan cap is successful and returns the qualifying history found
+so far.
 
 Conversation filtering uses `tinyteams_core::chat::same_conversation` against
 both the desk id and display name. Channel projection keeps only rows without a
 parent. Thread projection keeps the root and its direct children, and stops
-scanning once the root is collected. Content whose trimmed form is empty is
-skipped; all other content bytes and every author are preserved unchanged.
+scanning once the root row is reached, even if that row has blank content.
+Content whose trimmed form is empty is skipped; all other content bytes and
+every author are preserved unchanged.
 
 `TeamBriefing` identifies the viewer and desk and lists `BriefedTeammate`
 records. A teammate has an id, label, and optional role and description.

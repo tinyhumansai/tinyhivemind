@@ -10,6 +10,17 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+fn assert_wire_round_trip<T>(value: &T, expected: serde_json::Value)
+where
+    T: serde::Serialize + serde::de::DeserializeOwned + Eq + std::fmt::Debug,
+{
+    assert_eq!(serde_json::to_value(value).expect("serializes"), expected);
+    assert_eq!(
+        serde_json::from_value::<T>(expected).expect("deserializes"),
+        *value
+    );
+}
+
 type Calls = Arc<Mutex<Vec<(Option<Sequence>, usize)>>>;
 
 #[derive(Debug)]
@@ -93,20 +104,172 @@ fn page(messages: Vec<LogMessage>, next: Option<u64>) -> SessionPage {
 }
 
 #[test]
+fn session_author_variants_pin_their_wire_shape() {
+    let authors = [
+        (
+            SessionAuthor::Operator,
+            serde_json::json!({"type":"operator"}),
+        ),
+        (
+            SessionAuthor::Person {
+                id: "p1".into(),
+                label: "Pat".into(),
+            },
+            serde_json::json!({"type":"person","id":"p1","label":"Pat"}),
+        ),
+        (
+            SessionAuthor::Agent {
+                id: "a1".into(),
+                label: "Ada".into(),
+            },
+            serde_json::json!({"type":"agent","id":"a1","label":"Ada"}),
+        ),
+        (
+            SessionAuthor::System {
+                kind: "workflow".into(),
+                label: "Build".into(),
+            },
+            serde_json::json!({"type":"system","kind":"workflow","label":"Build"}),
+        ),
+    ];
+    for (author, expected) in authors {
+        assert_wire_round_trip(&author, expected);
+    }
+}
+
+#[test]
 fn session_records_pin_their_wire_shape() {
-    let author = SessionAuthor::System {
-        kind: "workflow".into(),
-        label: "Build".into(),
-    };
-    assert_eq!(
-        serde_json::to_value(author).expect("author serializes"),
-        serde_json::json!({"type":"system","kind":"workflow","label":"Build"})
+    assert_wire_round_trip(&Sequence(7), serde_json::json!(7));
+    assert_wire_round_trip(
+        &Conversation {
+            desk_id: "engineering".into(),
+            desk_name: "Engineering".into(),
+            thread_root: Some(Sequence(4)),
+        },
+        serde_json::json!({
+            "desk_id": "engineering",
+            "desk_name": "Engineering",
+            "thread_root": 4
+        }),
     );
-    assert_eq!(
-        serde_json::to_value(Sequence(7)).expect("sequence serializes"),
-        serde_json::json!(7)
+
+    let raw = LogMessage {
+        sequence: Sequence(9),
+        chat_id: Some("engineering".into()),
+        parent: Some(Sequence(4)),
+        author: SessionAuthor::Operator,
+        content: "hello".into(),
+    };
+    assert_wire_round_trip(
+        &raw,
+        serde_json::json!({
+            "sequence": 9,
+            "chat_id": "engineering",
+            "parent": 4,
+            "author": {"type":"operator"},
+            "content": "hello"
+        }),
+    );
+    assert_wire_round_trip(
+        &SessionPage {
+            messages: vec![raw],
+            next_before: Some(Sequence(9)),
+        },
+        serde_json::json!({
+            "messages": [{
+                "sequence": 9,
+                "chat_id": "engineering",
+                "parent": 4,
+                "author": {"type":"operator"},
+                "content": "hello"
+            }],
+            "next_before": 9
+        }),
+    );
+    assert_wire_round_trip(
+        &SessionMessage {
+            sequence: Sequence(9),
+            author: SessionAuthor::Operator,
+            content: "hello".into(),
+        },
+        serde_json::json!({
+            "sequence": 9,
+            "author": {"type":"operator"},
+            "content": "hello"
+        }),
+    );
+    assert_wire_round_trip(
+        &SessionQuery {
+            conversation: Conversation {
+                desk_id: "engineering".into(),
+                desk_name: "Engineering".into(),
+                thread_root: None,
+            },
+            before: Some(Sequence(10)),
+            window: 30,
+        },
+        serde_json::json!({
+            "conversation": {
+                "desk_id": "engineering",
+                "desk_name": "Engineering",
+                "thread_root": null
+            },
+            "before": 10,
+            "window": 30
+        }),
     );
     assert_eq!(Sequence(7).to_string(), "7");
+}
+
+#[test]
+fn session_wire_records_require_every_field() {
+    assert!(
+        serde_json::from_value::<Conversation>(serde_json::json!({
+            "desk_id": "engineering",
+            "thread_root": null
+        }))
+        .is_err()
+    );
+    assert!(
+        serde_json::from_value::<LogMessage>(serde_json::json!({
+            "sequence": 1,
+            "chat_id": null,
+            "parent": null,
+            "author": {"type":"operator"}
+        }))
+        .is_err()
+    );
+    assert!(
+        serde_json::from_value::<SessionPage>(serde_json::json!({
+            "next_before": null
+        }))
+        .is_err()
+    );
+    assert!(
+        serde_json::from_value::<SessionMessage>(serde_json::json!({
+            "sequence": 1,
+            "author": {"type":"operator"}
+        }))
+        .is_err()
+    );
+    assert!(
+        serde_json::from_value::<SessionQuery>(serde_json::json!({
+            "conversation": {
+                "desk_id": "engineering",
+                "desk_name": "Engineering",
+                "thread_root": null
+            },
+            "before": null
+        }))
+        .is_err()
+    );
+    assert!(
+        serde_json::from_value::<SessionAuthor>(serde_json::json!({
+            "type": "person",
+            "id": "p1"
+        }))
+        .is_err()
+    );
 }
 
 #[test]
@@ -232,14 +395,23 @@ async fn rejects_a_cursor_that_does_not_advance() {
 }
 
 #[tokio::test]
-async fn rejects_a_cursor_that_is_not_the_oldest_row() {
+async fn accepts_a_cursor_older_than_the_oldest_row() {
     let log = FakeLog::new(vec![page(
         vec![message(9, None, None, "a"), message(8, None, None, "b")],
         Some(7),
     )]);
+    assert!(project_session(&log, &query(2)).await.is_ok());
+}
+
+#[tokio::test]
+async fn rejects_a_cursor_newer_than_the_oldest_row() {
+    let log = FakeLog::new(vec![page(
+        vec![message(9, None, None, "a"), message(8, None, None, "b")],
+        Some(9),
+    )]);
     assert!(matches!(
         project_session(&log, &query(2)).await,
-        Err(Error::CursorDoesNotMatchOldest { .. })
+        Err(Error::CursorAfterOldest { .. })
     ));
 }
 
@@ -346,6 +518,29 @@ async fn thread_keeps_root_and_direct_children_then_stops_at_root() {
             .collect::<Vec<_>>(),
         vec![5, 6, 7]
     );
+}
+
+#[tokio::test]
+async fn whitespace_thread_root_stops_before_another_read() {
+    let log = FakeLog {
+        pages: Mutex::new(VecDeque::from([
+            Ok(page(
+                vec![message(5, Some("engineering"), None, " \n\t ")],
+                Some(5),
+            )),
+            Err(Box::new(io::Error::other("must not read past root")) as SourceError),
+        ])),
+        calls: Arc::default(),
+    };
+    let mut query = query(8);
+    query.conversation.thread_root = Some(Sequence(5));
+    assert!(
+        project_session(&log, &query)
+            .await
+            .expect("root terminates the walk")
+            .is_empty()
+    );
+    assert_eq!(log.call_count(), 1);
 }
 
 #[tokio::test]

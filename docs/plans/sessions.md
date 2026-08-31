@@ -20,7 +20,8 @@ watermarks, response selection, mention dispatch, storage, or a runtime choice.
    attribution, the scan cap, and source failures; implement the minimal paging
    fold in `session/mod.rs`.
 4. Add failing malformed-page tests, then implement typed validation for range,
-   descending order, duplicates, empty-page cursors, and cursor advancement.
+   descending order, duplicates, empty-page cursors, strict cursor advancement,
+   and the boundary that a next cursor is no newer than the oldest row.
 5. Add failing briefing tests, then implement records, snapshot construction,
    deterministic `system_text`, and `initialize_session` under `briefing/`.
 6. Add crate docs, module READMEs, centralized exports, manifest dependencies,

@@ -72,7 +72,12 @@ pub async fn project_session(
             if !matches_conversation(message, &query.conversation) {
                 continue;
             }
+            let is_thread_root = query.conversation.thread_root == Some(message.sequence);
             if message.content.trim().is_empty() {
+                if is_thread_root {
+                    reached_root = true;
+                    break;
+                }
                 continue;
             }
             projected.push(SessionMessage {
@@ -80,7 +85,7 @@ pub async fn project_session(
                 author: message.author.clone(),
                 content: message.content.clone(),
             });
-            if query.conversation.thread_root == Some(message.sequence) {
+            if is_thread_root {
                 reached_root = true;
                 break;
             }
@@ -159,8 +164,8 @@ fn validate_page(
             });
         }
         let oldest = page.messages[page.messages.len() - 1].sequence;
-        if next_before != oldest {
-            return Err(Error::CursorDoesNotMatchOldest {
+        if next_before > oldest {
+            return Err(Error::CursorAfterOldest {
                 next_before,
                 oldest,
             });

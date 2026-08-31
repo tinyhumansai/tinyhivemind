@@ -6,6 +6,8 @@ object-safe and independent of an executor. `project_session` validates every
 page, counts all raw rows against a fixed scan budget, filters one desk/channel
 or direct-child thread, and returns attributed messages chronologically.
 
-The host must treat `before` as exclusive and return `next_before` equal to a
-nonempty page's oldest sequence. Empty pages end a walk. A malformed page is a
-typed error rather than a reason to retry or silently accept incomplete order.
+The host must treat `before` as exclusive and return `next_before` no newer than
+a nonempty page's oldest sequence and strictly older than the requested cursor.
+Empty pages end a walk. A malformed page is a typed error rather than a reason
+to retry or silently accept incomplete order. Reaching a thread root ends the
+walk even when blank-content filtering omits that row from the projection.

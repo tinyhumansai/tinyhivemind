@@ -59,13 +59,116 @@ fn briefing_records_pin_their_wire_shape() {
         description: Some("Reviews changes".into()),
     };
     assert_eq!(
-        serde_json::to_value(teammate).expect("teammate serializes"),
+        serde_json::to_value(&teammate).expect("teammate serializes"),
         serde_json::json!({
             "id": "bob",
             "label": "Bob",
             "role": null,
             "description": "Reviews changes"
         })
+    );
+    assert_eq!(
+        serde_json::from_value::<BriefedTeammate>(serde_json::json!({
+            "id": "bob",
+            "label": "Bob",
+            "role": null,
+            "description": "Reviews changes"
+        }))
+        .expect("teammate deserializes"),
+        teammate
+    );
+
+    let briefing = TeamBriefing {
+        viewer_id: "alice".into(),
+        desk_id: "engineering".into(),
+        desk_name: "Engineering".into(),
+        teammates: vec![teammate],
+    };
+    let briefing_json = serde_json::json!({
+        "viewer_id": "alice",
+        "desk_id": "engineering",
+        "desk_name": "Engineering",
+        "teammates": [{
+            "id": "bob",
+            "label": "Bob",
+            "role": null,
+            "description": "Reviews changes"
+        }]
+    });
+    assert_eq!(
+        serde_json::to_value(&briefing).expect("briefing serializes"),
+        briefing_json
+    );
+    assert_eq!(
+        serde_json::from_value::<TeamBriefing>(briefing_json).expect("briefing deserializes"),
+        briefing
+    );
+
+    let initialization = SessionInitialization {
+        briefing,
+        history: vec![crate::SessionMessage {
+            sequence: Sequence(4),
+            author: SessionAuthor::Operator,
+            content: "hello".into(),
+        }],
+    };
+    let initialization_json = serde_json::json!({
+        "briefing": {
+            "viewer_id": "alice",
+            "desk_id": "engineering",
+            "desk_name": "Engineering",
+            "teammates": [{
+                "id": "bob",
+                "label": "Bob",
+                "role": null,
+                "description": "Reviews changes"
+            }]
+        },
+        "history": [{
+            "sequence": 4,
+            "author": {"type":"operator"},
+            "content": "hello"
+        }]
+    });
+    assert_eq!(
+        serde_json::to_value(&initialization).expect("initialization serializes"),
+        initialization_json
+    );
+    assert_eq!(
+        serde_json::from_value::<SessionInitialization>(initialization_json)
+            .expect("initialization deserializes"),
+        initialization
+    );
+}
+
+#[test]
+fn briefing_wire_records_require_every_field() {
+    assert!(
+        serde_json::from_value::<BriefedTeammate>(serde_json::json!({
+            "id": "bob",
+            "role": null,
+            "description": null
+        }))
+        .is_err()
+    );
+    assert!(
+        serde_json::from_value::<TeamBriefing>(serde_json::json!({
+            "viewer_id": "alice",
+            "desk_id": "engineering",
+            "desk_name": "Engineering"
+        }))
+        .is_err()
+    );
+    assert!(
+        serde_json::from_value::<SessionInitialization>(serde_json::json!({
+            "briefing": {
+                "viewer_id": "alice",
+                "desk_id": "engineering",
+                "desk_name": "Engineering",
+                "teammates": []
+            }
+        }))
+        .is_err()
     );
 }
 

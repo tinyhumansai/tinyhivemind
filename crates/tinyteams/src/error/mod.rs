@@ -48,9 +48,9 @@ pub enum Error {
         /// The cursor returned by the host.
         next_before: Sequence,
     },
-    /// A nonempty page's cursor did not name its oldest row.
-    #[error("next cursor {next_before} does not match oldest row {oldest}")]
-    CursorDoesNotMatchOldest {
+    /// A nonempty page's cursor was newer than its oldest row.
+    #[error("next cursor {next_before} is newer than oldest row {oldest}")]
+    CursorAfterOldest {
         /// The host-returned cursor.
         next_before: Sequence,
         /// The page's oldest sequence.
