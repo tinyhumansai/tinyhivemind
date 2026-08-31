@@ -41,7 +41,7 @@
 //!
 //! # Status
 //!
-//! The `greeting` module is the tinyteams_core's placeholder. It stays until the
+//! The `greeting` module is the template scaffold. It stays until the
 //! first real feature area lands so the coverage gate has something to measure,
 //! and is deleted then.
 
