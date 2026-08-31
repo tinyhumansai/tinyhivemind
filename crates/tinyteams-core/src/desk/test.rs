@@ -2,7 +2,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use serde::{Serialize, Serializer as _};
+use serde_json::{Value, json};
 
 use super::{Desk, DeskMember, DeskOrder, DeskSet};
 use crate::error::Error;
@@ -27,42 +27,124 @@ fn set<'a>(
 }
 
 #[test]
-fn desk_wire_fields_are_stable_snake_case() {
+fn desk_wire_form_is_exact_and_round_trips() {
+    let desk = Desk {
+        id: "engineering".into(),
+        name: "Engineering".into(),
+        description: Some("Builds the product".into()),
+        members: vec!["alice".into(), "bob".into()],
+    };
+    let expected = json!({
+        "id": "engineering",
+        "name": "Engineering",
+        "description": "Builds the product",
+        "members": ["alice", "bob"]
+    });
+
+    assert_eq!(serde_json::to_value(&desk).unwrap(), expected);
+    assert_eq!(serde_json::from_value::<Desk>(expected).unwrap(), desk);
+}
+
+#[test]
+fn desk_description_accepts_explicit_null() {
+    let value = json!({
+        "id": "engineering",
+        "name": "Engineering",
+        "description": null,
+        "members": ["alice"]
+    });
+
     assert_eq!(
-        field_names(&desk("engineering", "Engineering", &["alice"])),
-        ["id", "name", "description", "members"]
+        serde_json::from_value::<Desk>(value).unwrap(),
+        desk("engineering", "Engineering", &["alice"])
     );
 }
 
 #[test]
-fn desk_member_wire_fields_are_stable_snake_case() {
+fn desk_member_wire_form_is_exact_and_round_trips() {
+    let member = DeskMember {
+        desk_id: "engineering".into(),
+        agent_id: "bob".into(),
+    };
+    let expected = json!({
+        "desk_id": "engineering",
+        "agent_id": "bob"
+    });
+
+    assert_eq!(serde_json::to_value(&member).unwrap(), expected);
     assert_eq!(
-        field_names(&DeskMember {
-            desk_id: "engineering".into(),
-            agent_id: "bob".into(),
-        }),
-        ["desk_id", "agent_id"]
+        serde_json::from_value::<DeskMember>(expected).unwrap(),
+        member
     );
 }
 
 #[test]
-fn desk_order_wire_fields_are_stable_snake_case() {
+fn desk_order_wire_form_is_exact_and_round_trips() {
+    let order = DeskOrder {
+        desk_id: "engineering".into(),
+        ordered: vec!["bob".into(), "alice".into()],
+    };
+    let expected = json!({
+        "desk_id": "engineering",
+        "ordered": ["bob", "alice"]
+    });
+
+    assert_eq!(serde_json::to_value(&order).unwrap(), expected);
     assert_eq!(
-        field_names(&DeskOrder {
-            desk_id: "engineering".into(),
-            ordered: vec!["bob".into(), "alice".into()],
-        }),
-        ["desk_id", "ordered"]
+        serde_json::from_value::<DeskOrder>(expected).unwrap(),
+        order
     );
 }
 
 #[test]
-fn desk_wire_types_are_deserializable() {
-    fn assert_deserialize<T: for<'de> serde::Deserialize<'de>>() {}
+fn desk_wire_fields_are_required() {
+    for missing in ["id", "name", "description", "members"] {
+        let mut value = json!({
+            "id": "engineering",
+            "name": "Engineering",
+            "description": null,
+            "members": ["alice"]
+        });
+        value.as_object_mut().unwrap().remove(missing);
+        assert_missing_field::<Desk>(value, missing);
+    }
+}
 
-    assert_deserialize::<Desk>();
-    assert_deserialize::<DeskMember>();
-    assert_deserialize::<DeskOrder>();
+#[test]
+fn desk_member_wire_fields_are_required() {
+    for missing in ["desk_id", "agent_id"] {
+        let mut value = json!({
+            "desk_id": "engineering",
+            "agent_id": "alice"
+        });
+        value.as_object_mut().unwrap().remove(missing);
+        assert_missing_field::<DeskMember>(value, missing);
+    }
+}
+
+#[test]
+fn desk_order_wire_fields_are_required() {
+    for missing in ["desk_id", "ordered"] {
+        let mut value = json!({
+            "desk_id": "engineering",
+            "ordered": ["alice"]
+        });
+        value.as_object_mut().unwrap().remove(missing);
+        assert_missing_field::<DeskOrder>(value, missing);
+    }
+}
+
+fn assert_missing_field<T>(value: Value, field: &str)
+where
+    T: for<'de> serde::Deserialize<'de> + std::fmt::Debug,
+{
+    let error = serde_json::from_value::<T>(value).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains(&format!("missing field `{field}`")),
+        "unexpected error for missing `{field}`: {error}"
+    );
 }
 
 #[test]
@@ -335,221 +417,4 @@ fn rejects_an_incomplete_order() {
             missing_agent_id: "bob".into()
         })
     );
-}
-
-#[derive(Debug)]
-struct WireError;
-
-impl std::fmt::Display for WireError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("wire test error")
-    }
-}
-
-impl std::error::Error for WireError {}
-
-impl serde::ser::Error for WireError {
-    fn custom<T: std::fmt::Display>(_message: T) -> Self {
-        Self
-    }
-}
-
-fn field_names(value: &impl Serialize) -> Vec<&'static str> {
-    value.serialize(FieldNameSerializer).unwrap()
-}
-
-/// The field recorder intentionally supports structs only. Exercising every
-/// rejection keeps this test utility honest and prevents a serde shape change
-/// from being mistaken for a successful wire-field assertion.
-#[test]
-fn wire_field_recorder_rejects_every_non_struct_shape() {
-    assert!(FieldNameSerializer.serialize_bool(true).is_err());
-    assert!(FieldNameSerializer.serialize_i8(1).is_err());
-    assert!(FieldNameSerializer.serialize_i16(1).is_err());
-    assert!(FieldNameSerializer.serialize_i32(1).is_err());
-    assert!(FieldNameSerializer.serialize_i64(1).is_err());
-    assert!(FieldNameSerializer.serialize_u8(1).is_err());
-    assert!(FieldNameSerializer.serialize_u16(1).is_err());
-    assert!(FieldNameSerializer.serialize_u32(1).is_err());
-    assert!(FieldNameSerializer.serialize_u64(1).is_err());
-    assert!(FieldNameSerializer.serialize_f32(1.0).is_err());
-    assert!(FieldNameSerializer.serialize_f64(1.0).is_err());
-    assert!(FieldNameSerializer.serialize_char('x').is_err());
-    assert!(FieldNameSerializer.serialize_str("x").is_err());
-    assert!(FieldNameSerializer.serialize_bytes(b"x").is_err());
-    assert!(FieldNameSerializer.serialize_none().is_err());
-    assert!(FieldNameSerializer.serialize_some(&"x").is_err());
-    assert!(FieldNameSerializer.serialize_unit().is_err());
-    assert!(FieldNameSerializer.serialize_unit_struct("Unit").is_err());
-    assert!(
-        FieldNameSerializer
-            .serialize_unit_variant("Enum", 0, "Unit")
-            .is_err()
-    );
-    assert!(
-        FieldNameSerializer
-            .serialize_newtype_struct("Newtype", &"x")
-            .is_err()
-    );
-    assert!(
-        FieldNameSerializer
-            .serialize_newtype_variant("Enum", 0, "Newtype", &"x")
-            .is_err()
-    );
-    assert!(FieldNameSerializer.serialize_seq(Some(1)).is_err());
-    assert!(FieldNameSerializer.serialize_tuple(1).is_err());
-    assert!(
-        FieldNameSerializer
-            .serialize_tuple_struct("Tuple", 1)
-            .is_err()
-    );
-    assert!(
-        FieldNameSerializer
-            .serialize_tuple_variant("Enum", 0, "Tuple", 1)
-            .is_err()
-    );
-    assert!(FieldNameSerializer.serialize_map(Some(1)).is_err());
-    assert!(
-        FieldNameSerializer
-            .serialize_struct_variant("Enum", 0, "Struct", 1)
-            .is_err()
-    );
-}
-
-struct FieldNameSerializer;
-
-struct StructFields(Vec<&'static str>);
-
-impl serde::ser::SerializeStruct for StructFields {
-    type Ok = Vec<&'static str>;
-    type Error = WireError;
-
-    fn serialize_field<T: ?Sized + Serialize>(
-        &mut self,
-        key: &'static str,
-        _value: &T,
-    ) -> Result<(), Self::Error> {
-        self.0.push(key);
-        Ok(())
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(self.0)
-    }
-}
-
-macro_rules! unsupported {
-    ($($name:ident($($arg:ident: $type:ty),*);)*) => {$ (
-        fn $name(self, $($arg: $type),*) -> Result<Self::Ok, Self::Error> {
-            $(let _ = $arg;)*
-            Err(WireError)
-        }
-    )*};
-}
-
-impl serde::Serializer for FieldNameSerializer {
-    type Ok = Vec<&'static str>;
-    type Error = WireError;
-    type SerializeSeq = serde::ser::Impossible<Self::Ok, Self::Error>;
-    type SerializeTuple = serde::ser::Impossible<Self::Ok, Self::Error>;
-    type SerializeTupleStruct = serde::ser::Impossible<Self::Ok, Self::Error>;
-    type SerializeTupleVariant = serde::ser::Impossible<Self::Ok, Self::Error>;
-    type SerializeMap = serde::ser::Impossible<Self::Ok, Self::Error>;
-    type SerializeStruct = StructFields;
-    type SerializeStructVariant = serde::ser::Impossible<Self::Ok, Self::Error>;
-
-    unsupported! {
-        serialize_bool(value: bool);
-        serialize_i8(value: i8);
-        serialize_i16(value: i16);
-        serialize_i32(value: i32);
-        serialize_i64(value: i64);
-        serialize_u8(value: u8);
-        serialize_u16(value: u16);
-        serialize_u32(value: u32);
-        serialize_u64(value: u64);
-        serialize_f32(value: f32);
-        serialize_f64(value: f64);
-        serialize_char(value: char);
-        serialize_str(value: &str);
-        serialize_bytes(value: &[u8]);
-        serialize_unit_struct(name: &'static str);
-    }
-
-    fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
-        Err(WireError)
-    }
-    fn serialize_some<T: ?Sized + Serialize>(self, _value: &T) -> Result<Self::Ok, Self::Error> {
-        Err(WireError)
-    }
-    fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
-        Err(WireError)
-    }
-    fn serialize_unit_variant(
-        self,
-        _name: &'static str,
-        _index: u32,
-        _variant: &'static str,
-    ) -> Result<Self::Ok, Self::Error> {
-        Err(WireError)
-    }
-    fn serialize_newtype_struct<T: ?Sized + Serialize>(
-        self,
-        _name: &'static str,
-        _value: &T,
-    ) -> Result<Self::Ok, Self::Error> {
-        Err(WireError)
-    }
-    fn serialize_newtype_variant<T: ?Sized + Serialize>(
-        self,
-        _name: &'static str,
-        _index: u32,
-        _variant: &'static str,
-        _value: &T,
-    ) -> Result<Self::Ok, Self::Error> {
-        Err(WireError)
-    }
-    fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
-        Err(WireError)
-    }
-    fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple, Self::Error> {
-        Err(WireError)
-    }
-    fn serialize_tuple_struct(
-        self,
-        _name: &'static str,
-        _len: usize,
-    ) -> Result<Self::SerializeTupleStruct, Self::Error> {
-        Err(WireError)
-    }
-    fn serialize_tuple_variant(
-        self,
-        _name: &'static str,
-        _index: u32,
-        _variant: &'static str,
-        _len: usize,
-    ) -> Result<Self::SerializeTupleVariant, Self::Error> {
-        Err(WireError)
-    }
-    fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
-        Err(WireError)
-    }
-
-    fn serialize_struct(
-        self,
-        _name: &'static str,
-        len: usize,
-    ) -> Result<Self::SerializeStruct, Self::Error> {
-        Ok(StructFields(Vec::with_capacity(len)))
-    }
-
-    fn serialize_struct_variant(
-        self,
-        _name: &'static str,
-        _index: u32,
-        _variant: &'static str,
-        _len: usize,
-    ) -> Result<Self::SerializeStructVariant, Self::Error> {
-        Err(WireError)
-    }
 }

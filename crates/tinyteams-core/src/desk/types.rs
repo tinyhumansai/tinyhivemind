@@ -1,6 +1,6 @@
 //! Host-facing desk overlay records and their stable wire representation.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 /// A declared or operator-added group conversation.
 ///
@@ -14,6 +14,7 @@ pub struct Desk {
     /// The operator-facing display name and exact lookup alias.
     pub name: String,
     /// Optional operator-facing context about the desk.
+    #[serde(deserialize_with = "deserialize_required_description")]
     pub description: Option<String>,
     /// Founding agent ids in their declared order.
     pub members: Vec<String>,
@@ -37,4 +38,11 @@ pub struct DeskOrder {
     pub desk_id: String,
     /// Every final member id exactly once, in the desired order.
     pub ordered: Vec<String>,
+}
+
+fn deserialize_required_description<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::<String>::deserialize(deserializer)
 }

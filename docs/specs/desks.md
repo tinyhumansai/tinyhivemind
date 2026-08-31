@@ -76,8 +76,9 @@ The public operations are:
 
 - `resolve_id(identity)` returns the canonical borrowed desk id for an exact
   id or exact name. An exact id takes precedence over name aliases. No match is
-  an unknown-desk error; multiple id matches or multiple name matches are an
-  ambiguous-resolution error.
+  an unknown-desk error; multiple exact name matches are an ambiguous-resolution
+  error. Duplicate exact ids are rejected by `validate` as `DuplicateDeskId`
+  before identity resolution is used on a valid set.
 - `contains(identity)` reports whether `resolve_id` succeeds. It does not
   replace `validate`; malformed input can therefore make an otherwise present
   identity report false.
