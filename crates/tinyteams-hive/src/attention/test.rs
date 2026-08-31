@@ -285,13 +285,18 @@ fn a_dominant_speaker_is_damped_and_the_quietest_member_is_lifted() {
 
 #[test]
 fn share_is_measured_over_grounded_surviving_contributions_not_message_count() {
-    // scout emits the most messages, but none are grounded, so none count.
+    // scout emits the most messages by far, but none are grounded, so its
+    // share stays zero and it is still the member the guard reaches for.
     let transcript = [
         said(1, "planner", "!propose #stage"),
-        said(2, "critic", "!support #stage ^1"),
-        said(3, "scout", "!question"),
-        said(4, "scout", "!question"),
-        said(5, "scout", "!question"),
+        said(2, "planner", "!support #stage ^1"),
+        said(3, "planner", "!evidence #stage ^1"),
+        said(4, "planner", "!support #stage ^1"),
+        said(5, "critic", "!support #stage ^1"),
+        said(6, "scout", "!question"),
+        said(7, "scout", "!question"),
+        said(8, "scout", "!question"),
+        said(9, "scout", "!question"),
     ];
     let fixture = fixture(&transcript);
     let weights = SalienceWeights::DEFAULT;
