@@ -59,8 +59,8 @@ impl From<tinyteams::error::Error> for Error {
     }
 }
 
-impl From<tinyteams::tinyteams_core_error::Error> for Error {
-    fn from(source: tinyteams::tinyteams_core_error::Error) -> Self {
+impl From<tinyteams_core::error::Error> for Error {
+    fn from(source: tinyteams_core::error::Error) -> Self {
         Self::Core {
             source: source.into(),
         }

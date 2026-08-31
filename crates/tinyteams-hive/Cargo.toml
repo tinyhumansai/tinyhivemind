@@ -22,6 +22,10 @@ description = "Bounded group deliberation for agent group chats: traces, salienc
 serde = { workspace = true }
 thiserror = { workspace = true }
 tinyteams = { workspace = true }
+# Named directly as well as through `tinyteams`, because the runtime crate's own
+# `error` module shadows the core one in its glob re-export, and both error
+# types have to be convertible into this crate's.
+tinyteams-core = { workspace = true }
 
 [dev-dependencies]
 # Pins the exact JSON object shape of every payload type, as elsewhere in the
