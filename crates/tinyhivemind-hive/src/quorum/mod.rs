@@ -76,13 +76,17 @@ pub fn standings(
     // different offsets -- one per topic -- so an objection naming that
     // message must be able to silence the advocate on *every* topic it
     // advocated there, not just the last one folded.
-    let mut advocacy: BTreeMap<Sequence, Vec<(String, TopicId)>> = BTreeMap::new();
-    let mut ordered: Vec<TopicId> = Vec::new();
-    let mut supporters: BTreeMap<TopicId, Vec<String>> = BTreeMap::new();
+    //
+    // Every map here is keyed by a borrow of the traces being folded rather
+    // than by an owned copy. The fold runs on every step of every episode, and
+    // the owned `TopicStanding` is built once at the end from what survives.
+    let mut advocacy: BTreeMap<Sequence, Vec<(&str, &TopicId)>> = BTreeMap::new();
+    let mut ordered: Vec<&TopicId> = Vec::new();
+    let mut supporters: BTreeMap<&TopicId, Vec<&str>> = BTreeMap::new();
     // Weight per topic, per contributing agent, so silencing one advocate can
     // remove exactly their contribution rather than either leaving the whole
     // sum untouched or zeroing every other supporter's weight along with it.
-    let mut weight: BTreeMap<TopicId, BTreeMap<String, i64>> = BTreeMap::new();
+    let mut weight: BTreeMap<&TopicId, BTreeMap<&str, i64>> = BTreeMap::new();
 
     for trace in &live {
         if !matches!(trace.kind, TraceKind::Propose | TraceKind::Support) {
@@ -94,25 +98,22 @@ pub fn standings(
         if policy.require_grounded && trace.kind == TraceKind::Support && !trace.grounded() {
             continue;
         }
-        if !ordered.contains(topic) {
-            ordered.push(topic.clone());
+        if !ordered.contains(&topic) {
+            ordered.push(topic);
         }
-        advocacy
-            .entry(trace.sequence)
-            .or_default()
-            .push((agent.to_owned(), topic.clone()));
-        let entry = supporters.entry(topic.clone()).or_default();
-        if !entry.iter().any(|held| held == agent) {
-            entry.push(agent.to_owned());
+        advocacy.entry(trace.sequence).or_default().push((agent, topic));
+        let entry = supporters.entry(topic).or_default();
+        if !entry.contains(&agent) {
+            entry.push(agent);
         }
         *weight
-            .entry(topic.clone())
+            .entry(topic)
             .or_default()
-            .entry(agent.to_owned())
+            .entry(agent)
             .or_default() += importance(trace.kind);
     }
 
-    let mut silenced: BTreeMap<TopicId, Vec<String>> = BTreeMap::new();
+    let mut silenced: BTreeMap<&TopicId, Vec<&str>> = BTreeMap::new();
     for trace in &live {
         if trace.kind != TraceKind::Object {
             continue;
@@ -127,12 +128,12 @@ pub fn standings(
         for (advocate, topic) in advocacies {
             // An objection cannot silence its own author; that would let an
             // agent retract another's support by objecting to itself.
-            if trace.agent_id() == Some(advocate.as_str()) {
+            if trace.agent_id() == Some(*advocate) {
                 continue;
             }
-            let entry = silenced.entry(topic.clone()).or_default();
-            if !entry.iter().any(|held| held == advocate) {
-                entry.push(advocate.clone());
+            let entry = silenced.entry(topic).or_default();
+            if !entry.contains(advocate) {
+                entry.push(advocate);
             }
         }
     }
@@ -146,6 +147,7 @@ pub fn standings(
                 .unwrap_or_default()
                 .into_iter()
                 .filter(|agent| !silenced.contains(agent))
+                .map(str::to_owned)
                 .collect();
             let support: i64 = weight
                 .remove(&topic)
@@ -155,9 +157,9 @@ pub fn standings(
                 .map(|(_, contribution)| contribution)
                 .sum();
             TopicStanding {
-                topic,
+                topic: topic.clone(),
                 supporters,
-                silenced,
+                silenced: silenced.into_iter().map(str::to_owned).collect(),
                 support,
             }
         })
