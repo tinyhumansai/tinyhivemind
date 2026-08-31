@@ -55,65 +55,18 @@ pub fn step(
 ) -> Result<HiveStep> {
     roster.validate()?;
     desks.validate()?;
-
-    let desk_id = desks.resolve_id(&state.conversation.desk_id)?;
-    let members: Vec<&str> = desks
-        .members(desk_id)?
-        .into_iter()
-        .filter(|id| roster.active_member(id).is_some())
-        .collect();
-    for threshold in &state.thresholds {
-        if !members.iter().any(|id| *id == threshold.agent_id) {
-            return Err(Error::UnknownThresholdMember {
-                agent_id: threshold.agent_id.clone(),
-                desk_id: desk_id.to_owned(),
-            });
-        }
-    }
+    let members = active_members(roster, desks, state)?;
 
     if state.spent >= policy.turn_budget {
         return Ok(HiveStep::Exhausted { spent: state.spent });
     }
 
-    let live: Vec<SessionMessage> = transcript
-        .iter()
-        .filter(|message| message.sequence > state.watermark)
-        .filter(|message| match &message.author {
-            // A trace is only a vote if its author is a current member of
-            // this desk. Without this filter a retired agent, or one from a
-            // different desk, whose message lands after the watermark would
-            // still be folded into standings and could manufacture quorum
-            // nobody eligible actually holds.
-            SessionAuthor::Agent { id, .. } => members.iter().any(|member| *member == id),
-            SessionAuthor::Operator
-            | SessionAuthor::Person { .. }
-            | SessionAuthor::System { .. } => true,
-        })
-        .cloned()
-        .collect();
-    let traces = read(&live);
-    let at = live
-        .last()
-        .map_or(state.watermark, |message| message.sequence);
+    let (traces, at) = live_traces(transcript, state, &members);
     let standings = standings(&traces, at, &policy.quorum)?;
 
     match consensus(&standings, &policy.quorum) {
         ConsensusState::Quorum { topic } => {
-            // `consensus` names a topic it found in `standings`, so the lookup
-            // below cannot miss; it is written as a match rather than an
-            // unwrap so there is no panicking path in library code.
-            if state.phase == Phase::Commit
-                && let Some(boundary) = state.commit_boundary
-                && traces.iter().any(|trace| {
-                    trace.kind == TraceKind::Commit
-                        && trace.topic.as_ref() == Some(&topic)
-                        && trace.sequence > boundary
-                })
-                && let Some(standing) = standings
-                    .iter()
-                    .find(|standing| standing.topic == topic)
-                    .cloned()
-            {
+            if let Some(standing) = converged_standing(state, &traces, &standings, &topic) {
                 return Ok(HiveStep::Converged {
                     topic,
                     standing: Box::new(standing),
@@ -129,13 +82,7 @@ pub fn step(
             // cited or objected to is classified `Addressed` ahead of
             // `Dissent` by bid precedence, which would otherwise mask a real
             // dissenter and let the episode terminate early.
-            let free = members.iter().any(|member| {
-                !standings.iter().any(|standing| {
-                    topics.contains(&standing.topic)
-                        && standing.supporters.iter().any(|held| held == member)
-                })
-            });
-            if !free {
+            if !has_free_dissenter(&members, &standings, &topics) {
                 return Ok(HiveStep::Deadlocked { topics });
             }
         }
@@ -156,15 +103,7 @@ pub fn step(
     } else {
         state.phase
     };
-    // Fixed the moment the phase first flips to `Commit`, at the sequence
-    // standings were folded to for that decision, and carried unchanged for
-    // the rest of the episode -- the boundary a converging `!commit` trace
-    // must land strictly after.
-    let commit_boundary = if phase == Phase::Commit {
-        Some(state.commit_boundary.unwrap_or(at))
-    } else {
-        None
-    };
+    let commit_boundary = next_commit_boundary(state, phase, at);
     // `spent < turn_budget <= u32::MAX` was established above, so this
     // addition cannot saturate; the saturating form is used only to keep the
     // arithmetic total without an unreachable error branch.
@@ -186,6 +125,122 @@ pub fn step(
             },
         }),
     })
+}
+
+/// Resolve the episode's desk to its current, active member ids.
+///
+/// # Errors
+///
+/// Returns [`Error::UnknownThresholdMember`] when a carried threshold names
+/// someone who is no longer an active member of this desk.
+fn active_members<'a>(
+    roster: &Roster<'_>,
+    desks: &DeskSet<'a>,
+    state: &EpisodeState,
+) -> Result<Vec<&'a str>> {
+    let desk_id = desks.resolve_id(&state.conversation.desk_id)?;
+    let members: Vec<&str> = desks
+        .members(desk_id)?
+        .into_iter()
+        .filter(|id| roster.active_member(id).is_some())
+        .collect();
+    for threshold in &state.thresholds {
+        if !members.iter().any(|id| *id == threshold.agent_id) {
+            return Err(Error::UnknownThresholdMember {
+                agent_id: threshold.agent_id.clone(),
+                desk_id: desk_id.to_owned(),
+            });
+        }
+    }
+    Ok(members)
+}
+
+/// Fold the transcript above the watermark into traces, and the sequence
+/// standings should be computed at.
+///
+/// A trace is only a vote if its author is a current member of this desk.
+/// Without this filter a retired agent, or one from a different desk, whose
+/// message lands after the watermark would still be folded into standings
+/// and could manufacture quorum nobody eligible actually holds.
+fn live_traces(
+    transcript: &[SessionMessage],
+    state: &EpisodeState,
+    members: &[&str],
+) -> (Vec<crate::trace::Trace>, tinyteams::Sequence) {
+    let live: Vec<SessionMessage> = transcript
+        .iter()
+        .filter(|message| message.sequence > state.watermark)
+        .filter(|message| match &message.author {
+            SessionAuthor::Agent { id, .. } => members.iter().any(|member| *member == id),
+            SessionAuthor::Operator
+            | SessionAuthor::Person { .. }
+            | SessionAuthor::System { .. } => true,
+        })
+        .cloned()
+        .collect();
+    let traces = read(&live);
+    let at = live
+        .last()
+        .map_or(state.watermark, |message| message.sequence);
+    (traces, at)
+}
+
+/// The standing to converge on, if the commit turn actually recorded it.
+///
+/// `consensus` names a topic it found in `standings`, so the lookup here
+/// cannot miss; it is written as a search rather than an unwrap so there is
+/// no panicking path in library code.
+fn converged_standing(
+    state: &EpisodeState,
+    traces: &[crate::trace::Trace],
+    standings: &[crate::quorum::TopicStanding],
+    topic: &crate::trace::TopicId,
+) -> Option<crate::quorum::TopicStanding> {
+    if state.phase != Phase::Commit {
+        return None;
+    }
+    let boundary = state.commit_boundary?;
+    let recorded = traces.iter().any(|trace| {
+        trace.kind == TraceKind::Commit
+            && trace.topic.as_ref() == Some(topic)
+            && trace.sequence > boundary
+    });
+    if !recorded {
+        return None;
+    }
+    standings
+        .iter()
+        .find(|standing| &standing.topic == topic)
+        .cloned()
+}
+
+/// Whether a member remains who has backed neither tied topic.
+fn has_free_dissenter(
+    members: &[&str],
+    standings: &[crate::quorum::TopicStanding],
+    topics: &[crate::trace::TopicId],
+) -> bool {
+    members.iter().any(|member| {
+        !standings.iter().any(|standing| {
+            topics.contains(&standing.topic) && standing.supporters.iter().any(|held| held == member)
+        })
+    })
+}
+
+/// Fix the commit boundary the moment the phase first flips to `Commit`, at
+/// the sequence standings were folded to for that decision, and carry it
+/// unchanged for the rest of the episode -- the boundary a converging
+/// `!commit` trace must land strictly after.
+fn next_commit_boundary(
+    state: &EpisodeState,
+    phase: Phase,
+    at: tinyteams::Sequence,
+) -> Option<tinyteams::Sequence> {
+    if phase == Phase::Commit {
+        Some(state.commit_boundary.unwrap_or(at))
+    } else {
+        None
+    }
 }
 
 /// Filter a transcript to what one authorized turn may see.
