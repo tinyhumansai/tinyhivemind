@@ -3,6 +3,8 @@
 //! These import only through the published paths, so a change that moves an
 //! item out of the root re-export surface fails here rather than in a host.
 
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
 use tinyteams_hive::{
     AgentThreshold, Bid, BidReason, ConsensusState, EpisodePolicy, EpisodeState, HiveStep,
     HiveTurn, Phase, QuorumPolicy, Salience, SalienceWeights, TRACE_CAP, TopicId, TopicStanding,

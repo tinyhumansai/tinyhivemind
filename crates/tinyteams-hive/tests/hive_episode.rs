@@ -10,7 +10,7 @@ mod hive_harness;
 #[path = "support/scripted_agent.rs"]
 mod scripted_agent;
 
-use hive_harness::{HiveAgent, HiveHarness, Outcome};
+use hive_harness::{HiveHarness, Outcome};
 use scripted_agent::ScriptedAgent;
 use tinyteams_hive::{
     BidReason, EpisodePolicy, EpisodeState, QuorumPolicy, Visibility, quorum::TopicStanding,
