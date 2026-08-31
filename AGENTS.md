@@ -31,10 +31,12 @@ Three rules decide what belongs here:
    whole design avoids.
 
 `crates/tinyteams-core` additionally may not depend on an async runtime, a
-transport, an HTTP client, or a web framework: it is linked into the hot path of
-every agent turn and must compile in a host's default build with no feature
-flags behind it. `.github/scripts/assert-pure.sh` asserts this, and it is not
-advisory — do not add an exception to it to land a change.
+transport, an HTTP client, a web framework, a SQL database client, a git
+implementation, or `anyhow` (non-exhaustive — see the enumerated list in
+`.github/scripts/assert-pure.sh`, the source of truth): it is linked into the
+hot path of every agent turn and must compile in a host's default build with no
+feature flags behind it. `.github/scripts/assert-pure.sh` asserts this, and it
+is not advisory — do not add an exception to it to land a change.
 
 `ROADMAP.md` holds the phase plan and the two defects this work exists to fix.
 
