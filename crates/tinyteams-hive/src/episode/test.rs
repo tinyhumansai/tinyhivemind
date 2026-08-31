@@ -328,13 +328,22 @@ fn a_deadlock_a_dissenter_can_still_break_authorizes_one_more_turn() {
     room.members.push(member("archivist"));
     room.desks[0].members.push("archivist".into());
 
-    let turn = speaking(run(&room, &state(), &deadlocked(), &EpisodePolicy::DEFAULT));
-    assert_eq!(
-        turn.reason,
-        BidReason::Dissent,
-        "a member who has backed neither side gets one chance to break the tie",
+    let step = run(&room, &state(), &deadlocked(), &EpisodePolicy::DEFAULT);
+    assert!(
+        matches!(step, HiveStep::Speak { .. }),
+        "while a member who has backed neither side exists, the room is not \
+         deadlocked; it gets another turn — got {step:?}",
     );
-    assert_eq!(turn.agent_id, "archivist");
+
+    // The same room without that member is terminal, so the dissenter is what
+    // makes the difference rather than anything else in the transcript.
+    let committed = Room::new();
+    assert_eq!(
+        run(&committed, &state(), &deadlocked(), &EpisodePolicy::DEFAULT),
+        HiveStep::Deadlocked {
+            topics: vec![TopicId("stage".into()), TopicId("ship".into())],
+        },
+    );
 }
 
 #[test]

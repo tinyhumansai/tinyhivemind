@@ -104,13 +104,15 @@ pub fn step(
             }
         }
         ConsensusState::Deadlocked { topics } => {
-            // A deadlock is only terminal once nobody is left to break it. If a
-            // member has backed neither side it bids `Dissent`, and the room
-            // gets one more chance at cross-inhibition before it gives up.
+            // A deadlock is only terminal once nobody is left to break it. A
+            // member that has backed neither side bids `Dissent`, and while one
+            // exists the room gets another turn — whether or not that member is
+            // the one who wins the floor this time.
             let context = context(&traces, &standings, &members, state, policy, at);
-            if floor_holder(&bids(&context)?)
-                .is_none_or(|bid| bid.reason != crate::attention::BidReason::Dissent)
-            {
+            let free = bids(&context)?
+                .iter()
+                .any(|bid| bid.reason == crate::attention::BidReason::Dissent);
+            if !free {
                 return Ok(HiveStep::Deadlocked { topics });
             }
         }
