@@ -334,36 +334,3 @@ fn a_bid_reason_is_reported_for_every_turn() -> Result<(), String> {
     }
     Ok(())
 }
-
-#[test]
-fn debug_cross_inhibition_scratch() -> Result<(), String> {
-    let mut harness = HiveHarness::new(
-        "engineering",
-        "Engineering",
-        &["planner", "scout", "critic", "archivist"],
-    );
-    harness.operator("Pick one.");
-    let state = EpisodeState::opened(harness.conversation(), harness.watermark());
-
-    let mut planner = ScriptedAgent::new("planner", ["!propose #stage"]);
-    let mut scout = ScriptedAgent::new("scout", ["!propose #ship"]);
-    let mut critic = ScriptedAgent::new(
-        "critic",
-        [
-            "!support #stage ^2 Reversible.",
-            "!object >3 ^2 That precedent differs.",
-        ],
-    );
-    let mut archivist = ScriptedAgent::new("archivist", ["!support #ship ^3 We shipped before."]);
-
-    let (outcome, steps) = harness.run(
-        state,
-        &policy(10),
-        &mut [&mut planner, &mut scout, &mut critic, &mut archivist],
-    )?;
-    eprintln!("outcome = {outcome:?}");
-    for step in &steps {
-        eprintln!("{} : {}", step.agent_id, step.content);
-    }
-    Ok(())
-}
