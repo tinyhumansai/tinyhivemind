@@ -4,6 +4,10 @@ The runtime dispatch module composes the pure core decision with exactly one
 host call. A no-dispatch decision makes no call. A one-target decision passes
 the canonical request unchanged to `MentionTurnQueue::enqueue_once`; expected
 refusals are final outcomes and unexpected failures retain their source.
+Person, desk, and `@everyone` mentions never reach the queue, and a direct
+agent mention can select only the first eligible child target rather than fan
+out. The host supplies the explicit enablement flag and finite configurable
+`max_hops` on every decision; the library has no smaller hard ceiling.
 
 The host implementation is the transaction boundary. Under a key composed of
 the request conversation and committed trigger sequence, one transaction must:

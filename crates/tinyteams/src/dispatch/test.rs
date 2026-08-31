@@ -7,7 +7,7 @@ use std::{
     collections::HashSet,
     io,
     sync::{
-        Mutex,
+        Arc, Mutex,
         atomic::{AtomicBool, AtomicUsize, Ordering},
     },
 };
@@ -19,11 +19,13 @@ use tinyteams_core::{
     mention::{Mention, MentionTarget},
     roster::{Roster, RosterMember},
 };
+use tokio::sync::Barrier;
 
 #[derive(Default)]
 struct AtomicQueue {
     calls: AtomicUsize,
     fail_before_commit: AtomicBool,
+    before_commit: Option<Arc<Barrier>>,
     durable: Mutex<DurableQueueState>,
 }
 
@@ -41,6 +43,13 @@ impl AtomicQueue {
         }
     }
 
+    fn with_forced_concurrent_commit_attempts() -> Self {
+        Self {
+            before_commit: Some(Arc::new(Barrier::new(2))),
+            ..Self::default()
+        }
+    }
+
     fn durable_counts(&self) -> (usize, usize) {
         let durable = self.durable.lock().unwrap();
         (durable.keys.len(), durable.children.len())
@@ -51,6 +60,9 @@ impl MentionTurnQueue for AtomicQueue {
     fn enqueue_once(&self, request: MentionTurnRequest) -> MentionTurnFuture<'_> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         Box::pin(async move {
+            if let Some(barrier) = &self.before_commit {
+                barrier.wait().await;
+            }
             if self.fail_before_commit.swap(false, Ordering::SeqCst) {
                 return Err(Box::new(io::Error::other("failed before commit")) as BoxError);
             }
@@ -212,7 +224,7 @@ async fn an_unexpected_queue_failure_is_typed_preserves_source_and_never_retries
 async fn concurrent_duplicate_requests_enqueue_exactly_once() {
     let (members, input) = fixture();
     let roster = Roster::new(&members, &[], &[]);
-    let queue = AtomicQueue::default();
+    let queue = AtomicQueue::with_forced_concurrent_commit_attempts();
     let (left, right) = tokio::join!(
         dispatch_mention(&queue, policy(), &input, &roster),
         dispatch_mention(&queue, policy(), &input, &roster),
@@ -227,14 +239,6 @@ async fn concurrent_duplicate_requests_enqueue_exactly_once() {
         ]
     );
     assert_eq!(queue.calls.load(Ordering::SeqCst), 2);
-    assert_eq!(queue.durable_counts(), (1, 1));
-
-    assert_eq!(
-        dispatch_mention(&queue, policy(), &input, &roster)
-            .await
-            .unwrap(),
-        MentionDispatchOutcome::Already
-    );
     assert_eq!(queue.durable_counts(), (1, 1));
 }
 
