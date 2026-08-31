@@ -10,7 +10,6 @@ use std::error::Error as _;
 fn every_message_is_lowercase_without_trailing_punctuation() {
     let errors = [
         Error::from(tinyteams_core::error::Error::EmptyDeskId),
-        Error::EmptyTopicId,
         Error::DuplicateAgentThreshold {
             agent_id: "planner".into(),
         },
@@ -52,7 +51,7 @@ fn a_core_failure_is_carried_verbatim_and_kept_as_a_source() {
 #[test]
 fn the_result_alias_carries_the_crate_error() {
     fn failing() -> Result<()> {
-        Err(Error::EmptyTopicId)
+        Err(Error::ZeroHalfLife)
     }
     assert!(failing().is_err());
 }

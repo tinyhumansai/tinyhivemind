@@ -22,9 +22,6 @@ pub enum Error {
         #[source]
         source: tinyteams_core::error::Error,
     },
-    /// A topic identity was empty.
-    #[error("topic id must not be empty")]
-    EmptyTopicId,
     /// Two threshold records named the same agent.
     #[error("duplicate agent threshold `{agent_id}`")]
     DuplicateAgentThreshold {

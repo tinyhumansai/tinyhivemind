@@ -92,11 +92,15 @@ pub fn step(
 
     match consensus(&standings, &policy.quorum) {
         ConsensusState::Quorum { topic } => {
-            if state.phase == Phase::Commit {
-                let standing = standings
-                    .into_iter()
+            // `consensus` names a topic it found in `standings`, so the lookup
+            // below cannot miss; it is written as a match rather than an
+            // unwrap so there is no panicking path in library code.
+            if state.phase == Phase::Commit
+                && let Some(standing) = standings
+                    .iter()
                     .find(|standing| standing.topic == topic)
-                    .ok_or(Error::EmptyTopicId)?;
+                    .cloned()
+            {
                 return Ok(HiveStep::Converged {
                     topic,
                     standing: Box::new(standing),
