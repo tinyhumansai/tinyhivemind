@@ -134,6 +134,18 @@ fn a_marker_on_a_later_line_reports_a_utf8_byte_offset() {
 }
 
 #[test]
+fn a_multi_byte_indent_after_multi_byte_content_still_reports_the_bang() {
+    // Combines both prior offset cases: a preceding line with multi-byte
+    // content, and a marker line indented with a multi-byte whitespace
+    // character (U+00A0 NBSP is two UTF-8 bytes). `offset` must still point
+    // at the `!`, not somewhere inside the indentation.
+    let body = "caf\u{e9} \u{2615}\n\u{a0}!propose #a";
+    let traces = resolve(body, None, &agent("a"), Sequence(1));
+    assert_eq!(traces.len(), 1);
+    assert_eq!(&body[traces[0].offset..traces[0].offset + 1], "!");
+}
+
+#[test]
 fn a_marker_inside_a_fenced_block_is_masked() {
     let body = "before\n```\n!propose #hidden\n```\n!propose #real";
     let traces = resolve(body, None, &agent("a"), Sequence(1));
