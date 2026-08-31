@@ -7,11 +7,10 @@ this document is the short path through them.
 ## Development Setup
 
 Install a stable Rust toolchain with Rust 2024 support (see `rust-version` in
-`Cargo.toml` for the minimum supported version), initialize the vendored
-submodules, then run the four checks CI runs:
+`Cargo.toml` for the minimum supported version), then run the four checks CI
+runs:
 
 ```sh
-git submodule update --init --recursive
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo build --all-targets --all-features
