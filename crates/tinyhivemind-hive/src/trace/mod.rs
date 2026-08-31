@@ -66,8 +66,21 @@ pub fn resolve(
 /// conversation folds to an empty medium.
 #[must_use]
 pub fn read(messages: &[SessionMessage]) -> Vec<Trace> {
+    read_each(messages.iter())
+}
+
+/// Fold a borrowed projection into traces, in sequence order.
+///
+/// Identical to [`read`], for a caller that already holds references rather
+/// than owned messages. The episode filters the transcript on every step, and
+/// cloning that filtered slice each time would allocate a copy of the whole
+/// conversation for a fold that only ever borrows it.
+pub(crate) fn read_borrowed(messages: &[&SessionMessage]) -> Vec<Trace> {
+    read_each(messages.iter().copied())
+}
+
+fn read_each<'a>(messages: impl Iterator<Item = &'a SessionMessage>) -> Vec<Trace> {
     let mut traces: Vec<Trace> = messages
-        .iter()
         .flat_map(|message| resolve(&message.content, None, &message.author, message.sequence))
         .collect();
     traces.sort_by_key(|trace| (trace.sequence, trace.offset));
@@ -75,6 +88,12 @@ pub fn read(messages: &[SessionMessage]) -> Vec<Trace> {
 }
 
 fn extract(body: &str, author: &SessionAuthor, sequence: Sequence) -> Vec<Trace> {
+    // Every marker begins with `!`, so a body without one cannot deposit a
+    // trace. Most messages in a real transcript are ordinary conversation, and
+    // this check keeps the fold from scanning and allocating over all of them.
+    if !body.contains('!') {
+        return Vec::new();
+    }
     let fenced = fenced_ranges(body);
     let mut traces = Vec::new();
     let mut offset = 0;
