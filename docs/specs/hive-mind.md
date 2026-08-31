@@ -164,6 +164,7 @@ pub struct EpisodeState {
     pub phase: Phase,
     pub thresholds: Vec<AgentThreshold>,
     pub watermark: Sequence,
+    pub commit_boundary: Option<Sequence>,
 }
 
 pub struct HiveTurn {
@@ -175,8 +176,8 @@ pub struct HiveTurn {
 }
 
 pub enum HiveStep {
-    Speak { turn: HiveTurn },
-    Converged { topic: TopicId, standing: TopicStanding },
+    Speak { turn: Box<HiveTurn> },
+    Converged { topic: TopicId, standing: Box<TopicStanding> },
     Deadlocked { topics: Vec<TopicId> },
     Exhausted { spent: u32 },
     Idle,
