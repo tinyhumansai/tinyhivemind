@@ -62,8 +62,8 @@ use std::time::Instant;
 use tinyhivemind_hive::{EpisodePolicy, QuorumPolicy};
 
 use crate::live::LiveAgent;
-use crate::rng::mix;
 use crate::metrics::{Aggregate, arm_header, arm_row};
+use crate::rng::mix;
 use crate::run::{Participant, drive, run_episode};
 use crate::sim::Room;
 
