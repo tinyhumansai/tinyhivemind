@@ -48,11 +48,33 @@ impl HiveAgent for ScriptedAgent {
         &self.id
     }
 
-    fn speak(&mut self, _turn: &HiveTurn, visible: &[&SessionMessage]) -> Result<String, String> {
+    fn speak(&mut self, turn: &HiveTurn, visible: &[&SessionMessage]) -> Result<String, String> {
         self.calls
             .push(visible.iter().map(|message| message.sequence.0).collect());
-        self.lines
-            .pop_front()
-            .unwrap_or_else(|| Ok(self.filler.clone()))
+        if let Some(line) = self.lines.pop_front() {
+            return line;
+        }
+        if turn.phase == Phase::Commit {
+            return Ok(commit_line(visible));
+        }
+        Ok(self.filler.clone())
     }
+}
+
+/// What an out-of-script participant says once the room has moved to
+/// [`Phase::Commit`]: the carried topic, recomputed from what this turn can
+/// see, rather than a `!question` that would never record a decision.
+fn commit_line(visible: &[&SessionMessage]) -> String {
+    let messages: Vec<SessionMessage> = visible.iter().map(|message| (*message).clone()).collect();
+    let traces = read(&messages);
+    let at = messages
+        .last()
+        .map_or(Sequence(0), |message| message.sequence);
+    let policy = QuorumPolicy::DEFAULT;
+    if let Ok(standing) = standings(&traces, at, &policy)
+        && let ConsensusState::Quorum { topic } = consensus(&standing, &policy)
+    {
+        return format!("!commit #{topic} Recording the decision.");
+    }
+    "!question Nothing further from me.".to_owned()
 }
