@@ -190,20 +190,25 @@ pub fn project_for<'a>(turn: &HiveTurn, messages: &'a [SessionMessage]) -> Vec<&
 `step` evaluates in a fixed order: validate the roster and desks; return
 `Exhausted` if the budget is spent; fold traces and standings; return
 `Converged` if consensus is `Quorum`, the phase is already `Commit`, **and a
-`Commit` trace names that topic**; flip `Deliberate` to `Commit` and emit one
-commit turn if consensus is `Quorum` and the phase is `Deliberate`; return
-`Deadlocked` if consensus is `Deadlocked` and **every member already supports
-one of the tied topics**; otherwise take bids and either `Speak` or return
-`Idle`.
+`Commit` trace names that topic at a sequence strictly after
+`commit_boundary`**; flip `Deliberate` to `Commit`, fix `commit_boundary` to
+the sequence standings were just folded to, and emit one commit turn if
+consensus is `Quorum` and the phase is `Deliberate`; return `Deadlocked` if
+consensus is `Deadlocked` and **every member already supports one of the tied
+topics**; otherwise take bids and either `Speak` or return `Idle`.
 
 Two details of that order are load-bearing:
 
 - **Convergence requires the decision to have been recorded**, not merely to
   have been reachable. A room that reaches quorum takes one commit turn, and
-  only a `!commit` naming the carried topic ends the episode. If the committing
-  participant never records it, the episode runs on and terminates at its
-  budget instead — bounded either way, and never silently converged on a
-  decision nobody wrote down.
+  only a `!commit` naming the carried topic, at a sequence after
+  `commit_boundary`, ends the episode. `commit_boundary` is what stops an
+  unrelated `!commit` that predates the commit turn being authorized — one
+  planted speculatively, or left from an earlier exchange, that happens to
+  share the carried topic — from being misread as evidence that *this* turn
+  recorded a decision. If the committing participant never records it, the
+  episode runs on and terminates at its budget instead — bounded either way,
+  and never silently converged on a decision nobody wrote down.
 - **A free member is identified from the standings, not from a bid's reason.**
   Bid precedence classifies a member that has also been cited or objected to as
   `Addressed` ahead of `Dissent`, so reading the reason would mask a real
