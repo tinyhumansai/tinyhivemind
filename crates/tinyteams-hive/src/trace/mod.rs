@@ -140,12 +140,12 @@ fn parse_line(
             if target.is_none() {
                 target = value.parse().ok().map(Sequence);
             }
-        } else if let Some(value) = word.strip_prefix('^') {
-            if let Ok(parsed) = value.parse() {
-                let cited = Sequence(parsed);
-                if !cites.contains(&cited) {
-                    cites.push(cited);
-                }
+        } else if let Some(value) = word.strip_prefix('^')
+            && let Ok(parsed) = value.parse()
+        {
+            let cited = Sequence(parsed);
+            if !cites.contains(&cited) {
+                cites.push(cited);
             }
         }
     }

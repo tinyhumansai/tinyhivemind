@@ -79,7 +79,7 @@ pub fn bids(context: &BidContext<'_>) -> Result<Vec<Bid>> {
         if addresses(context.traces, member) {
             urge += ADDRESSED_BONUS;
             reason = BidReason::Addressed;
-        } else if !deadlocked.is_empty() && !backs_any(context.standings, &deadlocked, member) {
+        } else if !deadlocked.is_empty() && !backs_any(&deadlocked, member) {
             urge += DISSENT_BONUS;
             reason = BidReason::Dissent;
         } else if quiet == Some(*member) && is_lopsided(&shares, total, context.dominance_cap) {
@@ -117,9 +117,9 @@ pub fn floor_holder(bids: &[Bid]) -> Option<&Bid> {
     })
 }
 
-fn index_thresholds<'a>(
-    thresholds: &'a [AgentThreshold],
-) -> Result<BTreeMap<&'a str, &'a AgentThreshold>> {
+fn index_thresholds(
+    thresholds: &[AgentThreshold],
+) -> Result<BTreeMap<&str, &AgentThreshold>> {
     let mut indexed = BTreeMap::new();
     for threshold in thresholds {
         if indexed
@@ -218,8 +218,7 @@ fn deadlocked_topics(standings: &[TopicStanding]) -> Vec<&TopicStanding> {
     if tied.len() < 2 { Vec::new() } else { tied }
 }
 
-fn backs_any(standings: &[TopicStanding], deadlocked: &[&TopicStanding], member: &str) -> bool {
-    let _ = standings;
+fn backs_any(deadlocked: &[&TopicStanding], member: &str) -> bool {
     deadlocked
         .iter()
         .any(|standing| standing.supporters.iter().any(|held| held == member))
