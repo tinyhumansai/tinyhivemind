@@ -108,7 +108,7 @@ pub async fn project_session(
     Ok(projected)
 }
 
-fn validate_page(
+pub(crate) fn validate_page(
     page: &SessionPage,
     before: Option<Sequence>,
     requested: usize,
@@ -174,7 +174,7 @@ fn validate_page(
     Ok(())
 }
 
-fn matches_conversation(message: &LogMessage, conversation: &Conversation) -> bool {
+pub(crate) fn matches_conversation(message: &LogMessage, conversation: &Conversation) -> bool {
     let matches_desk = same_conversation(message.chat_id.as_deref(), Some(&conversation.desk_id))
         || same_conversation(message.chat_id.as_deref(), Some(&conversation.desk_name));
     if !matches_desk {

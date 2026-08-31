@@ -28,3 +28,5 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a test-first sample
 - [`mentions.md`](mentions.md) — P3 roster and mention resolution.
 - [`sessions.md`](sessions.md) — P4 attributed session projection and team
   initialization.
+- [`continuous-sharing.md`](continuous-sharing.md) — P5 watermark-based
+  continuous transcript sharing.

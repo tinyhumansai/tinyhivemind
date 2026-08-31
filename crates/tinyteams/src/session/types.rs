@@ -26,6 +26,28 @@ pub struct Conversation {
     pub thread_root: Option<Sequence>,
 }
 
+impl Conversation {
+    /// Return whether both values identify the same desk and exact thread.
+    ///
+    /// All General aliases are equivalent. Named desks match by exact
+    /// canonical id; display labels do not merge distinct desks.
+    #[must_use]
+    pub fn equivalent_to(&self, other: &Self) -> bool {
+        use tinyteams_core::chat::is_general_chat;
+
+        let self_is_general =
+            is_general_chat(Some(&self.desk_id)) || is_general_chat(Some(&self.desk_name));
+        let other_is_general =
+            is_general_chat(Some(&other.desk_id)) || is_general_chat(Some(&other.desk_name));
+        self.thread_root == other.thread_root
+            && if self_is_general || other_is_general {
+                self_is_general && other_is_general
+            } else {
+                self.desk_id == other.desk_id
+            }
+    }
+}
+
 /// The preserved author of a host log row.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]

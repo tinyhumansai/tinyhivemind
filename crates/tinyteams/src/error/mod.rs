@@ -64,6 +64,22 @@ pub enum Error {
         /// Returned page size.
         actual: usize,
     },
+    /// A sharing bound moved behind the last accepted watermark.
+    #[error("sharing bound {before} precedes watermark {watermark}")]
+    WatermarkRegression {
+        /// The requested exclusive upper bound.
+        before: Sequence,
+        /// The last accepted watermark.
+        watermark: Sequence,
+    },
+    /// The bounded set of already-present future rows is full.
+    #[error("cannot note sequence {sequence}: present set limit {limit} reached")]
+    PresentSetOverflow {
+        /// The maximum number of future rows retained.
+        limit: usize,
+        /// The row that could not be recorded.
+        sequence: Sequence,
+    },
     /// Host-supplied pure snapshots were invalid.
     #[error("invalid team snapshot")]
     Core {

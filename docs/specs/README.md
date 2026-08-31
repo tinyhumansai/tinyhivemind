@@ -32,3 +32,5 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a complete sample.
   and pure routing decisions.
 - [`sessions.md`](sessions.md) — host-owned paging, attributed projection, and
   ephemeral team initialization.
+- [`continuous-sharing.md`](continuous-sharing.md) — caller-owned watermarks
+  and stateless attributed transcript deltas.

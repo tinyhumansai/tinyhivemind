@@ -28,6 +28,7 @@
 pub mod briefing;
 pub mod error;
 pub mod session;
+pub mod sharing;
 
 pub use briefing::{BriefedTeammate, SessionInitialization, TeamBriefing, initialize_session};
 pub use error::{Error, Result};
@@ -35,5 +36,9 @@ pub use session::{
     Conversation, LogMessage, PAGE_SIZE, SCAN_LIMIT, SESSION_WINDOW, Sequence, SessionAuthor,
     SessionFuture, SessionLog, SessionMessage, SessionPage, SessionQuery, SourceError,
     project_session,
+};
+pub use sharing::{
+    PRESENT_SET_LIMIT, ReinitializeReason, SessionDelta, SharingPlan, SharingQuery, SharingState,
+    initialized_state, note_present, prepare_delta,
 };
 pub use tinyteams_core::*;
