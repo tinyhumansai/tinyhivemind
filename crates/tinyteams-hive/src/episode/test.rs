@@ -332,6 +332,36 @@ fn traces_from_non_members_do_not_manufacture_quorum() {
 }
 
 #[test]
+fn a_commit_trace_before_the_commit_boundary_does_not_converge() {
+    let room = Room::new();
+    let policy = EpisodePolicy::DEFAULT;
+
+    // A `!commit` for `#stage` already sits in the transcript before quorum
+    // ever forms -- planted speculatively, or left over from an earlier
+    // exchange. It must not be read as evidence that *this* commit-phase
+    // turn recorded anything.
+    let mut transcript = vec![
+        said(1, "planner", "!commit #stage Locking this in early."),
+        operator(2, "Decide how to roll this out."),
+        said(3, "planner", "!propose #stage Stage the rollout."),
+        said(4, "critic", "!support #stage ^3 Bounds the blast radius."),
+    ];
+
+    let turn = speaking(run(&room, &state(), &transcript, &policy));
+    assert_eq!(turn.phase, Phase::Commit);
+
+    // The authorized commit-phase turn itself does not commit.
+    transcript.push(said(5, &turn.agent_id, "!question Anything else?"));
+    assert!(
+        matches!(
+            run(&room, &turn.next_state, &transcript, &policy),
+            HiveStep::Speak { .. },
+        ),
+        "a `!commit` trace that predates the commit boundary must not converge the room",
+    );
+}
+
+#[test]
 fn the_commit_phase_is_one_way_when_support_later_decays_out() {
     let room = Room::new();
     let policy = EpisodePolicy {
