@@ -20,3 +20,8 @@ code snippets when they remove ambiguity, but do not paste entire future files
 into the plan.
 
 See [`example-retry-policy.md`](example-retry-policy.md) for a test-first sample.
+
+## Plans
+
+- [`chat-identity.md`](chat-identity.md) — implemented P1 conversation identity.
+- [`desks.md`](desks.md) — P2 desk DTOs, validation, and membership overlay.

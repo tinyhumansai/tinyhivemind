@@ -37,6 +37,9 @@ thiserror = "2"
 # inside the host's own records and its append-only journal. Their serde
 # attributes are part of that wire format and travel with the type definitions.
 serde = { version = "1", features = ["derive"] }
+# Pins the exact JSON object shape and required fields of host-facing DTOs in
+# unit tests without adding JSON handling to the runtime dependency graph.
+serde_json = "1"
 
 # Lints apply to every member that opts in with `[lints] workspace = true`, and
 # to every target of that member. CI runs clippy with `-D warnings`, so anything
