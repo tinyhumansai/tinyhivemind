@@ -21,3 +21,10 @@ After the specification is accepted, create a linked implementation plan in
 the contract; production code still belongs under `src/`.
 
 See [`example-retry-policy.md`](example-retry-policy.md) for a complete sample.
+
+## Accepted specifications
+
+- [`chat-identity.md`](chat-identity.md) — the four stored spellings of the
+  General conversation.
+- [`desks.md`](desks.md) — host-owned desk overlays and the borrowed membership
+  algebra.
