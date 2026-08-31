@@ -13,15 +13,16 @@ an executor, or a mock.
 
 ```text
 validate roster + desks
-  └─ budget spent?                       → Exhausted
-     └─ fold traces (above the watermark)
+  └─ budget spent?                          → Exhausted
+     └─ fold traces (above the watermark,
+        and only from current desk members)
         └─ fold standings, take consensus
-           ├─ Quorum   & phase = Commit   → Converged
-           ├─ Quorum   & phase = Deliberate → flip phase, emit one commit turn
-           ├─ Deadlock & no free member    → Deadlocked
+           ├─ Quorum & Commit & !commit recorded → Converged
+           ├─ Quorum & Deliberate    → flip phase, emit one commit turn
+           ├─ Deadlock & no free member         → Deadlocked
            └─ otherwise take bids
-              ├─ a winner                 → Speak (exactly one)
-              └─ nobody cleared threshold → Idle
+              ├─ a winner                       → Speak (exactly one)
+              └─ nobody cleared threshold       → Idle
 ```
 
 ### Exactly one turn
@@ -31,6 +32,20 @@ carries two. The charter's *one message, one turn* rule is therefore a type
 invariant rather than a convention, in the same way
 `MentionDispatchDecision::One` already is. `floor_holder` taking the argmax —
 rather than everyone above threshold — is what produces that single winner.
+
+### Who may vote
+
+Only messages *strictly above* `state.watermark`, authored by a **current
+active member of the episode's desk**, are folded into traces. A retired agent,
+or one from another desk, that posts into the room is context: visible to a
+turn, but unable to manufacture a quorum nobody eligible actually holds.
+
+### Convergence is recorded, not inferred
+
+Reaching quorum flips the phase and buys one commit turn; the episode ends only
+once a `!commit` trace names the carried topic. If nobody records it the
+episode runs on and stops at its budget — bounded either way, and never
+silently converged on a decision nobody wrote down.
 
 ### The watermark
 

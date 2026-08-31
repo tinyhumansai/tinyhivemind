@@ -188,19 +188,41 @@ pub fn project_for<'a>(turn: &HiveTurn, messages: &'a [SessionMessage]) -> Vec<&
 
 `step` evaluates in a fixed order: validate the roster and desks; return
 `Exhausted` if the budget is spent; fold traces and standings; return
-`Converged` if consensus is `Quorum` and the phase is already `Commit`; flip
-`Deliberate` to `Commit` and emit one commit turn if consensus is `Quorum` and
-the phase is `Deliberate`; return `Deadlocked` if consensus is `Deadlocked` and
-no bid carries `BidReason::Dissent`; otherwise take bids and either `Speak` or
-return `Idle`.
+`Converged` if consensus is `Quorum`, the phase is already `Commit`, **and a
+`Commit` trace names that topic**; flip `Deliberate` to `Commit` and emit one
+commit turn if consensus is `Quorum` and the phase is `Deliberate`; return
+`Deadlocked` if consensus is `Deadlocked` and **every member already supports
+one of the tied topics**; otherwise take bids and either `Speak` or return
+`Idle`.
+
+Two details of that order are load-bearing:
+
+- **Convergence requires the decision to have been recorded**, not merely to
+  have been reachable. A room that reaches quorum takes one commit turn, and
+  only a `!commit` naming the carried topic ends the episode. If the committing
+  participant never records it, the episode runs on and terminates at its
+  budget instead — bounded either way, and never silently converged on a
+  decision nobody wrote down.
+- **A free member is identified from the standings, not from a bid's reason.**
+  Bid precedence classifies a member that has also been cited or objected to as
+  `Addressed` ahead of `Dissent`, so reading the reason would mask a real
+  dissenter and end a breakable deadlock early.
+
+Only messages authored by a **current, active member of the episode's desk**
+are folded into traces. A retired agent, or one belonging to another desk,
+whose message lands above the watermark is context: visible, but unable to
+manufacture a quorum nobody eligible actually holds.
 
 The `Deliberate` to `Commit` transition is one-way. Deliberation and commitment
 are different classes of turn, and a room that has settled does not reopen
 because a late trace arrives.
 
 `Visibility::Blind` applies while `blind_round` is set and no participant has
-spoken twice. `project_for` then hides messages authored by other agents within
-the episode, keeping operator and system messages and the participant's own.
+spoken twice. `project_for` then hides messages authored by other agents
+**within the episode** — that is, above the watermark — keeping operator,
+person and system messages, the participant's own work, and the whole
+conversation that led into the episode. The round withholds the positions peers
+have taken since the room opened, not the context the room was opened about.
 
 `next_state` is returned rather than applied. The caller commits it only after
 its turn is durably appended, the discipline `prepare_delta` already
@@ -231,6 +253,10 @@ establishes.
 - `project_for` hides peer messages under `Blind` and reveals them under `Full`.
 - A point restated past `repetition_cap` scores zero.
 - `standings` over a shuffled trace list equals `standings` over the ordered one.
+- A quorum with no recorded `Commit` trace does not converge; it runs to its
+  budget instead.
+- A trace authored by a retired agent, or by one who is not a member of the
+  episode's desk, moves no standing.
 - Wire forms are pinned for every payload type, as elsewhere in the workspace.
 - A gated live run shows real models emitting parseable traces and an episode
   terminating inside its budget. It asserts structure and attribution, never
