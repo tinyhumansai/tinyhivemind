@@ -313,12 +313,11 @@ fn standings_are_order_independent() {
 
     let expected = standings(&ordered, at, &policy(2)).expect("folds");
     for permutation in [shuffled, rotated] {
-        let actual = standings(&permutation, at, &policy(2)).expect("folds");
-        let mut actual = actual;
-        let mut expected = expected.clone();
-        actual.sort_by(|a, b| a.topic.cmp(&b.topic));
-        expected.sort_by(|a, b| a.topic.cmp(&b.topic));
-        assert_eq!(actual, expected, "a reordered fold must land in the same place");
+        assert_eq!(
+            standings(&permutation, at, &policy(2)).expect("folds"),
+            expected,
+            "a reordered fold must land in the same place, topic order included",
+        );
     }
 }
 
