@@ -165,6 +165,34 @@ fn run(
     }
 }
 
+/// What an out-of-script participant says.
+///
+/// Once the room has moved to [`Phase::Commit`], the authorized speaker must
+/// actually record `!commit` for the episode to converge — phase alone is not
+/// evidence that a decision was recorded. Everywhere else, a script running
+/// out just yields silence.
+fn out_of_script_utterance(turn: &tinyteams_hive::HiveTurn, visible: &[&SessionMessage]) -> String {
+    if turn.phase != Phase::Commit {
+        return "!question Nothing further from me.".to_owned();
+    }
+    let messages: Vec<SessionMessage> = visible.iter().map(|message| (*message).clone()).collect();
+    let traces = read(&messages);
+    let at = messages
+        .last()
+        .map_or(Sequence(0), |message| message.sequence);
+    let policy = QuorumPolicy {
+        threshold: 2,
+        window: 100,
+        require_grounded: true,
+    };
+    if let Ok(standing) = standings(&traces, at, &policy)
+        && let ConsensusState::Quorum { topic } = consensus(&standing, &policy)
+    {
+        return format!("!commit #{topic} Recording the decision.");
+    }
+    "!question Nothing further from me.".to_owned()
+}
+
 /// Explain how the room finished.
 fn report(step: &HiveStep) {
     match step {
