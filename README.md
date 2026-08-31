@@ -28,7 +28,7 @@ something.
 crates/
 ├── tinyteams-core/   # the pure algebra: no async, no IO, no host types
 └── tinyteams/        # the session runtime: ports a host implements
-                      # (lands in P4 — see ROADMAP.md)
+                      # and attributed projection/initialization
 ```
 
 `tinyteams-core` is linked into the hot path of every agent turn and must
@@ -57,8 +57,11 @@ git submodule add https://github.com/tinyhumansai/tinyteams.git vendor/tinyteams
 
 ```toml
 [dependencies]
-tinyteams-core = { path = "vendor/tinyteams/crates/tinyteams-core" }
+tinyteams = { path = "vendor/tinyteams/crates/tinyteams" }
 ```
+
+The runtime crate re-exports `tinyteams-core`; hosts that only need pure desk,
+roster, and mention decisions may depend on `tinyteams-core` directly.
 
 Nothing here is published to crates.io, and there are no releases: the pinned
 commit is the version.
