@@ -62,6 +62,7 @@ use std::time::Instant;
 use tinyhivemind_hive::{EpisodePolicy, QuorumPolicy};
 
 use crate::live::LiveAgent;
+use crate::rng::mix;
 use crate::metrics::{Aggregate, arm_header, arm_row};
 use crate::run::{Participant, drive, run_episode};
 use crate::sim::Room;
@@ -207,8 +208,12 @@ fn main() {
 fn run(options: &Options) -> Result<(), String> {
     let rooms: Vec<Room> = (0..options.episodes)
         .map(|index| {
+            // Mixed rather than xor-ed: `seed ^ index` over a range of
+            // indices produces almost the same *set* of room seeds for two
+            // neighbouring seeds, which would make one seed's run silently
+            // indistinguishable from the next.
             Room::generate(
-                options.seed ^ u64::from(index),
+                mix(options.seed, u64::from(index)),
                 options.agents,
                 options.topics,
                 options.noise,
@@ -250,7 +255,7 @@ fn compare(options: &Options, rooms: &[Room]) -> Result<(), String> {
     for (index, room) in rooms.iter().enumerate() {
         hive_default.add(&run_episode(room, &default, TASK, false)?);
         hive_tuned.add(&run_episode(room, &tuned, TASK, false)?);
-        let seed = options.seed ^ u64::try_from(index).unwrap_or(0);
+        let seed = mix(options.seed, u64::try_from(index).unwrap_or(0));
         ladder.add_arm(&arms::run_ladder(room, seed)?);
         // The control is given the whole budget, which is more turns than the
         // deliberation actually spends. It is the arm to beat, so it gets
