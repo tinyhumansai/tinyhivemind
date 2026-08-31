@@ -28,3 +28,5 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a complete sample.
   General conversation.
 - [`desks.md`](desks.md) — host-owned desk overlays and the borrowed membership
   algebra.
+- [`mentions.md`](mentions.md) — roster records, mention grammar, normalization,
+  and pure routing decisions.

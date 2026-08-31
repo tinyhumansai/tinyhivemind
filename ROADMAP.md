@@ -14,8 +14,8 @@ dependency direction is enforced by construction.
 | P0 | Reshape the TinyBus module template into a plain library workspace | **done** |
 | P1 | Chat identity: `MAIN_THREAD_ID`, `GENERAL_DESK`, `is_general_chat`, `same_conversation` | **done** |
 | P2 | Desk types, then the membership algebra behind `DeskSet<'a>` | **done** |
-| P3 | The `@` grammar, `Mention`/`MentionTarget`, and resolution over `Roster`/`Person` | next |
-| P4 | `crates/tinyteams`: the `SessionLog` port, the paging walk, and the **attributed** transcript projection | |
+| P3 | The `@` grammar, `Mention`/`MentionTarget`, and resolution over `Roster`/`Person` | **done** |
+| P4 | `crates/tinyteams`: the `SessionLog` port, the paging walk, and the **attributed** transcript projection | next |
 | P5 | Continuous sharing — re-seed on a watermark rather than only on a rebind | |
 | P6 | The responder ladder, with the model-backed rung behind a `Selector` port | |
 | P7 | The mention-dispatch edge, bounded at depth 2 and shipped behind a flag | |
