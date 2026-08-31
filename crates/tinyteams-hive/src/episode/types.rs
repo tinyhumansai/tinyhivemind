@@ -94,6 +94,18 @@ pub struct EpisodeState {
     pub thresholds: Vec<AgentThreshold>,
     /// Exclusive lower bound: the sequence the episode opened at.
     pub watermark: Sequence,
+    /// The sequence standings were folded to when the phase first flipped to
+    /// [`Phase::Commit`].
+    ///
+    /// `None` until that flip happens, then fixed for the rest of the
+    /// episode. A `!commit` trace only counts toward [`HiveStep::Converged`]
+    /// when its sequence is strictly greater than this boundary — otherwise a
+    /// trace that merely happens to share the carried topic and predates the
+    /// commit turn being authorized could be misread as evidence that turn
+    /// recorded a decision.
+    ///
+    /// [`HiveStep::Converged`]: crate::episode::HiveStep::Converged
+    pub commit_boundary: Option<Sequence>,
 }
 
 impl EpisodeState {
@@ -106,6 +118,7 @@ impl EpisodeState {
             phase: Phase::Deliberate,
             thresholds: Vec::new(),
             watermark,
+            commit_boundary: None,
         }
     }
 }
