@@ -101,9 +101,9 @@ fn main() {
                 if !standing.silenced.is_empty() {
                     println!("  silenced by objection: {}", standing.silenced.join(", "));
                 }
-                println!(
-                    "\n  The room started tied. No vote was subtracted from a proposal;\n                       one objection silenced a rival's *advocate*, and the survivor carried.",
-                );
+                println!("\n  The room started tied. No vote was subtracted from a");
+                println!("  proposal; one objection silenced a rival's *advocate*,");
+                println!("  and the survivor carried.");
                 return;
             }
             HiveStep::Deadlocked { topics } => {
