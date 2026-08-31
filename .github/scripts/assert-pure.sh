@@ -13,12 +13,20 @@
 set -euo pipefail
 
 # Crates that may not depend on a runtime, a transport, or a web framework.
-pure_crates=("tinyteams-core")
+#
+# `tinyteams-hive` is here rather than in the exempt list below because it
+# defines no port of its own: an episode is a pure state machine over a
+# transcript the caller already holds, and every host obligation it needs is
+# already carried by `tinyteams`. See
+# docs/adr/0002-hive-episodes-are-sequential.md.
+pure_crates=("tinyteams-core" "tinyteams-hive")
 
 # `tinyteams` (the session runtime) is exempt from `tokio`/`futures`/
-# `async-trait`, which it needs for its ports — but not from the rest. It is
-# listed separately once it exists.
-#
+# `async-trait`, which it needs for its ports — but not from the rest. Its
+# ports are boxed `std::future::Future`s, so today it needs none of the three;
+# the exemption exists so that adding one is not a CI failure.
+exempt_async_crates=("tinyteams")
+
 # This is a maintained blocklist of known offenders, not an exhaustive
 # allowlist: it names every async runtime, transport, HTTP client, database
 # client, and VCS binding this repository has needed to reject so far, plus
@@ -26,8 +34,12 @@ pure_crates=("tinyteams-core")
 # not work around it — the day a new one shows up in the tree.
 forbidden_pure='tokio|futures|async-trait|axum|hyper|reqwest|ureq|curl|anyhow|rusqlite|git2'
 
+# The same list minus the three async primitives a port layer legitimately needs.
+forbidden_exempt='axum|hyper|reqwest|ureq|curl|anyhow|rusqlite|git2'
+
 status=0
-for crate in "${pure_crates[@]}"; do
+check_crate() {
+  local crate="$1" forbidden="$2"
   if ! cargo metadata --format-version 1 --no-deps \
     | jq -e --arg c "$crate" '.packages[] | select(.name == $c)' >/dev/null; then
     echo "assert-pure: no such package '$crate'" >&2
@@ -38,12 +50,19 @@ for crate in "${pure_crates[@]}"; do
     echo "assert-pure: cargo tree failed for '$crate'" >&2
     exit 1
   }
-  found="$(grep -Ei "$forbidden_pure" <<<"$tree" || true)"
+  found="$(grep -Ei "$forbidden" <<<"$tree" || true)"
   if [ -n "$found" ]; then
     echo "$crate pulled in a dependency its manifest forbids:" >&2
     echo "$found" >&2
     status=1
   fi
+}
+
+for crate in "${pure_crates[@]}"; do
+  check_crate "$crate" "$forbidden_pure"
+done
+for crate in "${exempt_async_crates[@]}"; do
+  check_crate "$crate" "$forbidden_exempt"
 done
 
 if [ "$status" -ne 0 ]; then
@@ -54,4 +73,4 @@ if [ "$status" -ne 0 ]; then
   exit 1
 fi
 
-echo "assert-pure: ${pure_crates[*]} — clean"
+echo "assert-pure: ${pure_crates[*]} ${exempt_async_crates[*]} — clean"
