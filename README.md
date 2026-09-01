@@ -1,11 +1,11 @@
 <h1 align="center">tinyhivemind</h1>
 
-<p align="center"><strong>Group chats for agents.</strong></p>
+<p align="center"><strong>Hive mind mechanics for agents.</strong></p>
 
 <p align="center">
-A shared transcript several agents read and write, and the mechanism that gets
-the right one to answer. Written in Rust, owns no storage, serves no HTTP,
-picks no runtime.
+Quorum sensing, cross-inhibition, stigmergy, pheromone decay and response
+thresholds, implemented as integer folds over a transcript your application
+already owns. Written in Rust. No storage, no HTTP, no runtime.
 </p>
 
 <p align="center">
@@ -27,34 +27,25 @@ picks no runtime.
 >
 > I'm excited to share this with you all as an open-source contribution and if you like my work, give me a follow over at https://github.com/senamakel/ 🙌
 
-## One agent answering is easy. A room is not.
+## Most hive minds are just fan-out
 
-Put five agents in one channel and the obvious problems show up immediately.
-They read each other's replies as their own words. They miss what a peer said
-between their own two turns. A single `@everyone` wakes all of them at once.
-Nobody can tell whether the room agreed on anything, or just stopped.
+Publish a task, wake N agents, collect the replies, average them somehow. That
+is a thread pool with a prompt attached. It has no notion of who is convinced,
+no way to register a grounded objection, no reason to stop other than running
+out of members, and no answer when somebody asks afterwards why the group chose
+what it chose.
 
-tinyhivemind is the layer that fixes those. It answers four questions and holds
-no state doing it.
+Actual collective decisions do not work that way, and the mechanisms that make
+them work have been studied for decades in colonies that have no leader, no
+shared memory, and far less bandwidth than five language models sharing a
+channel. tinyhivemind implements those mechanisms.
 
-**Who is here?** A roster of agents, and the people signed in alongside them.
+## The mechanics
 
-**What is a desk, and who is on it?** A declared group chat merged with the
-operator's runtime additions, retirements and ordering.
-
-**Who does `@this` mean?** A mention grammar, resolved against the live roster
-and desks, where only a direct agent mention can start a turn.
-
-**What does one participant see?** An attributed projection of a multi-speaker
-transcript into one viewer's history, so agent B never reads agent A's words as
-its own.
-
-## And then it lets the room decide
-
-`tinyhivemind-hive` is the opt-in part. Agents leave typed markers in the
-transcript, support accumulates, a grounded objection silences an advocate, and
-the episode ends as converged, deadlocked, exhausted, or idle. Always for a
-reason you can name afterwards.
+**Stigmergy.** Work leaves a trace in a shared medium, and the trace is the
+stimulus for the next piece of work. No agent addresses another and nothing
+dispatches anything. The transcript is the medium, and a marker line is a
+deposit in it.
 
 ```text
 !propose #stage Stage the rollout across three regions.
@@ -63,8 +54,58 @@ reason you can name afterwards.
 !commit  #stage
 ```
 
-Deliberation with an audit trail, in about 2.3 microseconds of library time per
-step.
+**Pheromone decay.** A trace's pull on the room's attention decays
+exponentially with distance in the transcript. Without it, whoever spoke first
+holds the floor forever, which is the failure ant trails avoid only because
+pheromone evaporates.
+
+**Quorum sensing.** An option carries when some number of distinct participants
+have grounded support for it inside a window. Not a majority of anything, not a
+score to beat. The count is local, order independent and idempotent, so an
+agent that catches up late folds to exactly the same standing as one that
+watched live. This is how honeybee swarms settle a nest site.
+
+**Cross-inhibition.** An objection names a *message*, and removes that
+message's author from the supporter set of whatever they were advocating. It
+does not debit the option. Subtracting from a score cannot break a tie between
+two equally supported options; silencing an advocate can, and that asymmetry is
+the entire reason it is shaped this way. Honeybees do this too, with stop
+signals.
+
+**Response thresholds.** Every member computes an urge from the salience field
+and its own affinity, and whoever bids highest takes the floor. A member whose
+urge never clears its threshold does not bid at all. This is the
+response-threshold model of division of labour, and it is also Pandemonium's
+decision demon, which is the same idea arrived at from the AI side.
+
+Every one of those is fixed-point integer arithmetic. Every payload derives
+`Eq`, and every episode replays byte for byte from the same transcript.
+
+## The floor is a substrate, not a broadcast
+
+The mechanics need a room to run in, so tinyhivemind owns that too, and it is
+the part most systems get wrong first. Five agents in one channel read each
+other's replies as their own words, miss what a peer said between their own two
+turns, and stampede on a single `@everyone`.
+
+**Who is here?** A roster of agents, and the people signed in alongside them.
+
+**What is a desk, and who is on it?** A declared room merged with the
+operator's runtime additions, retirements and ordering.
+
+**Who does `@this` mean?** A mention grammar resolved against the live roster
+and desks, where only a direct agent mention can start a turn.
+
+**What does one participant see?** An attributed, thread-aware projection of a
+multi-speaker transcript into one viewer's history, so agent B never reads
+agent A's words as its own.
+
+## An episode ends for a reason you can name
+
+Converged, deadlocked, exhausted, or idle. A room that could not decide says
+so, instead of emitting an answer nobody actually supported. The turn budget is
+finite, so termination is guaranteed rather than hoped for, and the standing
+that carried is returned alongside the outcome.
 
 ## It measurably beats one agent answering alone
 
