@@ -230,8 +230,41 @@ fn tuned_policy(agents: usize) -> EpisodePolicy {
             threshold: quorum_threshold(agents),
             window: 100,
             require_grounded: true,
+            // Refutation is off in both control arms, which is the crate
+            // default. No topic is ever capped *and* the simulated members
+            // never spend a turn on the move, so `hive+ref` differs from
+            // `hive+` in exactly one thing rather than in two.
+            refutation_cap: None,
+            ..QuorumPolicy::DEFAULT
         },
         ..EpisodePolicy::DEFAULT
+    }
+}
+
+/// The tuned policy with the negative evidence-to-topic link switched on.
+///
+/// A cap of two is the crate default: one member's assertion should not kill a
+/// hypothesis, and two distinct grounded refuters should. This is the arm the
+/// mechanism has to earn its place against, and it can lose.
+fn refuting_policy(tuned: &EpisodePolicy) -> EpisodePolicy {
+    EpisodePolicy {
+        quorum: QuorumPolicy {
+            refutation_cap: Some(2),
+            ..tuned.quorum
+        },
+        ..*tuned
+    }
+}
+
+/// The refuting policy with grounds weighed by evidential depth as well.
+fn evidential_policy(tuned: &EpisodePolicy) -> EpisodePolicy {
+    let refuting = refuting_policy(tuned);
+    EpisodePolicy {
+        quorum: QuorumPolicy {
+            require_evidential: true,
+            ..refuting.quorum
+        },
+        ..refuting
     }
 }
 
@@ -308,14 +341,20 @@ fn compare(options: &Options, rooms: &[Room]) -> Result<(), String> {
         tuned.repetition_cap,
     );
 
+    let refuting = refuting_policy(&tuned);
+    let evidential = evidential_policy(&tuned);
     let mut hive_default = Aggregate::default();
     let mut hive_tuned = Aggregate::default();
+    let mut hive_refuting = Aggregate::default();
+    let mut hive_evidential = Aggregate::default();
     let mut vote = Aggregate::default();
     let mut ladder = Aggregate::default();
     let wall = Instant::now();
     for (index, room) in rooms.iter().enumerate() {
         hive_default.add(&run_episode(room, &default, TASK, false)?);
         hive_tuned.add(&run_episode(room, &tuned, TASK, false)?);
+        hive_refuting.add(&run_episode(room, &refuting, TASK, false)?);
+        hive_evidential.add(&run_episode(room, &evidential, TASK, false)?);
         let seed = mix(options.seed, u64::try_from(index).unwrap_or(0));
         ladder.add_arm(&arms::run_ladder(room, seed)?);
         // The control is given the whole budget, which is more turns than the
@@ -330,6 +369,8 @@ fn compare(options: &Options, rooms: &[Room]) -> Result<(), String> {
     println!("{}", arm_row("vote", &vote));
     println!("{}", arm_row("hive", &hive_default));
     println!("{}", arm_row("hive+", &hive_tuned));
+    println!("{}", arm_row("hive+ref", &hive_refuting));
+    println!("{}", arm_row("hive+ev", &hive_evidential));
 
     println!(
         "\nhive  endings: converged {} · deadlocked {} · exhausted {} · idle {}",
@@ -338,6 +379,20 @@ fn compare(options: &Options, rooms: &[Room]) -> Result<(), String> {
     println!(
         "hive+ endings: converged {} · deadlocked {} · exhausted {} · idle {}",
         hive_tuned.converged, hive_tuned.deadlocked, hive_tuned.exhausted, hive_tuned.idle,
+    );
+    println!(
+        "hive+ref endings: converged {} · deadlocked {} · exhausted {} · idle {}",
+        hive_refuting.converged,
+        hive_refuting.deadlocked,
+        hive_refuting.exhausted,
+        hive_refuting.idle,
+    );
+    println!(
+        "hive+ev endings: converged {} · deadlocked {} · exhausted {} · idle {}",
+        hive_evidential.converged,
+        hive_evidential.deadlocked,
+        hive_evidential.exhausted,
+        hive_evidential.idle,
     );
     println!(
         "library time {:.1} ms over {} steps ({:.0} ns/step, {:.0} episodes/s)",

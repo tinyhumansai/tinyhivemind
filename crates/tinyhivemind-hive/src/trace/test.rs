@@ -69,6 +69,7 @@ fn every_trace_kind_pins_its_wire_spelling() {
         (TraceKind::Propose, "propose"),
         (TraceKind::Support, "support"),
         (TraceKind::Object, "object"),
+        (TraceKind::Refute, "refute"),
         (TraceKind::Evidence, "evidence"),
         (TraceKind::Question, "question"),
         (TraceKind::Commit, "commit"),
@@ -97,6 +98,7 @@ fn every_marker_spelling_is_recognized() {
         ("!propose #a", TraceKind::Propose),
         ("!support #a", TraceKind::Support),
         ("!object >1", TraceKind::Object),
+        ("!refute #a ^1", TraceKind::Refute),
         ("!evidence ^1", TraceKind::Evidence),
         ("!question", TraceKind::Question),
         ("!commit #a", TraceKind::Commit),
@@ -378,4 +380,33 @@ fn a_topic_id_displays_and_converts_from_both_string_forms() {
     assert_eq!(from_str, from_string);
     assert_eq!(from_str.as_str(), "stage");
     assert_eq!(from_str.to_string(), "stage");
+}
+
+#[test]
+fn a_refute_marker_is_the_one_that_requires_both_qualifiers() {
+    // Every other marker parses on its own. A refutation caps a hypothesis for
+    // the whole room, so it must name the hypothesis and point at the fact.
+    assert_eq!(
+        only("!refute #stage ^4 It was retired.").kind,
+        TraceKind::Refute
+    );
+    assert!(
+        resolve(
+            "!refute #stage No citation.",
+            None,
+            &agent("a"),
+            Sequence(1)
+        )
+        .is_empty()
+    );
+    assert!(resolve("!refute ^4 No topic.", None, &agent("a"), Sequence(1)).is_empty());
+    assert!(resolve("!refute Neither.", None, &agent("a"), Sequence(1)).is_empty());
+}
+
+#[test]
+fn a_refutation_is_grounded_by_construction() {
+    let trace = only("!refute #stage ^4 ^9 It was retired.");
+    assert!(trace.grounded());
+    assert_eq!(trace.cites, [Sequence(4), Sequence(9)]);
+    assert_eq!(trace.topic.as_ref().map(TopicId::as_str), Some("stage"));
 }

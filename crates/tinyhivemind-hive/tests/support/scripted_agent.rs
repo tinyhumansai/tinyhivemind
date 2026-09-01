@@ -19,6 +19,9 @@ pub(crate) struct ScriptedAgent {
     calls: Vec<Vec<u64>>,
     /// What it says once its script runs out.
     filler: String,
+    /// The room's quorum rule, so an out-of-script commit turn records what
+    /// the room actually carried rather than what the crate default would have.
+    quorum: QuorumPolicy,
 }
 
 impl ScriptedAgent {
@@ -28,7 +31,13 @@ impl ScriptedAgent {
             lines: lines.into_iter().map(|line| Ok(line.to_owned())).collect(),
             calls: Vec::new(),
             filler: "!question Nothing further from me.".to_owned(),
+            quorum: QuorumPolicy::DEFAULT,
         }
+    }
+
+    /// Tell the participant which quorum rule the room is running.
+    pub(crate) fn set_quorum(&mut self, quorum: QuorumPolicy) {
+        self.quorum = quorum;
     }
 
     /// A participant whose first model call fails.
@@ -55,7 +64,7 @@ impl HiveAgent for ScriptedAgent {
             return line;
         }
         if turn.phase == Phase::Commit {
-            return Ok(commit_line(visible));
+            return Ok(commit_line(visible, self.quorum));
         }
         Ok(self.filler.clone())
     }
@@ -64,13 +73,12 @@ impl HiveAgent for ScriptedAgent {
 /// What an out-of-script participant says once the room has moved to
 /// [`Phase::Commit`]: the carried topic, recomputed from what this turn can
 /// see, rather than a `!question` that would never record a decision.
-fn commit_line(visible: &[&SessionMessage]) -> String {
+fn commit_line(visible: &[&SessionMessage], policy: QuorumPolicy) -> String {
     let messages: Vec<SessionMessage> = visible.iter().map(|message| (*message).clone()).collect();
     let traces = read(&messages);
     let at = messages
         .last()
         .map_or(Sequence(0), |message| message.sequence);
-    let policy = QuorumPolicy::DEFAULT;
     if let Ok(standing) = standings(&traces, at, &policy)
         && let ConsensusState::Quorum { topic } = consensus(&standing, &policy)
     {

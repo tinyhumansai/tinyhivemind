@@ -20,11 +20,23 @@ dependency direction is enforced by construction.
 | P6 | The responder ladder, with the model-backed rung behind a `Selector` port | **done** |
 | P7 | The mention-dispatch edge, bounded by a host-supplied finite configurable `max_hops` (OpenCompany defaults to 2), with no library hard cap, and explicitly enabled by host policy | **done** |
 | P8 | `crates/tinyhivemind-hive`: bounded group deliberation — the trace grammar, salience, quorum with cross-inhibition, the attention market, and the episode state machine | **done** |
+| P9 | `!refute`, evidential grounding, grounded objections, and the benchmark arm that scored them | **done**, both knobs **off by default** — see below |
+| P10 | A transactive-memory directory folded from traces, and `BidReason::Knows` | planned |
+| P11 | `SessionMessage.parent` and the structured trace sidecar | planned |
+| P12 | Per-conversation read state | planned |
+| P13 | Digests and supersession | planned |
 
 The next work is the paired OpenCompany adapter integration, followed by a
 gated live-provider verification in which two agents exchange an attributed
 turn. The adapter initially remains disabled and uses two hops when enabled.
 The hive crate is opt-in and is not part of that first adapter.
+
+P10 through P13 come out of a survey of the biology, the group-decision
+literature, and the open-source landscape of shared agent memory, recorded in
+[`docs/research/`](docs/research/README.md) and specified in
+[`docs/specs/shared-medium-schema.md`](docs/specs/shared-medium-schema.md). They
+are ordered by leverage, and P11 and P12 are wire-format changes that need their
+serde-compatibility story written down before any code.
 
 ## What P8 adds, and what it deliberately does not
 
@@ -46,6 +58,30 @@ and self-consistency at a matched token budget is the honest control. P8 is a
 protocol for bounded deliberation with an auditable termination reason, and
 nothing more. See
 [`docs/adr/0002-hive-episodes-are-sequential.md`](docs/adr/0002-hive-episodes-are-sequential.md).
+
+## What P9 adds, and why it is off
+
+P9 answers the second finding of
+[the live hidden-profile run](docs/experiments/2026-09-01-live-hidden-profile.md):
+support is counted and grounds are not weighed, so a fact that refutes a
+hypothesis has no way to say so and killing one costs a turn per advocate.
+
+It adds `!refute #topic ^N`, which caps a topic once `refutation_cap` distinct
+grounded members have argued a cited fact against it, and `require_evidential`,
+under which a support counts only if its citation chain reaches a stated fact.
+Both are pure folds. Both are recorded in
+[ADR 0003](docs/adr/0003-refutation-links-evidence-to-a-topic.md) and
+[ADR 0004](docs/adr/0004-grounds-are-weighed-by-evidential-depth.md).
+
+**Both are off in `QuorumPolicy::DEFAULT`, because the benchmark scored them and
+they lost.** `hive+ref` reaches 75.0% against 82.1% for the same policy without
+it — below even the matched-budget vote — `hive+ev` reaches 55.9%, and no policy with either knob on appears in the
+top twelve of an 864-point grid search. The spec's acceptance criterion required
+the arm to be able to lose; it did, and the result is written up rather than
+buried. The mechanism stays in the library, opt-in, because the case it was
+built for — a hidden profile, where one member holds the fact that overturns a
+decoy — is not what the simulated benchmark measures. See
+[`docs/experiments/2026-09-01-refutation-and-grounds.md`](docs/experiments/2026-09-01-refutation-and-grounds.md).
 
 ## The two defects P4 and P5 fix
 
