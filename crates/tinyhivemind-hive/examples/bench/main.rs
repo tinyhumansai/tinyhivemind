@@ -491,7 +491,7 @@ fn live_scenario(options: &Options, command: &str, scenario: &Scenario) -> Resul
         decided,
         report.turns,
         wall.as_secs_f64(),
-        verdict(report.decided.as_ref().map(AsRef::as_ref), &scenario.truth),
+        verdict(report.decided.as_ref().map(TopicId::as_str), &scenario.truth),
     );
 
     let picks = live::poll(scenario, command)?;
