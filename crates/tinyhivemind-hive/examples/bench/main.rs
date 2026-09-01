@@ -367,7 +367,7 @@ fn trace(rooms: &[Room], policy: &EpisodePolicy) -> Result<(), String> {
 /// Search the policy grid and print the ordering.
 fn sweep_policies(options: &Options, rooms: &[Room]) -> Result<(), String> {
     let wall = Instant::now();
-    let scored = sweep::sweep(rooms, TASK)?;
+    let scored = sweep::sweep(rooms, TASK, options.agents)?;
     let wall = wall.elapsed();
     println!(
         "swept {} policies over {} rooms in {:.2} s\n",

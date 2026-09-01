@@ -13,12 +13,26 @@ use crate::run::run_episode;
 use crate::sim::Room;
 
 /// Values swept per field.
-const BUDGETS: [u32; 3] = [6, 9, 12];
-const THRESHOLDS: [u32; 2] = [2, 3];
+///
+/// Budget and quorum are swept *relative to the desk*, because both only mean
+/// anything against a room size: twelve turns is generous for three members
+/// and not enough for eight, and a threshold of three is a bare majority of
+/// five and unanimity of three.
+const BUDGET_PER_MEMBER: [u32; 3] = [2, 3, 4];
 const BLIND: [bool; 2] = [true, false];
 const REPETITION: [u32; 2] = [2, 3];
 const DOMINANCE: [u32; 2] = [40, 60];
 const WINDOWS: [u32; 2] = [30, 100];
+
+/// The quorum thresholds worth trying for a desk of `agents`: two, the
+/// smallest majority, and unanimity.
+fn thresholds(agents: usize) -> Vec<u32> {
+    let agents = u32::try_from(agents).unwrap_or(5);
+    let mut thresholds = vec![2, agents / 2 + 1, agents];
+    thresholds.sort_unstable();
+    thresholds.dedup();
+    thresholds
+}
 
 /// One scored point of the grid.
 #[derive(Clone, Debug)]
@@ -49,10 +63,12 @@ impl Scored {
 /// # Errors
 ///
 /// Propagates any library error, which here can only mean a malformed policy.
-pub(crate) fn sweep(rooms: &[Room], task: &str) -> Result<Vec<Scored>, String> {
+pub(crate) fn sweep(rooms: &[Room], task: &str, agents: usize) -> Result<Vec<Scored>, String> {
+    let per_member = u32::try_from(agents).unwrap_or(5);
     let mut scored = Vec::new();
-    for budget in BUDGETS {
-        for threshold in THRESHOLDS {
+    for multiple in BUDGET_PER_MEMBER {
+        let budget = per_member.saturating_mul(multiple).max(6);
+        for threshold in thresholds(agents) {
             for blind in BLIND {
                 for repetition in REPETITION {
                     for dominance in DOMINANCE {
