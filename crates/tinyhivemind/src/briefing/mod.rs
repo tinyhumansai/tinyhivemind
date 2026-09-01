@@ -194,15 +194,21 @@ impl SessionContext {
 /// The returned context is empty. Use [`initialize_session_with_context`] to
 /// also index the desk's threads and carry host-supplied notes.
 ///
+/// `briefing.brevity.window` is overwritten with `query.window` before it is
+/// returned: the budget the briefing states has to match the window the query
+/// actually reads, not whatever [`BrevityPolicy::DEFAULT`](crate::BrevityPolicy::DEFAULT)
+/// happened to carry when the briefing was built.
+///
 /// # Errors
 ///
 /// Returns any projection error documented by [`project_session`].
 pub async fn initialize_session(
     log: &(dyn SessionLog + '_),
     query: &SessionQuery,
-    briefing: TeamBriefing,
+    mut briefing: TeamBriefing,
 ) -> Result<SessionInitialization> {
     let history = project_session(log, query).await?;
+    briefing.brevity.window = query.window;
     Ok(SessionInitialization {
         briefing,
         context: SessionContext::default(),
@@ -219,6 +225,9 @@ pub async fn initialize_session(
 /// choice the viewer is making; the pinboard is not, because a pin is exactly
 /// the thing that has to survive the viewer's narrow scope.
 ///
+/// `briefing.brevity.window` is overwritten with `query.window`, for the same
+/// reason [`initialize_session`] overwrites it.
+///
 /// # Errors
 ///
 /// Returns any projection error documented by [`project_session`], or any read
@@ -227,12 +236,13 @@ pub async fn initialize_session(
 pub async fn initialize_session_with_context(
     log: &(dyn SessionLog + '_),
     query: &SessionQuery,
-    briefing: TeamBriefing,
+    mut briefing: TeamBriefing,
     notes: Vec<BriefingNote>,
 ) -> Result<SessionInitialization> {
     let history = project_session(log, query).await?;
     let threads = read_thread_index(log, &query.conversation, THREAD_INDEX_LIMIT).await?;
     let pins = read_pinboard(log, &query.conversation, PIN_LIMIT, query.before).await?;
+    briefing.brevity.window = query.window;
     Ok(SessionInitialization {
         briefing,
         context: SessionContext {

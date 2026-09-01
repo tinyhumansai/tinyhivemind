@@ -109,6 +109,15 @@ fn ignores_a_marker_inside_a_fenced_block_and_one_that_is_not_line_leading() {
 }
 
 #[test]
+fn requires_a_closing_fence_at_least_as_long_as_the_opener() {
+    // The outer block opens with four backticks. A three-backtick line
+    // inside it is Markdown content — an example fence being quoted — not a
+    // close, so the `!unpin` on the line after it must stay inert.
+    let body = "````\nexample:\n```\n!unpin ^1\n```\nstill inside\n````";
+    assert!(read_directives(body, &agent("alice"), Sequence(9)).is_empty());
+}
+
+#[test]
 fn ignores_an_unknown_marker_and_a_body_with_no_marker_at_all() {
     assert!(read_directives("!propose #x", &agent("alice"), Sequence(1)).is_empty());
     assert!(read_directives("ordinary conversation", &agent("alice"), Sequence(1)).is_empty());

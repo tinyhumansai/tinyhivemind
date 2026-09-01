@@ -413,7 +413,17 @@ async fn initialization_keeps_briefing_separate_from_history() {
     )
     .await
     .expect("initializes");
-    assert_eq!(initialized.briefing, briefing);
+    // The window the briefing states is reconciled to the query's window
+    // (1), not left at whatever `BrevityPolicy::DEFAULT` (30) carried in.
+    assert_eq!(initialized.briefing.brevity.window, query.window);
+    assert_eq!(
+        initialized.briefing.brevity.message_chars,
+        briefing.brevity.message_chars
+    );
+    assert_eq!(initialized.briefing.viewer_id, briefing.viewer_id);
+    assert_eq!(initialized.briefing.desk_id, briefing.desk_id);
+    assert_eq!(initialized.briefing.desk_name, briefing.desk_name);
+    assert_eq!(initialized.briefing.teammates, briefing.teammates);
     assert_eq!(initialized.history.len(), 1);
     assert_eq!(initialized.history[0].sequence, Sequence(4));
     assert!(initialized.context.is_empty());
