@@ -35,26 +35,30 @@ use crate::scenario::Scenario;
 /// its agents rather than something the library can impose.
 const DELIBERATE_PROTOCOL: &str = "\
 Reply with ONE line only, beginning with exactly one of these markers:
-!propose #topic <one sentence>   put a new option on the floor
-!support #topic ^N <why>         back an option, citing message N as grounds
-!object >N ^M <why>              object to message N, citing message M
-!evidence ^N <fact>              add grounds without taking a side
-!question <what you need>        ask for something not yet established
+!propose #topic  then one sentence putting a new option on the floor
+!support #topic ^N  then why, citing message N as grounds
+!object >N ^M  then why, objecting to message N and citing message M
+!evidence ^N  then a fact, adding grounds without taking a side
+!question  then what you need that nobody has established
 The # on a topic and the ^ on a citation are part of the grammar: `!propose \
 #canary ...` names an option, `!propose canary ...` names nothing and is \
 discarded. A support with no ^citation does not count, and only support moves \
-an option towards a decision. Do not write !commit: the room has not reached a \
-decision yet, and a commit line now counts for nothing. Write nothing before \
-or after the single marker line.";
+an option towards a decision. Angle brackets are not part of any line — write \
+the sentence itself, not a placeholder in brackets. The marker is what the \
+room counts and your prose is not, so never write !support for one option \
+while arguing for another: put the marker on the option you actually mean. Do \
+not write !commit: the room has not reached a decision yet, and a commit line \
+now counts for nothing. Write nothing before or after the single marker line.";
 
 /// The move available once the room has reached quorum.
 const COMMIT_PROTOCOL: &str = "\
 The room has reached quorum. Reply with ONE line only, recording the option \
 that carried:
-!commit #topic ^N <why>          record the decision, citing message N
+!commit #topic ^N  then why, citing message N
 Keep the # on the topic and the ^ on the citation; without them the line \
-records nothing. Use the topic the room actually settled on, not the one you \
-would have preferred. Write nothing before or after the single marker line.";
+records nothing. Angle brackets are not part of the line — write the sentence \
+itself. Use the topic the room actually settled on, not the one you would have \
+preferred. Write nothing before or after the single marker line.";
 
 /// A participant backed by an external agent command.
 pub(crate) struct LiveAgent {
