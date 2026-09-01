@@ -217,14 +217,14 @@ answers is the answer:
 ```text
   step(state, transcript, roster, desks, policy)
     │
-    ├─ budget spent? ───────────────────────────▶ Exhausted { spent }
-    ├─ quorum, phase = Commit? ─────────────────▶ Converged { topic, standing }
-    ├─ quorum, phase = Deliberate? ──────────────▶ Speak { one commit turn }
-    │                              flips the phase
-    ├─ two topics carry, nobody left to break it ▶ Deadlocked { topics }
+    ├─ budget spent? ─────────────────────────▶ Exhausted { spent }
+    ├─ quorum, and phase = Commit? ───────────▶ Converged { topic, .. }
+    ├─ quorum, and phase = Deliberate? ───────▶ Speak { the commit turn }
+    │                                           and the phase flips, once
+    ├─ two topics carry, nobody to break it ──▶ Deadlocked { topics }
     │
-    └─ highest bid clears its threshold? ───────▶ Speak { turn }
-                                       otherwise ▶ Idle
+    └─ highest bid clears its threshold? ─────▶ Speak { turn }
+                                             otherwise ▶ Idle
 ```
 
 The phase only ever moves one way, and the room gets exactly one chance to say
