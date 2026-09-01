@@ -68,13 +68,23 @@ Five members, quorum 3, budget 15. One episode per row.
 | `opencode` → `gpt-5-mini` (revised prompt) | #retries, wrong | 9 | #retries, wrong (3/5) |
 | `opencode` → `gpt-5-mini` (revised prompt) | #retries, wrong | — | — |
 
-Four rooms out of six reached an answer no member could reach alone, at 8–11
-turns of a 15-turn budget, in 45–75 seconds of wall clock. The vote never once
-returned the recorded answer.
+Then ten more, as a paired comparison of the two protocol prompts — five
+episodes each, same model, same scenario, run concurrently:
 
-That is the result the harness was built to produce, and it is worth being
-precise about what it is: evidence that *this* task shape separates the arms,
-on a sample of six. It is not an accuracy claim.
+| arm | hive correct | turns/ep | vote correct |
+| --- | --- | --- | --- |
+| old prompt (`c69cd82`) | 3/5 | 7.8 | 0/5 |
+| revised prompt (`486be57`) | 3/5 | 7.4 | 0/5 |
+
+Across every episode on this scenario the poll has returned the recorded answer
+**zero times out of sixteen**. It always answers `#retries`. That is the hidden
+profile working as designed rather than a surprise, and it is the finding with
+the most evidence behind it.
+
+Deliberation reached the answer in six of the ten paired episodes. Six in ten
+is what a room of this model achieves at this budget; the shape separates the
+arms cleanly and reproducibly, and that is a different and much weaker claim
+than deliberation solving the task.
 
 ## Six things the runs showed
 
@@ -89,7 +99,8 @@ speaker's framing is in the transcript before anybody has stated a fact.
 
 ### 2. Support is counted; grounds are not weighed
 
-This is the important one. In both failed rooms scout's refutation — the retry
+This is the important one. In all four failed rooms of the paired ten — and in
+both earlier failures — scout's refutation — the retry
 path shipped disabled, zero retries fired today — was in the transcript, at a
 sequence every later message could cite. It changed nothing. Members went on
 depositing `!support #retries ^6`, and three grounded supporters carried the
@@ -141,11 +152,17 @@ topic whose prose argues for another. The library counted a supporter for
 `#retries` that the author plainly did not intend. The protocol text now says
 the marker is what the room counts and the prose is not.
 
-**Neither fix is verified.** The two rooms run after the prompt change both
-landed on the decoy, against four out of four before it. Two runs is not
-evidence that the change hurt, and the two are not paired against the four —
-but it is also not evidence that it helped, and it should not be written up as
-a fix until it has been run properly. This is the open item.
+**The fixes were then run against the prompt they replaced, and made no
+measurable difference.** The paired comparison above ties at three of five on
+each arm. The earlier signal — four correct before the change, zero of two
+after — was sampling noise; pooling every `gpt-5-mini` episode on this scenario
+gives five of seven against three of seven, a two-episode gap on seven that the
+sample cannot resolve either.
+
+Neither run leaked a placeholder, so the comparison says nothing about the
+defect that motivated the change; that failure was seen once and is
+low-frequency. The change is kept for the transcripts it produces, not for an
+accuracy claim, and the write-up says so.
 
 ### 6. The vote control was quietly cheating
 
@@ -170,9 +187,8 @@ no answer.
 
 ## Open items
 
-1. Run design 3 at `--repeat 10` per model, before and after the protocol
-   prompt change, and settle whether the change helped, hurt, or did nothing.
-   Nothing in item 5 should be written up until this exists.
+1. ~~Run design 3 before and after the protocol prompt change.~~ Done at five
+   episodes per arm: a dead heat. Item 5 is updated and closed.
 2. An ADR for a negative evidence-to-topic link (item 2), then an
    implementation and a simulated arm for it, so it is scored against the
    matched-budget vote like everything else.
