@@ -152,9 +152,6 @@ git submodule add https://github.com/tinyhumansai/tinyhivemind.git vendor/tinyhi
 tinyhivemind = { path = "vendor/tinyhivemind/crates/tinyhivemind" }
 ```
 
-Nothing is published to crates.io and there are no releases. The pinned commit
-is the version.
-
 ```sh
 cargo run --release -p tinyhivemind-hive --example bench -- --trace
 ```
