@@ -42,8 +42,8 @@ channel. tinyhivemind implements those mechanisms.
 
 ## The mechanics
 
-**Stigmergy.** Work leaves a trace in a shared medium, and the trace is the
-stimulus for the next piece of work. No agent addresses another and nothing
+**[Stigmergy](https://en.wikipedia.org/wiki/Stigmergy).** Work leaves a trace in a shared medium, and the
+trace is the stimulus for the next piece of work. No agent addresses another and nothing
 dispatches anything. The transcript is the medium, and a marker line is a
 deposit in it.
 
@@ -54,31 +54,35 @@ deposit in it.
 !commit  #stage
 ```
 
-**Pheromone decay.** A trace's pull on the room's attention decays
-exponentially with distance in the transcript. Without it, whoever spoke first
+**[Pheromone decay](https://en.wikipedia.org/wiki/Ant_colony_optimization_algorithms).** A trace's pull on
+the room's attention decays [exponentially](https://en.wikipedia.org/wiki/Exponential_decay) with distance
+in the transcript. Without it, whoever spoke first
 holds the floor forever, which is the failure ant trails avoid only because
 pheromone evaporates.
 
-**Quorum sensing.** An option carries when some number of distinct participants
-have grounded support for it inside a window. Not a majority of anything, not a
+**[Quorum sensing](https://en.wikipedia.org/wiki/Quorum_sensing).** An option carries when some number of
+distinct participants have grounded support for it inside a window. Not a majority of anything, not a
 score to beat. The count is local, order independent and idempotent, so an
 agent that catches up late folds to exactly the same standing as one that
-watched live. This is how honeybee swarms settle a nest site.
+watched live. This is how [honeybee swarms](https://en.wikipedia.org/wiki/Swarming_(honey_bee)) settle a nest site.
 
-**Cross-inhibition.** An objection names a *message*, and removes that
-message's author from the supporter set of whatever they were advocating. It
+**[Cross-inhibition](https://en.wikipedia.org/wiki/Lateral_inhibition).** An objection names a *message*,
+and removes that message's author from the supporter set of whatever they were
+advocating. It
 does not debit the option. Subtracting from a score cannot break a tie between
 two equally supported options; silencing an advocate can, and that asymmetry is
 the entire reason it is shaped this way. Honeybees do this too, with stop
 signals.
 
-**Response thresholds.** Every member computes an urge from the salience field
-and its own affinity, and whoever bids highest takes the floor. A member whose
-urge never clears its threshold does not bid at all. This is the
-response-threshold model of division of labour, and it is also Pandemonium's
-decision demon, which is the same idea arrived at from the AI side.
+**[Response thresholds](https://en.wikipedia.org/wiki/Task_allocation_and_partitioning_of_social_insects).**
+Every member computes an urge from the salience field and its own affinity, and
+whoever bids highest takes the floor. A member whose
+urge never clears its threshold does not bid at all. This is the response-threshold model of division of labour, and it is also
+[Pandemonium](https://en.wikipedia.org/wiki/Pandemonium_architecture)'s decision demon, which is the same
+idea arrived at from the AI side.
 
-Every one of those is fixed-point integer arithmetic. Every payload derives
+Every one of those is [fixed-point](https://en.wikipedia.org/wiki/Fixed-point_arithmetic) integer
+arithmetic. Every payload derives
 `Eq`, and every episode replays byte for byte from the same transcript.
 
 ## The floor is a substrate, not a broadcast
@@ -117,7 +121,8 @@ Five agents choosing between four options, 5000 seeded rooms, on one core:
 | `vote` | independent answers, plurality, matched budget | 15.00 | 78.5% |
 | `hive+` | a tuned deliberation episode | 6.75 | **82.1%** |
 
-The middle row is the control most multi-agent claims are missing. A room that
+The middle row is [self-consistency](https://arxiv.org/abs/2203.11171), the
+control most multi-agent claims are missing. A room that
 could not beat an independent vote at the same budget would not be worth its
 budget. This one does, at every desk size from three to eight, while spending
 about half the turns.
@@ -169,6 +174,8 @@ see what the thing actually does.
 | [Benchmarks](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks) | the full report, including what it does not show |
 | [Host integration](https://github.com/tinyhumansai/tinyhivemind/wiki/Host-integration) | the three ports, and what your application owes the library |
 | [Development](https://github.com/tinyhumansai/tinyhivemind/wiki/Development) | the build contract, testing, and how to contribute |
+| [Glossary](https://github.com/tinyhumansai/tinyhivemind/wiki/Glossary) | every term, what it means here, and where it came from |
+| [Further reading](https://github.com/tinyhumansai/tinyhivemind/wiki/Further-reading) | the swarm biology, the group-decision literature, the papers |
 | [ROADMAP.md](ROADMAP.md) | the phase plan, and the two defects this work exists to fix |
 
 ## License
