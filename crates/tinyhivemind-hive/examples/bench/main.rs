@@ -109,16 +109,23 @@ impl Options {
             topics: 4,
             noise: 90,
             seed: 1,
-            policy: tuned_policy(),
+            policy: tuned_policy(5),
             mode: Mode::Compare,
         };
-        let mut args = std::env::args().skip(1);
+        // The policy is rebuilt once the room size is known, then any explicit
+        // policy flag is applied over it, so `--agents` moves the quorum
+        // threshold with the desk while `--quorum` still overrides it.
+        let args: Vec<String> = std::env::args().skip(1).collect();
+        if let Some(agents) = flag_number(&args, "--agents") {
+            options.agents = usize::try_from(agents).unwrap_or(5);
+            options.policy = tuned_policy(options.agents);
+        }
+        let mut args = args.into_iter();
         while let Some(flag) = args.next() {
             match flag.as_str() {
                 "--episodes" => options.episodes = next_number(&mut args).unwrap_or(500),
                 "--agents" => {
-                    options.agents =
-                        usize::try_from(next_number(&mut args).unwrap_or(5)).unwrap_or(5);
+                    let _ = next_number(&mut args);
                 }
                 "--topics" => {
                     options.topics =
@@ -161,6 +168,12 @@ fn next_number(args: &mut impl Iterator<Item = String>) -> Option<u32> {
     args.next()?.parse().ok()
 }
 
+/// Read one flag's number out of the whole argument list.
+fn flag_number(args: &[String], flag: &str) -> Option<u32> {
+    let at = args.iter().position(|argument| argument == flag)?;
+    args.get(at + 1)?.parse().ok()
+}
+
 /// The crate's own conservative default, with the window widened to cover a
 /// whole episode so the two hive arms differ only in the knobs the sweep moved.
 fn default_policy() -> EpisodePolicy {
@@ -173,27 +186,45 @@ fn default_policy() -> EpisodePolicy {
     }
 }
 
-/// The policy `--sweep` picks, and the one every other mode runs at.
+/// The policy `--sweep` picks, scaled to the size of the desk.
 ///
-/// The load-bearing change is the quorum threshold. Five members can put two
-/// grounded supporters behind each of two options, and an episode in which two
-/// options both carry is deadlocked by definition: no amount of further
-/// support resolves it, because both stay above the line. A threshold above
-/// half the desk makes that state unreachable and the deadlock rate falls to
-/// zero. The wider budget pays for the extra supporter each decision now needs.
-fn tuned_policy() -> EpisodePolicy {
+/// The load-bearing knob is the quorum threshold, and it has two bounds rather
+/// than one.
+///
+/// A threshold *above half the desk* is what removes deadlock. Five members can
+/// put two grounded supporters behind each of two options, and an episode in
+/// which two options both carry is deadlocked by definition: no amount of
+/// further support resolves it, because both stay above the line. Requiring a
+/// majority makes that state unreachable, and the deadlock rate falls to zero.
+///
+/// A threshold *below the whole desk* is what keeps a decision reachable.
+/// Cross-inhibition removes a silenced advocate from a topic's supporter set
+/// and does not put them back, so at unanimity a single grounded `!object`
+/// makes quorum unreachable for the rest of the episode. A live three-member
+/// room ran into exactly that and spent its whole budget without deciding.
+///
+/// Between the two: the smallest majority of the desk, and never the whole of
+/// it.
+fn tuned_policy(agents: usize) -> EpisodePolicy {
     EpisodePolicy {
         turn_budget: 12,
         blind_round: true,
         dominance_cap: 40,
         repetition_cap: 2,
         quorum: QuorumPolicy {
-            threshold: 3,
+            threshold: quorum_threshold(agents),
             window: 100,
             require_grounded: true,
         },
         ..EpisodePolicy::DEFAULT
     }
+}
+
+/// The smallest majority of a desk that still leaves one member to spare.
+fn quorum_threshold(agents: usize) -> u32 {
+    let agents = u32::try_from(agents).unwrap_or(u32::MAX);
+    let majority = agents / 2 + 1;
+    majority.min(agents.saturating_sub(1)).max(2)
 }
 
 fn main() {
