@@ -72,10 +72,9 @@ pub fn score(query: &str, text: &str) -> Option<TextMatch> {
             MatchKind::Substring
         };
         (kind, offset)
-    } else if let Some(offset) = subsequence(&haystack, &needle) {
-        (MatchKind::Subsequence, offset)
     } else {
-        return None;
+        let offset = subsequence(&haystack, &needle)?;
+        (MatchKind::Subsequence, offset)
     };
 
     Some(scored(kind, offset, needle.len(), haystack.len()))
