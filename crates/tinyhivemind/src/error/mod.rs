@@ -88,6 +88,20 @@ pub enum Error {
         /// The number of entries supplied by the caller.
         actual: usize,
     },
+    /// A search carried a regular expression that did not compile.
+    #[error("invalid regular expression `{pattern}`: {message}")]
+    InvalidPattern {
+        /// The expression source the caller supplied.
+        pattern: String,
+        /// The engine's own explanation.
+        message: String,
+    },
+    /// A search carried a regular expression and the `regex` feature is off.
+    #[error("regular-expression search requires the `regex` feature (`{pattern}`)")]
+    RegexUnsupported {
+        /// The expression source the caller supplied.
+        pattern: String,
+    },
     /// Host-supplied pure snapshots were invalid.
     #[error("invalid team snapshot")]
     Core {

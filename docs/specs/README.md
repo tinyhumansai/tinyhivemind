@@ -43,6 +43,9 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a complete sample.
 - [`refutation-and-grounds.md`](refutation-and-grounds.md) — a negative
   evidence-to-topic link, grounds weighed by evidential depth, and grounded
   objections.
+- [`recall.md`](recall.md) — one selection ranking, the roster and desk
+  pickers, bounded transcript search with optional regular expressions,
+  pinning as a fold, and the stated per-message budget.
 
 ## Draft and proposed specifications
 

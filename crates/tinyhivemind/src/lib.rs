@@ -3,7 +3,8 @@
 //! `tinyhivemind` re-exports the pure [`tinyhivemind_core`] algebra and adds the
 //! boundaries that must wait on a host: a [`SessionLog`] paging port,
 //! attributed transcript projection, ephemeral team initialization, a bounded
-//! index of a desk's live threads, and the
+//! index of a desk's live threads, [`search`] and [`pins`] over
+//! that same log, and the
 //! narrow [`Selector`] port used by model-assisted responder choice.
 //! Mention dispatch remains pure until one canonical request reaches the
 //! host-owned atomic [`MentionTurnQueue`] boundary.
@@ -25,6 +26,7 @@
 //!         role: Some("reviewer".into()),
 //!         description: None,
 //!     }],
+//!     brevity: Default::default(),
 //! };
 //! assert!(briefing.system_text().contains("@bob"));
 //! ```
@@ -32,21 +34,31 @@
 pub mod briefing;
 pub mod dispatch;
 pub mod error;
+pub mod pins;
 pub mod responder;
+pub mod search;
 pub mod session;
 pub mod sharing;
 pub mod threads;
 
 pub use briefing::{
-    BriefedTeammate, BriefingNote, SessionContext, SessionInitialization, TeamBriefing,
-    initialize_session, initialize_session_with_context,
+    BrevityPolicy, BriefedTeammate, BriefingNote, SessionContext, SessionInitialization,
+    TeamBriefing, initialize_session, initialize_session_with_context,
 };
 pub use dispatch::{
     EnqueueOutcome, EnqueueRefusal, MentionDispatchOutcome, MentionTurnFuture, MentionTurnQueue,
     dispatch_mention,
 };
 pub use error::{Error, Result};
+pub use pins::{
+    PIN_EXCERPT_CHARS, PIN_LIMIT, PIN_SCAN, Pin, PinAction, PinDirective, fold_pins, pin_note,
+    read_directives, read_pinboard,
+};
 pub use responder::{BoxError, Selector, SelectorFuture, choose_responder};
+pub use search::{
+    EXCERPT_CHARS, MessageHit, SEARCH_LIMIT, SEARCH_SCAN, SearchPattern, SearchQuery, ThreadHit,
+    search_messages, search_threads,
+};
 pub use session::{
     Conversation, LogMessage, PAGE_SIZE, SCAN_LIMIT, SESSION_WINDOW, Sequence, SessionAuthor,
     SessionFuture, SessionLog, SessionMessage, SessionPage, SessionQuery, SourceError,

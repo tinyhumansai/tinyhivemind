@@ -175,3 +175,75 @@ fn bounded_dispatch_decision_is_available_to_consumers() {
         matches!(decision, MentionDispatchDecision::One { request } if request.target_id == "bob")
     );
 }
+
+#[test]
+fn selection_ranking_is_available_to_consumers() {
+    use tinyhivemind_core::select::{
+        Candidate, MatchField, MatchKind, Pattern, SELECT_LIMIT, rank, rank_pattern, regex_source,
+        score, score_pattern,
+    };
+
+    let candidates = [
+        Candidate::new("alice", "Alice Nakamura"),
+        Candidate::new("bob", "Bob Ferrante").with_detail("reviews Alice's changes"),
+    ];
+    let hits = rank("alice", &candidates, SELECT_LIMIT);
+    // The id is the query exactly; the label only starts with it, so the id is
+    // the field reported.
+    assert_eq!(hits[0].id, "alice");
+    assert_eq!(hits[0].field, MatchField::Id);
+    assert_eq!(hits[0].kind, MatchKind::Exact);
+    assert_eq!(hits[1].id, "bob");
+    assert_eq!(hits[1].field, MatchField::Detail);
+    assert_eq!(
+        rank("nakamura", &candidates, SELECT_LIMIT)[0].field,
+        MatchField::Label
+    );
+
+    assert_eq!(
+        rank_pattern(&Pattern::Text("alice"), &candidates, SELECT_LIMIT).len(),
+        hits.len()
+    );
+    assert_eq!(
+        score("alice", "Alice"),
+        score_pattern(&Pattern::Text("alice"), "Alice")
+    );
+    assert_eq!(regex_source("/^ali/"), Some("^ali"));
+    assert_eq!(SELECT_LIMIT, 8);
+}
+
+#[test]
+fn name_searches_are_available_to_consumers() {
+    use tinyhivemind_core::{find, select::SELECT_LIMIT};
+
+    let members = [
+        RosterMember {
+            id: "alice".into(),
+            name: Some("Alice Nakamura".into()),
+        },
+        RosterMember {
+            id: "bob".into(),
+            name: Some("Bob Ferrante".into()),
+        },
+    ];
+    let people = [Person {
+        id: "u-1".into(),
+        label: "Dana Okoro".into(),
+    }];
+    let roster = Roster::new(&members, &people, &[]);
+    let declared = [Desk {
+        id: "engineering".into(),
+        name: "Engineering".into(),
+        description: Some("Ship the product".into()),
+        members: vec!["alice".into()],
+        responder_mode: ResponderMode::Lead,
+    }];
+    let desks = DeskSet::new(&declared, &[], &[], &[], &[]);
+
+    assert_eq!(find::agents("naka", &roster, SELECT_LIMIT)[0].id, "alice");
+    assert_eq!(find::people("okoro", &roster, SELECT_LIMIT)[0].id, "u-1");
+    assert_eq!(
+        find::desks("product", &desks, SELECT_LIMIT)[0].id,
+        "engineering"
+    );
+}

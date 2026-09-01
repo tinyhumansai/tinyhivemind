@@ -209,6 +209,34 @@ agent A's words as its own.
 One log, one sequence numbering, two histories. Every line a viewer did not
 write arrives as somebody else's, named.
 
+## The window is a budget, so the transcript is queryable
+
+That projection is bounded — about thirty messages — and the log behind it is
+not. The obvious fix is to show more, and it is the wrong one:
+[Lost in the Middle](https://arxiv.org/abs/2307.03172) finds a fact in the
+middle of a long context is used less reliably than the same fact at the edge
+of a short one, so a bigger window mostly relocates the problem into its own
+middle. It also charges every participant on every turn.
+
+So tinyhivemind does what
+[Recursive Language Models](https://arxiv.org/abs/2512.24601) do to a long
+prompt — treat the context as an environment to interrogate rather than a
+prefix to swallow — except the environment is a shared log rather than one
+model's REPL, and the interrogation is a pure fold rather than a recursive
+model call.
+
+**Search it.** One ranking for every picker — agents, people, desks, threads,
+messages — with an optional regular expression, over the same log port
+everything else uses. No index, no embeddings, no background job.
+
+**Pin what must not be lost.** `!pin` folds out of the transcript, not into a
+second store, and the board rides into every turn whether or not anybody
+searched for it.
+
+**State the budget.** The briefing tells an agent what a message costs the room
+it is written into. Reported, never enforced: nothing here rewrites what
+somebody said.
+
 ## An episode ends for a reason you can name
 
 Every step walks the same ladder in the same order, and the first rung that
@@ -408,6 +436,7 @@ see what the thing actually does.
 | [Quick start](https://github.com/tinyhumansai/tinyhivemind/wiki/Quick-start) | pin it, resolve a mention, read a deliberation |
 | [Architecture](https://github.com/tinyhumansai/tinyhivemind/wiki/Architecture) | the three crates and why they are split that way |
 | [Threads](https://github.com/tinyhumansai/tinyhivemind/wiki/Threads) | thread-scoped projection, and finding your way back into a busy desk |
+| [Recall](https://github.com/tinyhumansai/tinyhivemind/wiki/Recall) | searching the transcript, pinning what must not be lost, and the message budget |
 | [Hive episodes](https://github.com/tinyhumansai/tinyhivemind/wiki/Hive-episodes) | salience, quorum, cross-inhibition, and the attention market |
 | [Trace grammar](https://github.com/tinyhumansai/tinyhivemind/wiki/Trace-grammar) | what a marker deposits, and what real models get wrong |
 | [Episode policy](https://github.com/tinyhumansai/tinyhivemind/wiki/Episode-policy) | every setting, and how to tune it to the size of a desk |

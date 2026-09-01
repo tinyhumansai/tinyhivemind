@@ -23,6 +23,9 @@ what actually happened when it was run goes in
 - [`shared-context.md`](shared-context.md) — the human and organizational half
   (transactive memory, distributed cognition, grounding, boundary objects,
   awareness) and the open-source landscape of shared agent memory.
+- [`long-context.md`](long-context.md) — position bias in a long window,
+  context rot, and recursive language models: why P14 makes the transcript
+  queryable instead of making the window bigger.
 
-Both close with a table mapping each mechanism to the state this workspace
-already holds, and to the state it does not.
+Each closes with a table mapping the mechanisms it covers to the state this
+workspace already holds, and to the state it does not.

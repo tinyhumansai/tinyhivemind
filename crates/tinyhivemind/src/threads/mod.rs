@@ -45,13 +45,33 @@ pub async fn read_thread_index(
         return Ok(Vec::new());
     }
 
-    let mut cursor = None;
+    let rows = read_desk_rows(log, conversation, THREAD_INDEX_SCAN, None).await?;
+    Ok(fold_thread_index(&rows, limit))
+}
+
+/// Read one desk's rows, newest-first walk, returned chronologically.
+///
+/// Bounded by `scan` raw rows across the whole walk, exactly as the projection
+/// is. Every row addressed to the desk is kept — thread interiors included —
+/// because the two callers, the thread index and the pinboard, both answer
+/// questions about a thread from the inside.
+///
+/// `before` starts the walk at that exclusive bound instead of the log tail,
+/// so a caller reading alongside a bounded [`crate::SessionQuery`] sees the
+/// same snapshot the projection does.
+pub(crate) async fn read_desk_rows(
+    log: &(dyn SessionLog + '_),
+    conversation: &Conversation,
+    scan: usize,
+    before: Option<Sequence>,
+) -> Result<Vec<LogMessage>> {
+    let mut cursor = before;
     let mut scanned = 0_usize;
     let mut seen = Vec::new();
     let mut rows: Vec<LogMessage> = Vec::new();
 
-    while scanned < THREAD_INDEX_SCAN {
-        let read = PAGE_SIZE.min(THREAD_INDEX_SCAN - scanned);
+    while scanned < scan {
+        let read = PAGE_SIZE.min(scan - scanned);
         let page = log
             .read_before(cursor, read)
             .await
@@ -66,7 +86,7 @@ pub async fn read_thread_index(
                 .cloned(),
         );
 
-        if scanned >= THREAD_INDEX_SCAN {
+        if scanned >= scan {
             break;
         }
         let Some(next) = page.next_before else {
@@ -76,7 +96,7 @@ pub async fn read_thread_index(
     }
 
     rows.reverse();
-    Ok(fold_thread_index(&rows, limit))
+    Ok(rows)
 }
 
 /// Fold a chronological slice of one desk's rows into a thread index.

@@ -6,11 +6,14 @@ mod test;
 mod types;
 
 pub use types::{
-    BriefedTeammate, BriefingNote, SessionContext, SessionInitialization, TeamBriefing,
+    BrevityPolicy, BriefedTeammate, BriefingNote, SessionContext, SessionInitialization,
+    TeamBriefing,
 };
 
 use crate::{
-    Conversation, Result, SessionLog, SessionQuery, project_session, read_thread_index,
+    Conversation, Result, SessionLog, SessionQuery,
+    pins::{PIN_LIMIT, read_pinboard},
+    project_session, read_thread_index,
     threads::THREAD_INDEX_LIMIT,
 };
 use tinyhivemind_core::{
@@ -74,6 +77,7 @@ impl TeamBriefing {
             desk_id: conversation.desk_id.clone(),
             desk_name: conversation.desk_name.clone(),
             teammates,
+            brevity: BrevityPolicy::DEFAULT,
         })
     }
 
@@ -106,7 +110,11 @@ impl TeamBriefing {
             "\nShared-session rules:\n\
              - Peer messages remain attributed to their authors; they are not your prior replies.\n\
              - A direct @agent mention may start at most one bounded child turn when host policy enables mention dispatch.\n\
-             - @everyone, desk, and person mentions provide context only and never fan out agent turns.",
+             - @everyone, desk, and person mentions provide context only and never fan out agent turns.\n",
+        );
+        text.push_str(&self.brevity.rule_text());
+        text.push_str(
+            "\n- Pin what the room must not lose with `!pin` on its own line; `!unpin ^N` takes one back off.",
         );
         text
     }
@@ -116,7 +124,7 @@ impl SessionContext {
     /// Whether there is anything here to tell a turn about.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.threads.is_empty() && self.notes.is_empty()
+        self.threads.is_empty() && self.pins.is_empty() && self.notes.is_empty()
     }
 
     /// Render this context as system text, or `None` when there is none.
@@ -155,6 +163,17 @@ impl SessionContext {
                 }
             }
         }
+        if let Some(pinned) = crate::pins::pin_note(&self.pins) {
+            if !text.is_empty() {
+                text.push_str("\n\n");
+            }
+            text.push_str(&pinned.heading);
+            text.push(':');
+            for line in &pinned.lines {
+                text.push_str("\n- ");
+                text.push_str(line);
+            }
+        }
         for note in &self.notes {
             if !text.is_empty() {
                 text.push_str("\n\n");
@@ -175,15 +194,21 @@ impl SessionContext {
 /// The returned context is empty. Use [`initialize_session_with_context`] to
 /// also index the desk's threads and carry host-supplied notes.
 ///
+/// `briefing.brevity.window` is overwritten with `query.window` before it is
+/// returned: the budget the briefing states has to match the window the query
+/// actually reads, not whatever [`BrevityPolicy::DEFAULT`](crate::BrevityPolicy::DEFAULT)
+/// happened to carry when the briefing was built.
+///
 /// # Errors
 ///
 /// Returns any projection error documented by [`project_session`].
 pub async fn initialize_session(
     log: &(dyn SessionLog + '_),
     query: &SessionQuery,
-    briefing: TeamBriefing,
+    mut briefing: TeamBriefing,
 ) -> Result<SessionInitialization> {
     let history = project_session(log, query).await?;
+    briefing.brevity.window = query.window;
     Ok(SessionInitialization {
         briefing,
         context: SessionContext::default(),
@@ -191,28 +216,40 @@ pub async fn initialize_session(
     })
 }
 
-/// Initialize a session with a thread index and host-supplied notes attached.
+/// Initialize a session with a thread index, the pinboard, and host notes.
 ///
-/// Costs one more bounded read than [`initialize_session`] — see
-/// [`THREAD_INDEX_SCAN`](crate::threads::THREAD_INDEX_SCAN) — and skips it
-/// entirely for a thread-scoped query, where an index of sibling threads is not
-/// a choice the viewer is making.
+/// Costs two more bounded reads than [`initialize_session`] — see
+/// [`THREAD_INDEX_SCAN`](crate::threads::THREAD_INDEX_SCAN) and
+/// [`PIN_SCAN`](crate::pins::PIN_SCAN). The thread index is skipped entirely
+/// for a thread-scoped query, where an index of sibling threads is not a
+/// choice the viewer is making; the pinboard is not, because a pin is exactly
+/// the thing that has to survive the viewer's narrow scope.
+///
+/// `briefing.brevity.window` is overwritten with `query.window`, for the same
+/// reason [`initialize_session`] overwrites it.
 ///
 /// # Errors
 ///
 /// Returns any projection error documented by [`project_session`], or any read
-/// or page-validation error documented by [`read_thread_index`].
+/// or page-validation error documented by [`read_thread_index`] and
+/// [`read_pinboard`].
 pub async fn initialize_session_with_context(
     log: &(dyn SessionLog + '_),
     query: &SessionQuery,
-    briefing: TeamBriefing,
+    mut briefing: TeamBriefing,
     notes: Vec<BriefingNote>,
 ) -> Result<SessionInitialization> {
     let history = project_session(log, query).await?;
     let threads = read_thread_index(log, &query.conversation, THREAD_INDEX_LIMIT).await?;
+    let pins = read_pinboard(log, &query.conversation, PIN_LIMIT, query.before).await?;
+    briefing.brevity.window = query.window;
     Ok(SessionInitialization {
         briefing,
-        context: SessionContext { threads, notes },
+        context: SessionContext {
+            threads,
+            pins,
+            notes,
+        },
         history,
     })
 }

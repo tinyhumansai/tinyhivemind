@@ -45,9 +45,11 @@
 //! - [`desk`] — host-compatible desk records and the borrowed overlay fold.
 //! - [`dispatch`] — bounded selection of at most one mentioned child turn.
 //! - [`error`] — typed failures from malformed records or unresolved desks.
+//! - [`find`] — name searches over a roster snapshot and a desk snapshot.
 //! - [`mention`] — authored mention parsing and pure routing choices.
 //! - [`roster`] — borrowed agent and person identity snapshots.
 //! - [`responder`] — deterministic selection of one agent for one message.
+//! - [`select`] — the one ranking used by every picker in this workspace.
 //!
 //! # Example
 //!
@@ -98,6 +100,8 @@ pub mod chat;
 pub mod desk;
 pub mod dispatch;
 pub mod error;
+pub mod find;
 pub mod mention;
 pub mod responder;
 pub mod roster;
+pub mod select;

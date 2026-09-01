@@ -84,6 +84,7 @@ fn briefing_records_pin_their_wire_shape() {
         desk_id: "engineering".into(),
         desk_name: "Engineering".into(),
         teammates: vec![teammate],
+        brevity: BrevityPolicy::DEFAULT,
     };
     let briefing_json = serde_json::json!({
         "viewer_id": "alice",
@@ -94,7 +95,8 @@ fn briefing_records_pin_their_wire_shape() {
             "label": "Bob",
             "role": null,
             "description": "Reviews changes"
-        }]
+        }],
+        "brevity": { "message_chars": 600, "window": 30 }
     });
     assert_eq!(
         serde_json::to_value(&briefing).expect("briefing serializes"),
@@ -118,6 +120,7 @@ fn initialization_pins_its_wire_shape() {
             role: None,
             description: Some("Reviews changes".into()),
         }],
+        brevity: BrevityPolicy::DEFAULT,
     };
     let initialization = SessionInitialization {
         briefing,
@@ -129,6 +132,7 @@ fn initialization_pins_its_wire_shape() {
                 latest: Sequence(3),
                 landed: None,
             }],
+            pins: Vec::new(),
             notes: vec![BriefingNote {
                 heading: "Work raised in this conversation".into(),
                 lines: vec!["#12 rewrite the changelog — In review".into()],
@@ -150,7 +154,8 @@ fn initialization_pins_its_wire_shape() {
                 "label": "Bob",
                 "role": null,
                 "description": "Reviews changes"
-            }]
+            }],
+            "brevity": { "message_chars": 600, "window": 30 }
         },
         "context": {
             "threads": [{
@@ -160,6 +165,7 @@ fn initialization_pins_its_wire_shape() {
                 "latest": 3,
                 "landed": null
             }],
+            "pins": [],
             "notes": [{
                 "heading": "Work raised in this conversation",
                 "lines": ["#12 rewrite the changelog — In review"]
@@ -305,6 +311,7 @@ fn system_text_is_deterministic_and_states_coordination_rules() {
             role: Some("reviewer".into()),
             description: Some("Checks safety".into()),
         }],
+        brevity: BrevityPolicy::DEFAULT,
     };
     let expected = "You are @alice in the Engineering desk (id: engineering).\n\
 Teammates:\n\
@@ -312,9 +319,58 @@ Teammates:\n\
 Shared-session rules:\n\
 - Peer messages remain attributed to their authors; they are not your prior replies.\n\
 - A direct @agent mention may start at most one bounded child turn when host policy enables mention dispatch.\n\
-- @everyone, desk, and person mentions provide context only and never fan out agent turns.";
+- @everyone, desk, and person mentions provide context only and never fan out agent turns.\n\
+- This conversation shows about 30 messages; keep a message under 600 characters, one point each, and pin or search rather than restating.\n\
+- Pin what the room must not lose with `!pin` on its own line; `!unpin ^N` takes one back off.";
     assert_eq!(briefing.system_text(), expected);
     assert_eq!(briefing.system_text(), expected);
+}
+
+#[test]
+fn a_brevity_policy_reports_an_overrun_and_never_edits_a_message() {
+    let policy = BrevityPolicy {
+        message_chars: 10,
+        window: 30,
+    };
+    assert_eq!(policy.overrun("under"), None);
+    assert_eq!(policy.overrun("0123456789"), None);
+    assert_eq!(policy.overrun("0123456789ab"), Some(2));
+    assert_eq!(BrevityPolicy::default(), BrevityPolicy::DEFAULT);
+    assert!(
+        policy
+            .rule_text()
+            .contains("keep a message under 10 characters")
+    );
+}
+
+#[test]
+fn context_renders_pins_between_threads_and_notes() {
+    let context = SessionContext {
+        threads: Vec::new(),
+        pins: vec![crate::Pin {
+            sequence: Sequence(7),
+            pinned_at: Sequence(9),
+            pinned_by: SessionAuthor::Operator,
+            label: Some("limits".into()),
+            note: None,
+            excerpt: Some("midnight UTC".into()),
+        }],
+        notes: vec![BriefingNote {
+            heading: "Work raised in this conversation".into(),
+            lines: vec!["#12 rewrite the changelog".into()],
+        }],
+    };
+    assert!(!context.is_empty());
+    assert_eq!(
+        context.system_text(),
+        Some(
+            "Pinned in this conversation:\n\
+             - [7] #limits \"midnight UTC\"\n\
+             \nWork raised in this conversation:\n\
+             - #12 rewrite the changelog"
+                .into()
+        )
+    );
 }
 
 #[derive(Debug)]
@@ -333,6 +389,7 @@ async fn initialization_keeps_briefing_separate_from_history() {
         desk_id: "engineering".into(),
         desk_name: "Engineering".into(),
         teammates: Vec::new(),
+        brevity: BrevityPolicy::DEFAULT,
     };
     let row = LogMessage {
         sequence: Sequence(4),
@@ -356,7 +413,17 @@ async fn initialization_keeps_briefing_separate_from_history() {
     )
     .await
     .expect("initializes");
-    assert_eq!(initialized.briefing, briefing);
+    // The window the briefing states is reconciled to the query's window
+    // (1), not left at whatever `BrevityPolicy::DEFAULT` (30) carried in.
+    assert_eq!(initialized.briefing.brevity.window, query.window);
+    assert_eq!(
+        initialized.briefing.brevity.message_chars,
+        briefing.brevity.message_chars
+    );
+    assert_eq!(initialized.briefing.viewer_id, briefing.viewer_id);
+    assert_eq!(initialized.briefing.desk_id, briefing.desk_id);
+    assert_eq!(initialized.briefing.desk_name, briefing.desk_name);
+    assert_eq!(initialized.briefing.teammates, briefing.teammates);
     assert_eq!(initialized.history.len(), 1);
     assert_eq!(initialized.history[0].sequence, Sequence(4));
     assert!(initialized.context.is_empty());
@@ -378,6 +445,7 @@ fn viewer_briefing() -> TeamBriefing {
         desk_id: "engineering".into(),
         desk_name: "Engineering".into(),
         teammates: Vec::new(),
+        brevity: BrevityPolicy::DEFAULT,
     }
 }
 
@@ -513,6 +581,7 @@ fn context_renders_threads_and_notes_and_nothing_when_empty() {
                 landed: None,
             },
         ],
+        pins: Vec::new(),
         notes: vec![BriefingNote {
             heading: "Work raised in this conversation".into(),
             lines: vec![
@@ -537,6 +606,7 @@ fn context_renders_threads_and_notes_and_nothing_when_empty() {
 
     let notes_only = SessionContext {
         threads: Vec::new(),
+        pins: Vec::new(),
         notes: context.notes.clone(),
     };
     assert_eq!(
@@ -564,6 +634,7 @@ async fn initialization_propagates_projection_errors() {
         desk_id: "engineering".into(),
         desk_name: "Engineering".into(),
         teammates: Vec::new(),
+        brevity: BrevityPolicy::DEFAULT,
     };
     let query = SessionQuery {
         conversation: named_conversation(),
