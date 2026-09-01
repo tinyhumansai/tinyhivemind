@@ -20,6 +20,10 @@ publish = false
 # `.github/scripts/assert-pure.sh` asserts it.
 #
 [dependencies]
+# Optional: compiles `select::Pattern::Regex`, which lets a caller search by a
+# compiled expression instead of a literal query. Off in the default build,
+# because the pure algebra on the hot path of every turn does not need it.
+regex = { workspace = true, optional = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 
@@ -29,6 +33,8 @@ serde_json = { workspace = true }
 
 [features]
 default = []
+# Adds `select::Pattern::Regex` and regular-expression scoring.
+regex = ["dep:regex"]
 # Compiles opt-in tests that can call external model providers. Live execution
 # still requires the explicit environment switch documented in docs/testing.md.
 e2e = []
