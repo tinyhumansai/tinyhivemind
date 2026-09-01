@@ -7,7 +7,9 @@
 //! that same log, and the
 //! narrow [`Selector`] port used by model-assisted responder choice.
 //! Mention dispatch remains pure until one canonical request reaches the
-//! host-owned atomic [`MentionTurnQueue`] boundary.
+//! host-owned atomic [`MentionTurnQueue`] boundary, and [`mod@referral`] extends
+//! that same edge across a channel: one child turn that may run on another
+//! desk, and the one answer that comes back.
 //! The host remains responsible for storage, transports, model clients, and
 //! choosing an async executor.
 //!
@@ -35,6 +37,7 @@ pub mod briefing;
 pub mod dispatch;
 pub mod error;
 pub mod pins;
+pub mod referral;
 pub mod responder;
 pub mod search;
 pub mod session;
@@ -53,6 +56,11 @@ pub use error::{Error, Result};
 pub use pins::{
     PIN_EXCERPT_CHARS, PIN_LIMIT, PIN_SCAN, Pin, PinAction, PinDirective, fold_pins, pin_note,
     read_directives, read_pinboard,
+};
+pub use referral::{
+    NoReferralReason, Referral, ReferralDecision, ReferralFuture, ReferralInput, ReferralKind,
+    ReferralOrigin, ReferralOutcome, ReferralPolicy, ReferralQueue, ReferralReach,
+    dispatch_referral, referral,
 };
 pub use responder::{BoxError, Selector, SelectorFuture, choose_responder};
 pub use search::{

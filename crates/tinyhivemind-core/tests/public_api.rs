@@ -247,3 +247,141 @@ fn name_searches_are_available_to_consumers() {
         "engineering"
     );
 }
+
+/// Two agents, one on each of two desks.
+fn two_desks() -> ([RosterMember; 2], [Desk; 2]) {
+    (
+        [
+            RosterMember {
+                id: "ada".into(),
+                name: Some("Ada".into()),
+            },
+            RosterMember {
+                id: "linus".into(),
+                name: Some("Linus".into()),
+            },
+        ],
+        [
+            Desk {
+                id: "payments".into(),
+                name: "Payments".into(),
+                description: None,
+                members: vec!["ada".into()],
+                responder_mode: ResponderMode::Lead,
+            },
+            Desk {
+                id: "platform".into(),
+                name: "Platform".into(),
+                description: None,
+                members: vec!["linus".into()],
+                responder_mode: ResponderMode::Lead,
+            },
+        ],
+    )
+}
+
+#[test]
+fn a_referral_crosses_a_desk_and_finds_its_way_home() {
+    use tinyhivemind_core::referral::{
+        ReferralDecision, ReferralInput, ReferralKind, ReferralOrigin, ReferralPolicy,
+        ReferralReach, referral,
+    };
+
+    let (members, records) = two_desks();
+    let roster = Roster::new(&members, &[], &[]);
+    let desks = DeskSet::new(&records, &[], &[], &[], &[]);
+    let policy = ReferralPolicy {
+        enabled: true,
+        max_hops: 2,
+        reach: ReferralReach::Desks,
+        returns: true,
+    };
+
+    // Ada asks the platform desk, from inside a thread on her own desk.
+    let asking = ReferralInput {
+        key: DispatchKey {
+            trigger_sequence: 12,
+        },
+        conversation: DispatchConversation {
+            desk_id: "payments".into(),
+            thread_root: Some(9),
+        },
+        author_id: "ada".into(),
+        content: "@#platform does the gateway retry on 503?".into(),
+        mentions: resolve(
+            "@#platform does the gateway retry on 503?",
+            None,
+            &MentionAuthor::Agent { id: "ada".into() },
+            &roster,
+            &desks,
+        ),
+        hop: 0,
+        origin: None,
+    };
+    let ReferralDecision::One { referral: out } =
+        referral(policy, &asking, &roster, &desks).expect("well formed")
+    else {
+        panic!("the desk mention should have crossed");
+    };
+    assert_eq!(out.kind, ReferralKind::Forward);
+    assert_eq!(out.target_id, "linus");
+    assert_eq!(out.to.desk_id, "platform");
+    // A crossing referral lands on the desk channel, never in a thread.
+    assert_eq!(out.to.thread_root, None);
+    assert_eq!(out.child_hop, 1);
+
+    // Linus answers on his own desk, and the answer finds the thread that asked.
+    let answering = ReferralInput {
+        key: DispatchKey {
+            trigger_sequence: 4,
+        },
+        conversation: DispatchConversation {
+            desk_id: "platform".into(),
+            thread_root: None,
+        },
+        author_id: "linus".into(),
+        content: "It retries twice with jitter.".into(),
+        mentions: Vec::new(),
+        hop: out.child_hop,
+        origin: out.origin.clone(),
+    };
+    let ReferralDecision::One { referral: home } =
+        referral(policy, &answering, &roster, &desks).expect("well formed")
+    else {
+        panic!("the answer should have come home");
+    };
+    assert_eq!(home.kind, ReferralKind::Return);
+    assert_eq!(home.target_id, "ada");
+    assert_eq!(
+        home.to,
+        DispatchConversation {
+            desk_id: "payments".into(),
+            thread_root: Some(9),
+        },
+    );
+    assert_eq!(home.child_hop, 2);
+    assert_eq!(home.origin, None);
+    assert_eq!(
+        out.origin,
+        Some(ReferralOrigin {
+            conversation: DispatchConversation {
+                desk_id: "payments".into(),
+                thread_root: Some(9),
+            },
+            asker_id: "ada".into(),
+        }),
+    );
+
+    // And the round trip is over: Ada's relay may not start another.
+    let relaying = ReferralInput {
+        hop: home.child_hop,
+        origin: None,
+        conversation: home.to.clone(),
+        author_id: "ada".into(),
+        ..asking
+    };
+    assert!(matches!(
+        referral(policy, &relaying, &roster, &desks).expect("well formed"),
+        ReferralDecision::None { .. },
+    ));
+}
