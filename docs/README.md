@@ -44,6 +44,7 @@ Anything a reader wants before they touch the code:
 | [Desks and rosters](https://github.com/tinyhumansai/tinyhivemind/wiki/Desks-and-rosters) | membership, responder mode, conversation identity |
 | [Mentions](https://github.com/tinyhumansai/tinyhivemind/wiki/Mentions) | the grammar, resolution, and expansion |
 | [Transcript projection](https://github.com/tinyhumansai/tinyhivemind/wiki/Transcript-projection) | attribution, the paging walk, continuous sharing |
+| [Threads](https://github.com/tinyhumansai/tinyhivemind/wiki/Threads) | thread-scoped projection and the desk's thread index |
 | [Responder ladder](https://github.com/tinyhumansai/tinyhivemind/wiki/Responder-ladder) | the rungs, the selector, and mention dispatch |
 | [Hive episodes](https://github.com/tinyhumansai/tinyhivemind/wiki/Hive-episodes) | traces, salience, quorum, and the attention market |
 | [Episode policy](https://github.com/tinyhumansai/tinyhivemind/wiki/Episode-policy) | every setting, and how to tune it to a desk |

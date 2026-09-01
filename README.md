@@ -125,6 +125,7 @@ see what the thing actually does.
 | --- | --- |
 | [Quick start](https://github.com/tinyhumansai/tinyhivemind/wiki/Quick-start) | pin it, resolve a mention, read a deliberation |
 | [Architecture](https://github.com/tinyhumansai/tinyhivemind/wiki/Architecture) | the three crates and why they are split that way |
+| [Threads](https://github.com/tinyhumansai/tinyhivemind/wiki/Threads) | thread-scoped projection, and finding your way back into a busy desk |
 | [Hive episodes](https://github.com/tinyhumansai/tinyhivemind/wiki/Hive-episodes) | traces, salience, quorum, and the attention market |
 | [Benchmarks](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks) | the full report, including what it does not show |
 | [Host integration](https://github.com/tinyhumansai/tinyhivemind/wiki/Host-integration) | the three ports, and what your application owes the library |
