@@ -42,6 +42,29 @@ them work have been studied for decades in colonies that have no leader, no
 shared memory, and far less bandwidth than five language models sharing a
 channel. tinyhivemind implements those mechanisms.
 
+The shape of it is a loop, and your application holds both ends:
+
+```text
+  your application                                  tinyhivemind
+  ┌───────────────────────────────┐
+  │ session log (you own it)      │
+  │  1 planner  !propose #stage … │ ─── transcript ──┐
+  │  2 scout    !propose #ship  … │     roster       │
+  │  3 critic   !support #stage … │     desks        ▼
+  │                               │     ┌─────────────────────────┐
+  │                               │     │ step(state, …)          │
+  │  4 planner  !object  >3     … │     │   -> HiveStep           │
+  │  ▲                            │     │ a pure fold. no IO.     │
+  └──┼────────────────────────────┘     └────────────┬────────────┘
+     │                                               │
+     └───── one message, one turn ◀── Speak { turn } ┤
+                                                     │
+      Converged · Deadlocked · Exhausted · Idle ◀────┘
+```
+
+Nothing in the box on the right opens a file, a socket or a database. It reads
+what you hand it and returns what should happen next.
+
 ## The mechanics
 
 **[Stigmergy](https://en.wikipedia.org/wiki/Stigmergy).** Work leaves a trace
@@ -63,10 +86,19 @@ in the transcript. Without it, whoever spoke first holds the floor forever,
 which is the failure ant trails avoid only because pheromone evaporates.
 
 ```text
-two identical !support traces, scored 40 sequences apart
-  seq 41   distance 0    salience 3000
-  seq  1   distance 40   salience 2625
+one !support trace, rescored as the room talks past it
+
+  distance    recency term                salience
+      0       ████████████████  1000        3000
+     10       ████████████       750        2875
+     20       ████████           500        2750
+     40       ████               250        2625
+     80       █                   62        2531
 ```
+
+The floor under the bars is the trace's standing importance, which is why a
+proposal nobody has touched for eighty messages still outranks a fresh
+question. Recency is the term that moves.
 
 **[Quorum sensing](https://en.wikipedia.org/wiki/Quorum_sensing).** An option
 carries when some number of distinct participants have grounded support for it
@@ -103,6 +135,17 @@ both options carry, so the room is deadlocked
 
   #stage  supporters ["planner", "critic", "auditor"]
   #ship   supporters ["scout"]  silenced ["auditor"]   ->  #stage carries
+```
+
+The objection travels through the message to the author, and only then to the
+option — never straight at the option:
+
+```text
+   !object >6           authored by            advocate for
+  planner ─────▶ msg 6 ────────────▶ auditor ──────────────▶ #ship
+                                        │
+                                        └── removed from #ship's supporters,
+                                            still counted for #stage
 ```
 
 **[Response thresholds](https://en.wikipedia.org/wiki/Task_allocation_and_partitioning_of_social_insects).**
@@ -146,7 +189,52 @@ and desks, where only a direct agent mention can start a turn.
 multi-speaker transcript into one viewer's history, so agent B never reads
 agent A's words as its own.
 
+```text
+  the shared transcript                 what agent B is handed
+  ┌───────────────────────────┐         ┌────────────────────────────┐
+  │ 1  ana      (person)      │         │ user       ana: …          │
+  │ 2  agent A                │  ─────▶ │ user       agent A: …      │
+  │ 3  agent B                │         │ assistant  …               │ ← its own
+  │ 4  ana      (person)      │         │ user       ana: …          │
+  └───────────────────────────┘         └────────────────────────────┘
+                               ─────▶   what agent A is handed
+                                        ┌────────────────────────────┐
+                                        │ user       ana: …          │
+                                        │ assistant  …               │ ← its own
+                                        │ user       agent B: …      │
+                                        │ user       ana: …          │
+                                        └────────────────────────────┘
+```
+
+One log, one sequence numbering, two histories. Every line a viewer did not
+write arrives as somebody else's, named.
+
 ## An episode ends for a reason you can name
+
+Every step walks the same ladder in the same order, and the first rung that
+answers is the answer:
+
+```text
+  step(state, transcript, roster, desks, policy)
+    │
+    ├─ budget spent? ───────────────────────────▶ Exhausted { spent }
+    ├─ quorum, phase = Commit? ─────────────────▶ Converged { topic, standing }
+    ├─ quorum, phase = Deliberate? ──────────────▶ Speak { one commit turn }
+    │                              flips the phase
+    ├─ two topics carry, nobody left to break it ▶ Deadlocked { topics }
+    │
+    └─ highest bid clears its threshold? ───────▶ Speak { turn }
+                                       otherwise ▶ Idle
+```
+
+The phase only ever moves one way, and the room gets exactly one chance to say
+out loud what it settled on:
+
+```text
+   ┌─────────────┐   quorum reached   ┌──────────┐   still holds
+   │ Deliberate  │ ─────────────────▶ │  Commit  │ ───────────────▶ Converged
+   └─────────────┘   emit !commit     └──────────┘
+```
 
 Converged, deadlocked, exhausted, or idle. A room that could not decide says
 so, instead of emitting an answer nobody actually supported. The turn budget is
@@ -206,6 +294,36 @@ yours and is lent through one port.
 
 **One message, one turn.** `@everyone` is a list, not a broadcast, and no type
 here can carry two authorized speakers.
+
+They are enforced by the shape of the crates, not by discipline:
+
+```text
+   your application
+   ┌──────────────────────────────────────────────────────────┐
+   │  the session log      model calls        the turn queue   │
+   └────────┬───────────────────┬───────────────────┬─────────┘
+        SessionLog          Selector        MentionTurnQueue    ports you
+   ┌────────▼───────────────────▼───────────────────▼─────────┐  implement
+   │  tinyhivemind        the paging walk, the responder      │
+   │                      ladder, the mention-dispatch edge   │
+   ├──────────────────────────────────────────────────────────┤
+   │  tinyhivemind-core   desks · roster · mention grammar ·  │
+   │                      projection — arguments in, value    │
+   │                      out, no async, no host types        │
+   └──────────────────────────────────────────────────────────┘
+
+   ┌──────────────────────────────────────────────────────────┐
+   │  tinyhivemind-hive   traces · salience · quorum ·        │
+   │  opt-in, and pure    cross-inhibition · attention        │
+   │  enough to define    market · the episode machine        │
+   │  no port of its own  — it waits through the ports above  │
+   └──────────────────────────────────────────────────────────┘
+```
+
+Anything answerable from its arguments lives in a pure crate; anything that has
+to wait lives behind one of the three ports. CI asserts the split rather than
+trusting it — the pure crates cannot take on a runtime, a transport, an HTTP
+client, a web framework or a database driver without failing the build.
 
 ## Use it
 
