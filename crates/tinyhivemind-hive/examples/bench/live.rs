@@ -23,7 +23,7 @@ use tinyhivemind_hive::{
 };
 
 use crate::run::Participant;
-use crate::scenario::{Scenario, ScenarioAgent};
+use crate::scenario::Scenario;
 
 /// The moves available while the room is still deliberating.
 ///

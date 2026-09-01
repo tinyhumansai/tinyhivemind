@@ -49,11 +49,13 @@
 //! | `--trace` | print one episode turn by turn |
 //! | `--sweep` | score the policy grid |
 //! | `--agent-cmd CMD` | drive one episode through a real agent CLI |
+//! | `--scenario PATH` | give the live room a real problem with private facts |
 
 mod arms;
 mod live;
 mod metrics;
 mod rng;
+mod scenario;
 mod run;
 mod sim;
 mod sweep;
@@ -66,6 +68,7 @@ use crate::live::LiveAgent;
 use crate::metrics::{Aggregate, arm_header, arm_row};
 use crate::rng::mix;
 use crate::run::{Participant, drive, run_episode};
+use crate::scenario::Scenario;
 use crate::sim::Room;
 
 /// The task every room is given.
@@ -87,6 +90,8 @@ struct Options {
     policy: EpisodePolicy,
     /// What this run does.
     mode: Mode,
+    /// A real problem for the live room, if one was given.
+    scenario: Option<String>,
 }
 
 /// What this run does.
@@ -112,6 +117,7 @@ impl Options {
             seed: 1,
             policy: tuned_policy(5),
             mode: Mode::Compare,
+            scenario: None,
         };
         // The policy is rebuilt once the room size is known, then any explicit
         // policy flag is applied over it, so `--agents` moves the quorum
@@ -159,6 +165,7 @@ impl Options {
                         options.mode = Mode::Live(command);
                     }
                 }
+                "--scenario" => options.scenario = args.next(),
                 _ => {}
             }
         }
@@ -407,7 +414,118 @@ fn sweep_policies(options: &Options, rooms: &[Room]) -> Result<(), String> {
 }
 
 /// Drive one episode through a real agent CLI.
+///
+/// Without `--scenario` the room deliberates over a synthetic brief, which
+/// measures whether an agent can hold the trace grammar and nothing else.
+/// With one it decides a real problem whose answer is recorded, and the
+/// independent-vote control is run against the same agents so the deliberation
+/// has something to be scored against.
 fn live_episode(options: &Options, command: &str) -> Result<(), String> {
+    match &options.scenario {
+        Some(path) => {
+            let text = std::fs::read_to_string(path)
+                .map_err(|error| format!("could not read {path}: {error}"))?;
+            let scenario = Scenario::parse(&text)?;
+            live_scenario(options, command, &scenario)
+        }
+        None => live_synthetic(options, command),
+    }
+}
+
+/// Deliberate a real problem, then poll the same agents independently.
+fn live_scenario(options: &Options, command: &str, scenario: &Scenario) -> Result<(), String> {
+    let ids = scenario.member_ids();
+    // The room size comes from the scenario, so the quorum and budget have to
+    // follow it rather than the `--agents` default.
+    let policy = EpisodePolicy {
+        turn_budget: turn_budget(ids.len()),
+        quorum: QuorumPolicy {
+            threshold: quorum_threshold(ids.len()),
+            ..options.policy.quorum
+        },
+        ..options.policy
+    };
+    let mut agents: Vec<LiveAgent> = scenario
+        .agents
+        .iter()
+        .filter_map(|agent| {
+            LiveAgent::new(
+                &agent.id,
+                &agent.role,
+                command,
+                policy.quorum,
+                Scenario::private_brief(agent),
+            )
+        })
+        .collect();
+    if agents.len() != ids.len() {
+        return Err(format!("could not build agents from {command:?}"));
+    }
+    let mut participants: Vec<&mut dyn Participant> = agents
+        .iter_mut()
+        .map(|agent| agent as &mut dyn Participant)
+        .collect();
+
+    println!(
+        "driving one episode through {command:?}\n\
+         {} members, budget {}, quorum {}\n\nThe brief every member sees:\n{}",
+        ids.len(),
+        policy.turn_budget,
+        policy.quorum.threshold,
+        scenario.brief(),
+    );
+
+    let wall = std::time::Instant::now();
+    let report = drive(&ids, &mut participants, &policy, &scenario.brief(), true)?;
+    let wall = wall.elapsed();
+    for line in &report.trace {
+        println!("{line}");
+    }
+    let decided = report
+        .decided
+        .as_ref()
+        .map_or_else(|| "nothing".to_owned(), |topic| format!("#{topic}"));
+    println!(
+        "\nhive   ended {} on {} after {} turns in {:.0} s — {}",
+        report.ending.label(),
+        decided,
+        report.turns,
+        wall.as_secs_f64(),
+        verdict(report.decided.as_ref().map(AsRef::as_ref), &scenario.truth),
+    );
+
+    let picks = live::poll(scenario, command)?;
+    let mut tally: Vec<(String, u32)> = Vec::new();
+    for (id, pick) in &picks {
+        println!("vote   {id:>10} alone: #{pick}");
+        match tally.iter_mut().find(|(topic, _)| topic == pick) {
+            Some(entry) => entry.1 = entry.1.saturating_add(1),
+            None => tally.push((pick.clone(), 1)),
+        }
+    }
+    tally.sort_by(|left, right| right.1.cmp(&left.1));
+    if let Some((winner, count)) = tally.first() {
+        println!(
+            "vote   plurality #{winner} with {count} of {} — {}",
+            picks.len(),
+            verdict(Some(winner.as_str()), &scenario.truth),
+        );
+    }
+    println!("\nthe recorded answer is #{}", scenario.truth);
+    Ok(())
+}
+
+/// Whether an arm landed on the recorded answer.
+fn verdict(decided: Option<&str>, truth: &str) -> &'static str {
+    match decided {
+        Some(topic) if topic == truth => "correct",
+        Some(_) => "wrong",
+        None => "no answer",
+    }
+}
+
+/// Deliberate the synthetic brief, which has no recorded answer.
+fn live_synthetic(options: &Options, command: &str) -> Result<(), String> {
     let room = Room::generate(options.seed, options.agents, options.topics, options.noise);
     let ids = room.member_ids();
     let roles = [
