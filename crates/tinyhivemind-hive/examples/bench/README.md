@@ -117,8 +117,53 @@ no supporter; and it calls out the grammar's `#` and `^` sigils, because models
 drop them. Each of those is a host obligation rather than something the library
 can impose, and each was found by running the thing.
 
+### A real problem
+
+Without a scenario the live room deliberates a brief with no answer, which
+measures whether a model can hold the grammar and nothing else. `--scenario`
+gives it a problem that has one:
+
+```sh
+cargo run --release -p tinyhivemind-hive --example bench -- \
+  --agent-cmd "opencode run --pure -m openrouter/openai/gpt-5-mini" \
+  --scenario crates/tinyhivemind-hive/examples/bench/scenarios/checkout-503.txt \
+  --repeat 5
+```
+
+A scenario file is a shared brief, the options under the ids the room should
+use, a private brief per member, and the recorded answer:
+
+```text
+task: what the room must decide
+truth: the option id that is genuinely right
+
+[option rollback]
+One sentence describing it.
+
+[agent planner]
+role: release manager, who owns what can and cannot be shipped
+knows: a fact this member holds and nobody else does
+```
+
+The private briefs are deliberately not appended to the shared journal. A fact
+every member can already read is not private information, and a room whose
+members all start from the same facts has nothing to pool.
+
+Each round runs both arms against the same real agents: one deliberation
+episode, then an independent poll of the same members answering alone, decided
+by plurality and scored as no answer on a tie. `--repeat` runs the pair N
+times, because a live room is sampled rather than computed and one episode is
+an anecdote.
+
+The scenario that ships here is a hidden profile — the shared brief plants the
+wrong answer and the right one is reachable only by pooling facts across four
+members. That shape is what lets the poll lose; a scenario whose answer
+survives deleting every private brief measures nothing. Its header comment
+records the two designs that failed that test before this one passed it.
+
 Live mode asserts nothing and is not part of CI; it is for watching real agents
-hold — or fail to hold — the trace grammar.
+hold — or fail to hold — the trace grammar, and for watching whether a room
+pools what its members separately know.
 `crates/tinyhivemind-hive/tests/openrouter_hive_live.rs` is the asserting
 version, behind the `e2e` feature.
 
@@ -136,6 +181,8 @@ version, behind the `e2e` feature.
 | `--trace` | print one episode turn by turn |
 | `--sweep` | score the policy grid, swept relative to the desk size |
 | `--agent-cmd CMD` | drive one episode through a real agent CLI |
+| `--scenario PATH` | give the live room a real problem with private facts |
+| `--repeat N` | run a live scenario N times and count both arms |
 
 ## Layout
 
@@ -147,5 +194,7 @@ version, behind the `e2e` feature.
 | `arms.rs` | the `ladder` and `vote` controls |
 | `sweep.rs` | the policy grid and its ranking |
 | `metrics.rs` | aggregation and formatting |
-| `live.rs` | the external agent CLI backend and its prompt |
+| `live.rs` | the external agent CLI backend, its prompt, and the solo poll |
+| `scenario.rs` | the scenario file format, the briefs, and the recorded answer |
+| `scenarios/` | the scenario files themselves |
 | `rng.rs` | a seeded `SplitMix64`, so every run reproduces |
