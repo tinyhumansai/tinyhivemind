@@ -56,8 +56,8 @@ mod arms;
 mod live;
 mod metrics;
 mod rng;
-mod scenario;
 mod run;
+mod scenario;
 mod sim;
 mod sweep;
 
@@ -493,7 +493,13 @@ fn live_scenario(options: &Options, command: &str, scenario: &Scenario) -> Resul
 
         let wall = std::time::Instant::now();
         let keep_trace = round == 0;
-        let report = drive(&ids, &mut participants, &policy, &scenario.brief(), keep_trace)?;
+        let report = drive(
+            &ids,
+            &mut participants,
+            &policy,
+            &scenario.brief(),
+            keep_trace,
+        )?;
         let wall = wall.elapsed();
         for line in &report.trace {
             println!("{line}");
@@ -569,6 +575,15 @@ fn plurality(picks: &[(String, String)]) -> Option<String> {
         return None;
     }
     Some(leader.0.to_owned())
+}
+
+/// Whether an arm landed on the recorded answer.
+fn verdict(decided: Option<&str>, truth: &str) -> &'static str {
+    match decided {
+        Some(topic) if topic == truth => "correct",
+        Some(_) => "wrong",
+        None => "no answer",
+    }
 }
 
 /// Deliberate the synthetic brief, which has no recorded answer.
