@@ -1,3 +1,5 @@
+<img src="https://github.com/tinyhumansai/tinyhivemind/blob/main/docs/hero.png?raw=true" />
+
 <h1 align="center">tinyhivemind</h1>
 
 <p align="center"><strong>Hive mind mechanics for agents.</strong></p>
