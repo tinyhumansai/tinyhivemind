@@ -54,9 +54,8 @@ the medium, and a marker line is a deposit in it.
 !commit  #stage
 ```
 
-**[Pheromone
-decay](https://en.wikipedia.org/wiki/Ant_colony_optimization_algorithms).** A
-trace's pull on the room's attention decays
+**[Pheromone decay](https://en.wikipedia.org/wiki/Ant_colony_optimization_algorithms).**
+A trace's pull on the room's attention decays
 [exponentially](https://en.wikipedia.org/wiki/Exponential_decay) with distance
 in the transcript. Without it, whoever spoke first holds the floor forever,
 which is the failure ant trails avoid only because pheromone evaporates.
@@ -65,9 +64,9 @@ which is the failure ant trails avoid only because pheromone evaporates.
 carries when some number of distinct participants have grounded support for it
 inside a window. Not a majority of anything, not a score to beat. The count is
 local, order independent and idempotent, so an agent that catches up late folds
-to exactly the same standing as one that watched live. This is how [honeybee
-swarms](https://en.wikipedia.org/wiki/Swarming_%28honey_bee%29) settle a nest
-site.
+to exactly the same standing as one that watched live. This is how
+[honeybee swarms](https://en.wikipedia.org/wiki/Swarming_%28honey_bee%29)
+settle a nest site.
 
 **[Cross-inhibition](https://en.wikipedia.org/wiki/Lateral_inhibition).** An
 objection names a *message*, and removes that message's author from the
@@ -76,8 +75,7 @@ Subtracting from a score cannot break a tie between two equally supported
 options; silencing an advocate can, and that asymmetry is the entire reason it
 is shaped this way. Honeybees do this too, with stop signals.
 
-**[Response
-thresholds](https://en.wikipedia.org/wiki/Task_allocation_and_partitioning_of_social_insects).**
+**[Response thresholds](https://en.wikipedia.org/wiki/Task_allocation_and_partitioning_of_social_insects).**
 Every member computes an urge from the salience field and its own affinity, and
 whoever bids highest takes the floor. A member whose urge never clears its
 threshold does not bid at all. This is the response-threshold model of division
@@ -132,12 +130,12 @@ independent vote at the same budget would not be worth its budget. This one
 does, at every desk size from three to eight, while spending about half the
 turns.
 
-The [benchmark
-write-up](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks) has the
-rest: the two bounds on the quorum threshold, why the turn budget has to scale
-with the desk, what happens to accuracy without a blind opening round, what
-five live models did to the grammar when nobody was watching, and an honest
-section on what none of it shows.
+The
+[benchmark write-up](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks)
+has the rest: the two bounds on the quorum threshold, why the turn budget has
+to scale with the desk, what happens to accuracy without a blind opening round,
+what five live models did to the grammar when nobody was watching, and an
+honest section on what none of it shows.
 
 ## Three rules it will not break
 
