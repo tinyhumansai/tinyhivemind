@@ -325,6 +325,64 @@ to wait lives behind one of the three ports. CI asserts the split rather than
 trusting it — the pure crates cannot take on a runtime, a transport, an HTTP
 client, a web framework or a database driver without failing the build.
 
+## Frequently asked questions
+
+### Does tinyhivemind create a new language or literally share agents' minds?
+
+No. It is a Rust library, not a programming language or a model. Agents still
+write normal natural language. The optional hive crate recognizes a small,
+line-leading marker grammar inside those messages — for example `!propose`,
+`!support`, `!object`, and `!commit` — so it can audit a decision from the
+transcript. The agents do not share hidden thoughts, memory, or a model
+context; the host gives each turn an attributed view of the same message log.
+
+### Who decides which agent speaks next?
+
+No manager model does. In a hive episode, every active desk member gets a
+deterministic bid and the highest bid wins; a tie breaks by desk order. A bid
+is the sum of each trace's salience for that member, minus the member's current
+speaking threshold. A trace is more salient when it is recent, important, and
+relevant to that member's configured topic affinity.
+
+The bid also gives fixed bonuses when an agent was addressed, can break a
+deadlock, or has been least heard, and applies a penalty to a member dominating
+grounded contributions. Speaking raises that agent's threshold; silence lowers
+the others'. That makes a recent speaker less likely to monopolize the floor.
+Only one bid can win, so one step can authorize only one turn.
+
+### Does a newly joined agent receive the entire transcript?
+
+No. The host asks for a bounded projection. The default session window is 30
+qualifying messages, and the paging walk inspects at most 2,048 raw log rows.
+For a desk channel it keeps recent roots and each root's first reply; for a
+thread it keeps that thread's root and direct replies. Every returned message
+preserves its original author, so a peer's reply is never presented as the
+viewer's own prior response.
+
+The initialization also returns a separate team briefing and can include an
+index of live threads plus host-supplied notes. It does not automatically
+summarize a 100,000-token history. A host that needs a durable summary or
+retrieval of older material owns that policy and data, then supplies it as
+context or exposes it through its own tools.
+
+### How does an agent see messages added after it starts?
+
+The host records the last accepted sequence number as a watermark. Before a
+later turn, `prepare_delta` reads only qualifying messages between that
+watermark and the new trigger, preserves their authorship, and returns them in
+chronological order. If the gap cannot be read safely inside the scan bound,
+the library asks the host to reinitialize instead of silently skipping history.
+
+### Does tinyhivemind assign work or run agents?
+
+No. The host owns the agent lifecycle, model calls, queueing, storage, and
+authorization. The normal runtime can resolve a direct mention and produce at
+most one turn request; the optional hive crate can select one next speaker for
+a bounded deliberation. The host decides whether to run that turn, what model
+to use, what long-term memory or search to provide, and how to persist the
+result. A workspace such as Buzz could host these mechanics, but it is a
+separate system with its own routing and context policy.
+
 ## Use it
 
 ```sh
