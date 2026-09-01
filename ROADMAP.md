@@ -25,6 +25,15 @@ dependency direction is enforced by construction.
 | P11 | `SessionMessage.parent` and the structured trace sidecar | planned |
 | P12 | Per-conversation read state | planned |
 | P13 | Digests and supersession | planned |
+| P14 | Recall: one selection ranking, roster and desk pickers, bounded transcript search with optional regular expressions, pinning as a fold, and a stated per-message budget | **done** |
+
+P14 is out of order on purpose. It is not a wire-format change and does not
+wait on P10 through P13: it answers the same pressure they do — a bounded
+window over an unbounded log — with the two mechanisms that need no new port
+and no new stored state. Search makes the transcript queryable rather than
+something a turn must hold, pinning keeps a small working set arriving whether
+or not anybody asked, and `BrevityPolicy` states the budget every message is
+spending out of. See [`docs/specs/recall.md`](docs/specs/recall.md).
 
 The next work is the paired OpenCompany adapter integration, followed by a
 gated live-provider verification in which two agents exchange an attributed
