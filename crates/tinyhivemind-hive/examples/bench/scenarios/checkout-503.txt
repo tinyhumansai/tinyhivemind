@@ -1,0 +1,55 @@
+# A hidden-profile incident, third design.
+#
+# The first two designs failed as experiments, and the way they failed is
+# worth keeping. Both made the *correct* option the one a language model
+# reaches for unprompted — a retry storm after a release is the canonical 503
+# story — so every member solved it alone and the vote control scored five out
+# of five. An arm that cannot lose is not a control.
+#
+# This design puts the seductive story on a decoy. The brief itself plants
+# #retries, and the correct answer, #pool, is reachable only by conjunction:
+# the pool caps at 20 (archivist), a request holds a connection for its whole
+# life (critic), in-flight requests have sat at 24-31 since 09:14 (auditor),
+# and the release quintupled how long each one lasts (planner). No member
+# holds two of those, and one alone is inert. Only the room can hold all four.
+
+task: Since the 09:14 release the checkout API has returned 503 on about 8% of requests. The release shipped SDK 4.2, whose notes list a new retry-on-timeout path, and the room's first instinct in the incident channel was a retry storm. Ship exactly one change now, and say which.
+
+truth: pool
+
+[option rollback]
+Roll the 09:14 release back.
+
+[option pool]
+Raise the database connection pool cap from 20 to 60.
+
+[option retries]
+Flip off the retry-on-timeout path SDK 4.2 shipped.
+
+[option scale]
+Triple the API replica count.
+
+[agent planner]
+role: release manager, who owns what can and cannot be shipped
+knows: The 09:14 release raised the client request timeout from 2 seconds to 10, so a slow request now occupies its server-side resources five times as long as it did yesterday.
+knows: The release also carries a forward-only schema migration. Rolling it back drops a column that rows written since 09:14 already depend on, which loses paid orders.
+
+[agent critic]
+role: platform engineer, who owns the edge
+knows: Each in-flight API request holds one database connection for its whole lifetime, taken at request start and released at response.
+knows: Replica count does not change how many database connections exist. The pool is one shared pool sized per environment, not per replica.
+
+[agent archivist]
+role: database engineer, who owns the datastore
+knows: The connection pool is capped at 20. A request that cannot take a connection within 250ms is failed by the API with a 503 rather than queued.
+knows: The database itself is healthy — CPU under 20%, no slow queries, and it would accept up to 400 connections. You have no visibility into how many requests are in flight.
+
+[agent scout]
+role: client engineer, who owns the SDK
+knows: SDK 4.2 shipped the retry-on-timeout path disabled by default, the flag has never been turned on in any environment, and retry telemetry shows zero retries fired today.
+knows: Client-observed error rates match the server's exactly, so nothing is being amplified or masked between the two.
+
+[agent auditor]
+role: SRE on call, who owns the incident
+knows: Concurrent in-flight requests have sat between 24 and 31 since 09:14, against a morning baseline of 11.
+knows: Requests per minute and unique sessions are both flat against yesterday, so nothing is sending more traffic than usual.

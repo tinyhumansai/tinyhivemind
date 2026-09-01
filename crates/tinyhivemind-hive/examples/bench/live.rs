@@ -23,6 +23,7 @@ use tinyhivemind_hive::{
 };
 
 use crate::run::Participant;
+use crate::scenario::Scenario;
 
 /// The moves available while the room is still deliberating.
 ///
@@ -34,26 +35,30 @@ use crate::run::Participant;
 /// its agents rather than something the library can impose.
 const DELIBERATE_PROTOCOL: &str = "\
 Reply with ONE line only, beginning with exactly one of these markers:
-!propose #topic <one sentence>   put a new option on the floor
-!support #topic ^N <why>         back an option, citing message N as grounds
-!object >N ^M <why>              object to message N, citing message M
-!evidence ^N <fact>              add grounds without taking a side
-!question <what you need>        ask for something not yet established
+!propose #topic  then one sentence putting a new option on the floor
+!support #topic ^N  then why, citing message N as grounds
+!object >N ^M  then why, objecting to message N and citing message M
+!evidence ^N  then a fact, adding grounds without taking a side
+!question  then what you need that nobody has established
 The # on a topic and the ^ on a citation are part of the grammar: `!propose \
 #canary ...` names an option, `!propose canary ...` names nothing and is \
 discarded. A support with no ^citation does not count, and only support moves \
-an option towards a decision. Do not write !commit: the room has not reached a \
-decision yet, and a commit line now counts for nothing. Write nothing before \
-or after the single marker line.";
+an option towards a decision. Angle brackets are not part of any line — write \
+the sentence itself, not a placeholder in brackets. The marker is what the \
+room counts and your prose is not, so never write !support for one option \
+while arguing for another: put the marker on the option you actually mean. Do \
+not write !commit: the room has not reached a decision yet, and a commit line \
+now counts for nothing. Write nothing before or after the single marker line.";
 
 /// The move available once the room has reached quorum.
 const COMMIT_PROTOCOL: &str = "\
 The room has reached quorum. Reply with ONE line only, recording the option \
 that carried:
-!commit #topic ^N <why>          record the decision, citing message N
+!commit #topic ^N  then why, citing message N
 Keep the # on the topic and the ^ on the citation; without them the line \
-records nothing. Use the topic the room actually settled on, not the one you \
-would have preferred. Write nothing before or after the single marker line.";
+records nothing. Angle brackets are not part of the line — write the sentence \
+itself. Use the topic the room actually settled on, not the one you would have \
+preferred. Write nothing before or after the single marker line.";
 
 /// A participant backed by an external agent command.
 pub(crate) struct LiveAgent {
@@ -65,21 +70,34 @@ pub(crate) struct LiveAgent {
     /// know how many grounded supporters settle a question — and the harness
     /// reads the medium through the library's own fold to report it.
     quorum: QuorumPolicy,
+    /// What only this member knows, or empty for a room with no scenario.
+    ///
+    /// It is deliberately not appended to the shared journal. A fact every
+    /// member can already read is not private information, and a room whose
+    /// members all start from the same facts has nothing to pool — which is
+    /// the failure mode that makes most multi-agent results uninteresting.
+    private: String,
 }
 
 impl LiveAgent {
     /// Build a participant from a command line such as `opencode run`.
     ///
     /// The prompt is appended as the final argument.
-    pub(crate) fn new(id: &str, role: &str, command: &str, quorum: QuorumPolicy) -> Option<Self> {
-        let mut words = command.split_whitespace().map(str::to_owned);
-        let program = words.next()?;
+    pub(crate) fn new(
+        id: &str,
+        role: &str,
+        command: &str,
+        quorum: QuorumPolicy,
+        private: String,
+    ) -> Option<Self> {
+        let (program, args) = split_command(command)?;
         Some(Self {
             id: id.to_owned(),
             role: role.to_owned(),
             program,
-            args: words.collect(),
+            args,
             quorum,
+            private,
         })
     }
 
@@ -107,10 +125,11 @@ impl LiveAgent {
             Phase::Commit => COMMIT_PROTOCOL,
         };
         format!(
-            "You are @{}, the {} on a small team. {sight}\n\n{protocol}\n\n{}{}\n\
+            "You are @{}, the {} on a small team. {sight}\n\n{}\n{protocol}\n\n{}{}\n\
              Shared attributed transcript:\n{transcript}\n\nYour one line:",
             self.id,
             self.role,
+            self.private,
             self.floor(visible),
             self.last_line(visible),
         )
@@ -138,9 +157,14 @@ impl LiveAgent {
             return String::new();
         };
         if standings.is_empty() {
+            let naming = if self.private.is_empty() {
+                "The topic id you coin becomes the room's name for that option, so keep it short."
+            } else {
+                "Use one of the ids the brief already names; a fresh id for an option the brief \
+                 has a name for splits the room's support across two names for one idea."
+            };
             return format!(
-                "No option is on the floor yet. The topic id you coin becomes the room's name \
-                 for that option, so keep it short. An option carries once {} different \
+                "No option is on the floor yet. {naming} An option carries once {} different \
                  members have backed it with grounds.\n\n",
                 self.quorum.threshold,
             );
@@ -250,4 +274,56 @@ fn plain(text: &str) -> String {
         }
     }
     plain
+}
+
+/// Split an agent command line into its program and leading arguments.
+fn split_command(command: &str) -> Option<(String, Vec<String>)> {
+    let mut words = command.split_whitespace().map(str::to_owned);
+    let program = words.next()?;
+    Some((program, words.collect()))
+}
+
+/// The matched-budget control, run against the same real agents.
+///
+/// Every member answers the same brief alone, seeing its own private facts and
+/// nobody else's line, and the room's answer is the plurality. This is the arm
+/// deliberation has to beat, and on a hidden profile it is the arm that cannot
+/// win: each member's own facts point at the decoy, so a vote returns the
+/// decoy however many voters it polls.
+///
+/// # Errors
+///
+/// Returns a participant's own failure, such as an agent process that did not
+/// answer.
+pub(crate) fn poll(scenario: &Scenario, command: &str) -> Result<Vec<(String, String)>, String> {
+    let (program, args) = split_command(command).ok_or("empty agent command")?;
+    let mut picks = Vec::new();
+    for agent in &scenario.agents {
+        let prompt = format!(
+            "You are @{}, the {} on a small team. You are answering alone: nobody else's view \
+             is available to you and yours will not be shown to them.\n\n{}\n{}\n\
+             Reply with ONE line and nothing else: the id of the option you would ship, \
+             written as #id.",
+            agent.id,
+            agent.role,
+            Scenario::private_brief(agent),
+            scenario.brief(),
+        );
+        let output = Command::new(&program)
+            .args(&args)
+            .arg(prompt)
+            .output()
+            .map_err(|error| format!("could not run {program}: {error}"))?;
+        if !output.status.success() {
+            return Err(format!("{program} exited with {}", output.status));
+        }
+        let text = plain(&String::from_utf8_lossy(&output.stdout));
+        let pick = scenario
+            .options
+            .iter()
+            .find(|option| text.contains(&format!("#{}", option.id)))
+            .map_or_else(|| "(none)".to_owned(), |option| option.id.clone());
+        picks.push((agent.id.clone(), pick));
+    }
+    Ok(picks)
 }
