@@ -23,7 +23,7 @@ already owns. Written in Rust. No storage, no HTTP, no runtime.
 >
 > A note from [@senamakel](https://github.com/senamakel/).
 >
-> This is one of my best works so far and one of the most important libraries that I have worked on: tinyhivemind takes inspiration and learnings from my experience building harnesses, coordinating with agents, and building agents that can solve large, complex problems.
+> This is one of my best works so far and one of the most important libraries that I have worked on: tinyhivemind takes inspiration and learnings from real life biology and my experience building harnesses, coordinating with agents, and building agents that can solve large, complex problems.
 > 
 > This concept was initially built inside of OpenCompany but had to be later on moved into it's own standalone repo as it was too important to be left inside of OpenCompany and it had to be well-defined, researched, tested, and simulated thoroughly.
 >
