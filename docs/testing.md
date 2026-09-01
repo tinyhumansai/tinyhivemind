@@ -14,6 +14,13 @@ Run the mock and feature tests with the normal workspace suite:
 cargo test --all-features
 ```
 
+Two deterministic fuzz-style integration suites also run as part of that
+command. `fuzz_invariants.rs` in the core and hive crates generate hundreds of
+Unicode- and punctuation-heavy inputs and assert parser bounds, byte offsets,
+determinism, trace ordering, and quorum idempotence. They are deliberately
+seeded so a failure is reproducible in CI; coverage-guided fuzzing can replay
+the same invariants with its own generated corpus.
+
 The core and runtime module suites are the authoritative P7 verification. They
 cover the pure one-target decision, finite hop policy, ignored non-agent
 mentions, and the atomic queue boundary, including forced concurrent duplicate
