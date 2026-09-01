@@ -67,6 +67,7 @@ docs/
 ├── specs/              # behavior and architecture specifications
 ├── plans/              # test-first implementation plans
 └── adr/                # immutable architecture decision records
+wiki/                   # the GitHub wiki, checked out as a submodule
 ```
 
 ### The two-crate split
@@ -167,7 +168,7 @@ Supporting commands:
   vote; `-- --sweep` tunes the episode policy, `-- --trace` prints one episode,
   and `-- --agent-cmd "opencode run"` drives one through a real agent CLI. The
   harness is documented in `crates/tinyhivemind-hive/examples/bench/README.md`
-  and its findings in `docs/benchmark.md`.
+  and its findings on the wiki's `Benchmarks` page (`wiki/Benchmarks.md`).
 - `.github/scripts/assert-pure.sh` — assert the pure crates took on no
   runtime, transport, or web-framework dependency.
 - `cargo doc --no-deps --all-features` — build the rustdoc CI also builds with
@@ -233,10 +234,14 @@ releases are reproducible.
 
 ### Vendored dependencies
 
-There are none, and that is deliberate: this repository has no submodules and
-nothing to initialize after a clone. It is itself vendored — a consumer pins it
-as a submodule and takes it as a path dependency — so anything it vendored in
-turn would become a nested submodule in every consumer.
+There are none, and that is deliberate. This repository is itself vendored — a
+consumer pins it as a submodule and takes it as a path dependency — so anything
+it vendored in turn would become a nested submodule in every consumer.
+
+The one submodule here is `wiki/`, the GitHub wiki repository
+(`tinyhumansai/tinyhivemind.wiki`). It carries no code and nothing builds
+against it, so a clone that skips it still compiles. Run
+`git submodule update --init` when you need to edit documentation.
 
 ## Testing
 
@@ -278,8 +283,16 @@ Write documentation for the reader who has never seen the code.
   run by `cargo test`, so they cannot drift.
 - Complex modules must include a module-level `README.md` covering their design,
   public surface, and important operational constraints.
-- Keep `README.md`, `docs/`, and module docs aligned with code changes in the
-  same commit that changes behavior.
+- Keep `README.md`, `docs/`, `wiki/`, and module docs aligned with code changes
+  in the same commit that changes behavior.
+- `README.md` is marketing. It says what the library is, why it is worth using,
+  and where to read more. It does not carry reference material, build
+  instructions, or a benchmark report.
+- `wiki/` carries the narrative documentation: architecture, the concepts, the
+  deliberation protocol, the benchmark report, host integration, and the
+  development guide. It is a separate git repository, so a change there is
+  pushed on its own and the pointer bump is committed here.
+- `docs/` keeps the working record: specs, plans, ADRs, and testing notes.
 - Write accepted behavior and constraints in `docs/specs/` before creating a
   linked, implementation-ordered plan in `docs/plans/`. Specs define what and
   why; plans define how and in what sequence.
