@@ -192,7 +192,8 @@ Councils are better at open-ended writing, at work that genuinely decomposes,
 and at running on any model with no grammar to learn. Take one when the
 deliverable is prose. Take this when the deliverable is a decision somebody
 will ask you to justify later.
-[The full comparison](https://github.com/tinyhumansai/tinyhivemind/wiki/Agent-councils) is honest about both sides.
+[The full comparison](https://github.com/tinyhumansai/tinyhivemind/wiki/Agent-councils)
+is honest about both sides.
 
 ## Three rules it will not break
 
