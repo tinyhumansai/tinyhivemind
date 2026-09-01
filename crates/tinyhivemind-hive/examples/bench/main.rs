@@ -420,7 +420,12 @@ fn live_episode(options: &Options, command: &str) -> Result<(), String> {
         .iter()
         .enumerate()
         .filter_map(|(index, id)| {
-            LiveAgent::new(id, roles.get(index).copied().unwrap_or("teammate"), command)
+            LiveAgent::new(
+                id,
+                roles.get(index).copied().unwrap_or("teammate"),
+                command,
+                options.policy.quorum,
+            )
         })
         .collect();
     if agents.len() != ids.len() {
