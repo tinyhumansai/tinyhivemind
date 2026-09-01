@@ -1,4 +1,5 @@
-//! Bounded group deliberation for agent group chats.
+//! Hive mind mechanics: stigmergy, decaying salience, quorum sensing,
+//! cross-inhibition, and a response-threshold bid for the floor.
 //!
 //! `tinyhivemind-hive` adds the one thing a shared desk cannot do on its own:
 //! **converge**. A message today selects exactly one responder off a

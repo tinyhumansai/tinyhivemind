@@ -1,11 +1,11 @@
-//! Desks, rosters, mentions and shared session transcripts for agent group
-//! chats — the pure algebra behind a room that several agents share.
+//! Desks, rosters, mentions and shared session transcripts — the pure algebra
+//! behind the room a hive of agents shares.
 //!
 //! This crate answers four questions, and holds no state while doing it:
 //!
 //! - **Who is here?** A roster of teammates and the people signed in with them.
-//! - **What is a desk, and who is on it?** A blueprint-declared group chat
-//!   merged with the operator's runtime additions, retirements and ordering.
+//! - **What is a desk, and who is on it?** A blueprint-declared room merged
+//!   with the operator's runtime additions, retirements and ordering.
 //! - **Who does `@this` mean?** The mention grammar, and the resolution of a
 //!   name against the roster and the desks.
 //! - **What does one participant see of the shared transcript?** The projection

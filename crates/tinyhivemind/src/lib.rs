@@ -1,4 +1,4 @@
-//! Runtime-neutral session coordination for agent group chats.
+//! Runtime-neutral session coordination for a hive of agents.
 //!
 //! `tinyhivemind` re-exports the pure [`tinyhivemind_core`] algebra and adds the
 //! boundaries that must wait on a host: a [`SessionLog`] paging port,
