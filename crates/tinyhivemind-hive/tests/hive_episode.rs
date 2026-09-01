@@ -117,6 +117,32 @@ fn a_failed_turn_does_not_append_a_phantom_message() {
 }
 
 #[test]
+fn a_later_failed_turn_preserves_only_the_already_committed_history() {
+    let mut harness = harness();
+    harness.operator("Decide how to roll this out.");
+    let state = EpisodeState::opened(harness.conversation(), harness.watermark());
+
+    // The planner is chosen first, then its charged threshold yields the
+    // floor to the critic, whose failure must not manufacture a journal row.
+    let mut planner = ScriptedAgent::new("planner", ["!propose #stage"]);
+    let mut critic = ScriptedAgent::failing("critic", "model unavailable");
+    let mut scout = ScriptedAgent::new("scout", ["!question"]);
+
+    let result = harness.run(
+        state,
+        &policy(4),
+        &mut [&mut planner, &mut critic, &mut scout],
+    );
+
+    assert_eq!(result, Err("model unavailable".to_owned()));
+    assert_eq!(harness.journal().len(), 2, "operator plus planner only");
+    assert!(matches!(
+        &harness.journal()[1].author,
+        tinyhivemind_hive::SessionAuthor::Agent { id, .. } if id == "planner"
+    ));
+}
+
+#[test]
 fn an_episode_stops_at_its_budget_rather_than_running_on() -> Result<(), String> {
     let mut harness = harness();
     harness.operator("Talk this through.");

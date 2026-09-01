@@ -2,7 +2,9 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use super::{Mention, MentionAuthor, MentionTarget, direct_responder, mentioned_members, resolve};
+use super::{
+    Mention, MentionAuthor, MentionTarget, ascii_slug, direct_responder, mentioned_members, resolve,
+};
 use crate::{
     desk::{Desk, DeskSet, ResponderMode},
     roster::{Person, Roster, RosterMember},
@@ -422,6 +424,18 @@ fn direct_responder_fails_closed_for_an_invalid_roster() {
 
     assert_eq!(direct_responder(&mentions, &blank_roster), None);
     assert_eq!(direct_responder(&mentions, &duplicate_roster), None);
+}
+
+#[test]
+fn person_slugs_normalize_ascii_runs_without_leading_or_trailing_separators() {
+    assert_eq!(ascii_slug("  Chief--Researcher  "), "chief_researcher");
+    assert_eq!(ascii_slug("A / B / C"), "a_b_c");
+}
+
+#[test]
+fn person_slugs_discard_non_ascii_words_without_leaking_separators() {
+    assert_eq!(ascii_slug("😀 Élodie / Agent 7"), "lodie_agent_7");
+    assert_eq!(ascii_slug("東京"), "");
 }
 
 #[test]
