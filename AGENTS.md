@@ -6,9 +6,11 @@ the same instructions.
 
 ## Charter
 
-`tinyhivemind` is **group chats for agents**: a shared session transcript that
-several agents read and write, and the mechanism by which a message triggers the
-right agent to run a turn.
+`tinyhivemind` is **hive mind mechanics for agents**: a shared session
+transcript that several agents read and write, the mechanism by which a message
+triggers the right agent to run a turn, and the swarm mechanisms by which a
+room of them reaches a decision. Stigmergy, decaying salience, quorum sensing,
+cross-inhibition and response thresholds, all as pure folds.
 
 It answers four questions and holds no state doing it — who is here, what a desk
 is and who is on it, who `@this` means, and what one participant sees of the

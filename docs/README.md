@@ -46,7 +46,7 @@ Anything a reader wants before they touch the code:
 | [Transcript projection](https://github.com/tinyhumansai/tinyhivemind/wiki/Transcript-projection) | attribution, the paging walk, continuous sharing |
 | [Threads](https://github.com/tinyhumansai/tinyhivemind/wiki/Threads) | thread-scoped projection and the desk's thread index |
 | [Responder ladder](https://github.com/tinyhumansai/tinyhivemind/wiki/Responder-ladder) | the rungs, the selector, and mention dispatch |
-| [Hive episodes](https://github.com/tinyhumansai/tinyhivemind/wiki/Hive-episodes) | traces, salience, quorum, and the attention market |
+| [Hive episodes](https://github.com/tinyhumansai/tinyhivemind/wiki/Hive-episodes) | stigmergy, salience decay, quorum, cross-inhibition, the attention market |
 | [Episode policy](https://github.com/tinyhumansai/tinyhivemind/wiki/Episode-policy) | every setting, and how to tune it to a desk |
 | [Benchmarks](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks) | the full report, including what it does not show |
 | [Host integration](https://github.com/tinyhumansai/tinyhivemind/wiki/Host-integration) | the three ports and what a host owes the library |
