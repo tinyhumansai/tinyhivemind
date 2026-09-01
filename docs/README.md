@@ -51,6 +51,8 @@ Anything a reader wants before they touch the code:
 | [Benchmarks](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks) | the full report, including what it does not show |
 | [Host integration](https://github.com/tinyhumansai/tinyhivemind/wiki/Host-integration) | the three ports and what a host owes the library |
 | [Development](https://github.com/tinyhumansai/tinyhivemind/wiki/Development) | the build contract, testing, and contributing |
+| [Glossary](https://github.com/tinyhumansai/tinyhivemind/wiki/Glossary) | every term, what it means here, and where it came from |
+| [Further reading](https://github.com/tinyhumansai/tinyhivemind/wiki/Further-reading) | the swarm biology, the group-decision literature, the papers |
 | [FAQ](https://github.com/tinyhumansai/tinyhivemind/wiki/FAQ) | the questions that keep coming up |
 
 Edit those pages in `wiki/` and push the submodule, then commit the pointer
