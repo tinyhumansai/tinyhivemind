@@ -1,0 +1,48 @@
+# A hidden-profile incident.
+#
+# Every member is told the same brief and holds facts nobody else holds. Each
+# member's own facts point at #rollback, which is wrong; the room can only
+# reach #retries by pooling what its members separately know. That is the
+# whole point of the shape: a matched-budget vote cannot solve it, because
+# every independent voter answers #rollback.
+
+task: Since the 09:14 release the checkout API has returned 503 on about 8% of requests. Ship exactly one change now, and say which.
+
+truth: retries
+
+[option rollback]
+Roll back the 09:14 release.
+
+[option pool]
+Raise the database connection pool from 20 to 60.
+
+[option retries]
+Turn off the client retry-on-timeout policy the release enabled.
+
+[option scale]
+Triple the API replica count.
+
+[agent planner]
+role: release manager, who owns what can and cannot be shipped
+knows: The 09:14 release carries a forward-only schema migration. Rolling it back means dropping a column that rows written since 09:14 already depend on, which loses paid orders.
+knows: A config flag flip can ship in two minutes; a full rollback takes forty.
+
+[agent critic]
+role: platform engineer, who owns the edge
+knows: The 503s come from the shared per-tenant rate limiter in front of the API, not from any single replica. The limiter's budget is per tenant and does not move when replica count changes.
+knows: CPU across the API fleet has not gone above 30% all morning.
+
+[agent archivist]
+role: database engineer, who owns the datastore
+knows: Database connection pool utilisation peaked at 22% during the incident and p99 query latency is flat against last week.
+knows: No slow-query log entries since 09:14.
+
+[agent scout]
+role: client engineer, who owns the SDK
+knows: The 09:14 release enabled retry-on-timeout in the client SDK with 3 attempts and no jitter.
+knows: Request volume at the edge tripled at 09:14 while unique sessions stayed flat.
+
+[agent auditor]
+role: SRE on call, who owns the incident
+knows: Successful checkouts per minute are unchanged since 09:14; only the error count moved.
+knows: The error rate is concentrated on clients running SDK 4.2 and is zero on 4.1.
