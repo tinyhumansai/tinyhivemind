@@ -130,16 +130,13 @@ honest section on what none of it shows.
 
 ## Three rules it will not break
 
-**The host owns storage.** No database, no file, no socket, no second journal.
-Your log stays yours and gets lent through one port.
+**The host owns storage.** No database, no file, no socket. Your log stays
+yours and is lent through one port.
 
-**No host types, ever.** Nothing here names a type from a consuming
-application, and no callback ever crosses back into it.
+**No host types, ever.** Nothing here names a type from your application.
 
-**One message, one turn.** `@everyone` is a list, not a broadcast. There is no
-type in this library that can carry two authorized speakers. The one thing
-fan-out genuinely buys is independence, and that is bought here as a visibility
-filter on the projection, for the cost of a flag rather than a scheduler.
+**One message, one turn.** `@everyone` is a list, not a broadcast, and no type
+here can carry two authorized speakers.
 
 ## Use it
 
