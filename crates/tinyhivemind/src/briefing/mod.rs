@@ -232,7 +232,7 @@ pub async fn initialize_session_with_context(
 ) -> Result<SessionInitialization> {
     let history = project_session(log, query).await?;
     let threads = read_thread_index(log, &query.conversation, THREAD_INDEX_LIMIT).await?;
-    let pins = read_pinboard(log, &query.conversation, PIN_LIMIT).await?;
+    let pins = read_pinboard(log, &query.conversation, PIN_LIMIT, query.before).await?;
     Ok(SessionInitialization {
         briefing,
         context: SessionContext {

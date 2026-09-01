@@ -45,7 +45,7 @@ pub async fn read_thread_index(
         return Ok(Vec::new());
     }
 
-    let rows = read_desk_rows(log, conversation, THREAD_INDEX_SCAN).await?;
+    let rows = read_desk_rows(log, conversation, THREAD_INDEX_SCAN, None).await?;
     Ok(fold_thread_index(&rows, limit))
 }
 
@@ -55,12 +55,17 @@ pub async fn read_thread_index(
 /// is. Every row addressed to the desk is kept — thread interiors included —
 /// because the two callers, the thread index and the pinboard, both answer
 /// questions about a thread from the inside.
+///
+/// `before` starts the walk at that exclusive bound instead of the log tail,
+/// so a caller reading alongside a bounded [`crate::SessionQuery`] sees the
+/// same snapshot the projection does.
 pub(crate) async fn read_desk_rows(
     log: &(dyn SessionLog + '_),
     conversation: &Conversation,
     scan: usize,
+    before: Option<Sequence>,
 ) -> Result<Vec<LogMessage>> {
-    let mut cursor = None;
+    let mut cursor = before;
     let mut scanned = 0_usize;
     let mut seen = Vec::new();
     let mut rows: Vec<LogMessage> = Vec::new();

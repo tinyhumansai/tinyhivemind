@@ -189,6 +189,28 @@ async fn excerpts_a_long_row_around_the_match() {
 }
 
 #[tokio::test]
+async fn excerpts_a_match_past_a_width_expanding_lowercase_run() {
+    // `İ` lowercases to two characters, so 40 of them ahead of the match push
+    // the *lowercased* offset `score_pattern` reports to 80 even though
+    // "needle" starts at original character 40. A window built from the raw
+    // lowered offset lands well past the match; excerpt() has to be given the
+    // offset mapped back onto the original text first.
+    let filler_before = "İ".repeat(40);
+    let filler_after = "a ".repeat(60);
+    let content = format!("{filler_before}needle {filler_after}");
+    let log = FakeLog::new(vec![page(vec![message(2, None, None, &content)])]);
+    let hits = search_messages(&log, &SearchQuery::new("needle"))
+        .await
+        .expect("searches");
+    assert_eq!(hits.len(), 1);
+    assert!(
+        hits[0].excerpt.contains("needle"),
+        "excerpt {:?} lost the match behind the expanding filler",
+        hits[0].excerpt
+    );
+}
+
+#[tokio::test]
 async fn keeps_a_short_row_whole_and_collapses_its_whitespace() {
     let log = FakeLog::new(vec![page(vec![message(
         2,

@@ -131,27 +131,37 @@ pub fn fold_pins(rows: &[LogMessage], limit: usize) -> Vec<Pin> {
     if limit == 0 {
         return Vec::new();
     }
-    let mut board: BTreeMap<Sequence, Pin> = BTreeMap::new();
+    // A message carrying several markers gives them the same `pinned_at`
+    // sequence, so directive reading order — not the sequence alone — has to
+    // decide which one most recently touched the board. `ordinal` is that
+    // order: it advances once per directive, in the row-then-marker order the
+    // fold walks, and breaks the tie a sort on `pinned_at` alone could not.
+    let mut board: BTreeMap<Sequence, (Pin, usize)> = BTreeMap::new();
+    let mut ordinal = 0_usize;
     for row in rows {
         for directive in read_directives(&row.content, &row.author, row.sequence) {
             match directive.action {
                 PinAction::Pin => {
                     board.insert(
                         directive.target,
-                        Pin {
-                            sequence: directive.target,
-                            pinned_at: directive.sequence,
-                            pinned_by: directive.author,
-                            label: directive.label,
-                            note: directive.note,
-                            excerpt: None,
-                        },
+                        (
+                            Pin {
+                                sequence: directive.target,
+                                pinned_at: directive.sequence,
+                                pinned_by: directive.author,
+                                label: directive.label,
+                                note: directive.note,
+                                excerpt: None,
+                            },
+                            ordinal,
+                        ),
                     );
                 }
                 PinAction::Unpin => {
                     board.remove(&directive.target);
                 }
             }
+            ordinal += 1;
         }
     }
 
@@ -159,19 +169,19 @@ pub fn fold_pins(rows: &[LogMessage], limit: usize) -> Vec<Pin> {
         .iter()
         .map(|row| (row.sequence, row.content.as_str()))
         .collect();
-    let mut pins: Vec<Pin> = board
+    let mut pins: Vec<(Pin, usize)> = board
         .into_values()
-        .map(|mut pin| {
+        .map(|(mut pin, ordinal)| {
             pin.excerpt = excerpts
                 .get(&pin.sequence)
                 .map(|content| opening(content))
                 .filter(|opening| !opening.is_empty());
-            pin
+            (pin, ordinal)
         })
         .collect();
-    pins.sort_by_key(|pin| std::cmp::Reverse(pin.pinned_at));
+    pins.sort_by_key(|(_, ordinal)| std::cmp::Reverse(*ordinal));
     pins.truncate(limit);
-    pins
+    pins.into_iter().map(|(pin, _)| pin).collect()
 }
 
 /// Read one conversation's board from the host log.
@@ -180,6 +190,11 @@ pub fn fold_pins(rows: &[LogMessage], limit: usize) -> Vec<Pin> {
 /// included: a pin exists to lift one message out of the depth it is buried
 /// at, so refusing to look inside threads would defeat it. A thread-scoped
 /// read folds that thread alone.
+///
+/// `before` is the same exclusive bound a caller passes as
+/// [`crate::SessionQuery::before`]. Passing it through keeps the board and the
+/// projected history reading the same snapshot, so a delayed or replayed turn
+/// cannot see a pin — or an unpin — authored after its triggering message.
 ///
 /// # Errors
 ///
@@ -190,11 +205,12 @@ pub async fn read_pinboard(
     log: &(dyn SessionLog + '_),
     conversation: &Conversation,
     limit: usize,
+    before: Option<Sequence>,
 ) -> Result<Vec<Pin>> {
     if limit == 0 {
         return Ok(Vec::new());
     }
-    let rows = read_desk_rows(log, conversation, PIN_SCAN).await?;
+    let rows = read_desk_rows(log, conversation, PIN_SCAN, before).await?;
     let rows: Vec<LogMessage> = match conversation.thread_root {
         None => rows,
         Some(_) => rows

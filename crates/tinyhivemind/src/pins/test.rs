@@ -9,14 +9,14 @@ use std::{collections::VecDeque, io, sync::Mutex};
 #[derive(Debug)]
 struct FakeLog {
     pages: Mutex<VecDeque<std::result::Result<SessionPage, SourceError>>>,
-    calls: Mutex<usize>,
+    calls: Mutex<Vec<Option<Sequence>>>,
 }
 
 impl FakeLog {
     fn new(pages: Vec<SessionPage>) -> Self {
         Self {
             pages: Mutex::new(pages.into_iter().map(Ok).collect()),
-            calls: Mutex::new(0),
+            calls: Mutex::new(Vec::new()),
         }
     }
 
@@ -25,18 +25,25 @@ impl FakeLog {
             pages: Mutex::new(VecDeque::from([Err(
                 Box::new(io::Error::other("offline")) as SourceError
             )])),
-            calls: Mutex::new(0),
+            calls: Mutex::new(Vec::new()),
         }
     }
 
     fn call_count(&self) -> usize {
-        *self.calls.lock().expect("calls lock is not poisoned")
+        self.calls.lock().expect("calls lock is not poisoned").len()
+    }
+
+    fn first_call_before(&self) -> Option<Sequence> {
+        self.calls.lock().expect("calls lock is not poisoned")[0]
     }
 }
 
 impl SessionLog for FakeLog {
-    fn read_before(&self, _before: Option<Sequence>, _limit: usize) -> SessionFuture<'_> {
-        *self.calls.lock().expect("calls lock is not poisoned") += 1;
+    fn read_before(&self, before: Option<Sequence>, _limit: usize) -> SessionFuture<'_> {
+        self.calls
+            .lock()
+            .expect("calls lock is not poisoned")
+            .push(before);
         Box::pin(async move {
             self.pages
                 .lock()
@@ -217,7 +224,7 @@ async fn reads_a_desk_board_including_thread_interiors() {
         ],
         next_before: None,
     }]);
-    let board = read_pinboard(&log, &conversation(None), PIN_LIMIT)
+    let board = read_pinboard(&log, &conversation(None), PIN_LIMIT, None)
         .await
         .expect("reads");
     assert_eq!(board.len(), 1);
@@ -236,7 +243,7 @@ async fn reads_a_thread_board_from_that_thread_alone() {
         ],
         next_before: None,
     }]);
-    let board = read_pinboard(&log, &conversation(Some(2)), PIN_LIMIT)
+    let board = read_pinboard(&log, &conversation(Some(2)), PIN_LIMIT, None)
         .await
         .expect("reads");
     assert_eq!(board.len(), 1);
@@ -244,10 +251,38 @@ async fn reads_a_thread_board_from_that_thread_alone() {
 }
 
 #[tokio::test]
+async fn honors_the_query_bound_when_reading_the_board() {
+    let log = FakeLog::new(vec![SessionPage {
+        messages: vec![row(2, Some("engineering"), None, "!pin")],
+        next_before: None,
+    }]);
+    let bound = Sequence(5);
+    read_pinboard(&log, &conversation(None), PIN_LIMIT, Some(bound))
+        .await
+        .expect("reads");
+    assert_eq!(log.first_call_before(), Some(bound));
+}
+
+#[test]
+fn preserves_directive_order_within_one_message() {
+    // Two markers in the same message share a `pinned_at` sequence, so the
+    // fold has to track reading order itself: `^5` was written after `^3`
+    // and must survive truncation ahead of it.
+    let rows = [
+        row(5, None, None, "fifth"),
+        row(3, None, None, "third"),
+        row(6, None, None, "!pin ^3\n!pin ^5"),
+    ];
+    let pins = fold_pins(&rows, 1);
+    assert_eq!(pins.len(), 1);
+    assert_eq!(pins[0].sequence, Sequence(5));
+}
+
+#[tokio::test]
 async fn reads_nothing_at_a_zero_limit_and_reports_a_read_failure() {
     let log = FakeLog::new(vec![SessionPage::default()]);
     assert!(
-        read_pinboard(&log, &conversation(None), 0)
+        read_pinboard(&log, &conversation(None), 0, None)
             .await
             .expect("reads")
             .is_empty()
@@ -255,7 +290,7 @@ async fn reads_nothing_at_a_zero_limit_and_reports_a_read_failure() {
     assert_eq!(log.call_count(), 0);
 
     let failing = FakeLog::failing();
-    let error = read_pinboard(&failing, &conversation(None), PIN_LIMIT)
+    let error = read_pinboard(&failing, &conversation(None), PIN_LIMIT, None)
         .await
         .expect_err("read fails");
     assert!(matches!(error, crate::Error::Read { .. }));

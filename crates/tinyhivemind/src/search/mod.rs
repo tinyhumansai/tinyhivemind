@@ -129,7 +129,7 @@ pub async fn search_threads(
         return Ok(Vec::new());
     }
     let compiled = CompiledPattern::compile(pattern)?;
-    let rows = read_desk_rows(log, conversation, THREAD_INDEX_SCAN).await?;
+    let rows = read_desk_rows(log, conversation, THREAD_INDEX_SCAN, None).await?;
     Ok(rank_threads(&rows, &compiled.pattern(), limit))
 }
 
@@ -227,10 +227,32 @@ fn hit(message: &LogMessage, line: &str, matched: &TextMatch) -> MessageHit {
         chat_id: message.chat_id.clone(),
         parent: message.parent,
         author: message.author.clone(),
-        excerpt: excerpt(line, matched.offset),
+        excerpt: excerpt(line, original_offset(line, matched.offset)),
         score: matched.score,
         kind: matched.kind,
     }
+}
+
+/// Map a character offset into `line`'s lowercased form back to an offset
+/// into `line` itself.
+///
+/// [`score_pattern`] matches against the lowercased line and reports an
+/// offset in *that* string. Lowercasing can change a character's width — `İ`
+/// lowercases to two characters, for one — so a long enough run of expanding
+/// characters ahead of a match would otherwise shift the excerpt window past
+/// the text that actually matched. Walking `line`'s own characters and
+/// summing each one's lowercased width keeps the two offsets honest without
+/// lowercasing `line` a second time.
+fn original_offset(line: &str, lowered_offset: usize) -> usize {
+    let mut lowered = 0_usize;
+    for (index, ch) in line.chars().enumerate() {
+        let width = ch.to_lowercase().count();
+        if lowered_offset < lowered + width {
+            return index;
+        }
+        lowered += width;
+    }
+    line.chars().count()
 }
 
 /// Collapse a row to one line, so an excerpt is a line and offsets are stable.
@@ -240,11 +262,9 @@ fn collapse(content: &str) -> String {
 
 /// Take a window of the collapsed line around the match, cut on characters.
 ///
-/// The offset is a character index into the *lowercased* line, which for
-/// almost every input is the same index as in the line itself. Where a
-/// lowercasing changes a character count the window simply lands a character
-/// or two off; every cut here saturates, so it can never panic or split a
-/// character.
+/// `offset` is a character index into `line` itself — callers map a
+/// lowercased match offset back with [`original_offset`] first. Every cut
+/// here saturates, so it can never panic or split a character.
 fn excerpt(line: &str, offset: usize) -> String {
     let characters: Vec<char> = line.chars().collect();
     if characters.len() <= EXCERPT_CHARS {
