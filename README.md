@@ -60,6 +60,12 @@ A trace's pull on the room's attention decays
 in the transcript. Without it, whoever spoke first holds the floor forever,
 which is the failure ant trails avoid only because pheromone evaporates.
 
+```text
+two identical !support traces, scored 40 sequences apart
+  seq 41   distance 0    salience 3000
+  seq  1   distance 40   salience 2625
+```
+
 **[Quorum sensing](https://en.wikipedia.org/wiki/Quorum_sensing).** An option
 carries when some number of distinct participants have grounded support for it
 inside a window. Not a majority of anything, not a score to beat. The count is
@@ -68,12 +74,34 @@ to exactly the same standing as one that watched live. This is how
 [honeybee swarms](https://en.wikipedia.org/wiki/Swarming_%28honey_bee%29)
 settle a nest site.
 
+```text
+1 planner  !propose #stage Stage the rollout.
+2 scout    !propose #ship  Ship it all at once.
+3 critic   !support #stage ^1 Staging bounds the blast radius.
+
+  #stage  supporters ["planner", "critic"]   ->  carries at threshold 2
+  #ship   supporters ["scout"]
+
+4 auditor  !support #stage I agree.           <- no citation, counts for nothing
+```
+
 **[Cross-inhibition](https://en.wikipedia.org/wiki/Lateral_inhibition).** An
 objection names a *message*, and removes that message's author from the
 supporter set of whatever they were advocating. It does not debit the option.
 Subtracting from a score cannot break a tie between two equally supported
 options; silencing an advocate can, and that asymmetry is the entire reason it
 is shaped this way. Honeybees do this too, with stop signals.
+
+```text
+both options carry, so the room is deadlocked
+  #stage  supporters ["planner", "critic", "auditor"]
+  #ship   supporters ["scout", "auditor"]
+
+7 planner  !object >6 ^1 The regions are not independent.
+
+  #stage  supporters ["planner", "critic", "auditor"]
+  #ship   supporters ["scout"]  silenced ["auditor"]   ->  #stage carries
+```
 
 **[Response thresholds](https://en.wikipedia.org/wiki/Task_allocation_and_partitioning_of_social_insects).**
 Every member computes an urge from the salience field and its own affinity, and
@@ -82,6 +110,15 @@ threshold does not bid at all. This is the response-threshold model of division
 of labour, and it is also
 [Pandemonium](https://en.wikipedia.org/wiki/Pandemonium_architecture)'s
 decision demon, which is the same idea arrived at from the AI side.
+
+```text
+planner  urge 10312  Addressed     <- somebody cited its message
+scout    urge  8312  Salience
+critic   urge  8312  Salience
+auditor  --                        <- threshold never cleared, does not bid
+
+floor = planner
+```
 
 Every one of those is
 [fixed-point](https://en.wikipedia.org/wiki/Fixed-point_arithmetic) integer
