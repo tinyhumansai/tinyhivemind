@@ -42,10 +42,10 @@ channel. tinyhivemind implements those mechanisms.
 
 ## The mechanics
 
-**[Stigmergy](https://en.wikipedia.org/wiki/Stigmergy).** Work leaves a trace in a shared medium, and the
-trace is the stimulus for the next piece of work. No agent addresses another and nothing
-dispatches anything. The transcript is the medium, and a marker line is a
-deposit in it.
+**[Stigmergy](https://en.wikipedia.org/wiki/Stigmergy).** Work leaves a trace
+in a shared medium, and the trace is the stimulus for the next piece of work.
+No agent addresses another and nothing dispatches anything. The transcript is
+the medium, and a marker line is a deposit in it.
 
 ```text
 !propose #stage Stage the rollout across three regions.
@@ -54,36 +54,41 @@ deposit in it.
 !commit  #stage
 ```
 
-**[Pheromone decay](https://en.wikipedia.org/wiki/Ant_colony_optimization_algorithms).** A trace's pull on
-the room's attention decays [exponentially](https://en.wikipedia.org/wiki/Exponential_decay) with distance
-in the transcript. Without it, whoever spoke first
-holds the floor forever, which is the failure ant trails avoid only because
-pheromone evaporates.
+**[Pheromone
+decay](https://en.wikipedia.org/wiki/Ant_colony_optimization_algorithms).** A
+trace's pull on the room's attention decays
+[exponentially](https://en.wikipedia.org/wiki/Exponential_decay) with distance
+in the transcript. Without it, whoever spoke first holds the floor forever,
+which is the failure ant trails avoid only because pheromone evaporates.
 
-**[Quorum sensing](https://en.wikipedia.org/wiki/Quorum_sensing).** An option carries when some number of
-distinct participants have grounded support for it inside a window. Not a majority of anything, not a
-score to beat. The count is local, order independent and idempotent, so an
-agent that catches up late folds to exactly the same standing as one that
-watched live. This is how [honeybee swarms](https://en.wikipedia.org/wiki/Swarming_%28honey_bee%29) settle a nest site.
+**[Quorum sensing](https://en.wikipedia.org/wiki/Quorum_sensing).** An option
+carries when some number of distinct participants have grounded support for it
+inside a window. Not a majority of anything, not a score to beat. The count is
+local, order independent and idempotent, so an agent that catches up late folds
+to exactly the same standing as one that watched live. This is how [honeybee
+swarms](https://en.wikipedia.org/wiki/Swarming_%28honey_bee%29) settle a nest
+site.
 
-**[Cross-inhibition](https://en.wikipedia.org/wiki/Lateral_inhibition).** An objection names a *message*,
-and removes that message's author from the supporter set of whatever they were
-advocating. It
-does not debit the option. Subtracting from a score cannot break a tie between
-two equally supported options; silencing an advocate can, and that asymmetry is
-the entire reason it is shaped this way. Honeybees do this too, with stop
-signals.
+**[Cross-inhibition](https://en.wikipedia.org/wiki/Lateral_inhibition).** An
+objection names a *message*, and removes that message's author from the
+supporter set of whatever they were advocating. It does not debit the option.
+Subtracting from a score cannot break a tie between two equally supported
+options; silencing an advocate can, and that asymmetry is the entire reason it
+is shaped this way. Honeybees do this too, with stop signals.
 
-**[Response thresholds](https://en.wikipedia.org/wiki/Task_allocation_and_partitioning_of_social_insects).**
+**[Response
+thresholds](https://en.wikipedia.org/wiki/Task_allocation_and_partitioning_of_social_insects).**
 Every member computes an urge from the salience field and its own affinity, and
-whoever bids highest takes the floor. A member whose
-urge never clears its threshold does not bid at all. This is the response-threshold model of division of labour, and it is also
-[Pandemonium](https://en.wikipedia.org/wiki/Pandemonium_architecture)'s decision demon, which is the same
-idea arrived at from the AI side.
+whoever bids highest takes the floor. A member whose urge never clears its
+threshold does not bid at all. This is the response-threshold model of division
+of labour, and it is also
+[Pandemonium](https://en.wikipedia.org/wiki/Pandemonium_architecture)'s
+decision demon, which is the same idea arrived at from the AI side.
 
-Every one of those is [fixed-point](https://en.wikipedia.org/wiki/Fixed-point_arithmetic) integer
-arithmetic. Every payload derives
-`Eq`, and every episode replays byte for byte from the same transcript.
+Every one of those is
+[fixed-point](https://en.wikipedia.org/wiki/Fixed-point_arithmetic) integer
+arithmetic. Every payload derives `Eq`, and every episode replays byte for byte
+from the same transcript.
 
 ## The floor is a substrate, not a broadcast
 
@@ -122,16 +127,17 @@ Five agents choosing between four options, 5000 seeded rooms, on one core:
 | `hive+` | a tuned deliberation episode | 6.75 | **82.1%** |
 
 The middle row is [self-consistency](https://arxiv.org/abs/2203.11171), the
-control most multi-agent claims are missing. A room that
-could not beat an independent vote at the same budget would not be worth its
-budget. This one does, at every desk size from three to eight, while spending
-about half the turns.
+control most multi-agent claims are missing. A room that could not beat an
+independent vote at the same budget would not be worth its budget. This one
+does, at every desk size from three to eight, while spending about half the
+turns.
 
-The [benchmark write-up](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks)
-has the rest: the two bounds on the quorum threshold, why the turn budget has
-to scale with the desk, what happens to accuracy without a blind opening round,
-what five live models did to the grammar when nobody was watching, and an
-honest section on what none of it shows.
+The [benchmark
+write-up](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks) has the
+rest: the two bounds on the quorum threshold, why the turn budget has to scale
+with the desk, what happens to accuracy without a blind opening round, what
+five live models did to the grammar when nobody was watching, and an honest
+section on what none of it shows.
 
 ## Three rules it will not break
 
