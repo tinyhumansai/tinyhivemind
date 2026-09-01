@@ -64,7 +64,7 @@ pheromone evaporates.
 distinct participants have grounded support for it inside a window. Not a majority of anything, not a
 score to beat. The count is local, order independent and idempotent, so an
 agent that catches up late folds to exactly the same standing as one that
-watched live. This is how [honeybee swarms](https://en.wikipedia.org/wiki/Swarming_(honey_bee)) settle a nest site.
+watched live. This is how [honeybee swarms](https://en.wikipedia.org/wiki/Swarming_%28honey_bee%29) settle a nest site.
 
 **[Cross-inhibition](https://en.wikipedia.org/wiki/Lateral_inhibition).** An objection names a *message*,
 and removes that message's author from the supporter set of whatever they were
