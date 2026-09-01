@@ -50,6 +50,7 @@
 //! | `--sweep` | score the policy grid |
 //! | `--agent-cmd CMD` | drive one episode through a real agent CLI |
 //! | `--scenario PATH` | give the live room a real problem with private facts |
+//! | `--repeat N` | run a live scenario N times and count both arms |
 
 mod arms;
 mod live;
@@ -92,6 +93,8 @@ struct Options {
     mode: Mode,
     /// A real problem for the live room, if one was given.
     scenario: Option<String>,
+    /// How many times to run a live scenario.
+    repeat: u32,
 }
 
 /// What this run does.
@@ -118,6 +121,7 @@ impl Options {
             policy: tuned_policy(5),
             mode: Mode::Compare,
             scenario: None,
+            repeat: 1,
         };
         // The policy is rebuilt once the room size is known, then any explicit
         // policy flag is applied over it, so `--agents` moves the quorum
@@ -166,6 +170,7 @@ impl Options {
                     }
                 }
                 "--scenario" => options.scenario = args.next(),
+                "--repeat" => options.repeat = next_number(&mut args).unwrap_or(1).max(1),
                 _ => {}
             }
         }
@@ -433,6 +438,10 @@ fn live_episode(options: &Options, command: &str) -> Result<(), String> {
 }
 
 /// Deliberate a real problem, then poll the same agents independently.
+///
+/// Both arms are run `--repeat` times, because a live room is sampled rather
+/// than computed and one episode is an anecdote. The trace is printed for the
+/// first round only; the rest are counted.
 fn live_scenario(options: &Options, command: &str, scenario: &Scenario) -> Result<(), String> {
     let ids = scenario.member_ids();
     // The room size comes from the scenario, so the quorum and budget have to
@@ -445,83 +454,121 @@ fn live_scenario(options: &Options, command: &str, scenario: &Scenario) -> Resul
         },
         ..options.policy
     };
-    let mut agents: Vec<LiveAgent> = scenario
-        .agents
-        .iter()
-        .filter_map(|agent| {
-            LiveAgent::new(
-                &agent.id,
-                &agent.role,
-                command,
-                policy.quorum,
-                Scenario::private_brief(agent),
-            )
-        })
-        .collect();
-    if agents.len() != ids.len() {
-        return Err(format!("could not build agents from {command:?}"));
-    }
-    let mut participants: Vec<&mut dyn Participant> = agents
-        .iter_mut()
-        .map(|agent| agent as &mut dyn Participant)
-        .collect();
 
     println!(
-        "driving one episode through {command:?}\n\
+        "driving {} episode(s) through {command:?}\n\
          {} members, budget {}, quorum {}\n\nThe brief every member sees:\n{}",
+        options.repeat,
         ids.len(),
         policy.turn_budget,
         policy.quorum.threshold,
         scenario.brief(),
     );
 
-    let wall = std::time::Instant::now();
-    let report = drive(&ids, &mut participants, &policy, &scenario.brief(), true)?;
-    let wall = wall.elapsed();
-    for line in &report.trace {
-        println!("{line}");
-    }
-    let decided = report
-        .decided
-        .as_ref()
-        .map_or_else(|| "nothing".to_owned(), |topic| format!("#{topic}"));
-    println!(
-        "\nhive   ended {} on {} after {} turns in {:.0} s — {}",
-        report.ending.label(),
-        decided,
-        report.turns,
-        wall.as_secs_f64(),
-        verdict(report.decided.as_ref().map(TopicId::as_str), &scenario.truth),
-    );
-
-    let picks = live::poll(scenario, command)?;
-    let mut tally: Vec<(String, u32)> = Vec::new();
-    for (id, pick) in &picks {
-        println!("vote   {id:>10} alone: #{pick}");
-        match tally.iter_mut().find(|(topic, _)| topic == pick) {
-            Some(entry) => entry.1 = entry.1.saturating_add(1),
-            None => tally.push((pick.clone(), 1)),
+    let mut hive_correct = 0_u32;
+    let mut hive_decided = 0_u32;
+    let mut vote_correct = 0_u32;
+    let mut turns_total = 0_u32;
+    for round in 0..options.repeat {
+        let mut agents: Vec<LiveAgent> = scenario
+            .agents
+            .iter()
+            .filter_map(|agent| {
+                LiveAgent::new(
+                    &agent.id,
+                    &agent.role,
+                    command,
+                    policy.quorum,
+                    Scenario::private_brief(agent),
+                )
+            })
+            .collect();
+        if agents.len() != ids.len() {
+            return Err(format!("could not build agents from {command:?}"));
         }
-    }
-    tally.sort_by(|left, right| right.1.cmp(&left.1));
-    if let Some((winner, count)) = tally.first() {
+        let mut participants: Vec<&mut dyn Participant> = agents
+            .iter_mut()
+            .map(|agent| agent as &mut dyn Participant)
+            .collect();
+
+        let wall = std::time::Instant::now();
+        let keep_trace = round == 0;
+        let report = drive(&ids, &mut participants, &policy, &scenario.brief(), keep_trace)?;
+        let wall = wall.elapsed();
+        for line in &report.trace {
+            println!("{line}");
+        }
+        let decided = report.decided.as_ref().map(TopicId::as_str);
+        if decided.is_some() {
+            hive_decided = hive_decided.saturating_add(1);
+        }
+        if decided == Some(scenario.truth.as_str()) {
+            hive_correct = hive_correct.saturating_add(1);
+        }
+        turns_total = turns_total.saturating_add(report.turns);
         println!(
-            "vote   plurality #{winner} with {count} of {} — {}",
-            picks.len(),
-            verdict(Some(winner.as_str()), &scenario.truth),
+            "\nhive   ended {} on {} after {} turns in {:.0} s — {}",
+            report.ending.label(),
+            decided.map_or_else(|| "nothing".to_owned(), |topic| format!("#{topic}")),
+            report.turns,
+            wall.as_secs_f64(),
+            verdict(decided, &scenario.truth),
         );
+
+        let picks = live::poll(scenario, command)?;
+        for (id, pick) in &picks {
+            println!("vote   {id:>10} alone: #{pick}");
+        }
+        let winner = plurality(&picks);
+        match &winner {
+            Some(topic) => println!(
+                "vote   plurality #{topic} of {} — {}",
+                picks.len(),
+                verdict(Some(topic.as_str()), &scenario.truth),
+            ),
+            None => println!("vote   tied, no plurality — no answer"),
+        }
+        if winner.as_deref() == Some(scenario.truth.as_str()) {
+            vote_correct = vote_correct.saturating_add(1);
+        }
+        println!();
     }
-    println!("\nthe recorded answer is #{}", scenario.truth);
+
+    println!(
+        "over {} round(s), answer #{}:\n\
+         hive   {} correct, {} decided, {:.1} turns per episode\n\
+         vote   {} correct",
+        options.repeat,
+        scenario.truth,
+        hive_correct,
+        hive_decided,
+        metrics::ratio(u64::from(turns_total), u64::from(options.repeat)),
+        vote_correct,
+    );
     Ok(())
 }
 
-/// Whether an arm landed on the recorded answer.
-fn verdict(decided: Option<&str>, truth: &str) -> &'static str {
-    match decided {
-        Some(topic) if topic == truth => "correct",
-        Some(_) => "wrong",
-        None => "no answer",
+/// The single option with the most votes, or `None` when the poll is tied.
+///
+/// A tie is not a decision and must not be reported as one. Resolving it by
+/// the order the votes happened to arrive would hand the vote control a win it
+/// did not earn, which is exactly the kind of quiet thumb on the scale a
+/// benchmark exists to avoid.
+fn plurality(picks: &[(String, String)]) -> Option<String> {
+    let mut tally: Vec<(&str, u32)> = Vec::new();
+    for (_, pick) in picks {
+        match tally.iter_mut().find(|(topic, _)| *topic == pick.as_str()) {
+            Some(entry) => entry.1 = entry.1.saturating_add(1),
+            None => tally.push((pick.as_str(), 1)),
+        }
     }
+    let most = tally.iter().map(|(_, count)| *count).max()?;
+    let mut leaders = tally.iter().filter(|(_, count)| *count == most);
+    let leader = leaders.next()?;
+    if leaders.next().is_some() {
+        return None;
+    }
+    Some(leader.0.to_owned())
 }
 
 /// Deliberate the synthetic brief, which has no recorded answer.
