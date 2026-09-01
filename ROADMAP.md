@@ -25,7 +25,18 @@ dependency direction is enforced by construction.
 | P11 | `SessionMessage.parent` and the structured trace sidecar | planned |
 | P12 | Per-conversation read state | planned |
 | P13 | Digests and supersession | planned |
+| P15 | Cross-desk referral: one child turn that may run on another channel, the answer that comes back, and the federated benchmark that scored it | **done**, every knob **off by default** |
 | P14 | Recall: one selection ranking, roster and desk pickers, bounded transcript search with optional regular expressions, pinning as a fold, and a stated per-message budget | **done** |
+
+P15 is also out of order, and for a related reason: it is not a wire-format
+change either, and it answers a pressure none of P10 through P13 address. Every
+mechanism before it stops at the edge of one conversation, so a room of agents
+can pool what its members know and a *company* of them cannot. A desk is a
+correlation boundary — members of one desk are wrong about the same things —
+and no amount of deliberating inside a channel cancels an error every member
+shares. See [`docs/specs/cross-desk-referral.md`](docs/specs/cross-desk-referral.md),
+[ADR 0006](docs/adr/0006-a-referral-crosses-one-channel-at-a-time.md) and
+[the federated experiment](docs/experiments/2026-09-02-federated-hidden-profile.md).
 
 P14 is out of order on purpose. It is not a wire-format change and does not
 wait on P10 through P13: it answers the same pressure they do — a bounded

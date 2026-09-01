@@ -209,6 +209,32 @@ agent A's words as its own.
 One log, one sequence numbering, two histories. Every line a viewer did not
 write arrives as somebody else's, named.
 
+## A desk is a correlation boundary, so a question can leave it
+
+One room can pool what its members separately know. A *company* of rooms cannot,
+and that is not an inconvenience — it is the thing that decides the answer.
+Members of one desk read the same transcript, work the same part of the system,
+and are wrong about the same things. Averaging correlated error does not remove
+it, so no amount of deliberating inside a channel cancels a mistake every member
+of it shares.
+
+A **referral** is the one mechanism here that leaves a conversation: at most one
+turn, which may run on another desk, and one answer carried back to the
+conversation that asked. `@#platform` is not a broadcast — it resolves to
+exactly one agent before the decision leaves the fold — and a round trip is two
+hops, so it cannot ring.
+
+Three desks, each confidently wrong about a different option, deciding one
+question: deliberating inside the channels gets it right **0.2%** of the time,
+and every desk converges anyway, on three incompatible answers. Putting all
+twelve members in one room instead — removing the boundary rather than crossing
+it — gets **10.5%**, because a bigger room with three factions never reaches
+quorum. Crossing it gets **77.5%**, which matches what the same information is
+worth when handed over for free.
+
+It is off by default, and at desks with no blind spot of their own it changes
+no answer and costs twice the turns. That is the honest case for leaving it off.
+
 ## The window is a budget, so the transcript is queryable
 
 That projection is bounded — about thirty messages — and the log behind it is
@@ -349,7 +375,7 @@ They are enforced by the shape of the crates, not by discipline:
 ```
 
 Anything answerable from its arguments lives in a pure crate; anything that has
-to wait lives behind one of the three ports. CI asserts the split rather than
+to wait lives behind one of the ports. CI asserts the split rather than
 trusting it — the pure crates cannot take on a runtime, a transport, an HTTP
 client, a web framework or a database driver without failing the build.
 
@@ -437,11 +463,12 @@ see what the thing actually does.
 | [Architecture](https://github.com/tinyhumansai/tinyhivemind/wiki/Architecture) | the three crates and why they are split that way |
 | [Threads](https://github.com/tinyhumansai/tinyhivemind/wiki/Threads) | thread-scoped projection, and finding your way back into a busy desk |
 | [Recall](https://github.com/tinyhumansai/tinyhivemind/wiki/Recall) | searching the transcript, pinning what must not be lost, and the message budget |
+| [Cross-desk referral](https://github.com/tinyhumansai/tinyhivemind/wiki/Cross-desk-referral) | asking another channel a question, and getting the answer back |
 | [Hive episodes](https://github.com/tinyhumansai/tinyhivemind/wiki/Hive-episodes) | salience, quorum, cross-inhibition, and the attention market |
 | [Trace grammar](https://github.com/tinyhumansai/tinyhivemind/wiki/Trace-grammar) | what a marker deposits, and what real models get wrong |
 | [Episode policy](https://github.com/tinyhumansai/tinyhivemind/wiki/Episode-policy) | every setting, and how to tune it to the size of a desk |
 | [Benchmarks](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks) | the full report, including what it does not show |
-| [Host integration](https://github.com/tinyhumansai/tinyhivemind/wiki/Host-integration) | the three ports, and what your application owes the library |
+| [Host integration](https://github.com/tinyhumansai/tinyhivemind/wiki/Host-integration) | the ports, and what your application owes the library |
 | [Agent councils](https://github.com/tinyhumansai/tinyhivemind/wiki/Agent-councils) | how this differs from a council or crew, and what each does better |
 | [Development](https://github.com/tinyhumansai/tinyhivemind/wiki/Development) | the build contract, testing, and how to contribute |
 | [Glossary](https://github.com/tinyhumansai/tinyhivemind/wiki/Glossary) | every term, what it means here, and where it came from |

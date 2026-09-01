@@ -51,13 +51,14 @@ Anything a reader wants before they touch the code:
 | [Quick start](https://github.com/tinyhumansai/tinyhivemind/wiki/Quick-start) | pinning it, resolving a mention, reading a deliberation |
 | [Desks and rosters](https://github.com/tinyhumansai/tinyhivemind/wiki/Desks-and-rosters) | membership, responder mode, conversation identity |
 | [Mentions](https://github.com/tinyhumansai/tinyhivemind/wiki/Mentions) | the grammar, resolution, and expansion |
+| [Cross-desk referral](https://github.com/tinyhumansai/tinyhivemind/wiki/Cross-desk-referral) | asking another channel a question, and the answer coming back |
 | [Transcript projection](https://github.com/tinyhumansai/tinyhivemind/wiki/Transcript-projection) | attribution, the paging walk, continuous sharing |
 | [Threads](https://github.com/tinyhumansai/tinyhivemind/wiki/Threads) | thread-scoped projection and the desk's thread index |
 | [Responder ladder](https://github.com/tinyhumansai/tinyhivemind/wiki/Responder-ladder) | the rungs, the selector, and mention dispatch |
 | [Hive episodes](https://github.com/tinyhumansai/tinyhivemind/wiki/Hive-episodes) | stigmergy, salience decay, quorum, cross-inhibition, the attention market |
 | [Episode policy](https://github.com/tinyhumansai/tinyhivemind/wiki/Episode-policy) | every setting, and how to tune it to a desk |
 | [Benchmarks](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks) | the full report, including what it does not show |
-| [Host integration](https://github.com/tinyhumansai/tinyhivemind/wiki/Host-integration) | the three ports and what a host owes the library |
+| [Host integration](https://github.com/tinyhumansai/tinyhivemind/wiki/Host-integration) | the ports and what a host owes the library |
 | [Development](https://github.com/tinyhumansai/tinyhivemind/wiki/Development) | the build contract, testing, and contributing |
 | [Glossary](https://github.com/tinyhumansai/tinyhivemind/wiki/Glossary) | every term, what it means here, and where it came from |
 | [Further reading](https://github.com/tinyhumansai/tinyhivemind/wiki/Further-reading) | the swarm biology, the group-decision literature, the papers |
