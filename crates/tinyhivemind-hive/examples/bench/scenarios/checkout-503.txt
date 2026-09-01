@@ -1,48 +1,53 @@
 # A hidden-profile incident.
 #
-# Every member is told the same brief and holds facts nobody else holds. Each
-# member's own facts point at #rollback, which is wrong; the room can only
-# reach #retries by pooling what its members separately know. That is the
-# whole point of the shape: a matched-budget vote cannot solve it, because
-# every independent voter answers #rollback.
+# The brief pushes every member towards #rollback: a release went out, the
+# errors started, and the playbook says roll back. No member holds enough to
+# get past that alone. #retries is reachable only from three facts held by
+# three different members — the limiter counts requests, requests tripled while
+# sessions did not, and the release put a retry behind a config flag — and no
+# member holds two of them.
+#
+# That is what makes the arms separable. A matched-budget vote polls five
+# members who each answer from their own facts, and their own facts say
+# rollback. Only a room that pools them can reach the recorded answer.
 
-task: Since the 09:14 release the checkout API has returned 503 on about 8% of requests. Ship exactly one change now, and say which.
+task: Since the 09:14 release the checkout API has returned 503 on about 8% of requests. The on-call playbook says roll a bad release back, and the release is the obvious suspect. Ship exactly one change now, and say which.
 
 truth: retries
 
 [option rollback]
-Roll back the 09:14 release.
+Roll the 09:14 release back.
 
 [option pool]
 Raise the database connection pool from 20 to 60.
 
 [option retries]
-Turn off the client retry-on-timeout policy the release enabled.
+Flip off the retry-on-timeout config flag the release shipped.
 
 [option scale]
 Triple the API replica count.
 
 [agent planner]
 role: release manager, who owns what can and cannot be shipped
-knows: The 09:14 release carries a forward-only schema migration. Rolling it back means dropping a column that rows written since 09:14 already depend on, which loses paid orders.
-knows: A config flag flip can ship in two minutes; a full rollback takes forty.
+knows: The 09:14 release carries a forward-only schema migration. Rolling it back means dropping a column that rows written since 09:14 already depend on, which loses paid orders. You have not told anyone this yet.
+knows: A config flag flip ships in two minutes. A rollback takes forty, and the error budget is gone in twenty.
 
 [agent critic]
 role: platform engineer, who owns the edge
-knows: The 503s come from the shared per-tenant rate limiter in front of the API, not from any single replica. The limiter's budget is per tenant and does not move when replica count changes.
-knows: CPU across the API fleet has not gone above 30% all morning.
+knows: The 503s are all returned by the shared per-tenant rate limiter in front of the API. It counts requests, not sessions or users, and its budget did not change today.
+knows: Nothing in the API fleet is saturated: CPU under 30%, no replica has restarted, and the limiter sheds long before a replica is under load.
 
 [agent archivist]
 role: database engineer, who owns the datastore
-knows: Database connection pool utilisation peaked at 22% during the incident and p99 query latency is flat against last week.
-knows: No slow-query log entries since 09:14.
+knows: Connection pool utilisation peaked at 22% during the incident and p99 query latency is flat against last week, with no slow-query log entries since 09:14.
+knows: The 09:14 migration is additive and is not read on the checkout path at all.
 
 [agent scout]
 role: client engineer, who owns the SDK
-knows: The 09:14 release enabled retry-on-timeout in the client SDK with 3 attempts and no jitter.
-knows: Request volume at the edge tripled at 09:14 while unique sessions stayed flat.
+knows: The 09:14 release shipped SDK 4.2, whose only behavioural change is a retry-on-timeout in the network layer, 3 attempts, no jitter, behind a server-controlled config flag.
+knows: You do not have edge traffic numbers and cannot tell from here whether that retry is actually firing.
 
 [agent auditor]
 role: SRE on call, who owns the incident
-knows: Successful checkouts per minute are unchanged since 09:14; only the error count moved.
-knows: The error rate is concentrated on clients running SDK 4.2 and is zero on 4.1.
+knows: Request volume at the edge tripled at 09:14 while unique sessions stayed flat, and successful checkouts per minute have not moved.
+knows: The 503s are concentrated entirely on clients running SDK 4.2 and are zero on 4.1, but you do not know what changed between those two versions.
