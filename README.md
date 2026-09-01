@@ -224,7 +224,7 @@ answers is the answer:
     ├─ two topics carry, nobody to break it ──▶ Deadlocked { topics }
     │
     └─ highest bid clears its threshold? ─────▶ Speak { turn }
-                                             otherwise ▶ Idle
+                                    otherwise ▶ Idle
 ```
 
 The phase only ever moves one way, and the room gets exactly one chance to say
