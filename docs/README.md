@@ -40,6 +40,7 @@ Anything a reader wants before they touch the code:
 | page | what it covers |
 | --- | --- |
 | [Architecture](https://github.com/tinyhumansai/tinyhivemind/wiki/Architecture) | the three crates and why they are split that way |
+| [Agent councils](https://github.com/tinyhumansai/tinyhivemind/wiki/Agent-councils) | how this differs from a council or crew, and what each does better |
 | [Quick start](https://github.com/tinyhumansai/tinyhivemind/wiki/Quick-start) | pinning it, resolving a mention, reading a deliberation |
 | [Desks and rosters](https://github.com/tinyhumansai/tinyhivemind/wiki/Desks-and-rosters) | membership, responder mode, conversation identity |
 | [Mentions](https://github.com/tinyhumansai/tinyhivemind/wiki/Mentions) | the grammar, resolution, and expansion |
