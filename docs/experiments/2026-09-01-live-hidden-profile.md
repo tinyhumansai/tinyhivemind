@@ -99,10 +99,10 @@ speaker's framing is in the transcript before anybody has stated a fact.
 
 ### 2. Support is counted; grounds are not weighed
 
-This is the important one. In all four failed rooms of the paired ten — and in
-both earlier failures — scout's refutation — the retry
-path shipped disabled, zero retries fired today — was in the transcript, at a
-sequence every later message could cite. It changed nothing. Members went on
+This is the important one. In all four failed rooms of the paired ten, and in
+both earlier failures, scout's refutation was already in the transcript: the
+retry path shipped disabled, zero retries fired today, at a sequence every
+later message could cite. It changed nothing. Members went on
 depositing `!support #retries ^6`, and three grounded supporters carried the
 decoy.
 
