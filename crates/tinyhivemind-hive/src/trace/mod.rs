@@ -45,6 +45,9 @@ pub const TRACE_CAP: usize = 16;
 /// ```text
 /// !<kind> [#topic] [>target] [^cite ...] [free text]
 /// ```
+///
+/// One marker is stricter: `!refute` requires both a `#topic` and at least one
+/// `^cite`, and yields no trace without them.
 #[must_use]
 pub fn resolve(
     body: &str,
@@ -152,6 +155,7 @@ fn parse_line(
         "propose" => TraceKind::Propose,
         "support" => TraceKind::Support,
         "object" => TraceKind::Object,
+        "refute" => TraceKind::Refute,
         "evidence" => TraceKind::Evidence,
         "question" => TraceKind::Question,
         "commit" => TraceKind::Commit,
@@ -178,6 +182,14 @@ fn parse_line(
                 cites.push(ground);
             }
         }
+    }
+
+    // A refutation names a hypothesis and points at a fact. Missing either, it
+    // is not a refutation, and the line yields no trace at all rather than a
+    // trace that could cap a topic on nothing -- the same fail-closed rule the
+    // rest of the grammar uses for an unrecognised marker.
+    if kind == TraceKind::Refute && (topic.is_none() || cites.is_empty()) {
+        return None;
     }
 
     Some(Trace {

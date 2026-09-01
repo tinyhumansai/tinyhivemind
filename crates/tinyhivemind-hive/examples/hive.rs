@@ -92,6 +92,7 @@ fn main() {
             threshold: 2,
             window: 100,
             require_grounded: true,
+            ..QuorumPolicy::DEFAULT
         },
         ..EpisodePolicy::DEFAULT
     };
@@ -183,6 +184,7 @@ fn out_of_script_utterance(turn: &HiveTurn, visible: &[&SessionMessage]) -> Stri
         threshold: 2,
         window: 100,
         require_grounded: true,
+        ..QuorumPolicy::DEFAULT
     };
     if let Ok(standing) = standings(&traces, at, &policy)
         && let ConsensusState::Quorum { topic } = consensus(&standing, &policy)

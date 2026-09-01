@@ -136,7 +136,13 @@ fn the_policy_and_state_pin_their_wire_forms() {
             "blind_round": true,
             "dominance_cap": 50,
             "repetition_cap": 3,
-            "quorum": { "threshold": 2, "window": 30, "require_grounded": true },
+            "quorum": {
+                "threshold": 2,
+                "window": 30,
+                "require_grounded": true,
+                "refutation_cap": null,
+                "require_evidential": false,
+            },
             "weights": { "recency": 5, "importance": 30, "relevance": 20, "half_life": 20 },
         }),
     );

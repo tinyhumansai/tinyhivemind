@@ -45,6 +45,9 @@ pub enum Error {
     /// A quorum window of zero would admit no support at all.
     #[error("quorum window must not be zero")]
     ZeroQuorumWindow,
+    /// A refutation cap of zero would cap every topic before anyone spoke.
+    #[error("refutation cap must not be zero")]
+    ZeroRefutationCap,
 }
 
 impl From<tinyhivemind_core::error::Error> for Error {

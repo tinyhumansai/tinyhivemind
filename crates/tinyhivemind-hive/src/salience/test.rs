@@ -149,7 +149,10 @@ fn a_trace_newer_than_the_decision_point_does_not_decay() {
 #[test]
 fn importance_orders_the_trace_kinds() {
     assert!(importance(TraceKind::Commit) > importance(TraceKind::Propose));
-    assert!(importance(TraceKind::Propose) > importance(TraceKind::Object));
+    // A refutation is directed at a hypothesis rather than at a person, so it
+    // outranks an objection; putting a new option on the floor outranks both.
+    assert!(importance(TraceKind::Propose) > importance(TraceKind::Refute));
+    assert!(importance(TraceKind::Refute) > importance(TraceKind::Object));
     assert!(importance(TraceKind::Object) > importance(TraceKind::Evidence));
     assert!(importance(TraceKind::Evidence) > importance(TraceKind::Support));
     assert!(importance(TraceKind::Support) > importance(TraceKind::Question));

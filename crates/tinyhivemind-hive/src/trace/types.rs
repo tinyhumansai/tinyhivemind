@@ -44,6 +44,15 @@ pub enum TraceKind {
     Support,
     /// Silences the advocate of the targeted message.
     Object,
+    /// Argues a cited fact against a topic, rather than against a person.
+    ///
+    /// Where [`Object`] removes one advocate, a refutation caps the topic
+    /// itself once `refutation_cap` distinct members have deposited one. It is
+    /// the only marker that requires *both* a topic and a citation, so every
+    /// refutation is grounded by construction.
+    ///
+    /// [`Object`]: TraceKind::Object
+    Refute,
     /// Supplies grounds without taking a position.
     Evidence,
     /// Asks for something the room has not established.

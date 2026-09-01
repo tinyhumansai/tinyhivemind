@@ -23,6 +23,12 @@ const BLIND: [bool; 2] = [true, false];
 const REPETITION: [u32; 2] = [2, 3];
 const DOMINANCE: [u32; 2] = [40, 60];
 const WINDOWS: [u32; 2] = [30, 100];
+/// Refutation off, then at each cap a five-member room could actually reach.
+///
+/// `None` is the crate default and the control: no topic is capped, and the
+/// simulated members do not spend a turn on a move that cannot take effect.
+const REFUTATION: [Option<u32>; 3] = [None, Some(2), Some(3)];
+const EVIDENTIAL: [bool; 2] = [false, true];
 
 /// The quorum thresholds worth trying for a desk of `agents`: two, the
 /// smallest majority, and unanimity.
@@ -73,23 +79,29 @@ pub(crate) fn sweep(rooms: &[Room], task: &str, agents: usize) -> Result<Vec<Sco
                 for repetition in REPETITION {
                     for dominance in DOMINANCE {
                         for window in WINDOWS {
-                            let policy = EpisodePolicy {
-                                turn_budget: budget,
-                                blind_round: blind,
-                                dominance_cap: dominance,
-                                repetition_cap: repetition,
-                                quorum: QuorumPolicy {
-                                    threshold,
-                                    window,
-                                    require_grounded: true,
-                                },
-                                ..EpisodePolicy::DEFAULT
-                            };
-                            let mut totals = Aggregate::default();
-                            for room in rooms {
-                                totals.add(&run_episode(room, &policy, task, false)?);
+                            for refutation_cap in REFUTATION {
+                                for require_evidential in EVIDENTIAL {
+                                    let policy = EpisodePolicy {
+                                        turn_budget: budget,
+                                        blind_round: blind,
+                                        dominance_cap: dominance,
+                                        repetition_cap: repetition,
+                                        quorum: QuorumPolicy {
+                                            threshold,
+                                            window,
+                                            require_grounded: true,
+                                            refutation_cap,
+                                            require_evidential,
+                                        },
+                                        ..EpisodePolicy::DEFAULT
+                                    };
+                                    let mut totals = Aggregate::default();
+                                    for room in rooms {
+                                        totals.add(&run_episode(room, &policy, task, false)?);
+                                    }
+                                    scored.push(Scored { policy, totals });
+                                }
                             }
-                            scored.push(Scored { policy, totals });
                         }
                     }
                 }
@@ -103,13 +115,15 @@ pub(crate) fn sweep(rooms: &[Room], task: &str, agents: usize) -> Result<Vec<Sco
 /// The header for the sweep table.
 pub(crate) fn header() -> String {
     format!(
-        "{:>7}{:>7}{:>7}{:>7}{:>7}{:>8}{:>11}{:>11}{:>10}",
+        "{:>7}{:>7}{:>7}{:>7}{:>7}{:>8}{:>8}{:>7}{:>11}{:>11}{:>10}",
         "budget",
         "quorum",
         "window",
         "blind",
         "domin",
         "repeat",
+        "refute",
+        "evid",
         "decided %",
         "correct %",
         "turns/ep"
@@ -119,7 +133,7 @@ pub(crate) fn header() -> String {
 /// One row of the sweep table.
 pub(crate) fn row(point: &Scored) -> String {
     format!(
-        "{:>7}{:>7}{:>7}{:>7}{:>7}{:>8}{:>11.1}{:>11.1}{:>10.2}",
+        "{:>7}{:>7}{:>7}{:>7}{:>7}{:>8}{:>8}{:>7}{:>11.1}{:>11.1}{:>10.2}",
         point.policy.turn_budget,
         point.policy.quorum.threshold,
         point.policy.quorum.window,
@@ -130,6 +144,16 @@ pub(crate) fn row(point: &Scored) -> String {
         },
         point.policy.dominance_cap,
         point.policy.repetition_cap,
+        point
+            .policy
+            .quorum
+            .refutation_cap
+            .map_or_else(|| "off".to_owned(), |cap| cap.to_string()),
+        if point.policy.quorum.require_evidential {
+            "yes"
+        } else {
+            "no"
+        },
         point.totals.decision_rate(),
         point.totals.accuracy(),
         point.totals.turns_per_episode(),

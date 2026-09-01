@@ -185,6 +185,7 @@ fn live_agents_deliberate_and_the_episode_terminates_within_its_budget() -> Resu
             threshold: 2,
             window: 100,
             require_grounded: true,
+            ..QuorumPolicy::DEFAULT
         },
         ..EpisodePolicy::DEFAULT
     };

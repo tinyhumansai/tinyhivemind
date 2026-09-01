@@ -31,6 +31,7 @@ fn policy(turn_budget: u32) -> EpisodePolicy {
             threshold: 2,
             window: 100,
             require_grounded: true,
+            ..QuorumPolicy::DEFAULT
         },
         ..EpisodePolicy::DEFAULT
     }
@@ -389,5 +390,113 @@ fn a_bid_reason_is_reported_for_every_turn() -> Result<(), String> {
             "every turn must be able to say why it was authorized",
         );
     }
+    Ok(())
+}
+
+#[test]
+fn one_refutation_kills_a_hypothesis_the_room_would_otherwise_have_carried() -> Result<(), String> {
+    // The shape of the live hidden-profile failure, with the move the grammar
+    // was missing. `#retries` is the seductive story the brief plants;
+    // `#pool` is the boring true one. Scout holds the fact that kills the
+    // decoy, and before `!refute` the only way to spend it was one `!object`
+    // per advocate — which a five-member room at this budget cannot afford.
+    let mut harness = HiveHarness::new(
+        "engineering",
+        "Engineering",
+        &["planner", "scout", "critic", "archivist", "auditor"],
+    );
+    harness.operator("Checkout is returning 503s since the release. Find the cause.");
+    let state = EpisodeState::opened(harness.conversation(), harness.watermark());
+
+    let mut planner = ScriptedAgent::new(
+        "planner",
+        [
+            "!propose #retries A client retry storm after the release.",
+            "!support #pool ^1 The timeout change makes each request last longer.",
+        ],
+    );
+    let mut scout = ScriptedAgent::new(
+        "scout",
+        [
+            "!evidence The retry path shipped disabled and has never fired.",
+            "!refute #retries ^3 Zero retries fired today, so it is not the cause.",
+        ],
+    );
+    let mut critic = ScriptedAgent::new(
+        "critic",
+        [
+            "!support #retries ^2 The timing matches the release exactly.",
+            "!support #pool ^1 The concurrency numbers fit the pool ceiling.",
+        ],
+    );
+    let mut archivist =
+        ScriptedAgent::new("archivist", ["!propose #pool The pool caps at twenty."]);
+    let mut auditor = ScriptedAgent::new(
+        "auditor",
+        [
+            "!evidence In-flight requests sit at 24 to 31 with traffic flat.",
+            "!refute #retries ^3 Confirmed against the flag: the path is off.",
+        ],
+    );
+
+    // Refutation is off in the crate default, so the arm that uses it says so.
+    let majority = EpisodePolicy {
+        quorum: QuorumPolicy {
+            threshold: 3,
+            refutation_cap: Some(2),
+            ..policy(24).quorum
+        },
+        ..policy(24)
+    };
+    for agent in [
+        &mut planner,
+        &mut scout,
+        &mut critic,
+        &mut archivist,
+        &mut auditor,
+    ] {
+        agent.set_quorum(majority.quorum);
+    }
+    let (outcome, _) = harness.run(
+        state,
+        &majority,
+        &mut [
+            &mut planner,
+            &mut scout,
+            &mut critic,
+            &mut archivist,
+            &mut auditor,
+        ],
+    )?;
+
+    let (topic, _) = converged(&outcome);
+    assert_eq!(
+        topic,
+        &TopicId("pool".into()),
+        "the refuted decoy must not carry the room",
+    );
+
+    // The decoy was capped, not silenced. Both its advocates are still in its
+    // supporter set, so the transcript records that the room considered it and
+    // a reader can audit the refutation back to the message it cites.
+    let traces = read(harness.journal());
+    let at = harness
+        .journal()
+        .last()
+        .expect("the journal is non-empty")
+        .sequence;
+    let folded = standings(&traces, at, &majority.quorum).expect("folds");
+    let retries = folded
+        .iter()
+        .find(|standing| standing.topic == TopicId("retries".into()))
+        .expect("retries was proposed and must have a standing");
+
+    assert_eq!(retries.refuted_by, ["scout", "auditor"]);
+    assert!(
+        retries.silenced.is_empty(),
+        "a refutation names a hypothesis, never a person",
+    );
+    assert_eq!(retries.supporters, ["planner", "critic"]);
+    assert!(!retries.carried(&majority.quorum));
     Ok(())
 }
