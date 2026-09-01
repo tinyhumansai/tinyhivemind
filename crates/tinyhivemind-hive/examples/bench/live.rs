@@ -190,6 +190,39 @@ impl LiveAgent {
     }
 }
 
+impl Participant for LiveAgent {
+    fn id(&self) -> &str {
+        &self.id
+    }
+
+    fn speak(&mut self, turn: &HiveTurn, visible: &[&SessionMessage]) -> Result<String, String> {
+        let output = Command::new(&self.program)
+            .args(&self.args)
+            .arg(self.prompt(turn, visible))
+            .output()
+            .map_err(|error| format!("could not run {}: {error}", self.program))?;
+        if !output.status.success() {
+            return Err(format!("{} exited with {}", self.program, output.status));
+        }
+        let text = plain(&String::from_utf8_lossy(&output.stdout));
+        // Take the marker line if the agent wrapped it in prose or a banner; a
+        // turn that deposits no trace is still a legal turn, so prose falls
+        // through to the first thing the agent actually said.
+        let marker = text
+            .lines()
+            .map(str::trim)
+            .find(|line| line.starts_with('!'));
+        let answer = marker
+            .or_else(|| {
+                text.lines()
+                    .map(str::trim)
+                    .find(|line| !line.is_empty() && !line.starts_with('>'))
+            })
+            .unwrap_or("(no answer)");
+        Ok(answer.to_owned())
+    }
+}
+
 /// Strip ANSI escape sequences from a CLI's output.
 ///
 /// Real agent CLIs colour what they print and draw a banner around it. A
