@@ -121,7 +121,7 @@ impl LiveAgent {
             Phase::Commit => COMMIT_PROTOCOL,
         };
         format!(
-            "You are @{}, the {} on a small team. {sight}\n\n{}{protocol}\n\n{}{}\n\
+            "You are @{}, the {} on a small team. {sight}\n\n{}\n{protocol}\n\n{}{}\n\
              Shared attributed transcript:\n{transcript}\n\nYour one line:",
             self.id,
             self.role,
@@ -153,9 +153,14 @@ impl LiveAgent {
             return String::new();
         };
         if standings.is_empty() {
+            let naming = if self.private.is_empty() {
+                "The topic id you coin becomes the room's name for that option, so keep it short."
+            } else {
+                "Use one of the ids the brief already names; a fresh id for an option the brief \
+                 has a name for splits the room's support across two names for one idea."
+            };
             return format!(
-                "No option is on the floor yet. The topic id you coin becomes the room's name \
-                 for that option, so keep it short. An option carries once {} different \
+                "No option is on the floor yet. {naming} An option carries once {} different \
                  members have backed it with grounds.\n\n",
                 self.quorum.threshold,
             );
