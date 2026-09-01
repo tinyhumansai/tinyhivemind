@@ -24,10 +24,21 @@
 //! [option rollback]
 //! One sentence describing it.
 //!
+//! [desk payments]
+//! name: Payments
+//!
 //! [agent planner]
+//! desk: payments
 //! role: release manager, who owns what can and cannot be shipped
 //! knows: a fact this member holds and nobody else does
 //! ```
+//!
+//! Declaring more than one `[desk ...]` makes the scenario **federated**: the
+//! members are split across channels that cannot see one another's
+//! transcripts, and the only route between them is a referral. A federated
+//! hidden profile is the sharpest form of the test — the facts that overturn
+//! the decoy are not merely held by another member, they are held in another
+//! room.
 
 use std::fmt::Write as _;
 
@@ -39,10 +50,20 @@ pub(crate) struct ScenarioOption {
     pub(crate) description: String,
 }
 
+/// One channel a scenario's members are split across.
+pub(crate) struct ScenarioDesk {
+    /// Canonical desk id, used in `@#id` and as the conversation id.
+    pub(crate) id: String,
+    /// Operator-facing display name.
+    pub(crate) name: String,
+}
+
 /// One member of the room, and what only it knows.
 pub(crate) struct ScenarioAgent {
     /// Canonical agent id, matching a desk member.
     pub(crate) id: String,
+    /// The desk this member sits on, or `None` in a single-channel scenario.
+    pub(crate) desk: Option<String>,
     /// What this member is on the team to do.
     pub(crate) role: String,
     /// Facts held by this member and by nobody else.
@@ -57,6 +78,8 @@ pub(crate) struct Scenario {
     pub(crate) truth: String,
     /// The options on offer.
     pub(crate) options: Vec<ScenarioOption>,
+    /// The channels the members are split across, if the scenario declares any.
+    pub(crate) desks: Vec<ScenarioDesk>,
     /// The members, in seating order.
     pub(crate) agents: Vec<ScenarioAgent>,
 }
@@ -72,6 +95,7 @@ impl Scenario {
         let mut truth = String::new();
         let mut options: Vec<ScenarioOption> = Vec::new();
         let mut agents: Vec<ScenarioAgent> = Vec::new();
+        let mut desks: Vec<ScenarioDesk> = Vec::new();
         let mut section = Section::Top;
 
         for line in text.lines() {
@@ -80,28 +104,7 @@ impl Scenario {
                 continue;
             }
             if let Some(header) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
-                let (kind, id) = header
-                    .split_once(char::is_whitespace)
-                    .ok_or_else(|| format!("section header {header:?} names no id"))?;
-                let id = id.trim().to_owned();
-                match kind {
-                    "option" => {
-                        options.push(ScenarioOption {
-                            id,
-                            description: String::new(),
-                        });
-                        section = Section::Option;
-                    }
-                    "agent" => {
-                        agents.push(ScenarioAgent {
-                            id,
-                            role: String::new(),
-                            knows: Vec::new(),
-                        });
-                        section = Section::Agent;
-                    }
-                    other => return Err(format!("unknown section {other:?}")),
-                }
+                section = open_section(header, &mut options, &mut desks, &mut agents)?;
                 continue;
             }
             let (key, value) = match line.split_once(':') {
@@ -119,6 +122,20 @@ impl Scenario {
                         option.description.push(' ');
                     }
                     option.description.push_str(line);
+                }
+                (Section::Desk, "name") => {
+                    value.clone_into(
+                        &mut desks
+                            .last_mut()
+                            .ok_or_else(|| "name outside a section".to_owned())?
+                            .name,
+                    );
+                }
+                (Section::Agent, "desk") => {
+                    agents
+                        .last_mut()
+                        .ok_or_else(|| "desk outside a section".to_owned())?
+                        .desk = Some(value.to_owned());
                 }
                 (Section::Agent, "role") => {
                     value.clone_into(
@@ -151,10 +168,29 @@ impl Scenario {
         if !options.iter().any(|option| option.id == truth) {
             return Err(format!("truth {truth:?} is not one of the options"));
         }
+        for agent in &agents {
+            if let Some(desk) = &agent.desk
+                && !desks.iter().any(|record| record.id == *desk)
+            {
+                return Err(format!(
+                    "agent {:?} sits on unknown desk {desk:?}",
+                    agent.id
+                ));
+            }
+        }
+        if desks.len() > 1
+            && let Some(loose) = agents.iter().find(|agent| agent.desk.is_none())
+        {
+            return Err(format!(
+                "agent {:?} names no desk, and a federated scenario has more than one",
+                loose.id,
+            ));
+        }
         Ok(Self {
             task,
             truth,
             options,
+            desks,
             agents,
         })
     }
@@ -189,6 +225,65 @@ impl Scenario {
     pub(crate) fn member_ids(&self) -> Vec<&str> {
         self.agents.iter().map(|agent| agent.id.as_str()).collect()
     }
+
+    /// The channels this scenario declares, with their members.
+    ///
+    /// A scenario that declares no desk is one room, which is the shape the
+    /// single-desk live arm already runs.
+    pub(crate) fn channels(&self) -> Vec<crate::swarm::Channel> {
+        self.desks
+            .iter()
+            .map(|desk| crate::swarm::Channel {
+                id: desk.id.clone(),
+                name: desk.name.clone(),
+                members: self
+                    .agents
+                    .iter()
+                    .filter(|agent| agent.desk.as_deref() == Some(desk.id.as_str()))
+                    .map(|agent| agent.id.clone())
+                    .collect(),
+            })
+            .collect()
+    }
+}
+
+/// Open the section a `[kind id]` header names, and return which it is.
+fn open_section(
+    header: &str,
+    options: &mut Vec<ScenarioOption>,
+    desks: &mut Vec<ScenarioDesk>,
+    agents: &mut Vec<ScenarioAgent>,
+) -> Result<Section, String> {
+    let (kind, id) = header
+        .split_once(char::is_whitespace)
+        .ok_or_else(|| format!("section header {header:?} names no id"))?;
+    let id = id.trim().to_owned();
+    match kind {
+        "option" => {
+            options.push(ScenarioOption {
+                id,
+                description: String::new(),
+            });
+            Ok(Section::Option)
+        }
+        "desk" => {
+            desks.push(ScenarioDesk {
+                name: id.clone(),
+                id,
+            });
+            Ok(Section::Desk)
+        }
+        "agent" => {
+            agents.push(ScenarioAgent {
+                id,
+                desk: None,
+                role: String::new(),
+                knows: Vec::new(),
+            });
+            Ok(Section::Agent)
+        }
+        other => Err(format!("unknown section {other:?}")),
+    }
 }
 
 /// Which section the parser is inside.
@@ -197,6 +292,8 @@ enum Section {
     Top,
     /// Inside an `[option ...]`.
     Option,
+    /// Inside a `[desk ...]`.
+    Desk,
     /// Inside an `[agent ...]`.
     Agent,
 }

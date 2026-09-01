@@ -24,12 +24,12 @@ use tinyhivemind_hive::{
 use crate::rng::{Rng, mix};
 
 /// Names drawn on, in order, for a room's options.
-const TOPIC_NAMES: [&str; 8] = [
+pub(crate) const TOPIC_NAMES: [&str; 8] = [
     "stage", "ship", "revert", "shadow", "canary", "freeze", "split", "pilot",
 ];
 
 /// Names and roles drawn on, in order, for a room's members.
-const MEMBER_ROLES: [(&str, Role); 8] = [
+pub(crate) const MEMBER_ROLES: [(&str, Role); 8] = [
     ("planner", Role::Proposer),
     ("critic", Role::Critic),
     ("archivist", Role::Archivist),
@@ -146,6 +146,16 @@ pub(crate) struct SimAgent {
     pub(crate) role: Role,
     /// Private evaluation per topic, aligned with [`Room::topics`].
     evals: Vec<(TopicId, i32)>,
+    /// Readings of a topic that arrived from outside this member's own desk,
+    /// as a running sum and a count.
+    ///
+    /// A member that hears another channel's reading of an option does not
+    /// replace its own with it and does not simply defer to it: it averages
+    /// the two, which is the whole operation a channel boundary otherwise
+    /// prevents. Nothing here touches the supporter sets — an imported reading
+    /// changes what a member *believes*, and it still has to spend a turn
+    /// saying so before the room counts it.
+    imports: Vec<(TopicId, i64, u32)>,
     /// Its own argmax over `evals`.
     favourite: TopicId,
     /// Drives noncompliance only; never the private evaluations.
@@ -179,6 +189,22 @@ impl SimAgent {
                 (topic.clone(), base + draws.centered(noise))
             })
             .collect();
+        Self::assembled(id, role, seed, index, evals)
+    }
+
+    /// Build a participant from evaluations the caller has already drawn.
+    ///
+    /// [`Self::new`] draws independent noise around a shared truth, which is
+    /// the right model for one room. A federation of desks needs evaluations
+    /// whose error is *correlated within a desk*, so it draws its own and
+    /// hands them in here.
+    pub(crate) fn assembled(
+        id: &str,
+        role: Role,
+        seed: u64,
+        index: usize,
+        evals: Vec<(TopicId, i32)>,
+    ) -> Self {
         let favourite = evals
             .iter()
             .max_by_key(|(_, score)| *score)
@@ -187,10 +213,35 @@ impl SimAgent {
             id: id.to_owned(),
             role,
             evals,
+            imports: Vec::new(),
             favourite,
             rng: Rng::seeded(mix(seed, 0x000A_11CE ^ index as u64)),
             quorum: QuorumPolicy::DEFAULT,
         }
+    }
+
+    /// Fold one outside reading of a topic into this member's own view.
+    ///
+    /// Returns whether the reading was taken: a topic this member holds no
+    /// evaluation of is not a topic it can average anything into.
+    pub(crate) fn import(&mut self, topic: &TopicId, reading: i32) -> bool {
+        if !self.evals.iter().any(|(held, _)| held == topic) {
+            return false;
+        }
+        match self.imports.iter_mut().find(|(held, _, _)| held == topic) {
+            Some(entry) => {
+                entry.1 = entry.1.saturating_add(i64::from(reading));
+                entry.2 = entry.2.saturating_add(1);
+            }
+            None => self.imports.push((topic.clone(), i64::from(reading), 1)),
+        }
+        self.favourite = self
+            .evals
+            .iter()
+            .map(|(topic, _)| topic.clone())
+            .max_by_key(|topic| self.score(topic))
+            .unwrap_or_else(|| self.favourite.clone());
+        true
     }
 
     /// Tell the participant which quorum rule the room is running.
@@ -206,12 +257,18 @@ impl SimAgent {
         &self.favourite
     }
 
-    /// This participant's private score for one option.
-    fn score(&self, topic: &TopicId) -> i32 {
-        self.evals
-            .iter()
-            .find(|(held, _)| held == topic)
-            .map_or(i32::MIN, |(_, score)| *score)
+    /// This participant's score for one option: its own reading, averaged
+    /// with every outside reading it has taken.
+    pub(crate) fn score(&self, topic: &TopicId) -> i32 {
+        let Some((_, own)) = self.evals.iter().find(|(held, _)| held == topic) else {
+            return i32::MIN;
+        };
+        let Some((_, sum, count)) = self.imports.iter().find(|(held, _, _)| held == topic) else {
+            return *own;
+        };
+        let total = i64::from(*own).saturating_add(*sum);
+        let divisor = i64::from(*count).saturating_add(1);
+        i32::try_from(total / divisor).unwrap_or(*own)
     }
 
     /// Produce the body of one turn, seeing exactly what the turn authorized.

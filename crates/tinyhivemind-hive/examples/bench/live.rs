@@ -24,6 +24,8 @@ use tinyhivemind_hive::{
 
 use crate::run::Participant;
 use crate::scenario::Scenario;
+use crate::swarm::SwarmMember;
+use tinyhivemind_hive::referral::{Referral, ReferralKind};
 
 /// The moves available while the room is still deliberating.
 ///
@@ -33,13 +35,16 @@ use crate::scenario::Scenario;
 /// whole budget recording a decision it never actually reached. Offering only
 /// the moves that count in this phase is the fix, and it is one a host owes
 /// its agents rather than something the library can impose.
-const DELIBERATE_PROTOCOL: &str = "\
+const DELIBERATE_MOVES: &str = "\
 Reply with ONE line only, beginning with exactly one of these markers:
 !propose #topic  then one sentence putting a new option on the floor
 !support #topic ^N  then why, citing message N as grounds
 !object >N ^M  then why, objecting to message N and citing message M
 !evidence ^N  then a fact, adding grounds without taking a side
-!question  then what you need that nobody has established
+!question  then what you need that nobody has established";
+
+/// The rules those moves are read under.
+const DELIBERATE_RULES: &str = "\
 The # on a topic and the ^ on a citation are part of the grammar: `!propose \
 #canary ...` names an option, `!propose canary ...` names nothing and is \
 discarded. A support with no ^citation does not count, and only support moves \
@@ -101,9 +106,21 @@ impl LiveAgent {
         })
     }
 
-    /// Render exactly what this turn is allowed to see.
-    fn prompt(&self, turn: &HiveTurn, visible: &[&SessionMessage]) -> String {
-        let transcript = visible
+    /// What only this member knows, as a block for a prompt.
+    ///
+    /// A referred turn needs this as much as an ordinary one does, and the
+    /// first live federation forgot it: the answering agent was handed the
+    /// question and its desk's transcript and nothing else, so it could only
+    /// argue from what the desk had already said. It argued. The one desk that
+    /// asked a question got a rebuttal instead of the fact it asked for, and
+    /// adopted the answering desk's hypothesis.
+    pub(crate) fn private(&self) -> &str {
+        &self.private
+    }
+
+    /// Render an attributed transcript the way every prompt here shows one.
+    pub(crate) fn render(visible: &[&SessionMessage]) -> String {
+        visible
             .iter()
             .map(|message| {
                 let author = match &message.author {
@@ -115,14 +132,72 @@ impl LiveAgent {
                 format!("[{}] {author}: {}", message.sequence, message.content)
             })
             .collect::<Vec<_>>()
-            .join("\n");
+            .join("\n")
+    }
+
+    /// Run one prompt through the agent process and take its one line.
+    ///
+    /// # Errors
+    ///
+    /// Returns the process failure, or a non-zero exit.
+    pub(crate) fn line(&self, prompt: String) -> Result<String, String> {
+        let output = Command::new(&self.program)
+            .args(&self.args)
+            .arg(prompt)
+            .output()
+            .map_err(|error| format!("could not run {}: {error}", self.program))?;
+        if !output.status.success() {
+            return Err(format!("{} exited with {}", self.program, output.status));
+        }
+        let text = plain(&String::from_utf8_lossy(&output.stdout));
+        // Take the marker line if the agent wrapped it in prose or a banner; a
+        // turn that deposits no trace is still a legal turn, so prose falls
+        // through to the first thing the agent actually said.
+        let marker = text
+            .lines()
+            .map(str::trim)
+            .find(|line| line.starts_with('!') || line.starts_with('@'));
+        let answer = marker
+            .or_else(|| {
+                text.lines()
+                    .map(str::trim)
+                    .find(|line| !line.is_empty() && !line.starts_with('>'))
+            })
+            .unwrap_or("(no answer)");
+        Ok(answer.to_owned())
+    }
+
+    /// Render exactly what this turn is allowed to see.
+    pub(crate) fn prompt(&self, turn: &HiveTurn, visible: &[&SessionMessage]) -> String {
+        self.prompt_with(turn, visible, "")
+    }
+
+    /// The same, with one extra block of moves offered alongside the protocol.
+    ///
+    /// `extra` lands *inside* the protocol block rather than before the whole
+    /// prompt. That placement is not cosmetic. The first federated live run put
+    /// the cross-channel move above everything else, so the last instruction
+    /// the model read was still "reply with exactly one of these markers" —
+    /// and across twenty-seven turns on three desks, not one agent addressed
+    /// another channel. A move offered before the list of moves is not offered.
+    pub(crate) fn prompt_with(
+        &self,
+        turn: &HiveTurn,
+        visible: &[&SessionMessage],
+        extra: &str,
+    ) -> String {
+        let transcript = Self::render(visible);
         let sight = match turn.visibility {
             Visibility::Blind => "You cannot yet see your peers' positions. Form your own first.",
             Visibility::Full => "You can see the whole room.",
         };
+        // `extra` lands between the list of moves and the rules they are read
+        // under, so an extra move reads as one of the markers rather than as an
+        // afterthought. The commit phase offers nothing extra: the room has
+        // already reached a decision and there is nothing left to ask anybody.
         let protocol = match turn.phase {
-            Phase::Deliberate => DELIBERATE_PROTOCOL,
-            Phase::Commit => COMMIT_PROTOCOL,
+            Phase::Deliberate => format!("{DELIBERATE_MOVES}\n{extra}\n{DELIBERATE_RULES}"),
+            Phase::Commit => COMMIT_PROTOCOL.to_owned(),
         };
         format!(
             "You are @{}, the {} on a small team. {sight}\n\n{}\n{protocol}\n\n{}{}\n\
@@ -223,30 +298,7 @@ impl Participant for LiveAgent {
     }
 
     fn speak(&mut self, turn: &HiveTurn, visible: &[&SessionMessage]) -> Result<String, String> {
-        let output = Command::new(&self.program)
-            .args(&self.args)
-            .arg(self.prompt(turn, visible))
-            .output()
-            .map_err(|error| format!("could not run {}: {error}", self.program))?;
-        if !output.status.success() {
-            return Err(format!("{} exited with {}", self.program, output.status));
-        }
-        let text = plain(&String::from_utf8_lossy(&output.stdout));
-        // Take the marker line if the agent wrapped it in prose or a banner; a
-        // turn that deposits no trace is still a legal turn, so prose falls
-        // through to the first thing the agent actually said.
-        let marker = text
-            .lines()
-            .map(str::trim)
-            .find(|line| line.starts_with('!'));
-        let answer = marker
-            .or_else(|| {
-                text.lines()
-                    .map(str::trim)
-                    .find(|line| !line.is_empty() && !line.starts_with('>'))
-            })
-            .unwrap_or("(no answer)");
-        Ok(answer.to_owned())
+        self.line(self.prompt(turn, visible))
     }
 }
 
@@ -326,4 +378,121 @@ pub(crate) fn poll(scenario: &Scenario, command: &str) -> Result<Vec<(String, St
         picks.push((agent.id.clone(), pick));
     }
     Ok(picks)
+}
+
+/// The one extra move a member of a *federation* has.
+///
+/// It is written as an ordinary mention because that is what it is: the host
+/// reads the line with the same mention grammar it reads every other line
+/// with, and `referral` decides where the turn lands. Nothing about this move
+/// is special-cased, which is the point — an agent that writes `@#platform`
+/// into a sentence has asked another channel a question whether or not it
+/// meant to invoke a protocol.
+const CROSS_PROTOCOL: &str = "\
+@#deskid  then your question, asking another desk — this is a marker like the \
+others and a legal line on its own";
+
+/// What a member needs to know about that move to use it well.
+const CROSS_RULES: &str = "\
+You are not alone. The other desks below are working the same problem in their \
+own channels and you cannot see their transcripts, so a fact one of them holds \
+is a fact this desk does not have and cannot deduce. `@#deskid` runs one turn \
+on that desk and their answer comes back here as one line. It costs you this \
+turn, so ask only for what you cannot settle here — but do ask. Deciding on \
+this desk's evidence alone, when the evidence that would change your mind is \
+one question away on a desk you can address, is the exact failure this \
+arrangement exists to prevent. Put your own reading in the question; a desk \
+that has to guess what you already know answers a worse question.";
+
+/// A member of a federation backed by an external agent command.
+///
+/// It is a [`LiveAgent`] that also knows which channel it is on and who the
+/// other channels are. Everything else — the prompt, the parsing, the one
+/// process per turn — is unchanged.
+pub(crate) struct LiveDeskAgent {
+    agent: LiveAgent,
+    /// This member's own desk, by display name.
+    here: String,
+    /// Every other channel, id and display name.
+    peers: Vec<(String, String)>,
+}
+
+impl LiveDeskAgent {
+    /// Seat one live agent on a channel.
+    pub(crate) fn new(agent: LiveAgent, here: String, peers: Vec<(String, String)>) -> Self {
+        Self { agent, here, peers }
+    }
+
+    /// Run one prompt through the agent process and take its one line.
+    fn one_line(&self, prompt: String) -> Result<String, String> {
+        self.agent.line(prompt)
+    }
+
+    /// The sentence naming the channels this member may reach.
+    fn directory(&self) -> String {
+        let named = self
+            .peers
+            .iter()
+            .map(|(id, name)| format!("@#{id} — the {name} desk"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        format!(
+            "{CROSS_PROTOCOL}\n\n{CROSS_RULES}\nYou are on the {} desk. The desks you can \
+             address, and how:\n{named}\n",
+            self.here,
+        )
+    }
+}
+
+impl SwarmMember for LiveDeskAgent {
+    fn id(&self) -> &str {
+        self.agent.id()
+    }
+
+    fn speak(
+        &mut self,
+        turn: &tinyhivemind_hive::HiveTurn,
+        visible: &[&SessionMessage],
+    ) -> Result<String, String> {
+        // The federation's own move is offered alongside the ordinary ones,
+        // and the agent decides. The harness never writes a mention on an
+        // agent's behalf in this arm; if no cross-channel message happens,
+        // that is a finding about the agents rather than about the protocol.
+        let prompt = self.agent.prompt_with(turn, visible, &self.directory());
+        self.one_line(prompt)
+    }
+
+    fn answer(
+        &mut self,
+        incoming: &Referral,
+        visible: &[&SessionMessage],
+    ) -> Result<String, String> {
+        let transcript = LiveAgent::render(visible);
+        let asked = match incoming.kind {
+            ReferralKind::Forward => format!(
+                "@{} on another desk has asked your desk this, and your answer will be posted \
+                 here and carried back to them:\n{}\n\nAnswer it in ONE line, beginning with \
+                 !evidence. They cannot see anything on this desk, so state the facts they need \
+                 — including the ones above that only you hold — rather than your conclusion \
+                 from them. A desk that asks for a number and receives an argument has learned \
+                 nothing it can check. Do not ask a question back and do not tell them which \
+                 option to pick.",
+                incoming.source_id, incoming.content,
+            ),
+            ReferralKind::Return => format!(
+                "You asked another desk a question and this is what came back:\n{}\n\nRelay it \
+                 to your own desk in ONE line, beginning with !evidence, stating what they told \
+                 you. Do not add anything they did not say.",
+                incoming.content,
+            ),
+        };
+        let prompt = format!(
+            "You are @{}, on the {} desk.\n\n{}\n{asked}\n\nYour desk's transcript so far:\n\
+             {transcript}\n\nYour one line:",
+            self.agent.id(),
+            self.here,
+            self.agent.private(),
+        );
+        self.one_line(prompt)
+    }
 }

@@ -19,6 +19,7 @@
 use std::time::{Duration, Instant};
 
 use tinyhivemind_hive::{
+    EpisodePolicy,
     desk::DeskSet,
     responder::{
         ResponderPlan, ResponderRequest, SelectionPolicy, SelectorCandidate, accept_selection,
@@ -28,8 +29,9 @@ use tinyhivemind_hive::{
     trace::TopicId,
 };
 
+use crate::federation::Federation;
 use crate::rng::{Rng, mix};
-use crate::run::Host;
+use crate::run::{Host, Participant, drive};
 use crate::sim::Room;
 
 /// What one control arm decided, and what it spent.
@@ -160,4 +162,76 @@ pub(crate) fn run_vote(room: &Room, budget: u32) -> ArmReport {
         turns: spent,
         library_time: Duration::ZERO,
     }
+}
+
+/// Poll every member of a federation independently and take the plurality.
+///
+/// This is the matched-budget control for the swarm: one turn per member, no
+/// member seeing any other, exactly as many agent invocations as there are
+/// agents. It is a strong control on an ordinary problem and a weak one on a
+/// federated hidden profile, and saying which is which is the point of running
+/// it.
+pub(crate) fn run_federated_vote(federation: &Federation) -> ArmReport {
+    let mut tally: Vec<(&TopicId, u32)> = Vec::new();
+    for agent in &federation.agents {
+        let pick = agent.favourite();
+        match tally.iter_mut().find(|(topic, _)| *topic == pick) {
+            Some(entry) => entry.1 = entry.1.saturating_add(1),
+            None => tally.push((pick, 1)),
+        }
+    }
+    let decided = plurality(&tally);
+    ArmReport {
+        correct: decided.as_ref() == Some(&federation.truth),
+        decided,
+        turns: u32::try_from(federation.agents.len()).unwrap_or(u32::MAX),
+        library_time: Duration::ZERO,
+    }
+}
+
+/// Put every member of every desk on one desk and deliberate there.
+///
+/// This is the control that asks whether the *channel structure* costs
+/// anything. It removes the boundary rather than crossing it, which no real
+/// organisation can do, and it is given the whole federation's turn budget.
+///
+/// # Errors
+///
+/// Returns the library's own error text for a malformed snapshot.
+pub(crate) fn run_merged(
+    federation: &Federation,
+    policy: &EpisodePolicy,
+    task: &str,
+) -> Result<ArmReport, String> {
+    let mut agents = federation.agents.clone();
+    for agent in &mut agents {
+        agent.set_quorum(policy.quorum);
+    }
+    let ids: Vec<&str> = federation
+        .agents
+        .iter()
+        .map(|agent| agent.id.as_str())
+        .collect();
+    let mut participants: Vec<&mut dyn Participant> = agents
+        .iter_mut()
+        .map(|agent| agent as &mut dyn Participant)
+        .collect();
+    let report = drive(&ids, &mut participants, policy, task, false)?;
+    Ok(ArmReport {
+        correct: report.decided.as_ref() == Some(&federation.truth),
+        decided: report.decided,
+        turns: report.turns,
+        library_time: report.library_time,
+    })
+}
+
+/// The single option with the most votes, or `None` when the tally is tied.
+fn plurality(tally: &[(&TopicId, u32)]) -> Option<TopicId> {
+    let most = tally.iter().map(|(_, count)| *count).max()?;
+    let mut leaders = tally.iter().filter(|(_, count)| *count == most);
+    let leader = leaders.next()?;
+    if leaders.next().is_some() {
+        return None;
+    }
+    Some(leader.0.clone())
 }

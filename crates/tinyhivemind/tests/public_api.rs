@@ -152,3 +152,115 @@ fn root_exports_the_brevity_policy_stated_in_a_briefing() {
     assert_eq!(BrevityPolicy::DEFAULT.overrun("short"), None);
     assert!(BrevityPolicy::DEFAULT.rule_text().contains("600"));
 }
+
+#[tokio::test]
+async fn the_referral_queue_port_is_available_to_consumers() {
+    use std::sync::Mutex;
+    use tinyhivemind::{
+        BoxError, Referral, ReferralFuture, ReferralInput, ReferralOutcome, ReferralPolicy,
+        ReferralQueue, ReferralReach,
+        desk::{Desk, DeskSet, ResponderMode},
+        dispatch::{DispatchConversation, DispatchKey},
+        mention::{Mention, MentionTarget},
+        roster::{Roster, RosterMember},
+    };
+
+    /// The shape of a host: one atomic transaction, keyed by the conversation
+    /// the trigger was committed on plus its sequence.
+    #[derive(Default)]
+    struct Queue {
+        enqueued: Mutex<Vec<Referral>>,
+    }
+
+    impl ReferralQueue for Queue {
+        fn enqueue_once(&self, referral: Referral) -> ReferralFuture<'_> {
+            Box::pin(async move {
+                let mut enqueued = self.enqueued.lock().unwrap();
+                if enqueued
+                    .iter()
+                    .any(|held| held.from == referral.from && held.key == referral.key)
+                {
+                    return Ok::<_, BoxError>(EnqueueOutcome::Already);
+                }
+                enqueued.push(referral);
+                Ok(EnqueueOutcome::Enqueued)
+            })
+        }
+    }
+
+    let members = [
+        RosterMember {
+            id: "ada".into(),
+            name: None,
+        },
+        RosterMember {
+            id: "linus".into(),
+            name: None,
+        },
+    ];
+    let roster = Roster::new(&members, &[], &[]);
+    let records = [
+        Desk {
+            id: "payments".into(),
+            name: "Payments".into(),
+            description: None,
+            members: vec!["ada".into()],
+            responder_mode: ResponderMode::Lead,
+        },
+        Desk {
+            id: "platform".into(),
+            name: "Platform".into(),
+            description: None,
+            members: vec!["linus".into()],
+            responder_mode: ResponderMode::Lead,
+        },
+    ];
+    let desks = DeskSet::new(&records, &[], &[], &[], &[]);
+    let input = ReferralInput {
+        key: DispatchKey {
+            trigger_sequence: 7,
+        },
+        conversation: DispatchConversation {
+            desk_id: "payments".into(),
+            thread_root: None,
+        },
+        author_id: "ada".into(),
+        content: "@linus can you look?".into(),
+        mentions: vec![Mention {
+            target: MentionTarget::Agent { id: "linus".into() },
+            text: "@linus".into(),
+            offset: 0,
+            quiet: false,
+        }],
+        hop: 0,
+        origin: None,
+    };
+
+    let queue = Queue::default();
+    let policy = ReferralPolicy {
+        enabled: true,
+        max_hops: 2,
+        reach: ReferralReach::Channels,
+        returns: true,
+    };
+    let outcome = tinyhivemind::dispatch_referral(&queue, policy, &input, &roster, &desks)
+        .await
+        .expect("well formed");
+    assert_eq!(outcome, ReferralOutcome::Referred { crossed: true });
+    assert_eq!(queue.enqueued.lock().unwrap()[0].to.desk_id, "platform");
+
+    // The same trigger twice creates one child turn, not two.
+    let again = tinyhivemind::dispatch_referral(&queue, policy, &input, &roster, &desks)
+        .await
+        .expect("well formed");
+    assert_eq!(again, ReferralOutcome::Already);
+    assert_eq!(queue.enqueued.lock().unwrap().len(), 1);
+
+    // And the conservative default never reaches the queue at all.
+    let quiet =
+        tinyhivemind::dispatch_referral(&queue, ReferralPolicy::DEFAULT, &input, &roster, &desks)
+            .await
+            .expect("well formed");
+    assert!(matches!(quiet, ReferralOutcome::NotReferred { .. }));
+    assert_eq!(queue.enqueued.lock().unwrap().len(), 1);
+}

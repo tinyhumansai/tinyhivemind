@@ -38,6 +38,8 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a complete sample.
   the model selector boundary.
 - [`mention-dispatch.md`](mention-dispatch.md) — bounded one-target dispatch and
   the atomic host enqueue contract.
+- [`cross-desk-referral.md`](cross-desk-referral.md) — one bounded child turn
+  that may run on another channel, and the one answer that comes back.
 - [`hive-mind.md`](hive-mind.md) — bounded group deliberation: traces, salience,
   quorum with cross-inhibition, and the attention market.
 - [`refutation-and-grounds.md`](refutation-and-grounds.md) — a negative

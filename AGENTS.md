@@ -168,9 +168,11 @@ Supporting commands:
 - `cargo run --release -p tinyhivemind-hive --example bench` — simulate and
   benchmark deliberation against the responder ladder and a matched-budget
   vote; `-- --sweep` tunes the episode policy, `-- --trace` prints one episode,
-  and `-- --agent-cmd "opencode run"` drives one through a real agent CLI. The
-  harness is documented in `crates/tinyhivemind-hive/examples/bench/README.md`
-  and its findings on the wiki's `Benchmarks` page (`wiki/Benchmarks.md`).
+  `-- --swarm` runs a federation of desks that can only reach each other by a
+  referral, and `-- --agent-cmd "opencode run"` drives one through a real agent
+  CLI. The harness is documented in
+  `crates/tinyhivemind-hive/examples/bench/README.md` and its findings on the
+  wiki's `Benchmarks` page (`wiki/Benchmarks.md`).
 - `.github/scripts/assert-pure.sh` — assert the pure crates took on no
   runtime, transport, or web-framework dependency.
 - `cargo doc --no-deps --all-features` — build the rustdoc CI also builds with
