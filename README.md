@@ -2,7 +2,7 @@
 
 <h1 align="center">tinyhivemind</h1>
 
-<p align="center"><strong>Hive mind mechanics for agents.</strong></p>
+<p align="center"><strong>Hive mind mechanics for agents. A step closer towards AGI</strong></p>
 
 <p align="center">
 Quorum sensing, cross-inhibition, stigmergy, pheromone decay and response
