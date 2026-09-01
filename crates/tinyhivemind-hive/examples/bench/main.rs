@@ -62,7 +62,7 @@ mod sweep;
 
 use std::time::Instant;
 
-use tinyhivemind_hive::{EpisodePolicy, QuorumPolicy};
+use tinyhivemind_hive::{EpisodePolicy, QuorumPolicy, trace::TopicId};
 
 use crate::live::LiveAgent;
 use crate::metrics::{Aggregate, arm_header, arm_row};
