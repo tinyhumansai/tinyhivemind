@@ -39,18 +39,21 @@ Reply with ONE line only, beginning with exactly one of these markers:
 !object >N ^M <why>              object to message N, citing message M
 !evidence ^N <fact>              add grounds without taking a side
 !question <what you need>        ask for something not yet established
-A support with no ^citation does not count, and only support moves an option \
-towards a decision. Do not write !commit: the room has not reached a decision \
-yet, and a commit line now counts for nothing. Write nothing before or after \
-the single marker line.";
+The # on a topic and the ^ on a citation are part of the grammar: `!propose \
+#canary ...` names an option, `!propose canary ...` names nothing and is \
+discarded. A support with no ^citation does not count, and only support moves \
+an option towards a decision. Do not write !commit: the room has not reached a \
+decision yet, and a commit line now counts for nothing. Write nothing before \
+or after the single marker line.";
 
 /// The move available once the room has reached quorum.
 const COMMIT_PROTOCOL: &str = "\
 The room has reached quorum. Reply with ONE line only, recording the option \
 that carried:
 !commit #topic ^N <why>          record the decision, citing message N
-Use the topic the room actually settled on, not the one you would have \
-preferred. Write nothing before or after the single marker line.";
+Keep the # on the topic and the ^ on the citation; without them the line \
+records nothing. Use the topic the room actually settled on, not the one you \
+would have preferred. Write nothing before or after the single marker line.";
 
 /// A participant backed by an external agent command.
 pub(crate) struct LiveAgent {
