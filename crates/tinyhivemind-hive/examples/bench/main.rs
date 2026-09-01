@@ -21,7 +21,8 @@
 //!   plurality, with nobody seeing anybody. It is given the whole budget, which
 //!   is more turns than the deliberation actually spends.
 //! - `hive` — a deliberation episode at [`EpisodePolicy::DEFAULT`].
-//! - `hive+` — the same, at the policy `--sweep` picks.
+//! - `hive+` — the same, at the tuned policy: a majority quorum that is never
+//!   unanimity, and three turns of budget per member, both scaled to the desk.
 //!
 //! # What the numbers mean
 //!
@@ -39,9 +40,9 @@
 //! | flag | meaning |
 //! | --- | --- |
 //! | `--episodes N` | rooms to simulate (default 500) |
-//! | `--agents N` | members per room (default 5) |
 //! | `--topics N` | options on offer (default 4) |
 //! | `--noise N` | half-width of the error on a private evaluation (default 90) |
+//! | `--agents N` | members per room; moves the tuned quorum and budget with it |
 //! | `--seed N` | room generator seed (default 1) |
 //! | `--budget N`, `--quorum N`, `--window N` | episode policy |
 //! | `--dominance N`, `--repetition N`, `--no-blind` | episode policy |

@@ -8,8 +8,12 @@ the episode policy, and reports what the library itself costs per step.
 cargo run --release -p tinyhivemind-hive --example bench            # compare arms
 cargo run --release -p tinyhivemind-hive --example bench -- --trace # one episode
 cargo run --release -p tinyhivemind-hive --example bench -- --sweep # tune the policy
-cargo run -p tinyhivemind-hive --example bench -- --agent-cmd "opencode run"
+cargo run --release -p tinyhivemind-hive --example bench -- \
+  --agent-cmd "opencode run --pure -m openrouter/~openai/gpt-mini-latest"
 ```
+
+This file documents the harness. The findings it produces, and what they do and
+do not claim, are in [`docs/benchmark.md`](../../../../docs/benchmark.md).
 
 ## The task
 
@@ -32,7 +36,7 @@ Every arm decides the same rooms from the same private evaluations.
 | `ladder` | Today's behaviour: `responder_plan` in `tinyhivemind` selects one responder off the real ladder and that agent answers alone. One turn. |
 | `vote` | The honest matched-budget control — independent answers decided by plurality, nobody seeing anybody. It is given the *whole* budget, more turns than the deliberation actually spends. |
 | `hive` | A deliberation episode at `EpisodePolicy::DEFAULT`. |
-| `hive+` | The same, at the policy `--sweep` picks. |
+| `hive+` | The same, at the tuned policy: a majority quorum that is never unanimity, and three turns of budget per member. |
 
 A multi-agent result without a matched-budget control is close to meaningless,
 because the multi-agent arm has usually just spent more compute. `vote` is that
@@ -70,43 +74,18 @@ so the benchmark measures the protocol rather than a formatter.
 
 ```text
 arm       turns/ep   decided %   correct %       ns/step    episodes/s
-ladder        1.00       100.0        57.6          1086        920481
-vote         12.00       100.0        78.2             0           inf
-hive          6.16        89.7        73.3          2257         61920
-hive+         6.73        98.3        81.5          2222         58249
+ladder        1.00       100.0        57.6          1109        901660
+vote         15.00       100.0        78.5             0           inf
+hive          6.16        89.7        73.3          2231         62637
+hive+         6.75        99.4        82.1          2278         56641
 ```
 
-Three things are worth reading out of it.
-
-**The deliberation beats the matched-budget control, at half the budget.**
-`hive+` decides correctly 81.5% of the time in 6.7 turns; the control needs all
-12 and reaches 78.2%. A single responder — today's behaviour — manages 57.6%.
-The margin over the control is small and it is meant to be: independent
-sampling plus a plurality is most of what a room is for, and a protocol that
-could not clear it would not be worth its budget.
-
-**The quorum threshold is the load-bearing knob.** Five members can put two
-grounded supporters behind each of two options, and an episode where two options
-both carry is deadlocked by definition. A threshold above half the desk makes
-that unreachable: the sweep's best policy takes the deadlock rate from 514/5000
-to zero, and the decision rate from 89.7% to 98.3%. Hosts should set `QuorumPolicy::threshold` above half the desk.
-
-**The blind round is not decoration.** Rerun with `--no-blind` and accuracy
-collapses to 58.0% — level with a single agent — because the room cascades onto
-whatever was proposed first. That is an information cascade, and `Visibility`
-is what prevents it.
-
-None of this is evidence that language models deliberate better in a room. The
-participants here are arithmetic. What it does show is which *policy*
-aggregates information and which throws it away, which is the question a host
-has to answer when it configures a desk.
-
-## Cost
-
-`ns/step` measures the library alone, with the participants' own time excluded:
-about **2.2 µs** to decide who speaks next over a live transcript, or roughly
-58,000 whole episodes per second on one core. A model turn is six orders of
-magnitude more expensive, so the protocol is free in any real deployment.
+The tuned deliberation beats the matched-budget control at half the budget, and
+one responder off the ladder reaches 57.6%. The quorum threshold and the turn
+budget are the two settings that decide this, the blind round is worth 24
+points of accuracy on its own, and the state machine costs about 2.3 µs per
+step. [`docs/benchmark.md`](../../../../docs/benchmark.md) has the tables
+behind each of those, across desk sizes, plus what the benchmark does not show.
 
 ## Live mode
 
@@ -128,22 +107,15 @@ The library still authorizes exactly one speaker per step, so the number of
 processes an episode can start is bounded by its turn budget and by nothing
 else. Coloured output and a banner are stripped before the marker line is read.
 
-A run of the first command converged on `#rollout-strategy` in 11 turns and
-about 30 seconds of wall clock. Three things showed up that the simulation
-cannot:
-
-- **Topics drift.** One model proposed `#rollout`, another `#rollout-strategy`,
-  for the same idea, and the support behind them did not add up. A host running
-  live rooms should seed the topic vocabulary rather than let each turn coin
-  one.
-- **Models repeat themselves.** Four consecutive turns restated the same
-  `!question` verbatim. `repetition_cap` damps a restated *support*, so it does
-  not catch this; a host that cares can spend the budget elsewhere.
-- **Quorum above half the desk needs a desk to spare.** At `--agents 3` the
-  tuned threshold of 3 is unanimity, and a single `!object` silences one
-  advocate permanently — that episode ran out of budget instead of deciding.
-  The rule is a threshold above half the desk *and* a margin over it, which
-  five members and a threshold of three have.
+The prompt is not a static block of protocol text, because live rooms fail in
+ways the simulation cannot reach. It names the options already on the floor
+with their standings, folded through the library's own `standings`, so support
+does not split across two names for one idea; it shows a participant its own
+last line, because models restate it verbatim; it offers only the moves that
+count in the turn's phase, because a `!commit` written during deliberation adds
+no supporter; and it calls out the grammar's `#` and `^` sigils, because models
+drop them. Each of those is a host obligation rather than something the library
+can impose, and each was found by running the thing.
 
 Live mode asserts nothing and is not part of CI; it is for watching real agents
 hold — or fail to hold — the trace grammar.
@@ -155,25 +127,25 @@ version, behind the `e2e` feature.
 | flag | meaning |
 | --- | --- |
 | `--episodes N` | rooms to simulate (default 500) |
-| `--agents N` | members per room, 2–8 (default 5) |
+| `--agents N` | members per room, 2–8 (default 5); moves the tuned quorum and budget with it |
 | `--topics N` | options on offer, 2–8 (default 4) |
 | `--noise N` | half-width of the error on a private evaluation (default 90) |
 | `--seed N` | room generator seed (default 1) |
-| `--budget N` `--quorum N` `--window N` | episode policy |
+| `--budget N` `--quorum N` `--window N` | episode policy, overriding the tuned values |
 | `--dominance N` `--repetition N` `--no-blind` | episode policy |
 | `--trace` | print one episode turn by turn |
-| `--sweep` | score the 96-point policy grid |
+| `--sweep` | score the policy grid, swept relative to the desk size |
 | `--agent-cmd CMD` | drive one episode through a real agent CLI |
 
 ## Layout
 
 | file | what it holds |
 | --- | --- |
-| `main.rs` | the command line, the modes, and the tables |
+| `main.rs` | the command line, the tuned policy, the modes, and the tables |
 | `sim.rs` | the rooms, the private evaluations, and what a participant says |
 | `run.rs` | the host: a journal, a roster, and the step loop |
 | `arms.rs` | the `ladder` and `vote` controls |
 | `sweep.rs` | the policy grid and its ranking |
 | `metrics.rs` | aggregation and formatting |
-| `live.rs` | the external agent CLI backend |
+| `live.rs` | the external agent CLI backend and its prompt |
 | `rng.rs` | a seeded `SplitMix64`, so every run reproduces |
