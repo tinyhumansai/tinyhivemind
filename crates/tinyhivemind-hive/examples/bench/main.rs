@@ -544,6 +544,7 @@ fn live_synthetic(options: &Options, command: &str) -> Result<(), String> {
                 roles.get(index).copied().unwrap_or("teammate"),
                 command,
                 options.policy.quorum,
+                String::new(),
             )
         })
         .collect();
