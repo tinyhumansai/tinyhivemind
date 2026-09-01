@@ -109,8 +109,8 @@ impl Scenario {
                 None => ("", line),
             };
             match (&section, key) {
-                (Section::Top, "task") => task = value.to_owned(),
-                (Section::Top, "truth") => truth = value.to_owned(),
+                (Section::Top, "task") => value.clone_into(&mut task),
+                (Section::Top, "truth") => value.clone_into(&mut truth),
                 (Section::Option, _) => {
                     let option = options
                         .last_mut()
@@ -121,10 +121,12 @@ impl Scenario {
                     option.description.push_str(line);
                 }
                 (Section::Agent, "role") => {
-                    agents
-                        .last_mut()
-                        .ok_or_else(|| "role outside a section".to_owned())?
-                        .role = value.to_owned();
+                    value.clone_into(
+                        &mut agents
+                            .last_mut()
+                            .ok_or_else(|| "role outside a section".to_owned())?
+                            .role,
+                    );
                 }
                 (Section::Agent, "knows") => {
                     agents

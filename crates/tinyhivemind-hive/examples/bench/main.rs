@@ -470,74 +470,17 @@ fn live_scenario(options: &Options, command: &str, scenario: &Scenario) -> Resul
     let mut vote_correct = 0_u32;
     let mut turns_total = 0_u32;
     for round in 0..options.repeat {
-        let mut agents: Vec<LiveAgent> = scenario
-            .agents
-            .iter()
-            .filter_map(|agent| {
-                LiveAgent::new(
-                    &agent.id,
-                    &agent.role,
-                    command,
-                    policy.quorum,
-                    Scenario::private_brief(agent),
-                )
-            })
-            .collect();
-        if agents.len() != ids.len() {
-            return Err(format!("could not build agents from {command:?}"));
-        }
-        let mut participants: Vec<&mut dyn Participant> = agents
-            .iter_mut()
-            .map(|agent| agent as &mut dyn Participant)
-            .collect();
-
-        let wall = std::time::Instant::now();
-        let keep_trace = round == 0;
-        let report = drive(
-            &ids,
-            &mut participants,
-            &policy,
-            &scenario.brief(),
-            keep_trace,
-        )?;
-        let wall = wall.elapsed();
-        for line in &report.trace {
-            println!("{line}");
-        }
-        let decided = report.decided.as_ref().map(TopicId::as_str);
-        if decided.is_some() {
+        let outcome = live_round(command, scenario, &policy, &ids, round == 0)?;
+        if outcome.decided.is_some() {
             hive_decided = hive_decided.saturating_add(1);
         }
-        if decided == Some(scenario.truth.as_str()) {
+        if outcome.decided.as_deref() == Some(scenario.truth.as_str()) {
             hive_correct = hive_correct.saturating_add(1);
         }
-        turns_total = turns_total.saturating_add(report.turns);
-        println!(
-            "\nhive   ended {} on {} after {} turns in {:.0} s — {}",
-            report.ending.label(),
-            decided.map_or_else(|| "nothing".to_owned(), |topic| format!("#{topic}")),
-            report.turns,
-            wall.as_secs_f64(),
-            verdict(decided, &scenario.truth),
-        );
-
-        let picks = live::poll(scenario, command)?;
-        for (id, pick) in &picks {
-            println!("vote   {id:>10} alone: #{pick}");
-        }
-        let winner = plurality(&picks);
-        match &winner {
-            Some(topic) => println!(
-                "vote   plurality #{topic} of {} — {}",
-                picks.len(),
-                verdict(Some(topic.as_str()), &scenario.truth),
-            ),
-            None => println!("vote   tied, no plurality — no answer"),
-        }
-        if winner.as_deref() == Some(scenario.truth.as_str()) {
+        if outcome.voted.as_deref() == Some(scenario.truth.as_str()) {
             vote_correct = vote_correct.saturating_add(1);
         }
-        println!();
+        turns_total = turns_total.saturating_add(outcome.turns);
     }
 
     println!(
@@ -552,6 +495,89 @@ fn live_scenario(options: &Options, command: &str, scenario: &Scenario) -> Resul
         vote_correct,
     );
     Ok(())
+}
+
+/// What one live round of both arms decided.
+struct RoundOutcome {
+    /// The topic the deliberation settled on.
+    decided: Option<String>,
+    /// The topic the independent poll returned, if it was not tied.
+    voted: Option<String>,
+    /// Turns the deliberation took.
+    turns: u32,
+}
+
+/// Run one deliberation and one independent poll over the same room.
+fn live_round(
+    command: &str,
+    scenario: &Scenario,
+    policy: &EpisodePolicy,
+    ids: &[&str],
+    keep_trace: bool,
+) -> Result<RoundOutcome, String> {
+    let mut agents: Vec<LiveAgent> = scenario
+        .agents
+        .iter()
+        .filter_map(|agent| {
+            LiveAgent::new(
+                &agent.id,
+                &agent.role,
+                command,
+                policy.quorum,
+                Scenario::private_brief(agent),
+            )
+        })
+        .collect();
+    if agents.len() != ids.len() {
+        return Err(format!("could not build agents from {command:?}"));
+    }
+    let mut participants: Vec<&mut dyn Participant> = agents
+        .iter_mut()
+        .map(|agent| agent as &mut dyn Participant)
+        .collect();
+
+    let wall = std::time::Instant::now();
+    let report = drive(
+        ids,
+        &mut participants,
+        policy,
+        &scenario.brief(),
+        keep_trace,
+    )?;
+    let wall = wall.elapsed();
+    for line in &report.trace {
+        println!("{line}");
+    }
+    let decided = report.decided.as_ref().map(TopicId::as_str);
+    println!(
+        "\nhive   ended {} on {} after {} turns in {:.0} s — {}",
+        report.ending.label(),
+        decided.map_or_else(|| "nothing".to_owned(), |topic| format!("#{topic}")),
+        report.turns,
+        wall.as_secs_f64(),
+        verdict(decided, &scenario.truth),
+    );
+
+    let picks = live::poll(scenario, command)?;
+    for (id, pick) in &picks {
+        println!("vote   {id:>10} alone: #{pick}");
+    }
+    let voted = plurality(&picks);
+    match &voted {
+        Some(topic) => println!(
+            "vote   plurality #{topic} of {} — {}",
+            picks.len(),
+            verdict(Some(topic.as_str()), &scenario.truth),
+        ),
+        None => println!("vote   tied, no plurality — no answer"),
+    }
+    println!();
+
+    Ok(RoundOutcome {
+        decided: decided.map(str::to_owned),
+        voted,
+        turns: report.turns,
+    })
 }
 
 /// The single option with the most votes, or `None` when the poll is tied.
