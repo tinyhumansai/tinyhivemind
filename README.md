@@ -1,66 +1,104 @@
-# tinyhiveminds
+<h1 align="center">tinyhivemind</h1>
+
+<p align="center"><strong>Group chats for agents.</strong></p>
+
+<p align="center">
+A shared transcript several agents read and write, and the mechanism that gets
+the right one to answer. Written in Rust, owns no storage, serves no HTTP,
+picks no runtime.
+</p>
+
+<p align="center">
+<a href="https://github.com/tinyhumansai/tinyhivemind/wiki">Wiki</a> &nbsp;·&nbsp;
+<a href="https://github.com/tinyhumansai/tinyhivemind/wiki/Quick-start">Quick start</a> &nbsp;·&nbsp;
+<a href="https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks">Benchmarks</a> &nbsp;·&nbsp;
+<a href="https://github.com/tinyhumansai/tinyhivemind/wiki/Architecture">Architecture</a>
+</p>
+
+---
 
 > [!NOTE]
 >
 > A note from [@senamakel](https://github.com/senamakel/).
 >
-> This is one of my best works so far and one of the most important libraries that I have worked on: tinyhivemind takes inspiration and learnings from my experience building harnesses, coordinating with agents, and building agents that can solve large, complex problems.
-> 
-> This concept was initially built inside of OpenCompany but had to be later on moved into it's own standalone repo as it was too important to be left inside of OpenCompany and it had to be well-defined, researched, tested, and simulated thoroughly.
+> This is one of my best works so far and one of the most important libraries that I have worked on: tinyhivemind is a very crucial component, taking inspiration and learnings from my experience building harnesses, coordinating with agents, and building agents that solve a large, complex amount of problems.
 >
-> I'm excited to share this with you all as an open-source contribution and if you like my work, give me a follow over at https://github.com/senamakel/ 🙌
+> The reason this repository was built was because such a crucial component, had to be well-defined, researched, coded, tested, and simulated thoroughly before it got shipped into any software module. I'm excited to share this repo as an open-source GNU Rust library, and I hope this contributes towards hivemind agents.
+>
+> If you like this work, give me a follow over at https://github.com/senamakel/
 
+## One agent answering is easy. A room is not.
 
-Group chats for agents to chat with each other.
+Put five agents in one channel and the obvious problems show up immediately.
+They read each other's replies as their own words. They miss what a peer said
+between their own two turns. A single `@everyone` wakes all of them at once.
+Nobody can tell whether the room agreed on anything, or just stopped.
 
-`tinyhivemind` is the shared session substrate: a transcript that several agents
-read and write, and the mechanism by which a message reaches the right agent.
-It answers four questions and holds no state doing it.
+tinyhivemind is the layer that fixes those. It answers four questions and holds
+no state doing it.
 
-- **Who is here?** A roster of teammates, and the people signed in alongside
-  them.
-- **What is a desk, and who is on it?** A blueprint-declared group chat merged
-  with the operator's runtime additions, retirements and ordering.
-- **Who does `@this` mean?** The mention grammar, and resolution of a name
-  against the roster and the desks.
-- **What does one participant see?** The projection of a multi-speaker
-  transcript into one viewer's turn history.
+**Who is here?** A roster of agents, and the people signed in alongside them.
 
-It is being built by moving that layer out of
-[`opencompany`](https://github.com/tinyhumansai/opencompany) and fixing two
-defects it has there. See [`ROADMAP.md`](ROADMAP.md) for the phase plan.
+**What is a desk, and who is on it?** A declared group chat merged with the
+operator's runtime additions, retirements and ordering.
 
-## Layout
+**Who does `@this` mean?** A mention grammar, resolved against the live roster
+and desks, where only a direct agent mention can start a turn.
 
-A two-crate cargo workspace, split by whether an answer has to wait on
-something.
+**What does one participant see?** An attributed projection of a multi-speaker
+transcript into one viewer's history, so agent B never reads agent A's words as
+its own.
+
+## And then it lets the room decide
+
+`tinyhivemind-hive` is the opt-in part. Agents leave typed markers in the
+transcript, support accumulates, a grounded objection silences an advocate, and
+the episode ends as converged, deadlocked, exhausted, or idle. Always for a
+reason you can name afterwards.
 
 ```text
-crates/
-├── tinyhivemind-core/   # the pure algebra: no async, no IO, no host types
-└── tinyhivemind/        # the session runtime: ports a host implements
-                      # and attributed projection/initialization
+!propose #stage Stage the rollout across three regions.
+!support #stage ^1 Staging bounds the blast radius if the migration is wrong.
+!object  >3      The regions are not independent, so this bounds nothing.
+!commit  #stage
 ```
 
-`tinyhivemind-core` is linked into the hot path of every agent turn and must
-compile in a host's default build with no feature flags. It may not depend on an
-async runtime, a transport, an HTTP client, or a web framework;
-`.github/scripts/assert-pure.sh` asserts it in CI.
+Deliberation with an audit trail, in about 2.3 microseconds of library time per
+step.
 
-## What it deliberately does not do
+## It measurably beats one agent answering alone
 
-- **It owns no storage.** No database, no file, no socket. The host owns the
-  append-only log and lends it through a port. There is no second journal:
-  messages are addressed by sequence number across surfaces the host owns —
-  reactions, board cards, run rows — so a second log could not be made
-  consistent with the first.
-- **It serves no HTTP.** Routes, authorization and rendering stay with the host.
-- **It does not fan out.** One message triggers exactly one turn. `@everyone`
-  resolves to a list named in that turn's context, not to a turn each.
+Five agents choosing between four options, 5000 seeded rooms, on one core:
+
+| arm | what it is | turns | correct |
+| --- | --- | --- | --- |
+| `ladder` | one responder answers alone, which is how most systems work today | 1.00 | 57.6% |
+| `vote` | independent answers, plurality, matched budget | 15.00 | 78.5% |
+| `hive+` | a tuned deliberation episode | 6.75 | **82.1%** |
+
+The middle row is the control most multi-agent claims are missing. A room that
+could not beat an independent vote at the same budget would not be worth its
+budget. This one does, at every desk size from three to eight, while spending
+about half the turns.
+
+The [benchmark write-up](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks)
+has the rest: the two bounds on the quorum threshold, why the turn budget has
+to scale with the desk, what happens to accuracy without a blind opening round,
+what five live models did to the grammar when nobody was watching, and an
+honest section on what none of it shows.
+
+## Three rules it will not break
+
+**The host owns storage.** No database, no file, no socket, no second journal.
+Your log stays yours and gets lent through one port.
+
+**No host types, ever.** Nothing here names a type from a consuming
+application, and no callback ever crosses back into it.
+
+**One message, one turn.** `@everyone` is a list, not a broadcast. There is no
+type in this library that can carry two authorized speakers.
 
 ## Use it
-
-Pin the repository as a submodule and take the crate as a path dependency:
 
 ```sh
 git submodule add https://github.com/tinyhumansai/tinyhivemind.git vendor/tinyhivemind
@@ -71,65 +109,27 @@ git submodule add https://github.com/tinyhumansai/tinyhivemind.git vendor/tinyhi
 tinyhivemind = { path = "vendor/tinyhivemind/crates/tinyhivemind" }
 ```
 
-The runtime crate re-exports `tinyhivemind-core`; hosts that only need pure desk,
-roster, and mention decisions may depend on `tinyhivemind-core` directly.
-
-Nothing here is published to crates.io, and there are no releases: the pinned
-commit is the version.
-
-## Simulate it
-
-`tinyhivemind-hive` ships a benchmark that runs whole deliberation episodes
-against reproducible synthetic rooms and scores them against two controls: the
-responder ladder as it behaves today, and a matched-budget independent vote.
+Nothing is published to crates.io and there are no releases. The pinned commit
+is the version.
 
 ```sh
-cargo run --release -p tinyhivemind-hive --example bench
+cargo run --release -p tinyhivemind-hive --example bench -- --trace
 ```
 
-```text
-arm       turns/ep   decided %   correct %       ns/step    episodes/s
-ladder        1.00       100.0        57.6          1109        901660
-vote         15.00       100.0        78.5             0           inf
-hive          6.16        89.7        73.3          2231         62637
-hive+         6.75        99.4        82.1          2278         56641
-```
+That prints one deliberation episode turn by turn, which is the fastest way to
+see what the thing actually does.
 
-The deliberation decides correctly more often than the matched-budget control
-while spending half its turns, and the state machine costs about 2.3 µs per
-step — six orders of magnitude below a model turn. `-- --sweep` tunes the
-episode policy over a grid; `-- --agent-cmd "opencode run"` drives one episode
-through a real agent CLI instead of simulated participants.
+## Read more
 
-[`docs/benchmark.md`](docs/benchmark.md) is the full report: the two bounds on
-the quorum threshold, why the budget has to scale with the desk, what happens
-to accuracy without the blind round, and what the numbers do and do not claim.
-[`crates/tinyhivemind-hive/examples/bench/README.md`](crates/tinyhivemind-hive/examples/bench/README.md)
-documents the harness itself.
-
-## Develop
-
-Run every command from the repository root. These four are the contract; CI
-includes them alongside default-feature tests, the bundled example, the purity
-guard, and the coverage gate (see `.github/workflows/ci.yml`).
-
-```sh
-cargo fmt --all -- --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo build --all-targets --all-features
-cargo test --all-features
-```
-
-Plus the guards CI also runs:
-
-```sh
-.github/scripts/assert-pure.sh
-.github/scripts/check-file-coverage.sh 90 coverage.json
-```
-
-Every source file must hold at least 90% line coverage.
-[`AGENTS.md`](AGENTS.md) is the full working agreement for humans and coding
-agents alike; `CLAUDE.md` is a symlink to it.
+| | |
+| --- | --- |
+| [Quick start](https://github.com/tinyhumansai/tinyhivemind/wiki/Quick-start) | pin it, resolve a mention, read a deliberation |
+| [Architecture](https://github.com/tinyhumansai/tinyhivemind/wiki/Architecture) | the three crates and why they are split that way |
+| [Hive episodes](https://github.com/tinyhumansai/tinyhivemind/wiki/Hive-episodes) | traces, salience, quorum, and the attention market |
+| [Benchmarks](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks) | the full report, including what it does not show |
+| [Host integration](https://github.com/tinyhumansai/tinyhivemind/wiki/Host-integration) | the three ports, and what your application owes the library |
+| [Development](https://github.com/tinyhumansai/tinyhivemind/wiki/Development) | the build contract, testing, and how to contribute |
+| [ROADMAP.md](ROADMAP.md) | the phase plan, and the two defects this work exists to fix |
 
 ## License
 

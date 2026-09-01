@@ -13,7 +13,7 @@ cargo run --release -p tinyhivemind-hive --example bench -- \
 ```
 
 This file documents the harness. The findings it produces, and what they do and
-do not claim, are in [`docs/benchmark.md`](../../../../docs/benchmark.md).
+do not claim, are in [the benchmark write-up](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks).
 
 ## The task
 
@@ -84,8 +84,8 @@ The tuned deliberation beats the matched-budget control at half the budget, and
 one responder off the ladder reaches 57.6%. The quorum threshold and the turn
 budget are the two settings that decide this, the blind round is worth 24
 points of accuracy on its own, and the state machine costs about 2.3 µs per
-step. [`docs/benchmark.md`](../../../../docs/benchmark.md) has the tables
-behind each of those, across desk sizes, plus what the benchmark does not show.
+step. [The benchmark write-up](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks)
+has the tables behind each of those, across desk sizes, plus what the benchmark does not show.
 
 ## Live mode
 
