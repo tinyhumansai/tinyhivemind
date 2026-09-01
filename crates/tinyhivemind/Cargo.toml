@@ -9,9 +9,18 @@ publish = false
 description = "Runtime-neutral session coordination ports for tinyhivemind"
 
 [dependencies]
+# Optional: compiles `SearchPattern::Regex`, so a transcript search can be
+# spelled as an expression. Off by default; a search that carries one without
+# it fails with a typed error rather than quietly matching something else.
+regex = { workspace = true, optional = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tinyhivemind-core = { workspace = true }
+
+[features]
+default = []
+# Regular-expression search, here and in the core selection ranking.
+regex = ["dep:regex", "tinyhivemind-core/regex"]
 
 [dev-dependencies]
 serde_json = { workspace = true }
