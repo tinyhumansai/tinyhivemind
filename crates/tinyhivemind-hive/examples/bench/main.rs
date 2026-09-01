@@ -4,6 +4,7 @@
 //! cargo run --release -p tinyhivemind-hive --example bench            # compare arms
 //! cargo run --release -p tinyhivemind-hive --example bench -- --trace # one episode
 //! cargo run --release -p tinyhivemind-hive --example bench -- --sweep # tune the policy
+//! cargo run --release -p tinyhivemind-hive --example bench -- --swarm # several desks
 //! cargo run -p tinyhivemind-hive --example bench -- --agent-cmd "opencode run"
 //! ```
 //!
@@ -48,29 +49,59 @@
 //! | `--dominance N`, `--repetition N`, `--no-blind` | episode policy |
 //! | `--trace` | print one episode turn by turn |
 //! | `--sweep` | score the policy grid |
+//! | `--swarm` | several desks messaging across channels |
+//! | `--desks N`, `--per-desk N`, `--bias N` | the federation `--swarm` builds |
 //! | `--agent-cmd CMD` | drive one episode through a real agent CLI |
 //! | `--scenario PATH` | give the live room a real problem with private facts |
 //! | `--repeat N` | run a live scenario N times and count both arms |
 
 mod arms;
+mod federation;
 mod live;
 mod metrics;
 mod rng;
 mod run;
 mod scenario;
 mod sim;
+mod swarm;
 mod sweep;
 
 use std::time::Instant;
 
 use tinyhivemind_hive::{EpisodePolicy, QuorumPolicy, trace::TopicId};
 
+use crate::federation::Federation;
 use crate::live::LiveAgent;
 use crate::metrics::{Aggregate, arm_header, arm_row};
 use crate::rng::mix;
 use crate::run::{Participant, drive, run_episode};
 use crate::scenario::Scenario;
 use crate::sim::Room;
+use crate::swarm::{SwarmReport, pooled, run_swarm};
+use tinyhivemind_hive::referral::ReferralPolicy;
+
+/// How much a desk overrates its own decoy, by default.
+///
+/// The value is bounded on both sides, and both bounds are what make the
+/// problem federated rather than merely noisy.
+///
+/// *Above* the 60-point gap between the true option and a decoy, a desk's own
+/// average points at the wrong answer, so no amount of deliberation inside one
+/// channel finds the right one. *Below* twice that gap, one outside reading is
+/// enough to overturn it: a member that has heard one other desk's reading of
+/// its favourite averages `(40 + bias + 40) / 2`, which has to fall under the
+/// true option's 100. At three desks the honest window is roughly 90 to 120,
+/// and 110 sits inside it with room on both sides.
+const SWARM_BIAS: i32 = 110;
+/// The same value where the argument parser needs it unsigned.
+const SWARM_BIAS_U32: u32 = 110;
+const _: () = assert!(SWARM_BIAS as u32 == SWARM_BIAS_U32);
+/// Half-width of the individual error on a federated evaluation, by default.
+///
+/// Small enough that a desk's shared bias survives it — otherwise every desk
+/// is individually unbiased and there is nothing for a channel crossing to
+/// fix — and large enough that no single member is an oracle for its desk.
+const SWARM_NOISE: u32 = 50;
 
 /// The task every room is given.
 const TASK: &str = "We must choose one rollout strategy for a risky migration. Decide together.";
@@ -95,6 +126,16 @@ struct Options {
     scenario: Option<String>,
     /// How many times to run a live scenario.
     repeat: u32,
+    /// Desks in a federation.
+    desks: usize,
+    /// Members on each desk of a federation.
+    per_desk: usize,
+    /// How much a desk overrates its own decoy.
+    bias: i32,
+    /// Whether to print a transcript as well as the totals.
+    trace: bool,
+    /// The agent command, when one was given.
+    agent: Option<String>,
 }
 
 /// What this run does.
@@ -107,6 +148,8 @@ enum Mode {
     Sweep,
     /// Drive one episode through a real agent CLI.
     Live(String),
+    /// Compare several desks solving one problem across channels.
+    Swarm,
 }
 
 impl Options {
@@ -122,11 +165,27 @@ impl Options {
             mode: Mode::Compare,
             scenario: None,
             repeat: 1,
+            desks: 3,
+            per_desk: 4,
+            bias: SWARM_BIAS,
+            trace: false,
+            agent: None,
         };
         // The policy is rebuilt once the room size is known, then any explicit
         // policy flag is applied over it, so `--agents` moves the quorum
         // threshold with the desk while `--quorum` still overrides it.
         let args: Vec<String> = std::env::args().skip(1).collect();
+        // The federation has its own noise default. A desk is only a
+        // correlation boundary if its shared bias is legible *through* each
+        // member's individual error: at the single-room default of ±90 the
+        // bias is swamped, every desk is individually unbiased, and crossing a
+        // channel would be measuring nothing. An explicit `--noise` still
+        // wins, so the swamped regime can be asked for on purpose.
+        if args.iter().any(|argument| argument == "--swarm")
+            && flag_number(&args, "--noise").is_none()
+        {
+            options.noise = SWARM_NOISE;
+        }
         if let Some(agents) = flag_number(&args, "--agents") {
             // Clamped to what `Room::generate` will actually build, so the
             // quorum threshold cannot be set for a desk that does not exist.
@@ -162,11 +221,36 @@ impl Options {
                     options.policy.repetition_cap = next_number(&mut args).unwrap_or(2);
                 }
                 "--no-blind" => options.policy.blind_round = false,
-                "--trace" => options.mode = Mode::Trace,
+                "--desks" => {
+                    options.desks =
+                        usize::try_from(next_number(&mut args).unwrap_or(3)).unwrap_or(3);
+                }
+                "--per-desk" => {
+                    options.per_desk =
+                        usize::try_from(next_number(&mut args).unwrap_or(4)).unwrap_or(4);
+                }
+                "--bias" => {
+                    options.bias = i32::try_from(next_number(&mut args).unwrap_or(SWARM_BIAS_U32))
+                        .unwrap_or(SWARM_BIAS);
+                }
+                "--swarm" => options.mode = Mode::Swarm,
+                "--trace" => {
+                    options.trace = true;
+                    // `--swarm --trace` prints a federation transcript rather
+                    // than a single room's, so the swarm mode keeps the floor.
+                    if !matches!(options.mode, Mode::Swarm) {
+                        options.mode = Mode::Trace;
+                    }
+                }
                 "--sweep" => options.mode = Mode::Sweep,
                 "--agent-cmd" => {
                     if let Some(command) = args.next() {
-                        options.mode = Mode::Live(command);
+                        options.agent = Some(command.clone());
+                        // `--swarm --agent-cmd` drives a federation rather than
+                        // one room, so the swarm mode keeps the floor.
+                        if !matches!(options.mode, Mode::Swarm) {
+                            options.mode = Mode::Live(command);
+                        }
                     }
                 }
                 "--scenario" => options.scenario = args.next(),
@@ -300,6 +384,11 @@ fn main() {
 
 /// Run the selected mode.
 fn run(options: &Options) -> Result<(), String> {
+    // Built first because every other mode needs them, and skipped for the
+    // swarm, which generates federations of its own.
+    if matches!(options.mode, Mode::Swarm) {
+        return swarm_compare(options);
+    }
     let rooms: Vec<Room> = (0..options.episodes)
         .map(|index| {
             // Mixed rather than xor-ed: `seed ^ index` over a range of
@@ -316,6 +405,8 @@ fn run(options: &Options) -> Result<(), String> {
         .collect();
 
     match &options.mode {
+        // Handled above, before the single-desk rooms were generated.
+        Mode::Swarm => Ok(()),
         Mode::Compare => compare(options, &rooms),
         Mode::Trace => trace(&rooms, &options.policy),
         Mode::Sweep => sweep_policies(options, &rooms),
@@ -718,4 +809,455 @@ fn live_synthetic(options: &Options, command: &str) -> Result<(), String> {
         ),
     );
     Ok(())
+}
+
+/// The referral policy the swarm arm runs at.
+///
+/// Two hops is one round trip — the question out, the answer back — and it is
+/// the value `OpenCompany` defaults its mention-dispatch chain to, so the swarm
+/// is not quietly given a deeper chain than a host would allow. Desk mentions
+/// and returns are on because they are the mechanism under test; without them
+/// the arm is the siloed control with extra steps.
+const fn swarm_referrals() -> ReferralPolicy {
+    ReferralPolicy {
+        enabled: true,
+        max_hops: 2,
+        reach: tinyhivemind_hive::referral::ReferralReach::Desks,
+        returns: true,
+    }
+}
+
+/// Run every federated arm over the same federations and print the comparison.
+fn swarm_compare(options: &Options) -> Result<(), String> {
+    if let Some(command) = &options.agent {
+        let Some(path) = &options.scenario else {
+            return Err("a live federation needs --scenario".to_owned());
+        };
+        let text = std::fs::read_to_string(path)
+            .map_err(|error| format!("could not read {path}: {error}"))?;
+        let scenario = Scenario::parse(&text)?;
+        return live_federation(options, command, &scenario);
+    }
+    let federations: Vec<Federation> = (0..options.episodes)
+        .map(|index| {
+            Federation::generate(
+                mix(options.seed, u64::from(index)),
+                options.desks,
+                options.per_desk,
+                options.topics,
+                options.noise,
+                options.bias,
+            )
+        })
+        .collect();
+    let Some(first) = federations.first() else {
+        return Err("no federations generated".to_owned());
+    };
+
+    // Each desk deliberates at the budget its own size earns, exactly as it
+    // would if it were the only desk. The merged control is given the whole
+    // federation's budget instead, which is more turns than any desk has.
+    let desk_policy = EpisodePolicy {
+        turn_budget: turn_budget(options.per_desk),
+        quorum: QuorumPolicy {
+            threshold: quorum_threshold(options.per_desk),
+            ..options.policy.quorum
+        },
+        ..options.policy
+    };
+    let whole = first.agents.len();
+    let merged_policy = EpisodePolicy {
+        turn_budget: turn_budget(whole),
+        quorum: QuorumPolicy {
+            threshold: quorum_threshold(whole),
+            ..options.policy.quorum
+        },
+        ..options.policy
+    };
+
+    describe(
+        options,
+        first,
+        &desk_policy,
+        &merged_policy,
+        federations.len(),
+    );
+    if options.trace {
+        trace_swarm(first, &desk_policy)?;
+    }
+
+    let mut siloed = SwarmTotals::default();
+    let mut swarmed = SwarmTotals::default();
+    let mut free = SwarmTotals::default();
+    let mut merged = Aggregate::default();
+    let mut vote = Aggregate::default();
+    let wall = Instant::now();
+    for federation in &federations {
+        siloed.add(&run_swarm(
+            federation,
+            &desk_policy,
+            ReferralPolicy::DEFAULT,
+            TASK,
+            false,
+        )?);
+        swarmed.add(&run_swarm(
+            federation,
+            &desk_policy,
+            swarm_referrals(),
+            TASK,
+            false,
+        )?);
+        free.add(&run_swarm(
+            &pooled(federation),
+            &desk_policy,
+            ReferralPolicy::DEFAULT,
+            TASK,
+            false,
+        )?);
+        merged.add_arm(&arms::run_merged(federation, &merged_policy, TASK)?);
+        vote.add_arm(&arms::run_federated_vote(federation));
+    }
+    let wall = wall.elapsed();
+
+    tabulate(
+        &siloed,
+        &swarmed,
+        &free,
+        &merged,
+        &vote,
+        wall,
+        federations.len(),
+    );
+    Ok(())
+}
+
+/// Running totals over a sample of federated runs.
+#[derive(Clone, Debug, Default)]
+struct SwarmTotals {
+    /// Federations in the sample.
+    runs: u32,
+    /// Federations whose desks agreed on one option.
+    decided: u32,
+    /// Federations that landed on the genuinely best option.
+    correct: u32,
+    /// Agent invocations across every desk.
+    turns: u64,
+    /// Referrals that left the desk that made them.
+    crossings: u64,
+    /// Answers that arrived after the desk that asked had finished.
+    stranded: u64,
+    /// Desk episodes that ended in a recorded decision.
+    converged: u32,
+    /// Desk episodes that tied with nobody left to break it.
+    deadlocked: u32,
+    /// Desk episodes that spent their budget.
+    exhausted: u32,
+    /// Desk episodes where nobody cleared their threshold.
+    idle: u32,
+    /// Calls into the library.
+    step_calls: u64,
+    /// Time spent inside the library.
+    library_time: std::time::Duration,
+}
+
+impl SwarmTotals {
+    /// Fold one federated run in.
+    fn add(&mut self, report: &SwarmReport) {
+        self.runs = self.runs.saturating_add(1);
+        if report.decided.is_some() {
+            self.decided = self.decided.saturating_add(1);
+        }
+        if report.correct {
+            self.correct = self.correct.saturating_add(1);
+        }
+        self.turns = self.turns.saturating_add(u64::from(report.turns));
+        self.crossings = self.crossings.saturating_add(u64::from(report.crossings));
+        self.stranded = self.stranded.saturating_add(u64::from(report.stranded));
+        self.step_calls = self.step_calls.saturating_add(u64::from(report.step_calls));
+        self.library_time += report.library_time;
+        for desk in &report.desks {
+            match desk.ending {
+                run::Ending::Converged => self.converged = self.converged.saturating_add(1),
+                run::Ending::Deadlocked => self.deadlocked = self.deadlocked.saturating_add(1),
+                run::Ending::Exhausted => self.exhausted = self.exhausted.saturating_add(1),
+                run::Ending::Idle => self.idle = self.idle.saturating_add(1),
+            }
+        }
+    }
+
+    /// One row of the comparison table.
+    fn row(&self, name: &str) -> String {
+        let runs = u64::from(self.runs);
+        format!(
+            "{name:<9} {:>7.1}% {:>7} {:>9.1} {:>10.1} {:>9.1}",
+            metrics::ratio(u64::from(self.correct), runs) * 100.0,
+            self.decided,
+            metrics::ratio(self.turns, runs),
+            metrics::ratio(self.crossings, runs),
+            metrics::ratio(self.stranded, runs),
+        )
+    }
+}
+
+/// Drive a federated scenario through a real agent CLI.
+///
+/// Every desk gets the same brief, every member gets only its own private
+/// facts, and no member can see another desk's transcript. Whether anything
+/// crosses a channel is entirely the agents' decision: the harness offers the
+/// move in the prompt and writes no mention on anybody's behalf. A run in which
+/// nothing crosses is a finding about the agents, not a failure of the harness,
+/// and it is reported as such.
+fn live_federation(options: &Options, command: &str, scenario: &Scenario) -> Result<(), String> {
+    let channels = scenario.channels();
+    if channels.len() < 2 {
+        return Err("a federated live run needs at least two [desk ...] sections".to_owned());
+    }
+    let widest = channels
+        .iter()
+        .map(|channel| channel.members.len())
+        .max()
+        .unwrap_or(2);
+    let policy = EpisodePolicy {
+        turn_budget: turn_budget(widest),
+        quorum: QuorumPolicy {
+            threshold: quorum_threshold(widest),
+            ..options.policy.quorum
+        },
+        ..options.policy
+    };
+
+    let mut seated = seat_federation(&channels, scenario, command, policy.quorum)?;
+    let seats = seated.len();
+    println!(
+        "driving {} desks through {command:?}\n\
+         {} members, budget {} per desk, quorum {}, referrals {} hops\n\n\
+         The brief every desk sees:\n{}",
+        channels.len(),
+        seats,
+        policy.turn_budget,
+        policy.quorum.threshold,
+        swarm_referrals().max_hops,
+        scenario.brief(),
+    );
+    for channel in &channels {
+        println!("{:>10}: {}", channel.name, channel.members.join(", "));
+    }
+    println!();
+
+    let mut members: Vec<&mut dyn swarm::SwarmMember> = seated
+        .iter_mut()
+        .map(|member| member as &mut dyn swarm::SwarmMember)
+        .collect();
+    let wall = Instant::now();
+    let report = swarm::drive_swarm(
+        &channels,
+        &mut members,
+        &policy,
+        swarm_referrals(),
+        &scenario.brief(),
+        true,
+    )?;
+    let wall = wall.elapsed();
+    for line in &report.trace {
+        println!("{line}");
+    }
+
+    println!();
+    for desk in &report.desks {
+        println!(
+            "{:>10} ended {} on {}",
+            desk.name,
+            desk.ending.label(),
+            desk.decided
+                .as_ref()
+                .map_or_else(|| "nothing".to_owned(), |topic| format!("#{topic}")),
+        );
+    }
+    let decided = report
+        .decided
+        .as_ref()
+        .map(tinyhivemind_hive::trace::TopicId::as_str);
+    println!(
+        "\nhive   federation decided {} after {} agent turns in {:.0} s — {}",
+        decided.map_or_else(|| "nothing".to_owned(), |topic| format!("#{topic}")),
+        report.turns,
+        wall.as_secs_f64(),
+        verdict(decided, &scenario.truth),
+    );
+    println!(
+        "       {} messages crossed a channel, {} answers arrived too late",
+        report.crossings, report.stranded,
+    );
+
+    let picks = live::poll(scenario, command)?;
+    for (id, pick) in &picks {
+        println!("vote   {id:>16} alone: #{pick}");
+    }
+    match plurality(&picks) {
+        Some(topic) => println!(
+            "vote   plurality #{topic} of {} — {}",
+            picks.len(),
+            verdict(Some(topic.as_str()), &scenario.truth),
+        ),
+        None => println!("vote   tied, no plurality — no answer"),
+    }
+    Ok(())
+}
+
+/// Print what the federation is, before any arm runs.
+fn describe(
+    options: &Options,
+    first: &Federation,
+    desk_policy: &EpisodePolicy,
+    merged_policy: &EpisodePolicy,
+    count: usize,
+) {
+    println!(
+        "federations {}  desks {}  per desk {}  options {}  desk bias +{}  eval noise ±{}\n\
+         per-desk policy: budget {}  quorum {}   merged: budget {}  quorum {}\n\
+         referrals: {} hops, desk mentions and returns on\n",
+        count,
+        first.desks.len(),
+        options.per_desk,
+        options.topics,
+        options.bias,
+        options.noise,
+        desk_policy.turn_budget,
+        desk_policy.quorum.threshold,
+        merged_policy.turn_budget,
+        merged_policy.quorum.threshold,
+        swarm_referrals().max_hops,
+    );
+    print!("the federation: ");
+    for desk in &first.desks {
+        print!("{} overrates #{}  ", desk.name, desk.decoy);
+    }
+    println!("and #{} is genuinely best\n", first.truth);
+}
+
+/// Print one federated episode, channel by channel.
+fn trace_swarm(first: &Federation, desk_policy: &EpisodePolicy) -> Result<(), String> {
+    let report = run_swarm(first, desk_policy, swarm_referrals(), TASK, true)?;
+    for line in &report.trace {
+        println!("{line}");
+    }
+    println!();
+    for desk in &report.desks {
+        println!(
+            "{:>9} ended {} on {}",
+            desk.name,
+            desk.ending.label(),
+            desk.decided
+                .as_ref()
+                .map_or_else(|| "nothing".to_owned(), |topic| format!("#{topic}")),
+        );
+    }
+    println!(
+        "federation decided {} ({}) after {} agent turns, {} crossings\n",
+        report
+            .decided
+            .as_ref()
+            .map_or_else(|| "nothing".to_owned(), |topic| format!("#{topic}")),
+        if report.correct { "correct" } else { "wrong" },
+        report.turns,
+        report.crossings,
+    );
+    Ok(())
+}
+
+/// Print the federated comparison table and the totals under it.
+fn tabulate(
+    siloed: &SwarmTotals,
+    swarmed: &SwarmTotals,
+    free: &SwarmTotals,
+    merged: &Aggregate,
+    vote: &Aggregate,
+    wall: std::time::Duration,
+    federations: usize,
+) {
+    println!(
+        "{:<9} {:>8} {:>8} {:>9} {:>10} {:>9}",
+        "arm", "correct", "decided", "turns", "crossings", "stranded",
+    );
+    println!("{}", siloed.row("siloed"));
+    println!("{}", swarmed.row("swarm"));
+    println!("{}", free.row("pooled"));
+    println!(
+        "{:<9} {:>7.1}% {:>7} {:>9.1} {:>10} {:>9}",
+        "merged",
+        merged.accuracy(),
+        merged.converged,
+        merged.turns_per_episode(),
+        "—",
+        "—",
+    );
+    println!(
+        "{:<9} {:>7.1}% {:>7} {:>9.1} {:>10} {:>9}",
+        "vote",
+        vote.accuracy(),
+        vote.converged,
+        vote.turns_per_episode(),
+        "—",
+        "—",
+    );
+
+    println!(
+        "\nsiloed desk endings: converged {} · deadlocked {} · exhausted {} · idle {}",
+        siloed.converged, siloed.deadlocked, siloed.exhausted, siloed.idle,
+    );
+    println!(
+        "swarm  desk endings: converged {} · deadlocked {} · exhausted {} · idle {}",
+        swarmed.converged, swarmed.deadlocked, swarmed.exhausted, swarmed.idle,
+    );
+    println!(
+        "library time {:.1} ms over {} steps ({:.0} ns/step)",
+        swarmed.library_time.as_secs_f64() * 1_000.0,
+        swarmed.step_calls,
+        metrics::ratio(
+            u64::try_from(swarmed.library_time.as_nanos()).unwrap_or(u64::MAX),
+            swarmed.step_calls,
+        ),
+    );
+    println!(
+        "wall clock {:.1} ms for {} federations across every arm",
+        wall.as_secs_f64() * 1_000.0,
+        federations,
+    );
+}
+
+/// Build one live agent per member, each knowing which channel it sits on.
+fn seat_federation(
+    channels: &[swarm::Channel],
+    scenario: &Scenario,
+    command: &str,
+    quorum: QuorumPolicy,
+) -> Result<Vec<live::LiveDeskAgent>, String> {
+    let mut seated: Vec<live::LiveDeskAgent> = Vec::new();
+    for channel in channels {
+        let peers: Vec<(String, String)> = channels
+            .iter()
+            .filter(|other| other.id != channel.id)
+            .map(|other| (other.id.clone(), other.name.clone()))
+            .collect();
+        for member in &channel.members {
+            let Some(agent) = scenario.agents.iter().find(|agent| &agent.id == member) else {
+                return Err(format!("desk {} names unknown member {member}", channel.id));
+            };
+            let Some(live) = LiveAgent::new(
+                &agent.id,
+                &agent.role,
+                command,
+                quorum,
+                Scenario::private_brief(agent),
+            ) else {
+                return Err(format!("could not build agents from {command:?}"));
+            };
+            seated.push(live::LiveDeskAgent::new(
+                live,
+                channel.name.clone(),
+                peers.clone(),
+            ));
+        }
+    }
+    Ok(seated)
 }

@@ -1,0 +1,114 @@
+# The checkout-503 hidden profile, split across three channels.
+#
+# `checkout-503.txt` puts five members in one room and hides the answer in a
+# conjunction no member holds alone. This is the same incident with the same
+# answer, and one thing changed: the members are on three desks that cannot
+# read each other's transcripts.
+#
+# That change is the whole experiment. In one room the conjunction is reachable
+# by deliberating — every fact is one turn away. Here it is not reachable at
+# all unless somebody asks another channel, because the four facts that make
+# #pool the answer are held on three different desks:
+#
+#   - the pool caps at 20                              (Data)
+#   - a request holds a connection for its whole life  (Platform)
+#   - in-flight requests have sat at 24-31 since 09:14 (Platform)
+#   - the release quintupled how long each one lasts   (Release)
+#
+# Platform holds two of the four and can get no further alone. Data holds the
+# cap and cannot see the in-flight count. Release holds the multiplier and
+# nothing to multiply.
+#
+# The first version of this file failed as an experiment, and the way it failed
+# is worth keeping. It gave Data both "the cap is 20" and "the database would
+# accept 400", which is very nearly the answer written down: two of the three
+# desks solved it without asking anybody anything, and the run proved nothing
+# about crossing a channel. A desk that can reach the truth alone is not part
+# of a hidden profile.
+#
+# So each desk now also holds a fact that points confidently at a *different*
+# wrong option, and each of those decoys is refuted only by a fact on another
+# desk:
+#
+#   - Platform reads doubled concurrency after an SDK release as a retry storm.
+#     Only Release knows the retry path has never been switched on.
+#   - Data reads an eighteen-month-old cap that carried yesterday's traffic as
+#     exonerated. Only Release knows each request now holds its connection five
+#     times longer.
+#   - Release reads pod CPU at 85% as a capacity shortfall. Only Platform knows
+#     replicas do not add connections.
+#
+# Every desk can rule something out by itself. No desk can rule #pool in.
+
+task: Since the 09:14 release the checkout API has returned 503 on about 8% of requests. The release shipped SDK 4.2, whose notes list a new retry-on-timeout path, and the incident channel's first instinct was a retry storm. Ship exactly one change now, and say which.
+
+truth: pool
+
+[option rollback]
+Roll the 09:14 release back.
+
+[option pool]
+Raise the database connection pool cap from 20 to 60.
+
+[option retries]
+Flip off the retry-on-timeout path SDK 4.2 shipped.
+
+[option scale]
+Triple the API replica count.
+
+[desk platform]
+name: Platform
+
+[desk data]
+name: Data
+
+[desk release]
+name: Release
+
+[agent platform-lead]
+desk: platform
+role: platform engineer, who owns the edge
+knows: Each in-flight API request holds one database connection for its whole lifetime, taken at request start and released at response.
+
+[agent platform-sre]
+desk: platform
+role: SRE on call, who owns the incident
+knows: Concurrent in-flight requests have sat between 24 and 31 since 09:14, against a morning baseline of 11.
+knows: Concurrency more than doubling at the exact minute an SDK release shipped a retry path is the signature of a retry storm, and that is what this looks like from here.
+
+[agent platform-net]
+desk: platform
+role: network engineer, who owns capacity
+knows: Replica count does not change how many database connections exist. The pool is one shared pool sized per environment, not per replica.
+
+[agent data-lead]
+desk: data
+role: database engineer, who owns the datastore
+knows: The connection pool is capped at 20. A request that cannot take a connection within 250ms is failed by the API with a 503 rather than queued.
+
+[agent data-dba]
+desk: data
+role: database reliability engineer, who owns the database itself
+knows: The database is healthy — CPU under 20%, no slow queries — and it would accept far more connections than the pool asks it for.
+knows: The pool cap has been 20 for eighteen months and carried yesterday's identical traffic without a single 503, and nothing about the pool changed at 09:14. You have no visibility into how many requests are in flight, or how long each one holds its connection.
+
+[agent data-analyst]
+desk: data
+role: data analyst, who owns the traffic numbers
+knows: Requests per minute and unique sessions are both flat against yesterday, so nothing is sending more traffic than usual.
+
+[agent release-manager]
+desk: release
+role: release manager, who owns what can and cannot be shipped
+knows: The 09:14 release raised the client request timeout from 2 seconds to 10, so a slow request now occupies its server-side resources five times as long as it did yesterday.
+
+[agent release-schema]
+desk: release
+role: schema owner, who owns migrations
+knows: The release carries a forward-only schema migration. Rolling it back drops a column that rows written since 09:14 already depend on, which loses paid orders.
+knows: API pod CPU has climbed from 30% to 85% since 09:14 and the pods are the only thing visibly under strain, which reads from here as a capacity shortfall.
+
+[agent release-sdk]
+desk: release
+role: client engineer, who owns the SDK
+knows: SDK 4.2 shipped the retry-on-timeout path disabled by default, the flag has never been turned on in any environment, and retry telemetry shows zero retries fired today.
