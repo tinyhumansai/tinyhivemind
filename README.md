@@ -174,6 +174,26 @@ to scale with the desk, what happens to accuracy without a blind opening round,
 what five live models did to the grammar when nobody was watching, and an
 honest section on what none of it shows.
 
+## Not an agent council
+
+A council is a conversation with roles: a manager or a round-robin picks the
+next speaker, and it stops on a round cap or when the manager says so.
+
+| | agent council | tinyhivemind episode |
+| --- | --- | --- |
+| who speaks next | a manager model, or round-robin | argmax over per-member bids |
+| what agreement is | inferred from the replies | an explicit supporter set |
+| what disagreement is | a message saying "I disagree" | an objection that removes an advocate |
+| how it ends | round cap, or the manager stops | quorum, deadlock, exhaustion or idle |
+| cost per round | one turn per member | one turn, total |
+| replay | re-run and hope | byte-identical from the same transcript |
+
+Councils are better at open-ended writing, at work that genuinely decomposes,
+and at running on any model with no grammar to learn. Take one when the
+deliverable is prose. Take this when the deliverable is a decision somebody
+will ask you to justify later.
+[The full comparison](https://github.com/tinyhumansai/tinyhivemind/wiki/Agent-councils) is honest about both sides.
+
 ## Three rules it will not break
 
 **The host owns storage.** No database, no file, no socket. Your log stays
@@ -214,6 +234,7 @@ see what the thing actually does.
 | [Episode policy](https://github.com/tinyhumansai/tinyhivemind/wiki/Episode-policy) | every setting, and how to tune it to the size of a desk |
 | [Benchmarks](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks) | the full report, including what it does not show |
 | [Host integration](https://github.com/tinyhumansai/tinyhivemind/wiki/Host-integration) | the three ports, and what your application owes the library |
+| [Agent councils](https://github.com/tinyhumansai/tinyhivemind/wiki/Agent-councils) | how this differs from a council or crew, and what each does better |
 | [Development](https://github.com/tinyhumansai/tinyhivemind/wiki/Development) | the build contract, testing, and how to contribute |
 | [Glossary](https://github.com/tinyhumansai/tinyhivemind/wiki/Glossary) | every term, what it means here, and where it came from |
 | [Further reading](https://github.com/tinyhumansai/tinyhivemind/wiki/Further-reading) | the swarm biology, the group-decision literature, the papers |
