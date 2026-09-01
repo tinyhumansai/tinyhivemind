@@ -40,3 +40,6 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a complete sample.
   the atomic host enqueue contract.
 - [`hive-mind.md`](hive-mind.md) — bounded group deliberation: traces, salience,
   quorum with cross-inhibition, and the attention market.
+- [`thread-scoped-conversations.md`](thread-scoped-conversations.md) — proposed:
+  which half of OpenCompany's threads epic this layer owns, and which stays with
+  the host.
