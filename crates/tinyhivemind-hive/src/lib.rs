@@ -75,11 +75,28 @@
 //! ];
 //!
 //! let traces = read(&transcript);
-//! let policy = QuorumPolicy { threshold: 2, window: 100, require_grounded: true };
-//! let standings = standings(&traces, Sequence(4), &policy)?;
+//! let policy = QuorumPolicy { window: 100, ..QuorumPolicy::DEFAULT };
+//! let settled = standings(&traces, Sequence(4), &policy)?;
 //!
 //! // Two distinct grounded supporters carry `stage`; `ship` has none.
-//! assert_eq!(consensus(&standings, &policy), ConsensusState::Quorum { topic: "stage".into() });
+//! assert_eq!(consensus(&settled, &policy), ConsensusState::Quorum { topic: "stage".into() });
+//!
+//! // A cited fact argues against the option rather than against a person.
+//! // The cap is `None` by default — the benchmark scored the mechanism and it
+//! // lost — so a room that wants it says so. Two distinct refuters then cap
+//! // `stage` out of contention, and neither supporter is silenced: the
+//! // standing records both sides.
+//! let policy = QuorumPolicy { refutation_cap: Some(2), ..policy };
+//! let mut contested = transcript.to_vec();
+//! contested.extend([
+//!     said(5, agent("auditor"), "!evidence Staging needs a second environment we do not have."),
+//!     said(6, agent("auditor"), "!refute #stage ^5 There is nowhere to stage it."),
+//!     said(7, agent("scout"), "!refute #stage ^5 Confirmed, the environment was retired."),
+//! ]);
+//! let contested = standings(&read(&contested), Sequence(7), &policy)?;
+//! assert_eq!(consensus(&contested, &policy), ConsensusState::Deliberating);
+//! assert_eq!(contested[0].refuted_by, ["auditor", "scout"]);
+//! assert_eq!(contested[0].supporters, ["planner", "critic"]);
 //! # Ok::<(), tinyhivemind_hive::error::Error>(())
 //! ```
 

@@ -67,6 +67,14 @@ const NONCOMPLIANCE: u32 = 60;
 /// Set it to zero and the room degenerates into a plurality of first
 /// impressions, which is exactly the `vote` control arm.
 const SOCIAL_WEIGHT: i32 = 25;
+/// The largest refutation cap a real room could ever satisfy.
+///
+/// A participant does not spend a turn on a move that cannot take effect, so a
+/// `None` cap, or one above the largest possible desk, is how the control arms
+/// turn refutation off without the simulated members behaving differently in
+/// any other way.
+const REACHABLE_REFUTATION_CAP: u32 = 8;
+const _: () = assert!(MEMBER_ROLES.len() == REACHABLE_REFUTATION_CAP as usize);
 /// How far below its own choice a participant will still close a decision out.
 ///
 /// A room whose members each hold out for a private preference nobody else
@@ -218,6 +226,22 @@ impl SimAgent {
                 "Thinking about this; {} still looks strongest to me.",
                 self.favourite
             );
+        }
+
+        // A hypothesis this member rates *clearly* below its own — the same
+        // 60-point gap that separates the genuinely best option from a decoy —
+        // is not a tie to be broken but a claim to be killed. Objecting would
+        // cost one turn per advocate and grow with every new supporter;
+        // refuting costs one turn and caps the topic for the whole room. The
+        // gap is what separates the two moves: a merely weaker contender still
+        // gets an objection, below.
+        if self
+            .quorum
+            .refutation_cap
+            .is_some_and(|cap| cap <= REACHABLE_REFUTATION_CAP)
+            && let Some((topic, grounds)) = view.refutable(self)
+        {
+            return format!("!refute #{topic} ^{grounds} The grounds I hold rule this one out.");
         }
 
         // Two options are both carrying, which is the one state no amount of
@@ -465,6 +489,34 @@ impl View {
                     .is_some_and(|id| id != agent.id && self.has_backed(id, worst))
         })?;
         Some((worst, target.sequence, self.proposal(best)?))
+    }
+
+    /// A topic on the floor this participant rates clearly below its own best,
+    /// and has not already refuted: the topic, and the grounds to cite.
+    ///
+    /// The threshold is [`CONCESSION`], the same gap that separates the true
+    /// option from a decoy, so a refutation is spent on a hypothesis this
+    /// member believes is wrong rather than on one it merely likes less. Ties
+    /// between two plausible options stay the objection's business.
+    ///
+    /// Grounds are this member's own evidence where it has deposited any, and
+    /// otherwise the proposal being argued against.
+    fn refutable(&self, agent: &SimAgent) -> Option<(&TopicId, Sequence)> {
+        let mine = agent.score(&agent.favourite);
+        let topic = self
+            .standings
+            .iter()
+            .filter(|standing| standing.topic != agent.favourite)
+            .filter(|standing| !standing.refuted_by.contains(&agent.id))
+            .filter(|standing| mine.saturating_sub(agent.score(&standing.topic)) > CONCESSION)
+            .max_by_key(|standing| standing.supporters.len())
+            .map(|standing| &standing.topic)?;
+        let own_evidence = self.traces.iter().find(|trace| {
+            trace.kind == TraceKind::Evidence && trace.agent_id() == Some(agent.id.as_str())
+        });
+        let grounds =
+            own_evidence.map_or_else(|| self.proposal(topic), |trace| Some(trace.sequence))?;
+        Some((topic, grounds))
     }
 
     /// A message advocating a topic this participant rates below its own

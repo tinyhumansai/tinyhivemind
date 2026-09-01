@@ -183,4 +183,60 @@ fn the_default_policy_bounds_every_episode() {
         ),
         (2, true),
     );
+    // Both narrowing knobs are off by default. The benchmark scored them and
+    // they lost, and a default is not the place to carry a mechanism its own
+    // harness says costs accuracy.
+    assert_eq!(
+        (
+            QuorumPolicy::DEFAULT.refutation_cap,
+            QuorumPolicy::DEFAULT.require_evidential,
+        ),
+        (None, false),
+    );
+}
+
+#[test]
+fn root_exports_refutation_through_the_public_surface() {
+    let transcript = [
+        said(1, "planner", "!propose #stage"),
+        said(2, "critic", "!support #stage ^1"),
+        said(3, "auditor", "!evidence The environment was retired."),
+        said(4, "auditor", "!refute #stage ^3 Nowhere to stage it."),
+        said(5, "scout", "!refute #stage ^3 Confirmed."),
+    ];
+    let policy = QuorumPolicy {
+        refutation_cap: Some(2),
+        ..QuorumPolicy::DEFAULT
+    };
+    let standings: Vec<TopicStanding> =
+        standings(&read(&transcript), Sequence(5), &policy).expect("folds");
+    let stage = &standings[0];
+
+    assert_eq!(stage.topic, TopicId("stage".into()));
+    assert_eq!(stage.refuted_by, ["auditor", "scout"]);
+    // Two distinct refuters cap the topic. Nothing was removed to do it: both
+    // supporters survive, and the standing records the whole exchange.
+    assert_eq!(stage.supporters, ["planner", "critic"]);
+    assert!(stage.silenced.is_empty());
+    assert!(!stage.carried(&policy));
+    assert_eq!(consensus(&standings, &policy), ConsensusState::Deliberating);
+}
+
+#[test]
+fn root_exports_evidential_grounding_as_a_policy() {
+    // A chain of agreement that never reaches a fact is a cascade with a
+    // citation on it, and `require_evidential` refuses to count it.
+    let transcript = [
+        said(1, "planner", "!propose #stage"),
+        said(2, "critic", "!support #stage ^1"),
+        said(3, "scout", "!support #stage ^2"),
+    ];
+    let policy = QuorumPolicy {
+        require_evidential: true,
+        ..QuorumPolicy::DEFAULT
+    };
+    let standings: Vec<TopicStanding> =
+        standings(&read(&transcript), Sequence(3), &policy).expect("folds");
+    assert_eq!(standings[0].supporters, ["planner"]);
+    assert_eq!(consensus(&standings, &policy), ConsensusState::Deliberating);
 }

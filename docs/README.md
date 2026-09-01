@@ -15,7 +15,9 @@ docs/
 ├── testing.md     # the deterministic harness, opt-in live tests, coverage
 ├── specs/         # behavior and architecture specifications
 ├── plans/         # implementation plans derived from approved specs
-└── adr/           # architecture decision records, numbered and immutable
+├── adr/           # architecture decision records, numbered and immutable
+├── research/      # the reading behind a mechanism, with its equations
+└── experiments/   # what happened when it was actually run
 ```
 
 - [`testing.md`](testing.md) covers the deterministic coordination harness, the
@@ -29,6 +31,11 @@ commands, and are updated as the work progresses.
 [`adr/0001-record-architecture-decisions.md`](adr/0001-record-architecture-decisions.md)
 as the template. An accepted ADR is not edited; it is superseded by a later
 one.
+- [`research/`](research/README.md) holds the working notes behind a mechanism —
+the citation, the equation, and what the workspace would have to represent to
+implement it. Research is not a decision; it is the warrant one cites.
+- `experiments/` holds dated records of running the library for real, reported
+run by run so a small sample reads as one.
 
 Complex modules also carry a module-level `README.md` inside `src/<module>/`
 covering their design, public surface, and important constraints.

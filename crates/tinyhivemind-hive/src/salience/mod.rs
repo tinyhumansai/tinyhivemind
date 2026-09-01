@@ -77,12 +77,16 @@ pub(crate) fn with_relevance(standing: i64, weights: &SalienceWeights, relevance
 /// Return the standing importance of a trace kind, in thousandths.
 ///
 /// A proposal and a commitment move the room most; a question moves it least.
+/// A refutation outranks an objection because it is directed at a hypothesis
+/// rather than at a person, and is outranked by a proposal because putting a
+/// new option on the floor moves the room further than removing one.
 /// These are ordinal rather than measured, and are deliberately coarse.
 #[must_use]
 pub fn importance(kind: TraceKind) -> i64 {
     match kind {
         TraceKind::Commit => 1_000,
         TraceKind::Propose => 900,
+        TraceKind::Refute => 850,
         TraceKind::Object => 800,
         TraceKind::Evidence => 600,
         TraceKind::Support => 500,

@@ -37,6 +37,14 @@ Every arm decides the same rooms from the same private evaluations.
 | `vote` | The honest matched-budget control — independent answers decided by plurality, nobody seeing anybody. It is given the *whole* budget, more turns than the deliberation actually spends. |
 | `hive` | A deliberation episode at `EpisodePolicy::DEFAULT`. |
 | `hive+` | The same, at the tuned policy: a majority quorum that is never unanimity, and three turns of budget per member. |
+| `hive+ref` | The tuned policy with `refutation_cap: Some(2)` — a cited fact can cap a hypothesis for the whole room. |
+| `hive+ev` | The same, plus `require_evidential`: support counts only if its citation chain reaches a stated fact. |
+
+The last two lose, reproducibly and by a lot, and the write-up in
+[`docs/experiments/2026-09-01-refutation-and-grounds.md`](../../../../docs/experiments/2026-09-01-refutation-and-grounds.md)
+says by how much and what the harness does not test. They are here because an
+arm that cannot lose is not evidence, and a mechanism scored and reported is
+worth more than one quietly shipped on.
 
 A multi-agent result without a matched-budget control is close to meaningless,
 because the multi-agent arm has usually just spent more compute. `vote` is that
@@ -64,6 +72,13 @@ with model quality. On its turn a participant, seeing exactly what
 5. **proposes** — puts its own favourite on the floor if nobody has;
 6. **objects, or adds evidence**, according to its role.
 
+It also **refutes** — before it objects — when the room is running a policy that
+would let a refutation take effect and it rates an option on the floor clearly
+below its own, by the same 60-point gap that separates the true option from a
+decoy. A `None` or unreachable `refutation_cap` turns both the mechanism and the
+move off together, so a control arm differs from its treatment in one thing
+rather than in two.
+
 It reads the medium through the library's own `resolve` and `standings`, not
 through a private imitation of them, and it emits ordinary prose 6% of the time
 so the benchmark measures the protocol rather than a formatter.
@@ -78,13 +93,19 @@ ladder        1.00       100.0        57.6          1109        901660
 vote         15.00       100.0        78.5             0           inf
 hive          6.16        89.7        73.3          2231         62637
 hive+         6.75        99.4        82.1          2278         56641
+hive+ref      8.99        88.6        75.0          2827         35398
+hive+ev      10.29        60.8        55.9          2971         29816
 ```
 
 The tuned deliberation beats the matched-budget control at half the budget, and
 one responder off the ladder reaches 57.6%. The quorum threshold and the turn
 budget are the two settings that decide this, the blind round is worth 24
 points of accuracy on its own, and the state machine costs about 2.3 µs per
-step. [The benchmark write-up](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks)
+step.
+
+The two refutation arms lose, which is why both knobs are off in
+`QuorumPolicy::DEFAULT`. `hive+ref` falls below even the vote control, and
+`hive+ev` starves the room — it fails to decide two episodes in five. [The benchmark write-up](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks)
 has the tables behind each of those, across desk sizes, plus what the benchmark does not show.
 
 ## Live mode

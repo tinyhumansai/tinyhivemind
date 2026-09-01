@@ -20,10 +20,13 @@ fn author(index: u64) -> SessionAuthor {
 }
 
 fn content(state: &mut u64) -> String {
-    const LINES: [&str; 13] = [
+    const LINES: [&str; 16] = [
         "!propose #stage",
         "!support #stage ^1",
         "!object >1 ^2",
+        "!refute #stage ^1",
+        "!refute #stage",
+        "!refute ^1",
         "!question",
         "!commit #stage",
         "not a marker !support",
@@ -52,6 +55,13 @@ fn arbitrary_transcripts_have_stable_well_formed_and_idempotent_folds() {
         threshold: 2,
         window: 100,
         require_grounded: true,
+        ..QuorumPolicy::DEFAULT
+    };
+    // The same corpus under the narrowing policy, so citation-chain resolution
+    // is fuzzed for termination on cycles and self-citations too.
+    let evidential = QuorumPolicy {
+        require_evidential: true,
+        ..policy
     };
 
     for case in 0..256_u64 {
@@ -87,6 +97,10 @@ fn arbitrary_transcripts_have_stable_well_formed_and_idempotent_folds() {
         assert_eq!(
             standings(&traces, at, &policy).expect("valid policy"),
             standings(&doubled_and_reversed, at, &policy).expect("valid policy"),
+        );
+        assert_eq!(
+            standings(&traces, at, &evidential).expect("valid policy"),
+            standings(&doubled_and_reversed, at, &evidential).expect("valid policy"),
         );
         assert!(traces.len() <= messages.len() * TRACE_CAP);
     }
