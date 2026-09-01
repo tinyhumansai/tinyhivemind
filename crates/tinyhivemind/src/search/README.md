@@ -11,6 +11,16 @@ rest". Search is that reach: the transcript becomes something a turn queries,
 and only what matched comes back. [`../pins`](../pins) is the other half —
 what must arrive without anybody asking.
 
+Showing more is not the alternative it looks like. Accuracy over a long input
+is U-shaped in position, so a message in the middle of a bigger window is used
+*less* reliably than the same message at the edge of a smaller one, and the
+cost is paid by every participant on every turn. Treating the log as an
+environment to query rather than a prefix to swallow is the move
+[recursive language models](https://arxiv.org/abs/2512.24601) make on a single
+prompt; the reading behind that, and what was deliberately not borrowed from
+it, is in
+[`docs/research/long-context.md`](../../../../docs/research/long-context.md).
+
 ## Public surface
 
 | Item | What it is |

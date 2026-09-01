@@ -19,13 +19,32 @@ is not "the agent forgot"; it is worse than that:
   message costs five other messages of shared window, including the one that
   answered the question.
 
-The tempting answer — enlarge the window — does not work: it moves the cliff
-without removing it, and it costs every participant on every turn. The answer
-here is the one a person uses on a large corpus: stop trying to hold it, and
-make it *queryable*, with a small pinned working set that rides along
-regardless. That is the same move a recursive language model makes over a long
-context — the context becomes an environment to interrogate rather than a
-prefix to swallow — applied to a shared transcript rather than a single prompt.
+The tempting answer — enlarge the window — does not work. It moves the cliff
+without removing it, it costs every participant on every turn, and position
+inside a long input is not neutral: Liu et al.,
+[Lost in the Middle](https://arxiv.org/abs/2307.03172) (*TACL* 2024), report a
+U-shaped curve in which a fact in the middle of a long context is used less
+reliably than the same fact at the edge of a short one. A bigger window
+relocates the problem into its own middle.
+
+The answer here is the one a person uses on a large corpus: stop trying to hold
+it, and make it *queryable*, with a small pinned working set that rides along
+regardless. That is the move Zhang, Kraska & Khattab make in
+[Recursive Language Models](https://arxiv.org/abs/2512.24601) — hold the
+context in a REPL as an environment the model inspects, chunks and recursively
+queries, rather than as a prefix it must swallow. Their reported result is the
+one that matters for this design: an RLM beats base models and long-context
+scaffolds *even on prompts that would have fit*, at comparable or lower cost.
+Querying a context can beat holding it when holding it was an option.
+
+Applied to a shared transcript rather than a single prompt, with two
+differences that follow from the charter and one from the setting. There is no
+recursion — a fold cannot call a model, and a port would be the host's — and no
+index, because a second store is what rule 1 forbids. And there is a pinboard,
+which a single-prompt setting has no reason to want: one prompt has nobody else
+to lose a message on. Read
+[`../research/long-context.md`](../research/long-context.md) for the citations
+and what was deliberately not borrowed.
 
 ## Goals
 
@@ -49,6 +68,10 @@ prefix to swallow — applied to a shared transcript rather than a single prompt
   and it is honest about being bounded.
 - **Ranking quality as a research result.** The ordering is a fixed-point
   integer fold chosen to be predictable and testable, not a retrieval model.
+- **A claim that querying beats holding for deliberation.** The RLM results
+  that motivate the shape of this are single-prompt retrieval benchmarks. A
+  deliberation is not a retrieval task, and nothing here is evidence that a
+  room decides better — the discipline P8 and P9 were held to.
 - **Enforcing brevity.** The budget is reported, never applied. This crate does
   not edit an authored message; a transcript that disagrees with what was said
   is worse than a long one.

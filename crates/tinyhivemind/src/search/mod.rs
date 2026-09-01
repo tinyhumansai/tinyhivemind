@@ -4,7 +4,9 @@
 //! default — and the log behind it is unbounded. Search is how the rest of it
 //! stays reachable: instead of enlarging the window until it stops fitting,
 //! the transcript becomes something a turn *queries*, and only what matched
-//! comes back. [Pinning](crate::pins) is the other half of the same answer,
+//! comes back. Enlarging it would not work anyway — position inside a long
+//! context is not neutral, and a bigger window relocates the problem into its
+//! own middle. See `docs/research/long-context.md`. [Pinning](crate::pins) is the other half of the same answer,
 //! for the handful of insights that must ride along on every turn whether or
 //! not anybody thought to search for them.
 //!
