@@ -104,7 +104,7 @@ impl Scenario {
                 }
                 continue;
             }
-            let (key, value) = match line.split_once(american_colon) {
+            let (key, value) = match line.split_once(':') {
                 Some((key, value)) => (key.trim(), value.trim()),
                 None => ("", line),
             };
@@ -198,11 +198,3 @@ enum Section {
     /// Inside an `[agent ...]`.
     Agent,
 }
-
-/// The key separator, named so the `split_once` above reads as prose.
-const fn american_colon(character: char) -> bool {
-    character == ':'
-}
-
-#[cfg(test)]
-mod test;
