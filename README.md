@@ -137,7 +137,9 @@ Your log stays yours and gets lent through one port.
 application, and no callback ever crosses back into it.
 
 **One message, one turn.** `@everyone` is a list, not a broadcast. There is no
-type in this library that can carry two authorized speakers.
+type in this library that can carry two authorized speakers. The one thing
+fan-out genuinely buys is independence, and that is bought here as a visibility
+filter on the projection, for the cost of a flag rather than a scheduler.
 
 ## Use it
 
@@ -167,7 +169,9 @@ see what the thing actually does.
 | [Quick start](https://github.com/tinyhumansai/tinyhivemind/wiki/Quick-start) | pin it, resolve a mention, read a deliberation |
 | [Architecture](https://github.com/tinyhumansai/tinyhivemind/wiki/Architecture) | the three crates and why they are split that way |
 | [Threads](https://github.com/tinyhumansai/tinyhivemind/wiki/Threads) | thread-scoped projection, and finding your way back into a busy desk |
-| [Hive episodes](https://github.com/tinyhumansai/tinyhivemind/wiki/Hive-episodes) | traces, salience, quorum, and the attention market |
+| [Hive episodes](https://github.com/tinyhumansai/tinyhivemind/wiki/Hive-episodes) | salience, quorum, cross-inhibition, and the attention market |
+| [Trace grammar](https://github.com/tinyhumansai/tinyhivemind/wiki/Trace-grammar) | what a marker deposits, and what real models get wrong |
+| [Episode policy](https://github.com/tinyhumansai/tinyhivemind/wiki/Episode-policy) | every setting, and how to tune it to the size of a desk |
 | [Benchmarks](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks) | the full report, including what it does not show |
 | [Host integration](https://github.com/tinyhumansai/tinyhivemind/wiki/Host-integration) | the three ports, and what your application owes the library |
 | [Development](https://github.com/tinyhumansai/tinyhivemind/wiki/Development) | the build contract, testing, and how to contribute |
