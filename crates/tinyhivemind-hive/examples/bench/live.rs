@@ -101,16 +101,47 @@ impl Participant for LiveAgent {
         if !output.status.success() {
             return Err(format!("{} exited with {}", self.program, output.status));
         }
-        let text = String::from_utf8_lossy(&output.stdout);
-        // Take the marker line if the agent wrapped it in prose; a turn that
-        // deposits no trace is still a legal turn, so prose falls through.
+        let text = plain(&String::from_utf8_lossy(&output.stdout));
+        // Take the marker line if the agent wrapped it in prose or a banner; a
+        // turn that deposits no trace is still a legal turn, so prose falls
+        // through to the first thing the agent actually said.
         let marker = text
             .lines()
             .map(str::trim)
             .find(|line| line.starts_with('!'));
         let answer = marker
-            .or_else(|| text.lines().map(str::trim).find(|line| !line.is_empty()))
+            .or_else(|| {
+                text.lines()
+                    .map(str::trim)
+                    .find(|line| !line.is_empty() && !line.starts_with('>'))
+            })
             .unwrap_or("(no answer)");
         Ok(answer.to_owned())
     }
+}
+
+/// Strip ANSI escape sequences from a CLI's output.
+///
+/// Real agent CLIs colour what they print and draw a banner around it. A
+/// marker line preceded by a colour reset is still a marker line, and the
+/// grammar reads the text rather than the terminal.
+fn plain(text: &str) -> String {
+    let mut plain = String::with_capacity(text.len());
+    let mut characters = text.chars();
+    while let Some(character) = characters.next() {
+        if character != '\u{1b}' {
+            plain.push(character);
+            continue;
+        }
+        // CSI sequences end at their final byte in `@`..=`~`; anything else
+        // after the escape is a two-character sequence.
+        if characters.next() == Some('[') {
+            for byte in characters.by_ref() {
+                if ('@'..='~').contains(&byte) {
+                    break;
+                }
+            }
+        }
+    }
+    plain
 }
