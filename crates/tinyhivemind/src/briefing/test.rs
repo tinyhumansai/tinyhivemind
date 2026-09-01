@@ -104,9 +104,36 @@ fn briefing_records_pin_their_wire_shape() {
         serde_json::from_value::<TeamBriefing>(briefing_json).expect("briefing deserializes"),
         briefing
     );
+}
 
+#[test]
+fn initialization_pins_its_wire_shape() {
+    let briefing = TeamBriefing {
+        viewer_id: "alice".into(),
+        desk_id: "engineering".into(),
+        desk_name: "Engineering".into(),
+        teammates: vec![BriefedTeammate {
+            id: "bob".into(),
+            label: "Bob".into(),
+            role: None,
+            description: Some("Reviews changes".into()),
+        }],
+    };
     let initialization = SessionInitialization {
         briefing,
+        context: SessionContext {
+            threads: vec![crate::ThreadLine {
+                root: Sequence(2),
+                opening: "ship the release".into(),
+                replies: 1,
+                latest: Sequence(3),
+                landed: None,
+            }],
+            notes: vec![BriefingNote {
+                heading: "Work raised in this conversation".into(),
+                lines: vec!["#12 rewrite the changelog — In review".into()],
+            }],
+        },
         history: vec![crate::SessionMessage {
             sequence: Sequence(4),
             author: SessionAuthor::Operator,
@@ -123,6 +150,19 @@ fn briefing_records_pin_their_wire_shape() {
                 "label": "Bob",
                 "role": null,
                 "description": "Reviews changes"
+            }]
+        },
+        "context": {
+            "threads": [{
+                "root": 2,
+                "opening": "ship the release",
+                "replies": 1,
+                "latest": 3,
+                "landed": null
+            }],
+            "notes": [{
+                "heading": "Work raised in this conversation",
+                "lines": ["#12 rewrite the changelog — In review"]
             }]
         },
         "history": [{
@@ -319,6 +359,193 @@ async fn initialization_keeps_briefing_separate_from_history() {
     assert_eq!(initialized.briefing, briefing);
     assert_eq!(initialized.history.len(), 1);
     assert_eq!(initialized.history[0].sequence, Sequence(4));
+    assert!(initialized.context.is_empty());
+}
+
+fn desk_row(sequence: u64, parent: Option<u64>, content: &str) -> LogMessage {
+    LogMessage {
+        sequence: Sequence(sequence),
+        chat_id: Some("engineering".into()),
+        parent: parent.map(Sequence),
+        author: SessionAuthor::Operator,
+        content: content.into(),
+    }
+}
+
+fn viewer_briefing() -> TeamBriefing {
+    TeamBriefing {
+        viewer_id: "alice".into(),
+        desk_id: "engineering".into(),
+        desk_name: "Engineering".into(),
+        teammates: Vec::new(),
+    }
+}
+
+#[tokio::test]
+async fn context_carries_the_thread_index_and_host_notes_beside_history() {
+    let log = OnePage(SessionPage {
+        messages: vec![
+            desk_row(3, Some(1), "on it"),
+            desk_row(2, None, "check the invoice"),
+            desk_row(1, None, "draft the launch email"),
+        ],
+        next_before: None,
+    });
+    let query = SessionQuery {
+        conversation: named_conversation(),
+        before: None,
+        window: 10,
+    };
+    let note = BriefingNote {
+        heading: "Work raised in this conversation".into(),
+        lines: vec!["#12 rewrite the changelog — In review".into()],
+    };
+    let initialized =
+        initialize_session_with_context(&log, &query, viewer_briefing(), vec![note.clone()])
+            .await
+            .expect("initializes");
+
+    assert_eq!(
+        initialized
+            .context
+            .threads
+            .iter()
+            .map(|line| (line.root.0, line.replies))
+            .collect::<Vec<_>>(),
+        vec![(1, 1), (2, 0)]
+    );
+    assert_eq!(initialized.context.notes, vec![note]);
+    // The context is beside the history, never folded into it.
+    assert_eq!(
+        initialized
+            .history
+            .iter()
+            .map(|item| item.content.as_str())
+            .collect::<Vec<_>>(),
+        vec!["draft the launch email", "check the invoice", "on it"]
+    );
+}
+
+#[tokio::test]
+async fn context_skips_the_index_inside_a_thread_and_propagates_read_failures() {
+    let log = OnePage(SessionPage {
+        messages: vec![desk_row(1, None, "root")],
+        next_before: None,
+    });
+    let mut query = SessionQuery {
+        conversation: named_conversation(),
+        before: None,
+        window: 10,
+    };
+    query.conversation.thread_root = Some(Sequence(1));
+    let initialized = initialize_session_with_context(&log, &query, viewer_briefing(), Vec::new())
+        .await
+        .expect("initializes");
+    assert!(initialized.context.is_empty());
+
+    query.conversation.thread_root = None;
+    assert!(matches!(
+        initialize_session_with_context(&FailingLog, &query, viewer_briefing(), Vec::new()).await,
+        Err(crate::Error::Read { .. })
+    ));
+
+    // The index read is a second read, and it fails on its own.
+    assert!(matches!(
+        initialize_session_with_context(
+            &FailsAfterHistory::default(),
+            &query,
+            viewer_briefing(),
+            Vec::new()
+        )
+        .await,
+        Err(crate::Error::Read { .. })
+    ));
+}
+
+/// Answers the history projection, then fails the thread-index read.
+///
+/// Both walks start at the same cursor, so only call order tells them apart.
+#[derive(Debug, Default)]
+struct FailsAfterHistory {
+    reads: std::sync::Mutex<usize>,
+}
+
+impl SessionLog for FailsAfterHistory {
+    fn read_before(&self, _: Option<Sequence>, _: usize) -> SessionFuture<'_> {
+        let mut reads = self.reads.lock().expect("reads lock is not poisoned");
+        *reads += 1;
+        let first = *reads == 1;
+        Box::pin(async move {
+            if first {
+                Ok(SessionPage::default())
+            } else {
+                Err(Box::new(io::Error::other("offline")) as SourceError)
+            }
+        })
+    }
+}
+
+#[test]
+fn context_renders_threads_and_notes_and_nothing_when_empty() {
+    assert_eq!(SessionContext::default().system_text(), None);
+
+    let context = SessionContext {
+        threads: vec![
+            crate::ThreadLine {
+                root: Sequence(41),
+                opening: "draft the launch email".into(),
+                replies: 4,
+                latest: Sequence(58),
+                landed: Some("In review".into()),
+            },
+            crate::ThreadLine {
+                root: Sequence(37),
+                opening: "check the invoice".into(),
+                replies: 1,
+                latest: Sequence(39),
+                landed: None,
+            },
+            crate::ThreadLine {
+                root: Sequence(30),
+                opening: "any thoughts?".into(),
+                replies: 0,
+                latest: Sequence(30),
+                landed: None,
+            },
+        ],
+        notes: vec![BriefingNote {
+            heading: "Work raised in this conversation".into(),
+            lines: vec![
+                "#12 rewrite the changelog".into(),
+                "#13 book the venue".into(),
+            ],
+        }],
+    };
+    assert_eq!(
+        context.system_text(),
+        Some(
+            "Threads in this desk:\n\
+             - [41] \"draft the launch email\" — 4 replies (landed: In review)\n\
+             - [37] \"check the invoice\" — 1 reply\n\
+             - [30] \"any thoughts?\" — no replies\n\
+             \nWork raised in this conversation:\n\
+             - #12 rewrite the changelog\n\
+             - #13 book the venue"
+                .into()
+        )
+    );
+
+    let notes_only = SessionContext {
+        threads: Vec::new(),
+        notes: context.notes.clone(),
+    };
+    assert_eq!(
+        notes_only.system_text(),
+        Some(
+            "Work raised in this conversation:\n- #12 rewrite the changelog\n- #13 book the venue"
+                .into()
+        )
+    );
 }
 
 #[derive(Debug)]

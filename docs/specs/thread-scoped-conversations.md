@@ -213,20 +213,23 @@ nothing makes them, and they have already drifted once. *Step 5.*
 Ordered so each step is independently reviewable, and none depends on the
 adapter landing first.
 
-1. **The channel-level rule.** Teach the walk roots-plus-first-reply, inside the
-   paging walk where `parent` is still in scope. Self-contained, and the only
-   place this repository is behind.
-2. **`read_before`'s cost, in the port's docs.** No code. It stops the next host
-   from paying what `opencompany` paid.
-3. **A thread index over the projection.** E's fold, with the host-supplied
-   landing left as an option on the row.
-4. **Host-supplied briefing context** on `SessionInitialization`, so C and E have
-   a typed home rather than an appended string.
+1. **The channel-level rule** — *done.* The walk is roots-plus-first-reply,
+   narrowed inside the paging walk where `parent` is still in scope.
+2. **`read_before`'s cost, in the port's docs** — *done.* No code. It stops
+   the next host from paying what `opencompany` paid.
+3. **A thread index over the projection** — *done.* E's fold, in
+   `crates/tinyhivemind/src/threads`, with the host-supplied landing an option
+   on the row.
+4. **Host-supplied briefing context** — *done.* `SessionContext` on
+   `SessionInitialization` carries the index and host `BriefingNote`s beside the
+   operator's message rather than appended to it.
 5. **`Conversation` as the stored origin** — a host-side change in `opencompany`,
    listed here because it is the one that makes B and D unable to disagree.
 
-Steps 1 and 2 are worth doing before the adapter integration. Steps 3–5 are
-better after it, when there is a real consumer to shape them against.
+Steps 3 and 4 were sequenced after the adapter so a real consumer could shape
+them. They landed first instead, so their shapes are deliberately minimal —
+one fold, one option, one typed slot — and the adapter is still free to push
+back.
 
 ## Non-goals
 
@@ -240,15 +243,37 @@ better after it, when there is a real consumer to shape them against.
 - **`find_thread`.** It was gated on G's bound and has no home yet in either
   repository.
 
+## Resolved while implementing
+
+- **The index lives in the runtime crate, not `-core`.** The fold is pure, but
+  its input is `LogMessage` — the port's own row type, and the only shape that
+  still carries `parent`. Moving it to core would move the port's row type with
+  it. The charter's rule is applied *inside* the module instead:
+  `fold_thread_index` is the decision and takes a slice; `read_thread_index` is
+  the waiting and owns the paging.
+- **The landing is an `Option<String>` on the row.** It admits "finished → In
+  review" and nothing else. A typed status would need this crate to know what a
+  board is. The fold always returns `None`; the host fills it afterwards.
+- **The index has its own scan bound, not the projection's.** 256 rows against
+  `SCAN_LIMIT`'s 2048: it answers a recency question, and a full scan to surface
+  a thread nobody has touched in two thousand messages is the wrong trade. The
+  visible consequence is stated in the module README — a thread whose *root*
+  fell outside the bound is absent even when its replies are recent.
+- **A blank root is not a thread, but it is still an anchor.** The index skips
+  it, because the row exists to say what a thread is about. The channel-level
+  projection keeps it, because there the root's job is to be an anchor rather
+  than to be read. The two rules differ on purpose.
+
 ## Open questions
 
-- **Does the index belong in `-core` or the runtime crate?** The fold is pure,
-  but it needs the walk's output, which is the runtime crate's. The charter's
-  rule — decision in core, waiting in the runtime — suggests core takes a
-  projected slice and the runtime does the reading.
-- **What shape carries the landing?** An `Option<String>` on an index row is
-  enough for "finished → In review" and admits nothing else; a typed status
-  would need this crate to know what a board is, which it must not.
 - **Does the watermark change the index's liveness bound?** P5 re-seeds on a
   watermark rather than a rebind, so "threads with activity inside the page the
-  seed already walks" now has a moving definition.
+  seed already walks" now has a moving definition. `THREAD_INDEX_SCAN` is a
+  fixed row bound taken from the head of the log and is deliberately independent
+  of the watermark, which means a re-seed can produce an index the previous one
+  did not contain. Whether that is churn or the point is an adapter question.
+- **Should the delta narrow like the seed?** The sharing walk still admits
+  roots only, because deciding "first reply to its root" row by row needs
+  replies that may sit below the watermark. Closing it means carrying answered
+  roots in `SharingState`. Until then a first reply reaches a channel-level
+  participant on the next reseed rather than the next tick.
