@@ -17,7 +17,10 @@
 
 use std::process::Command;
 
-use tinyhivemind_hive::{HiveTurn, Phase, SessionAuthor, SessionMessage, Visibility};
+use tinyhivemind_hive::{
+    HiveTurn, Phase, SessionAuthor, SessionMessage, Visibility,
+    trace::{TraceKind, resolve},
+};
 
 use crate::run::Participant;
 
@@ -81,11 +84,75 @@ impl LiveAgent {
             Phase::Commit => "The room has reached quorum; record the decision with !commit.",
         };
         format!(
-            "You are @{}, the {} on a small team. {sight} {phase}\n\n{PROTOCOL}\n\n\
+            "You are @{}, the {} on a small team. {sight} {phase}\n\n{PROTOCOL}\n\n{}{}\n\
              Shared attributed transcript:\n{transcript}\n\nYour one line:",
-            self.id, self.role,
+            self.id,
+            self.role,
+            floor(visible),
+            self.last_line(visible),
         )
     }
+
+    /// The marker line this participant last authored, if any.
+    ///
+    /// Live models restate their own previous line verbatim when they have
+    /// nothing new: one run spent four consecutive turns on the same
+    /// `!question`. The protocol's `repetition_cap` damps a restated *support*
+    /// and cannot see this, so the participant is shown what it already said
+    /// and told not to say it again.
+    fn last_line(&self, visible: &[&SessionMessage]) -> String {
+        let own = visible
+            .iter()
+            .rev()
+            .find(|message| match &message.author {
+                SessionAuthor::Agent { id, .. } => id == &self.id,
+                SessionAuthor::Operator
+                | SessionAuthor::Person { .. }
+                | SessionAuthor::System { .. } => false,
+            })
+            .map(|message| message.content.trim());
+        own.map_or_else(String::new, |line| {
+            format!("You already said this, so do not repeat it — say something that moves the room on:\n{line}\n\n")
+        })
+    }
+}
+
+/// The topics already on the floor, with the message that put each there.
+///
+/// Live models coin a fresh topic id for an idea the room already has one for
+/// — `#rollout` and `#rollout-strategy` in the same episode — and support
+/// behind two names for one idea does not add up to a quorum. Naming the open
+/// topics is the cheapest repair, and it is what a host running real rooms
+/// should do rather than let every turn invent its own vocabulary.
+fn floor(visible: &[&SessionMessage]) -> String {
+    let mut topics: Vec<String> = Vec::new();
+    for message in visible {
+        for trace in resolve(&message.content, None, &message.author, message.sequence) {
+            if trace.kind != TraceKind::Propose {
+                continue;
+            }
+            let Some(topic) = trace.topic.as_ref() else {
+                continue;
+            };
+            let entry = format!("#{topic} (proposed in message {})", trace.sequence);
+            if !topics
+                .iter()
+                .any(|held| held.starts_with(&format!("#{topic} ")))
+            {
+                topics.push(entry);
+            }
+        }
+    }
+    if topics.is_empty() {
+        return "No topic is on the floor yet. The topic id you coin becomes the room's name for \
+                that option, so keep it short.\n\n"
+            .to_owned();
+    }
+    format!(
+        "Topics already on the floor — reuse one of these ids exactly if your point is about it, \
+         and only coin a new id for a genuinely different option:\n{}\n\n",
+        topics.join("\n"),
+    )
 }
 
 impl Participant for LiveAgent {

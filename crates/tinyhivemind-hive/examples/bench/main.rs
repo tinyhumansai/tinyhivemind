@@ -117,7 +117,9 @@ impl Options {
         // threshold with the desk while `--quorum` still overrides it.
         let args: Vec<String> = std::env::args().skip(1).collect();
         if let Some(agents) = flag_number(&args, "--agents") {
-            options.agents = usize::try_from(agents).unwrap_or(5);
+            // Clamped to what `Room::generate` will actually build, so the
+            // quorum threshold cannot be set for a desk that does not exist.
+            options.agents = usize::try_from(agents).unwrap_or(5).clamp(2, 8);
             options.policy = tuned_policy(options.agents);
         }
         let mut args = args.into_iter();
