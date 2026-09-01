@@ -147,6 +147,67 @@ say so in the port's documentation: `read_before` is called once per rebind and
 now once per watermark tick, so an implementation linear in the journal is
 linear in the company's whole history on every turn.
 
+## What this makes possible
+
+The sub-issues are named after their mechanics. These are the things a host can
+do once the mechanics are in place, and the step each one waits on.
+
+**An agent can hold two conversations in one desk at once.** Two operators open
+two threads under the same desk within a minute of each other. Today the second
+"make it shorter" arrives with the first thread's answer as its most recent
+context, and the model shortens the wrong thing. Thread-scoped projection is
+already here; what the sequence adds is that every other surface — the card, the
+settle marker, the model session, the tool read — agrees with it. *Steps 1, 5,
+and the host's `Conversation::equivalent_to` session key.*
+
+**A desk still reads as a conversation, not a list of unanswered questions.**
+An agent joining a busy desk sees each question with its answer under it, and
+never the interior of a thread it is not in. This is the difference between a
+transcript that summarises and one that reads as though everyone was ignored.
+*Step 1.*
+
+**An agent can pull one thread on demand.** A teammate reading the desk sees a
+root and its first reply, decides that thread is the one that matters, and reads
+the rest of it — without the host widening the seed for everyone, and without
+the read escaping the desk it was scoped to. `read_thread` is
+`project_session` with a `thread_root`; the tool schema and belt stay with the
+host. *Available now; the tool is the host's to register.*
+
+**A company can carry a long history without paying for it every turn.** Under
+continuous sharing, `read_before` runs on every watermark tick, so a journal
+read that is linear in total events is a per-turn tax that grows with the
+company's age. Stating the contract in the port is what stops the next host
+implementing the slow one. *Step 2.*
+
+**A cold-started agent can say what is live and where its work went.** Asked
+"what are we doing?" after a restart, it answers from a thread index over the
+transcript — the open roots, their opening words, how much reply traffic each
+has — rather than from whatever happened to fit the window. The one thing the
+index cannot compute is where a thread's work landed; the host fills that.
+*Step 3.*
+
+**Briefing context stops corrupting what the operator asked.** Host context
+arrives as a typed field rather than appended to the operator's message, so
+nothing downstream has to strip it back off to reason about intent. In
+`opencompany` the strip list has grown four times, and a desk-addressed
+"thanks!" once opened a card because the appended briefing was long enough to
+read as substance. *Step 4.*
+
+**A card and its settle marker cannot land in different conversations.** Work
+raised in a thread reports back into that thread; work raised in the channel
+reports into the channel. Today the origin is two fields that must agree and
+nothing makes them, and they have already drifted once. *Step 5.*
+
+### What none of this gives you
+
+- **A thread is still not a first-class object.** It is a root sequence and the
+  rows that point at it. There is no thread record to rename, archive, or move.
+- **No cross-desk view.** Every query is scoped to one desk; "what is live
+  everywhere" is a host question asked once per desk.
+- **No retroactive repair.** A journal written before this lands keeps whatever
+  parents it has. Nothing is backfilled, and a desk of unparented rows projects
+  exactly as it does today.
+
 ## Sequence
 
 Ordered so each step is independently reviewable, and none depends on the
