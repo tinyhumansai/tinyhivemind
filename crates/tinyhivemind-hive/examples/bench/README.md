@@ -115,15 +115,38 @@ process per turn, any command that takes a prompt as its final argument and
 prints an answer:
 
 ```sh
-cargo run -p tinyhivemind-hive --example bench -- --agent-cmd "opencode run"
+cargo run --release -p tinyhivemind-hive --example bench -- \
+  --agent-cmd "opencode run --pure -m openrouter/~openai/gpt-mini-latest" --agents 5
+```
+
+```sh
 cargo run -p tinyhivemind-hive --example bench -- --agent-cmd "claude -p"
 cargo run -p tinyhivemind-hive --example bench -- --agent-cmd "codex exec"
 ```
 
 The library still authorizes exactly one speaker per step, so the number of
 processes an episode can start is bounded by its turn budget and by nothing
-else. Live mode asserts nothing and is not part of CI; it is for watching real
-agents hold — or fail to hold — the trace grammar.
+else. Coloured output and a banner are stripped before the marker line is read.
+
+A run of the first command converged on `#rollout-strategy` in 11 turns and
+about 30 seconds of wall clock. Three things showed up that the simulation
+cannot:
+
+- **Topics drift.** One model proposed `#rollout`, another `#rollout-strategy`,
+  for the same idea, and the support behind them did not add up. A host running
+  live rooms should seed the topic vocabulary rather than let each turn coin
+  one.
+- **Models repeat themselves.** Four consecutive turns restated the same
+  `!question` verbatim. `repetition_cap` damps a restated *support*, so it does
+  not catch this; a host that cares can spend the budget elsewhere.
+- **Quorum above half the desk needs a desk to spare.** At `--agents 3` the
+  tuned threshold of 3 is unanimity, and a single `!object` silences one
+  advocate permanently — that episode ran out of budget instead of deciding.
+  The rule is a threshold above half the desk *and* a margin over it, which
+  five members and a threshold of three have.
+
+Live mode asserts nothing and is not part of CI; it is for watching real agents
+hold — or fail to hold — the trace grammar.
 `crates/tinyhivemind-hive/tests/openrouter_hive_live.rs` is the asserting
 version, behind the `e2e` feature.
 

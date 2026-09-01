@@ -5,7 +5,8 @@
 //! argument and prints an answer works, which covers the obvious ones:
 //!
 //! ```sh
-//! cargo run -p tinyhivemind-hive --example bench -- --agent-cmd "opencode run"
+//! cargo run -p tinyhivemind-hive --example bench -- \
+//!   --agent-cmd "opencode run --pure -m openrouter/~openai/gpt-mini-latest"
 //! cargo run -p tinyhivemind-hive --example bench -- --agent-cmd "claude -p"
 //! cargo run -p tinyhivemind-hive --example bench -- --agent-cmd "codex exec"
 //! ```
