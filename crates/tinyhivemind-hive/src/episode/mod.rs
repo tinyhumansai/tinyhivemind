@@ -18,7 +18,7 @@ use crate::{
     attention::{AgentThreshold, BidContext, bids, floor_holder},
     error::{Error, Result},
     quorum::{ConsensusState, consensus, standings},
-    trace::{TraceKind, read},
+    trace::{TraceKind, read_borrowed},
 };
 use tinyhivemind::{SessionAuthor, SessionMessage, desk::DeskSet, roster::Roster};
 
@@ -64,11 +64,12 @@ pub fn step(
     let (live, traces, at) = live_traces(transcript, state, &members);
     let standings = standings(&traces, at, &policy.quorum)?;
 
-    match consensus(&standings, &policy.quorum) {
+    let consensus = consensus(&standings, &policy.quorum);
+    match &consensus {
         ConsensusState::Quorum { topic } => {
-            if let Some(standing) = converged_standing(state, &traces, &standings, &topic) {
+            if let Some(standing) = converged_standing(state, &traces, &standings, topic) {
                 return Ok(HiveStep::Converged {
-                    topic,
+                    topic: topic.clone(),
                     standing: Box::new(standing),
                 });
             }
@@ -82,8 +83,10 @@ pub fn step(
             // cited or objected to is classified `Addressed` ahead of
             // `Dissent` by bid precedence, which would otherwise mask a real
             // dissenter and let the episode terminate early.
-            if !has_free_dissenter(&members, &standings, &topics) {
-                return Ok(HiveStep::Deadlocked { topics });
+            if !has_free_dissenter(&members, &standings, topics) {
+                return Ok(HiveStep::Deadlocked {
+                    topics: topics.clone(),
+                });
             }
         }
         ConsensusState::Deliberating => {}
@@ -95,10 +98,7 @@ pub fn step(
         return Ok(HiveStep::Idle);
     };
 
-    let phase = if matches!(
-        consensus(&standings, &policy.quorum),
-        ConsensusState::Quorum { .. }
-    ) {
+    let phase = if matches!(consensus, ConsensusState::Quorum { .. }) {
         Phase::Commit
     } else {
         state.phase
@@ -162,16 +162,16 @@ fn active_members<'a>(
 /// Without this filter a retired agent, or one from a different desk, whose
 /// message lands after the watermark would still be folded into standings
 /// and could manufacture quorum nobody eligible actually holds.
-fn live_traces(
-    transcript: &[SessionMessage],
+fn live_traces<'a>(
+    transcript: &'a [SessionMessage],
     state: &EpisodeState,
     members: &[&str],
 ) -> (
-    Vec<SessionMessage>,
+    Vec<&'a SessionMessage>,
     Vec<crate::trace::Trace>,
     tinyhivemind::Sequence,
 ) {
-    let live: Vec<SessionMessage> = transcript
+    let live: Vec<&SessionMessage> = transcript
         .iter()
         .filter(|message| message.sequence > state.watermark)
         .filter(|message| match &message.author {
@@ -180,9 +180,8 @@ fn live_traces(
             | SessionAuthor::Person { .. }
             | SessionAuthor::System { .. } => true,
         })
-        .cloned()
         .collect();
-    let traces = read(&live);
+    let traces = read_borrowed(&live);
     let at = live
         .last()
         .map_or(state.watermark, |message| message.sequence);
@@ -303,7 +302,7 @@ fn context<'a>(
 /// that speaks plain prose with no `!marker` still took its turn; counting
 /// only trace authors would keep a room blind forever if any member never
 /// happens to cast a formal vote.
-fn visibility(policy: &EpisodePolicy, live: &[SessionMessage], members: &[&str]) -> Visibility {
+fn visibility(policy: &EpisodePolicy, live: &[&SessionMessage], members: &[&str]) -> Visibility {
     if !policy.blind_round {
         return Visibility::Full;
     }

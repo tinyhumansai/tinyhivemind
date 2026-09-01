@@ -32,7 +32,7 @@ use std::collections::BTreeMap;
 use crate::{
     error::{Error, Result},
     quorum::TopicStanding,
-    salience::salience,
+    salience::{standing, with_relevance},
     trace::{Trace, TraceKind},
 };
 
@@ -61,18 +61,29 @@ pub fn bids(context: &BidContext<'_>) -> Result<Vec<Bid>> {
     let quiet = quietest(context.members, &shares);
     let deadlocked = deadlocked_topics(context.standings);
 
+    // Saturation and the recency-and-importance half of salience are
+    // properties of a trace, not of the member reading it, so both are folded
+    // once here rather than once per member per trace. The arithmetic each
+    // member then does is identical to evaluating the whole score inline.
+    let mut scored: Vec<(&Trace, i64)> = Vec::new();
+    if !context.members.is_empty() {
+        for trace in context.traces {
+            if is_saturated(trace, context.standings, context.repetition_cap) {
+                continue;
+            }
+            scored.push((trace, standing(trace, context.at, context.weights)?));
+        }
+    }
+
     let mut bids = Vec::new();
     for member in context.members {
         let default = AgentThreshold::new(*member, 0);
         let threshold = thresholds.get(*member).copied().unwrap_or(&default);
 
         let mut urge = 0;
-        for trace in context.traces {
-            if is_saturated(trace, context.standings, context.repetition_cap) {
-                continue;
-            }
+        for (trace, base) in &scored {
             let relevance = threshold.relevance(trace.topic.as_ref());
-            urge += salience(trace, context.at, context.weights, relevance)?.0;
+            urge += with_relevance(*base, context.weights, relevance).0;
         }
 
         let mut reason = BidReason::Salience;
@@ -136,13 +147,10 @@ fn index_thresholds(thresholds: &[AgentThreshold]) -> Result<BTreeMap<&str, &Age
 /// Deliberately not a message count: an agent can emit ten ungrounded lines for
 /// the price of one, so counting those would reward exactly the behaviour the
 /// equality guard exists to damp.
-fn grounded_shares(context: &BidContext<'_>) -> BTreeMap<String, u32> {
+fn grounded_shares<'a>(context: &BidContext<'a>) -> BTreeMap<&'a str, u32> {
     let floor = context.at.0.saturating_sub(u64::from(context.window));
-    let mut shares: BTreeMap<String, u32> = context
-        .members
-        .iter()
-        .map(|member| ((*member).to_owned(), 0))
-        .collect();
+    let mut shares: BTreeMap<&str, u32> =
+        context.members.iter().map(|member| (*member, 0)).collect();
     for trace in context.traces {
         if trace.sequence.0 < floor || !trace.grounded() {
             continue;
@@ -164,18 +172,18 @@ fn grounded_shares(context: &BidContext<'_>) -> BTreeMap<String, u32> {
     shares
 }
 
-fn quietest<'a>(members: &[&'a str], shares: &BTreeMap<String, u32>) -> Option<&'a str> {
+fn quietest<'a>(members: &[&'a str], shares: &BTreeMap<&str, u32>) -> Option<&'a str> {
     members
         .iter()
         .min_by_key(|member| shares.get(**member).copied().unwrap_or_default())
         .copied()
 }
 
-fn is_lopsided(shares: &BTreeMap<String, u32>, total: u32, cap: u32) -> bool {
+fn is_lopsided(shares: &BTreeMap<&str, u32>, total: u32, cap: u32) -> bool {
     shares.values().any(|share| exceeds(*share, total, cap))
 }
 
-fn dominates(shares: &BTreeMap<String, u32>, member: &str, total: u32, cap: u32) -> bool {
+fn dominates(shares: &BTreeMap<&str, u32>, member: &str, total: u32, cap: u32) -> bool {
     exceeds(shares.get(member).copied().unwrap_or_default(), total, cap)
 }
 

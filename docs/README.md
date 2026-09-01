@@ -2,6 +2,9 @@
 
 - [`testing.md`](testing.md) — deterministic coordination harness, opt-in
   OpenRouter tests, and coverage commands.
+- [`benchmark.md`](benchmark.md) — what bounded deliberation buys over one
+  responder, what it costs per step, and which policy settings decide the
+  difference.
 
 This directory holds documentation that does not belong in rustdoc: the shape
 of the system, the reasoning behind it, and the constraints a reader needs

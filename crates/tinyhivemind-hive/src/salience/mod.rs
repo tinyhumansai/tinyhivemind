@@ -41,18 +41,37 @@ pub fn salience(
     weights: &SalienceWeights,
     relevance: u8,
 ) -> Result<Salience> {
+    Ok(with_relevance(
+        standing(trace, at, weights)?,
+        weights,
+        relevance,
+    ))
+}
+
+/// The part of a trace's salience that does not depend on who is reading it.
+///
+/// Recency and importance are properties of the trace alone, so the attention
+/// market computes them once per trace rather than once per member per trace.
+///
+/// # Errors
+///
+/// Returns [`Error::ZeroHalfLife`] when the weights would make recency
+/// undefined.
+pub(crate) fn standing(trace: &Trace, at: Sequence, weights: &SalienceWeights) -> Result<i64> {
     if weights.half_life == 0 {
         return Err(Error::ZeroHalfLife);
     }
     let distance = at.0.saturating_sub(trace.sequence.0);
-    let recency = decay(distance, weights.half_life);
-    let importance = importance(trace.kind);
-    let relevance = i64::from(relevance.min(100)) * SCALE / 100;
+    Ok(
+        i64::from(weights.recency) * decay(distance, weights.half_life)
+            + i64::from(weights.importance) * importance(trace.kind),
+    )
+}
 
-    let total = i64::from(weights.recency) * recency
-        + i64::from(weights.importance) * importance
-        + i64::from(weights.relevance) * relevance;
-    Ok(Salience(total / 10))
+/// Add one reader's topical relevance to a trace's standing salience.
+pub(crate) fn with_relevance(standing: i64, weights: &SalienceWeights, relevance: u8) -> Salience {
+    let relevance = i64::from(relevance.min(100)) * SCALE / 100;
+    Salience((standing + i64::from(weights.relevance) * relevance) / 10)
 }
 
 /// Return the standing importance of a trace kind, in thousandths.

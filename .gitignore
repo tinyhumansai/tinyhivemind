@@ -23,3 +23,7 @@ worktrees/*
 .idea/
 .vscode/
 *.swp
+
+# Profiler output
+perf.data
+perf.data.old
