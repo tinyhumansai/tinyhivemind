@@ -5,9 +5,14 @@ mod test;
 
 mod types;
 
-pub use types::{BriefedTeammate, SessionInitialization, TeamBriefing};
+pub use types::{
+    BriefedTeammate, BriefingNote, SessionContext, SessionInitialization, TeamBriefing,
+};
 
-use crate::{Conversation, Result, SessionLog, SessionQuery, project_session};
+use crate::{
+    Conversation, Result, SessionLog, SessionQuery, project_session, read_thread_index,
+    threads::THREAD_INDEX_LIMIT,
+};
 use tinyhivemind_core::{
     chat::is_general_chat,
     desk::DeskSet,
@@ -107,7 +112,68 @@ impl TeamBriefing {
     }
 }
 
+impl SessionContext {
+    /// Whether there is anything here to tell a turn about.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.threads.is_empty() && self.notes.is_empty()
+    }
+
+    /// Render this context as system text, or `None` when there is none.
+    ///
+    /// Deterministic, and deliberately a separate string from
+    /// [`TeamBriefing::system_text`] and from the operator's message: a host
+    /// that appends context to what the operator wrote has to strip it back off
+    /// everywhere intent is read, and that cut list only ever grows.
+    #[must_use]
+    pub fn system_text(&self) -> Option<String> {
+        if self.is_empty() {
+            return None;
+        }
+        let mut text = String::new();
+        if !self.threads.is_empty() {
+            text.push_str("Threads in this desk:");
+            for thread in &self.threads {
+                text.push_str("\n- [");
+                text.push_str(&thread.root.0.to_string());
+                text.push_str("] \"");
+                text.push_str(&thread.opening);
+                text.push('"');
+                match thread.replies {
+                    0 => text.push_str(" — no replies"),
+                    1 => text.push_str(" — 1 reply"),
+                    replies => {
+                        text.push_str(" — ");
+                        text.push_str(&replies.to_string());
+                        text.push_str(" replies");
+                    }
+                }
+                if let Some(landed) = &thread.landed {
+                    text.push_str(" (landed: ");
+                    text.push_str(landed);
+                    text.push(')');
+                }
+            }
+        }
+        for note in &self.notes {
+            if !text.is_empty() {
+                text.push_str("\n\n");
+            }
+            text.push_str(&note.heading);
+            text.push(':');
+            for line in &note.lines {
+                text.push_str("\n- ");
+                text.push_str(line);
+            }
+        }
+        Some(text)
+    }
+}
+
 /// Project history and return it alongside, never merged with, a team briefing.
+///
+/// The returned context is empty. Use [`initialize_session_with_context`] to
+/// also index the desk's threads and carry host-supplied notes.
 ///
 /// # Errors
 ///
@@ -118,5 +184,35 @@ pub async fn initialize_session(
     briefing: TeamBriefing,
 ) -> Result<SessionInitialization> {
     let history = project_session(log, query).await?;
-    Ok(SessionInitialization { briefing, history })
+    Ok(SessionInitialization {
+        briefing,
+        context: SessionContext::default(),
+        history,
+    })
+}
+
+/// Initialize a session with a thread index and host-supplied notes attached.
+///
+/// Costs one more bounded read than [`initialize_session`] — see
+/// [`THREAD_INDEX_SCAN`](crate::threads::THREAD_INDEX_SCAN) — and skips it
+/// entirely for a thread-scoped query, where an index of sibling threads is not
+/// a choice the viewer is making.
+///
+/// # Errors
+///
+/// Returns any projection error documented by [`project_session`], or any read
+/// or page-validation error documented by [`read_thread_index`].
+pub async fn initialize_session_with_context(
+    log: &(dyn SessionLog + '_),
+    query: &SessionQuery,
+    briefing: TeamBriefing,
+    notes: Vec<BriefingNote>,
+) -> Result<SessionInitialization> {
+    let history = project_session(log, query).await?;
+    let threads = read_thread_index(log, &query.conversation, THREAD_INDEX_LIMIT).await?;
+    Ok(SessionInitialization {
+        briefing,
+        context: SessionContext { threads, notes },
+        history,
+    })
 }
