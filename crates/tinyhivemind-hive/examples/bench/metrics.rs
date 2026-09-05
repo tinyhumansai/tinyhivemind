@@ -672,7 +672,7 @@ pub(crate) fn spearman_milli(x: &[u32], y: &[u32]) -> i64 {
     // thousandth rather than always down.
     let scaled = 1000_i128 * covariance.abs();
     let quadrupled = u128::try_from(4 * scaled * scaled / spread).unwrap_or(0);
-    let magnitude = i64::try_from((quadrupled.isqrt() + 1) / 2)
+    let magnitude = i64::try_from(quadrupled.isqrt().div_ceil(2))
         .unwrap_or(1000)
         .min(1000);
     if covariance < 0 {

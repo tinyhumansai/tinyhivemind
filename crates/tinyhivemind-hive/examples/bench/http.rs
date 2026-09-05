@@ -89,7 +89,7 @@ impl Thinking {
 }
 
 /// The endpoint and credentials every seat on one backend shares.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub(crate) struct HttpConfig {
     /// The router's base URL, without a trailing slash or version path.
     pub(crate) base: String,
@@ -101,6 +101,24 @@ pub(crate) struct HttpConfig {
     pub(crate) timeout_secs: u64,
     /// Whether the endpoint is asked to think before it answers.
     pub(crate) thinking: Thinking,
+}
+
+/// Written by hand so the key cannot reach a log through a `{:?}`.
+///
+/// A derived `Debug` on a struct holding a credential is one interpolation
+/// away from printing it, and this one is carried into every seat, every
+/// error path and every panic message the harness can produce.
+impl std::fmt::Debug for HttpConfig {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("HttpConfig")
+            .field("base", &self.base)
+            .field("key", &"<redacted>")
+            .field("wire", &self.wire)
+            .field("timeout_secs", &self.timeout_secs)
+            .field("thinking", &self.thinking)
+            .finish()
+    }
 }
 
 /// Tokens spent and calls made by one seat, or one poll, over an HTTP backend.
@@ -119,6 +137,17 @@ impl Usage {
         self.input = self.input.saturating_add(input);
         self.output = self.output.saturating_add(output);
         self.calls = self.calls.saturating_add(1);
+    }
+
+    /// Tokens a failed attempt was billed for anyway.
+    ///
+    /// No call is counted: `calls` measures the requests that produced a
+    /// turn, and the retry that follows counts itself. The tokens are real
+    /// spend whether or not the reply was usable, so dropping them would
+    /// under-report what the run cost.
+    fn spent(&mut self, input: u64, output: u64) {
+        self.input = self.input.saturating_add(input);
+        self.output = self.output.saturating_add(output);
     }
 
     /// Total tokens spent, input and output combined.
@@ -185,9 +214,7 @@ impl HttpAgent {
 
     /// Post one prompt and take its reply, retrying once.
     fn call(&mut self, text: &str) -> Result<String, String> {
-        let (answer, input, output) = ask(&self.config, &self.model, text)?;
-        self.usage.borrow_mut().add(input, output);
-        Ok(answer)
+        ask(&self.config, &self.model, text, &self.usage)
     }
 }
 
@@ -282,29 +309,181 @@ impl SwarmMember for HttpDeskAgent {
     }
 }
 
-/// Ask the backend once, with one retry, and return the reply and the input
-/// and output tokens it cost.
+/// Ask the backend once and, where trying again could plausibly help, twice.
+///
+/// Both attempts' token spend is recorded on `usage` even when the reply was
+/// unusable: a 200 with empty content, or a 4xx from a request the endpoint
+/// still billed, is real cost, and dropping it would make every cost-per-point
+/// figure the harness prints optimistic.
+///
+/// A second attempt is made only for a failure that could go the other way —
+/// a transport error, a 429, or a 5xx. A 400 or a 401 is a property of the
+/// request, and repeating it buys a second identical rejection and a second
+/// bill.
 ///
 /// # Errors
 ///
 /// Returns curl's own failure, an HTTP status outside 2xx (via
 /// `fail-with-body`), a response that is not valid JSON, or a response with
-/// no answer in the shape the wire format expects — after both attempts fail.
+/// no answer in the shape the wire format expects. When a retry was made and
+/// also failed, the first attempt's error text is carried in the message
+/// rather than discarded — the two are often different, and the first one is
+/// usually the informative one.
 pub(crate) fn ask(
     config: &HttpConfig,
     model: &str,
     prompt: &str,
-) -> Result<(String, u64, u64), String> {
+    usage: &UsageHandle,
+) -> Result<String, String> {
+    let first = match attempt(config, model, prompt) {
+        Ok(reply) => {
+            usage.borrow_mut().add(reply.input, reply.output);
+            return Ok(reply.answer);
+        }
+        Err(failed) => failed,
+    };
+    usage.borrow_mut().spent(first.spent.0, first.spent.1);
+    if !first.retryable {
+        return Err(first.message);
+    }
     match attempt(config, model, prompt) {
-        Ok(result) => Ok(result),
-        Err(_first) => attempt(config, model, prompt),
+        Ok(reply) => {
+            usage.borrow_mut().add(reply.input, reply.output);
+            Ok(reply.answer)
+        }
+        Err(second) => {
+            usage.borrow_mut().spent(second.spent.0, second.spent.1);
+            Err(format!(
+                "{} (first attempt: {})",
+                second.message, first.message
+            ))
+        }
     }
 }
 
-fn attempt(config: &HttpConfig, model: &str, prompt: &str) -> Result<(String, u64, u64), String> {
+/// One usable reply and what it was billed.
+struct Reply {
+    answer: String,
+    input: u64,
+    output: u64,
+}
+
+/// One failed attempt: why, whether repeating it could help, and what it cost.
+struct Failed {
+    message: String,
+    retryable: bool,
+    /// Input and output tokens the response reported, or zeros when it
+    /// carried no usage block at all.
+    spent: (u64, u64),
+}
+
+/// The line `--write-out` puts on stderr so the status code is readable
+/// without disturbing the JSON body on stdout.
+const STATUS_PREFIX: &str = "http-status: ";
+
+fn attempt(config: &HttpConfig, model: &str, prompt: &str) -> Result<Reply, Failed> {
     let (url, body) = request(config, model, prompt);
     let script = config_script(config, &url, &body);
 
+    let output = match curl(&script) {
+        Ok(output) => output,
+        Err(message) => {
+            return Err(Failed {
+                message,
+                // Nothing reached the endpoint, so nothing about the request
+                // has been shown to be wrong.
+                retryable: true,
+                spent: (0, 0),
+            });
+        }
+    };
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let status = http_status(&stderr);
+    // `fail-with-body` keeps the body on a failing status, so an endpoint
+    // that bills a rejected request still reports what it billed.
+    let payload: Option<Value> = serde_json::from_slice(&output.stdout).ok();
+    let spent = payload
+        .as_ref()
+        .map_or((0, 0), |payload| billed(config, payload));
+
+    if !output.status.success() {
+        let head = stderr
+            .lines()
+            .filter(|line| !line.starts_with(STATUS_PREFIX))
+            .take(3)
+            .collect::<Vec<_>>()
+            .join(" | ");
+        return Err(Failed {
+            message: format!("curl exited with {}: {head}", output.status),
+            retryable: retryable(status),
+            spent,
+        });
+    }
+    let payload = match serde_json::from_slice::<Value>(&output.stdout) {
+        Ok(payload) => payload,
+        Err(error) => {
+            return Err(Failed {
+                message: format!("{} returned invalid JSON: {error}", config.base),
+                // A 2xx that did not decode is a truncated or mangled
+                // response rather than a rejected request.
+                retryable: true,
+                spent,
+            });
+        }
+    };
+    match parse(config, &payload) {
+        Ok((answer, input, output)) => Ok(Reply {
+            answer,
+            input,
+            output,
+        }),
+        Err(message) => Err(Failed {
+            message,
+            retryable: true,
+            spent,
+        }),
+    }
+}
+
+/// Whether a status is worth one more attempt.
+///
+/// `None` is a request that never got a status at all. A 429 is the endpoint
+/// asking for exactly this, and a 5xx is the endpoint's own fault; every
+/// other 4xx is a property of the request that a repeat would reproduce.
+fn retryable(status: Option<u16>) -> bool {
+    match status {
+        None => true,
+        Some(code) => code == 429 || (500..600).contains(&code),
+    }
+}
+
+/// The status code curl wrote to stderr, if the request got one.
+fn http_status(stderr: &str) -> Option<u16> {
+    let code: u16 = stderr
+        .lines()
+        .find_map(|line| line.strip_prefix(STATUS_PREFIX))
+        .and_then(|code| code.trim().parse().ok())?;
+    // curl reports `000` when no response was received at all.
+    (code > 0).then_some(code)
+}
+
+/// What one response says it was billed, in this backend's wire format.
+fn billed(config: &HttpConfig, payload: &Value) -> (u64, u64) {
+    let usage = &payload["usage"];
+    match config.wire {
+        Wire::OpenAi => (
+            usage["prompt_tokens"].as_u64().unwrap_or(0),
+            usage["completion_tokens"].as_u64().unwrap_or(0),
+        ),
+        Wire::Anthropic => (
+            usage["input_tokens"].as_u64().unwrap_or(0),
+            usage["output_tokens"].as_u64().unwrap_or(0),
+        ),
+    }
+}
+
+/// Run one curl config script and collect its output.
+fn curl(script: &str) -> Result<std::process::Output, String> {
     let mut child = Command::new("curl")
         .args(["--config", "-"])
         .stdin(Stdio::piped())
@@ -318,17 +497,9 @@ fn attempt(config: &HttpConfig, model: &str, prompt: &str) -> Result<(String, u6
         .ok_or_else(|| "failed to open curl input".to_owned())?
         .write_all(script.as_bytes())
         .map_err(|error| format!("failed to send curl config: {error}"))?;
-    let output = child
+    child
         .wait_with_output()
-        .map_err(|error| format!("curl failed: {error}"))?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let head = stderr.lines().take(3).collect::<Vec<_>>().join(" | ");
-        return Err(format!("curl exited with {}: {head}", output.status));
-    }
-    let payload: Value = serde_json::from_slice(&output.stdout)
-        .map_err(|error| format!("{} returned invalid JSON: {error}", config.base))?;
-    parse(config, &payload)
+        .map_err(|error| format!("curl failed: {error}"))
 }
 
 /// Reply budget for one turn.
@@ -419,6 +590,12 @@ fn config_script(config: &HttpConfig, url: &str, body: &Value) -> String {
     }
     let _ = writeln!(script, "data-binary = \"{}\"", escape(&body.to_string()));
     let _ = writeln!(script, "max-time = {}", config.timeout_secs);
+    // The status goes to stderr rather than stdout, so reading it costs the
+    // JSON body nothing.
+    let _ = writeln!(
+        script,
+        "write-out = \"%{{stderr}}{STATUS_PREFIX}%{{http_code}}\\n\""
+    );
     script.push_str("silent\nshow-error\nfail-with-body\n");
     script
 }
@@ -454,8 +631,7 @@ fn parse(config: &HttpConfig, payload: &Value) -> Result<(String, u64, u64), Str
                 .map(str::trim)
                 .filter(|text| !text.is_empty())
                 .ok_or_else(|| format!("{} returned no assistant content", config.base))?;
-            let input = payload["usage"]["prompt_tokens"].as_u64().unwrap_or(0);
-            let output = payload["usage"]["completion_tokens"].as_u64().unwrap_or(0);
+            let (input, output) = billed(config, payload);
             Ok((crate::live::marker_line(content), input, output))
         }
         Wire::Anthropic => {
@@ -470,8 +646,7 @@ fn parse(config: &HttpConfig, payload: &Value) -> Result<(String, u64, u64), Str
                 .map(str::trim)
                 .filter(|text| !text.is_empty())
                 .ok_or_else(|| format!("{} returned no text content", config.base))?;
-            let input = payload["usage"]["input_tokens"].as_u64().unwrap_or(0);
-            let output = payload["usage"]["output_tokens"].as_u64().unwrap_or(0);
+            let (input, output) = billed(config, payload);
             Ok((crate::live::marker_line(content), input, output))
         }
     }

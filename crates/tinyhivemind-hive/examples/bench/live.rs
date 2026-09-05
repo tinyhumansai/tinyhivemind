@@ -586,8 +586,11 @@ pub(crate) fn poll(
                 plain(&String::from_utf8_lossy(&output.stdout))
             }
             Backend::Http { config, model } => {
-                let (answer, ..) = crate::http::ask(config, model, &prompt)?;
-                answer
+                // The poll has never reported its own token spend, so the
+                // handle is a sink; the CLI arm beside it accounts for
+                // nothing either, and one of the two accounting would make
+                // the matched-budget comparison uneven rather than better.
+                crate::http::ask(config, model, &prompt, &crate::http::UsageHandle::default())?
             }
         };
         let pick = scenario
