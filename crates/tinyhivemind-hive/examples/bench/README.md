@@ -268,6 +268,24 @@ router routes, and what accuracy costs per unit spent. The arms, the numbers
 they scored, and what makes `BidReason::Knows` reachable at all are in
 [`DELEGATION.md`](DELEGATION.md).
 
+`scenarios/index-lock-expert.txt` is the hidden profile written for a room with
+a named specialist. The brief plants the decoy — a migration finished at 02:14
+and write latency stepped at 02:14 — and three members' private facts back it.
+Only `planner` holds the fact that kills it: the migration is forward-only and
+rolling it back destroys paid orders. The answer, `#batch`, is a conjunction of
+two halves that are inert apart. `scout` reports that the rebuild dropped the
+table's lock escalation threshold from 50,000 to 5,000 and cannot see how large
+any job's transactions are; `dba` reports the two batch sizes, 6,200 and 500,
+neither of which has changed in a year. Two bulk writers are on the option list
+precisely so that the threshold alone accuses both and the sizes alone accuse
+neither. Polled alone against a live model the scenario answers `#rollback`:
+three runs, two models, plurality wrong every time and never more than one
+member on the truth. `scenarios/index-lock-tiers.txt` is the same scenario with
+a `tier:` on every seat — four `cheap` seats whose job is a lookup and a
+negation, one `reasoning` seat on `dba`, the only member asked to hold a number
+against somebody else's threshold — and it exists to price that routing rather
+than to change the answer.
+
 ## Live mode
 
 `--agent-cmd` swaps the simulated participants for a real agent CLI, one

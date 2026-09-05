@@ -6,8 +6,10 @@ The delegation half of [the deliberation benchmark](README.md): what
 
 ## Three questions
 
-They exist to answer three questions about expert delegation. The
-specification is [`docs/specs/expert-delegation.md`](../../../../docs/specs/expert-delegation.md);
+They exist to answer three questions about expert delegation. The write-up of
+what they scored, at 5000 rooms per shape, is
+[`docs/experiments/2026-09-05-expert-delegation.md`](../../../../docs/experiments/2026-09-05-expert-delegation.md).
+The specification is [`docs/specs/expert-delegation.md`](../../../../docs/specs/expert-delegation.md);
 the reading behind it is [`docs/research/delegation.md`](../../../../docs/research/delegation.md).
 Its acceptance criteria were written before any of these numbers, and one of
 them is that the mechanism must be able to lose and the loss must be

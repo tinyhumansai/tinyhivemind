@@ -21,7 +21,7 @@ dependency direction is enforced by construction.
 | P7 | The mention-dispatch edge, bounded by a host-supplied finite configurable `max_hops` (OpenCompany defaults to 2), with no library hard cap, and explicitly enabled by host policy | **done** |
 | P8 | `crates/tinyhivemind-hive`: bounded group deliberation — the trace grammar, salience, quorum with cross-inhibition, the attention market, and the episode state machine | **done** |
 | P9 | `!refute`, evidential grounding, grounded objections, and the benchmark arm that scored them | **done**, both knobs **off by default** — see below |
-| P10 | A transactive-memory directory folded from traces, `BidReason::Knows`, and `!defer` | **done**, both knobs **off by default** pending the benchmark arm — see below |
+| P10 | A transactive-memory directory folded from traces, `BidReason::Knows`, and `!defer` | **done**, both knobs **off by default** — see below |
 | P11 | `SessionMessage.parent` and the structured trace sidecar | planned |
 | P12 | Per-conversation read state | planned |
 | P13 | Digests and supersession | planned |
@@ -126,16 +126,29 @@ step. Recorded in
 [ADR 0007](docs/adr/0007-the-directory-is-folded-from-citations.md), with the
 reading in [`docs/research/delegation.md`](docs/research/delegation.md).
 
-**`EpisodePolicy::DEFAULT` carries `directory: None` and `defer_cap: None`,
-off by default pending the benchmark arm.** The acceptance criteria were
-written before any numbers: the mechanism must be able to lose and the loss
-must be published; `vote` gets the same turn budget; a mechanism that helps
-hidden profiles but costs more than two points on the uniform 5000-room bench
-ships off; and directory circularity is reported as the rank correlation
-between directory weight and speech share. The predicted result on the uniform
-bench is **zero** — with homogeneous expertise there is nothing to route on.
-Two mechanisms in this crate have already been measured, lost, and been left
-opt-in; the default is not the place to carry an unscored third.
+**Both are off in `EpisodePolicy::DEFAULT`, because the benchmark scored them
+and they did not win.** The acceptance criteria were written before any
+numbers: the mechanism must be able to lose and the loss must be published;
+`vote` gets the same turn budget; a mechanism that helps hidden profiles but
+costs more than two points on the uniform 5000-room bench ships off; and
+directory circularity is reported as the rank correlation between directory
+weight and speech share.
+
+The uniform bench predicted zero and delivered zero: `hive+dir` is `hive+` to
+the digit at 82.1% over 5000 rooms, and `BidReason::Knows` never fires there at
+all. On a hidden profile with an evidence-first opening it scores **65.8%
+against `hive+`'s 66.3%** with `Knows` winning the floor in 77.5% of episodes,
+and `hive+defer` moves `±0.5` and never leaves the interval. A *directed*
+router is worse still — `ladder+dir` reaches 45.1% with two specialists against
+the uninformed ladder's 52.6%, while routing to the decisive member more often
+(22.3% against 18.9%) — and it degrades with shared history rather than
+sharpening. The one thing that moves a hidden profile is when a member speaks:
+depositing facts before taking positions takes the same rooms from 15.3% to
+66.3%, `+51.3 [+49.8, +52.8]` over the matched-budget vote, which is a finding
+about participants rather than about this fold. The circularity number `rho`
+falls from `0.83` to `0.07` across those same arms, so the estimator can be
+made to stop measuring speech — it just does not buy accuracy when it does.
+See [`docs/experiments/2026-09-05-expert-delegation.md`](docs/experiments/2026-09-05-expert-delegation.md).
 
 ## The two defects P4 and P5 fix
 

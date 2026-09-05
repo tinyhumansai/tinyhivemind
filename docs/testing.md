@@ -110,6 +110,13 @@ in `crates/tinyhivemind-hive/examples/bench/LIVE.md`, alongside the harness
 command lines for the CLI and HTTP paths and the environment variables each
 needs.
 
+One backend cannot use the HTTP path at all. `codex exec` speaks the streaming
+Responses API, which the router in front of these runs will not relay, so a
+`codex` seat is driven through `--agent-cmd` against OpenRouter directly rather
+than through `--api-base`. That is a property of the route rather than of the
+harness, and it is why the delegation matrix carries one CLI row for a model
+every other row reaches over HTTP.
+
 End-to-end live verification belongs in the future OpenCompany host adapter,
 where a committed agent reply can pass through the real atomic enqueue port and
 trigger one attributed child turn through a live provider. That host work is
