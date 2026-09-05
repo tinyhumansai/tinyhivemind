@@ -77,7 +77,8 @@ seven and a half points *less* accurate (45.1% against 52.6%). Directory
 weight on a topic is earned by grounding it, so the heaviest holder is the
 member who argued it hardest rather than the one who reads it best. Matching a
 task against a description is the routing rule Claude Code's subagents and
-CrewAI's role strings use, and on this benchmark it loses to a coin flip.
+CrewAI's role strings use, and on this benchmark it loses to a uniform draw
+over the same five candidates.
 Per unit spent it is worse too: 95.8 right answers per thousand units against
 115.4.
 
