@@ -19,7 +19,7 @@
 //!   transcript says holds the contested topic — and has not said so yet —
 //!   gets one bonus to bring it out. It is off unless a directory is supplied,
 //!   and it stops the moment its holder deposits on the topic, so it cannot
-//!   compound. See [`crate::directory`].
+//!   compound. See [`mod@crate::directory`].
 //! - **Repetition.** Once a topic has `repetition_cap` distinct supporters,
 //!   restating it scores nothing — the rumour has met enough peers who already
 //!   know it. Step repetition is among the most common observed multi-agent
