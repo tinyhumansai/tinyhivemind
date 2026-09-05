@@ -687,6 +687,24 @@ fn stats_check() -> bool {
     ok &= spearman_milli(&increasing, &increasing) == 1000;
     ok &= spearman_milli(&increasing, &decreasing) == -1000;
 
+    // The same two properties with tied ranks, which is the case the
+    // no-ties shortcut formula gets wrong: it biases the magnitude toward
+    // zero, where Pearson-on-ranks still reports the perfect correlation
+    // that is actually there.
+    let tied = [1_u32, 1, 2, 2, 3, 3];
+    let tied_reversed = [3_u32, 3, 2, 2, 1, 1];
+    ok &= spearman_milli(&tied, &tied) == 1000;
+    ok &= spearman_milli(&tied, &tied_reversed) == -1000;
+
+    // A vector with no spread has no ranking to correlate with anything.
+    let flat = [4_u32, 4, 4, 4, 4, 4];
+    ok &= spearman_milli(&flat, &tied) == 0;
+
+    // And the magnitude stays inside the definition's bounds on a partial
+    // correlation, ties and all.
+    let partial = spearman_milli(&[1_u32, 1, 2, 3, 3, 4], &[1_u32, 2, 2, 3, 4, 4]);
+    ok &= partial > 0 && partial < 1000;
+
     // A paired bootstrap of an array against itself can never show a
     // difference, at any resample, so both bounds collapse to zero.
     let flags = [true, false, true, true, false, false, true, false];

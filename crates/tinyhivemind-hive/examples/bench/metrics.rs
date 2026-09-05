@@ -610,44 +610,76 @@ fn percentile(sorted: &[f64], per_mille: u32) -> f64 {
 /// Spearman's rank correlation, in thousandths (so `1000` is a perfect
 /// increasing correlation and `-1000` a perfect decreasing one).
 ///
+/// Computed as Pearson's correlation *on the ranks*, which is Spearman's
+/// definition and is exact whether or not there are ties. The familiar
+/// shortcut `ρ = 1 - 6·Σd²/(n·(n²-1))` is only equal to it when every rank is
+/// distinct; with tied ranks it biases the magnitude toward zero, and this
+/// harness ranks small vectors of directory weights and turn counts where ties
+/// are the common case rather than the exception.
+///
 /// Ranks are computed on *doubled* averages: a tie group spanning 1-based
 /// ranks `first..=last` gets the doubled rank `first + last`, which is always
 /// an integer because it is a sum of two integers rather than their average.
-/// Every downstream quantity — the doubled-rank differences, their squares,
-/// and the final formula — then stays exact integer arithmetic with no
-/// floating-point rounding anywhere in the ranking itself, which is why the
-/// result is an `i64` rather than an `f64`.
-///
-/// The ordinary Spearman formula on plain ranks is `ρ = 1 - 6·Σd²/(n·(n²-1))`.
-/// Doubling every rank doubles every difference `d`, so `d²` scales by four;
-/// scaling the whole formula's numerator and denominator to compensate and
-/// moving to thousandths gives the formula this function implements:
+/// Their mean is then exactly `n + 1`, another integer, so every deviation,
+/// covariance and variance below stays exact integer arithmetic — the doubling
+/// cancels between numerator and denominator, so no rescaling is needed:
 ///
 /// ```text
-/// ρ (in thousandths) = 1000 - 6000·Σd²/(4·n·(n²-1))
+/// a = 2·rank(x) - (n + 1)     b = 2·rank(y) - (n + 1)
+/// ρ (in thousandths) = 1000·Σab / √(Σa²·Σb²)
 /// ```
+///
+/// The one inexact step is that final square root, taken as an integer square
+/// root on the squared numerator and rounded to nearest, so the result is
+/// deterministic and never off by more than one thousandth.
 ///
 /// `n` is the number of paired observations, which in this harness is always
 /// a small count of arms or of policy grid points (`2..=8`); `x` and `y` must
 /// be the same length. Returns `0` for fewer than two pairs, where rank
-/// correlation is undefined.
+/// correlation is undefined, and for a constant vector, whose variance is zero
+/// and whose correlation with anything is therefore undefined too.
 pub(crate) fn spearman_milli(x: &[u32], y: &[u32]) -> i64 {
     let n = x.len();
     if n < 2 || y.len() != n {
         return 0;
     }
-    let rx = doubled_ranks(x);
-    let ry = doubled_ranks(y);
-    let sum_d2: i64 = rx
+    // The mean of the doubled ranks is exactly `n + 1`, so centring them
+    // needs no division and loses nothing.
+    let mean = i64::try_from(n).unwrap_or(i64::MAX) + 1;
+    let ax: Vec<i64> = doubled_ranks(x).into_iter().map(|r| r - mean).collect();
+    let ay: Vec<i64> = doubled_ranks(y).into_iter().map(|r| r - mean).collect();
+
+    let covariance: i128 = ax
         .iter()
-        .zip(ry.iter())
-        .map(|(a, b)| {
-            let d = a - b;
-            d * d
-        })
+        .zip(ay.iter())
+        .map(|(a, b)| i128::from(*a) * i128::from(*b))
         .sum();
-    let n = i64::try_from(n).unwrap_or(i64::MAX);
-    1000 - (6000 * sum_d2) / (4 * n * (n * n - 1))
+    let variance = |values: &[i64]| -> i128 {
+        values
+            .iter()
+            .map(|value| i128::from(*value) * i128::from(*value))
+            .sum()
+    };
+    // A vector with no spread at all — every observation tied — has no
+    // ranking to correlate, and the formula would divide by zero.
+    let spread = variance(&ax) * variance(&ay);
+    if spread == 0 {
+        return 0;
+    }
+
+    // `|ρ|·1000 = √((1000·Σab)² / Σa²Σb²)`, taken as an integer square root of
+    // four times the quotient so that halving it rounds to the nearest
+    // thousandth rather than always down.
+    let scaled = 1000_i128 * covariance.abs();
+    let quadrupled = u128::try_from(4 * scaled * scaled / spread).unwrap_or(0);
+    let magnitude = i64::try_from((quadrupled.isqrt() + 1) / 2)
+        .unwrap_or(1000)
+        .min(1000);
+    if covariance < 0 {
+        -magnitude
+    } else {
+        magnitude
+    }
 }
 
 /// Doubled average ranks (1-based), so a tie group gets an exact integer.
