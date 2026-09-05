@@ -57,6 +57,12 @@ const CITATION_CREDIT: i64 = 1_000;
 const DISCREDIT_SCALE: i64 = 10_000;
 /// Declared relevance runs `0..=100`; the weight terms run in thousandths.
 const PRIOR_SCALE: i64 = 10;
+/// The unit `specialisation`, `credibility` and `prior` are expressed in.
+///
+/// The same number as [`PRIOR_SCALE`] and a different quantity: this one
+/// divides the policy's weights back out of the combined total, and would
+/// still be ten if declared relevance were rescaled tomorrow.
+const TENTHS: i64 = 10;
 
 /// Fold the transcript into an estimate of who knows what.
 ///
@@ -170,7 +176,7 @@ fn weigh(specialisation: i64, credibility: i64, prior: i64, policy: &DirectoryPo
         .saturating_mul(i64::from(policy.specialisation))
         .saturating_add(credibility.saturating_mul(i64::from(policy.credibility)))
         .saturating_add(prior.saturating_mul(i64::from(policy.prior)));
-    (total / PRIOR_SCALE).clamp(0, WEIGHT_CEILING)
+    (total / TENTHS).clamp(0, WEIGHT_CEILING)
 }
 
 /// Index prior records by agent, rejecting a repeat.

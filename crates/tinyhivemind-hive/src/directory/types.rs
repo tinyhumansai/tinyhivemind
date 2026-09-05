@@ -1,6 +1,6 @@
 //! Stable directory inputs and entries.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
 
 use crate::trace::TopicId;
 
@@ -96,10 +96,49 @@ pub struct DirectoryEntry {
 /// [`top`]: Directory::top
 /// [`lines`]: Directory::lines
 /// [`entries`]: Directory::entries
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize)]
 #[serde(transparent)]
 pub struct Directory {
     entries: Vec<DirectoryEntry>,
+}
+
+/// Decode a directory, restoring the ordering its queries depend on.
+///
+/// The wire form is the entry array and nothing else — the same one
+/// `#[serde(transparent)]` writes — but a decoded array is whatever the sender
+/// wrote, and [`top`], [`lines`] and [`topics`] all read the entries as being
+/// in `(topic, agent_id)` order. `topics` in particular compares each entry
+/// with the previous one, so an unsorted array would report a topic twice.
+/// Sorting here rather than trusting the sender is what keeps that invariant a
+/// property of the type. A repeated `(topic, agent_id)` is rejected instead of
+/// sorted: two weights for one pair is not a directory the fold could have
+/// produced, and silently keeping either one would be a guess.
+///
+/// [`top`]: Directory::top
+/// [`lines`]: Directory::lines
+/// [`topics`]: Directory::topics
+impl<'de> Deserialize<'de> for Directory {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let mut entries = Vec::<DirectoryEntry>::deserialize(deserializer)?;
+        entries.sort_by(|left, right| {
+            left.topic
+                .cmp(&right.topic)
+                .then_with(|| left.agent_id.cmp(&right.agent_id))
+        });
+        if let Some(pair) = entries
+            .windows(2)
+            .find(|pair| pair[0].topic == pair[1].topic && pair[0].agent_id == pair[1].agent_id)
+        {
+            return Err(D::Error::custom(format!(
+                "duplicate directory entry for {} on #{}",
+                pair[0].agent_id, pair[0].topic
+            )));
+        }
+        Ok(Self { entries })
+    }
 }
 
 impl Directory {

@@ -114,6 +114,66 @@ fn a_directory_is_transparently_its_entries() {
     assert!(Directory::default().entries().is_empty());
 }
 
+#[test]
+fn a_decoded_directory_is_sorted_into_topic_and_agent_order() {
+    // The wire form is the entry array, and a sender may write it in any
+    // order. `top`, `topics` and `lines` all read the entries as sorted, so
+    // decoding restores that rather than trusting what arrived.
+    let unsorted = serde_json::json!([
+        entry_value("scout", "pool", 200),
+        entry_value("archivist", "cache", 100),
+        entry_value("archivist", "pool", 300),
+    ]);
+    let decoded = serde_json::from_value::<Directory>(unsorted).expect("deserializes");
+    let order: Vec<(&str, String)> = decoded
+        .entries()
+        .iter()
+        .map(|entry| (entry.agent_id.as_str(), entry.topic.to_string()))
+        .collect();
+    assert_eq!(
+        order,
+        vec![
+            ("archivist", "cache".to_owned()),
+            ("archivist", "pool".to_owned()),
+            ("scout", "pool".to_owned()),
+        ]
+    );
+    // And `topics` reports each topic once, which is the invariant the sort
+    // exists for: it compares each entry with the previous one only.
+    assert_eq!(
+        decoded
+            .topics()
+            .into_iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>(),
+        vec!["cache".to_owned(), "pool".to_owned()]
+    );
+}
+
+#[test]
+fn a_decoded_directory_rejects_a_repeated_pair() {
+    let repeated = serde_json::json!([
+        entry_value("archivist", "pool", 300),
+        entry_value("archivist", "pool", 100),
+    ]);
+    let error = serde_json::from_value::<Directory>(repeated).expect_err("a repeated pair");
+    assert!(
+        error.to_string().contains("duplicate directory entry"),
+        "unexpected error: {error}"
+    );
+}
+
+/// One entry as it appears on the wire, with only its weight varying.
+fn entry_value(agent_id: &str, topic: &str, weight: i64) -> serde_json::Value {
+    serde_json::json!({
+        "agent_id": agent_id,
+        "topic": topic,
+        "specialisation": weight,
+        "credibility": 0,
+        "weight": weight,
+    })
+}
+
 // --- Malformed policies ---
 
 #[test]
