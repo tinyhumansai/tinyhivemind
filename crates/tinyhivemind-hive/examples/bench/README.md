@@ -90,6 +90,13 @@ move off together, so a control arm differs from its treatment in one thing
 rather than in two. It **defers** only under `--defer-cap`, on a topic it knows
 another member owns.
 
+Under `--blind-evidence` it **deposits first**: its opening turn, while the
+room is blind, states its own reading of the topic it knows best rather than
+putting an option on the floor, and once the floor exists it proposes what it
+now rates highest rather than backing a worse option that got there first. Its
+support then cites the deposit the room actually stated about that option. See
+[The evidence-first opening](#the-evidence-first-opening).
+
 It reads the medium through the library's own `resolve` and `standings`, not
 through a private imitation of them, and it emits ordinary prose 6% of the time
 so the benchmark measures the protocol rather than a formatter.
@@ -133,11 +140,11 @@ has the tables behind each of those, across desk sizes, plus what the benchmark 
 A second table is printed under the first, in `metrics.rs`:
 
 ```text
-arm       correct %          95% CI  expert %   to-expert   route %   cost/ep     rho
-ladder         57.6       56.2–59.0         —           —         —      1.00       —
-vote           78.5       77.4–79.6         —           —         —     15.00       —
-hive           73.3       72.0–74.5         —           —         —      6.16     0.7
-hive+          82.1       81.0–83.1         —           —         —      6.75     0.7
+arm       correct %          95% CI  fact %  to-fact  knows %  defers/ep  route %  cost/ep    rho
+ladder         57.6       56.2–59.0       —        —        —          —        —     1.00      —
+vote           78.5       77.4–79.6       —        —        —          —        —    15.00      —
+hive           73.3       72.0–74.5       —        —      0.0        0.0        —     6.16   0.75
+hive+          82.1       81.0–83.1       —        —      0.0        0.0        —     6.75   0.72
 ```
 
 `95% CI` is a Wilson score interval on `correct %`, chosen over the plain
@@ -146,11 +153,24 @@ plain interval can cross outside `[0, 100]` and its coverage is worst. Under
 each row, a paired-bootstrap comparison line reports the same arm against
 `vote` at equal turns, e.g. `hive+ − vote: +3.6 [+2.1, +5.0]`: the accuracy
 difference and its 95% interval, resampling episode indices together for both
-arms because they decided the *same* rooms. `expert %` and `to-expert` report
-how often, and how late, the room's decisive member — a `--specialists` topic
-expert or the `--hidden-profile` fact-holder — spoke at all, over the episodes
-that *had* one. `route %` is the share of those episodes in which the
-responder ladder picked that member as its one responder. `rho` is the
+arms because they decided the *same* rooms.
+
+`fact %` and `to-fact` report how often, and how late, the room's decisive
+member — a `--specialists` topic expert or the `--hidden-profile` fact-holder —
+put its knowledge on the floor **before the commit boundary**, over the
+episodes that *had* such a member. It counts a topiced `!evidence` deposit and
+nothing else: an earlier version of this column counted the member's opening
+`!propose`, read 100% on every arm of every run, and measured only that
+everybody gets a turn in the blind round. A deposit landing at or after the
+commit boundary is compute the room paid for and could not use, and is scored
+as a miss.
+
+`knows %` is the share of episodes in which a `BidReason::Knows` bid won the
+floor at least once — the directory's holder of the contested topic, brought
+out because the transcript says it knows something it has not said. Only an arm
+that folds a directory can reach it. `defers/ep` is turns spent on `!defer`.
+`route %` is the share of the scoreable episodes in which the responder ladder
+picked the decisive member as its one responder. `rho` is the
 circularity number `docs/specs/expert-delegation.md` obliges this benchmark to
 print: at the end of every episode the harness folds `directory()` over that
 episode's own journal — always at `DirectoryPolicy::DEFAULT`, whatever the arm
@@ -165,26 +185,87 @@ expert, so nothing can be routed right or wrong).
 and has learned nothing except who talked — the failure
 `docs/research/delegation.md` names *who spoke becomes who is thought to
 know*. At or below zero it is reading grounded deposits and other members'
-citations rather than turn count. The simulated rooms sit at about `0.7` on
-every deliberating arm and every expertise shape, which bounds how much any
-result here can be credited to the directory having found something. It is
-printed beside accuracy rather than in a footnote for exactly that reason.
+citations rather than turn count. It is printed to two decimals rather than
+one: every deliberating arm of the default bench lands in the same tenth, and a
+single decimal printed `0.7` for every arm of every run and read as a constant
+somebody had hard-coded.
+
+Under the ordinary opening the rooms sit at about `0.72`, which bounds how much
+any result there can be credited to the directory having found something. Under
+`--blind-evidence` it separates: `0.36` on a hidden profile, `0.07` for
+`hive+defer` on the same shape, against `0.83` for `hive` on a hidden profile
+with the ordinary opening. Depositing before arguing is what makes directory
+weight stop tracking turn count.
 
 `--json` prints one flat JSON object per arm, one per line, ahead of both
-tables, covering every column of both plus `expert_led` — the share of
+tables, covering every column of both (as `fact_pct`, `to_fact`, `knows_pct`
+and `defers_per_episode`) plus `expert_led` — the share of
 episodes in which the decisive member authored the first `!propose` for the
 topic the room went on to decide, which the tables have no room for. `--stats-check` runs a small set of
 known cases through `wilson`, `paired_bootstrap` and `spearman_milli` — the
 statistics live in an example, so `cargo test` never exercises them — and
 exits `0` or `1`.
 
+## The evidence-first opening
+
+`--blind-evidence` changes one thing about the *participants* and nothing about
+the library: while the room is still `Visibility::Blind`, a member's first turn
+deposits `!evidence #topic` — its own reading of the topic it knows best, with
+no citation, because nothing is visible to cite — instead of proposing an
+option. Proposals begin once the room goes to `Visibility::Full`.
+
+The finding it exists to state is short: **without an evidence-first opening, a
+room whose members share a bias reaches quorum inside the blind round, and no
+floor mechanism can act.** A `!propose` counts as a supporter, so four members
+who privately favour the same planted decoy carry it before anybody has read
+anybody; the episode's first non-blind turn is a commit turn, and a fact
+arriving then has nothing left to change. That is not a hypothesis — the live
+rooms recorded it (in every correct episode of the 2026-09-01 run the five
+blind turns were five `!evidence` lines, one per member) and the federation
+reached it from the other side (moving a desk's question to *before* it had
+backed anything was the difference between failing outright and 77.5%).
+
+It is off by default, so every published number that does not ask for it is
+unchanged, and what it buys is measured rather than assumed:
+
+```text
+5000 rooms                        hive+   hive+dir   vote   ladder   ladder+dir
+uniform                            82.1       82.1   78.5     57.6         49.5
+uniform  --blind-evidence          75.3       75.7   78.5     57.6         98.8
+--specialists 2                    74.2       74.2   71.1     52.6         45.1
+--specialists 2 --blind-evidence   67.6       68.0   71.1     52.6         84.4
+--hidden-profile                   15.3       15.3   15.0     35.1         34.6
+--hidden-profile --blind-evidence  66.3       65.8   15.0     35.1         64.1
+```
+
+On an ordinary room it **costs** about seven points: five of the fifteen turns
+go on deposits nobody needed, and `hive+` fails to decide 7% of the time rather
+than 0.6%. On the hidden profile it is the difference between 15% and 66%. That
+is the trade, stated rather than tuned away.
+
+Two side effects are worth reading before the numbers are:
+
+- **`ladder+dir` on a uniform room is an artifact, not a result.** The arm
+  tells its router which *topic* the call turns on, and that topic is the
+  correct option. With an evidence-first opening the directory records "who
+  deposited a reading of `#truth`", and a member who deposited on `#truth` is
+  usually a member whose favourite *is* `#truth` — so routing to the heaviest
+  holder returns the right answer 98.8% of the time by construction. The
+  92-point swing from the same arm's 49.5% under the ordinary opening is the
+  size of the leak, not the size of the mechanism. Read the `--specialists`
+  row instead, where the deposit is a specialist's tight reading rather than a
+  vote, and even there read it knowing the topic was named.
+- **The two refutation arms fall further.** `hive+ref` and `hive+ev` lose about
+  twenty-five points under the flag. A blind round spent depositing is a blind
+  round not spent proposing, and both arms already had the tightest budget.
+
 ## Delegation
 
-`--specialists`, `--hidden-profile`, `--defer-cap`, `--history` and
-`--cost-tiers` measure whether expert delegation earns its place: whether the
-floor reaches the member holding the deciding fact, how precisely a router
-routes, and what accuracy costs per unit spent. The arms, the numbers they
-scored, and why the hidden profile is decided before delegation can act are in
+`--specialists`, `--hidden-profile`, `--defer-cap`, `--history`,
+`--cost-tiers` and `--blind-evidence` measure whether expert delegation earns
+its place: whether the deciding fact reaches the floor in time, how precisely a
+router routes, and what accuracy costs per unit spent. The arms, the numbers
+they scored, and what makes `BidReason::Knows` reachable at all are in
 [`DELEGATION.md`](DELEGATION.md).
 
 ## Live mode
@@ -293,6 +374,8 @@ rather than a failure of the harness.
 | `--specialists N` | `N` members each read one topic far more tightly than everybody else, and everybody else's read of that topic widens to match -- information is redistributed, not created |
 | `--hidden-profile` | one decoy is planted above every member's own argmax except one member, who alone holds the fact that rules it out |
 | `--cost-tiers` | with `--specialists`, a specialist's own turn costs ten times a lay member's, for the `cost/ep` column |
+| `--blind-evidence` | a member's first turn, while the room is blind, is a deposit rather than a position (off by default) |
+| `--directory` | fold the directory into the traced episode's own policy, so `--trace` can show a `knows` turn |
 | `--defer-cap N` | turns a member may spend deferring to a topic's expert instead of arguing outside its own specialty (default 1, minimum 1); read by `hive+defer` and `hive+dir+defer` |
 | `--history N` | prior episodes of `hive+` the `ladder+dir` arm earns its directory from (default 3) |
 | `--budget N` `--quorum N` `--window N` | episode policy, overriding the tuned values |
@@ -323,17 +406,27 @@ rather than a failure of the harness.
 `--swarm --noise` defaults to ±50 rather than ±90: at the single-room default
 the desk bias is swamped, every desk is individually unbiased, and crossing a
 channel would be measuring nothing. `--hidden-profile --noise` defaults to ±50
-for the same reason and by the same rule — an explicit `--noise` still wins —
-so that the planted decoy, which reads 190 against the true option's 100, is
-every non-decisive member's own argmax and the matched-budget poll scores
-zero by construction.
+for the same reason and by the same rule — an explicit `--noise` still wins.
+
+The two constants that shape the hidden profile are bounded on both sides, and
+`sim.rs` writes the arithmetic on each. `HIDDEN_LIFT` is `100`, so the planted
+decoy reads **140** against the true option's **100**: at ±50 the difference of
+two draws is triangular on ±100, so a lay member's own argmax is the decoy
+`1 - (60/100)² / 2 ≈ 82%` of the time and the matched-budget poll scores 15%.
+`GROUNDS_WEIGHT` is `45`, inside the window `(40, 65)`: *above* the decoy's
+bare 40-point lead, so one grounded refutation flips a member that has seen it
+and has yet to see anybody back anything; *below* `40 + 25`, the lead once one
+peer is already behind the decoy, so a member reading the fact against a room
+that has started backing the decoy needs the fact **plus** a peer that has
+already crossed. Two signals carry where one does not, and both bounds are what
+keep the profile solvable but not trivial.
 
 ## Layout
 
 | file | what it holds |
 | --- | --- |
 | `main.rs` | the command line, the tuned policy, the modes, and the tables |
-| `sim.rs` | the rooms, the private evaluations, what a participant says, and the `Expertise` shapes (`--specialists`, `--hidden-profile`) that redistribute those evaluations |
+| `sim.rs` | the rooms, the private evaluations, what a participant says, the `Expertise` shapes (`--specialists`, `--hidden-profile`) that redistribute those evaluations, and the evidence-first opening (`--blind-evidence`) |
 | `federation.rs` | several desks, each with a correlated bias of its own |
 | `swarm.rs` | one journal per channel, the scheduler, and the referral edge |
 | `run.rs` | the host: a journal, a roster, and the step loop |

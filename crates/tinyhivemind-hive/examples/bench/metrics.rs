@@ -32,16 +32,25 @@ pub(crate) struct Aggregate {
     /// Time spent inside the library.
     pub(crate) library_time: Duration,
     /// Episodes in which the room's decisive member -- its expert, or the
-    /// hidden-profile member who held the deciding fact -- spoke at all.
-    pub(crate) expert_spoke: u32,
+    /// hidden-profile member who held the deciding fact -- put its knowledge
+    /// on the floor before the commit boundary.
+    pub(crate) fact_deposited: u32,
     /// Episodes in which the room *had* a decisive member at all, which is
-    /// the denominator `expert %` is a share of. Zero for a uniform room,
+    /// the denominator `fact %` is a share of. Zero for a uniform room,
     /// where nobody holds anything anybody else does not.
     pub(crate) expert_of: u32,
-    /// Sum of the turn index at which the decisive member first spoke, over
-    /// exactly the episodes counted in `expert_spoke`; the numerator for
-    /// [`Aggregate::expert_latency`].
-    pub(crate) expert_turns: u64,
+    /// Sum of the turn index at which that deposit landed, over exactly the
+    /// episodes counted in `fact_deposited`; the numerator for
+    /// [`Aggregate::fact_latency`].
+    pub(crate) fact_turns: u64,
+    /// Episodes in which a [`BidReason::Knows`] bid won the floor at least
+    /// once. Only an arm that folds a directory can ever populate this; the
+    /// mechanism is unreachable without one.
+    ///
+    /// [`BidReason::Knows`]: tinyhivemind_hive::BidReason::Knows
+    pub(crate) knows: u32,
+    /// Turns spent on `!defer` across the sample.
+    pub(crate) defers: u64,
     /// Episodes in which the decisive member also authored the first
     /// `!propose` for the topic the room went on to decide.
     pub(crate) expert_proposed: u32,
@@ -90,19 +99,23 @@ impl Aggregate {
         self.library_time += report.library_time;
         self.correct_flags.push(report.correct);
         self.cost_units = self.cost_units.saturating_add(report.cost_units);
+        self.defers = self.defers.saturating_add(u64::from(report.defers));
+        if report.knows_turns > 0 {
+            self.knows = self.knows.saturating_add(1);
+        }
         if report.has_expert {
             self.expert_of = self.expert_of.saturating_add(1);
         }
-        if report.expert_spoke {
-            self.expert_spoke = self.expert_spoke.saturating_add(1);
-            if let Some(at) = report.expert_at {
-                self.expert_turns = self.expert_turns.saturating_add(u64::from(at));
+        if report.fact_deposited {
+            self.fact_deposited = self.fact_deposited.saturating_add(1);
+            if let Some(at) = report.fact_at {
+                self.fact_turns = self.fact_turns.saturating_add(u64::from(at));
             }
-            if let Some(expert) = expert_id(report)
-                && report.proposer.as_deref() == Some(expert)
-            {
-                self.expert_proposed = self.expert_proposed.saturating_add(1);
-            }
+        }
+        if let Some(expert) = report.decisive.as_deref()
+            && report.proposer.as_deref() == Some(expert)
+        {
+            self.expert_proposed = self.expert_proposed.saturating_add(1);
         }
         if let Some(rho) = report.rho_milli {
             self.rank_rho_milli = self.rank_rho_milli.saturating_add(rho);
@@ -167,15 +180,26 @@ impl Aggregate {
     }
 
     /// Share of the episodes that *had* a decisive member in which that
-    /// member spoke at all.
-    pub(crate) fn expert_reach(&self) -> f64 {
-        ratio(self.expert_spoke.into(), self.expert_of.into()) * 100.0
+    /// member's knowledge reached the floor in time to matter.
+    pub(crate) fn fact_reach(&self) -> f64 {
+        ratio(self.fact_deposited.into(), self.expert_of.into()) * 100.0
     }
 
-    /// Mean turn index at which the decisive member first spoke, over the
-    /// episodes in which it spoke at all.
-    pub(crate) fn expert_latency(&self) -> f64 {
-        ratio(self.expert_turns, self.expert_spoke.into())
+    /// Mean turn index at which that deposit landed, over the episodes in
+    /// which it landed in time at all.
+    pub(crate) fn fact_latency(&self) -> f64 {
+        ratio(self.fact_turns, self.fact_deposited.into())
+    }
+
+    /// Share of episodes in which a `BidReason::Knows` bid won the floor at
+    /// least once.
+    pub(crate) fn knows_rate(&self) -> f64 {
+        ratio(self.knows.into(), self.episodes.into()) * 100.0
+    }
+
+    /// Mean turns spent on `!defer` per episode.
+    pub(crate) fn defers_per_episode(&self) -> f64 {
+        ratio(self.defers, self.episodes.into())
     }
 
     /// Share of the episodes it *could* be scored over in which the
@@ -232,22 +256,6 @@ impl Aggregate {
         let sum = i32::try_from(self.rank_rho_milli).unwrap_or(i32::MAX);
         f64::from(sum) / f64::from(self.rank_rho_count)
     }
-}
-
-/// Recover the decisive member's id from `first_spoke` by matching the turn
-/// index `expert_at` already pinned.
-///
-/// `first_spoke` maps an agent id to the turn at which it first spoke, and
-/// every turn has exactly one speaker, so at most one id can match a given
-/// turn index. This lets the fold learn *which* id was decisive without
-/// `EpisodeReport` having to carry that id as a separate field.
-fn expert_id(report: &EpisodeReport) -> Option<&str> {
-    let at = report.expert_at?;
-    report
-        .first_spoke
-        .iter()
-        .find(|(_, turn)| *turn == at)
-        .map(|(id, _)| id.as_str())
 }
 
 /// A safe ratio that never divides by zero.
@@ -329,8 +337,17 @@ fn deliberates(name: &str) -> bool {
 /// directory-circularity proxy.
 pub(crate) fn detail_header() -> String {
     format!(
-        "{:<8}{:>11}{:>16}{:>10}{:>12}{:>10}{:>10}{:>8}",
-        "arm", "correct %", "95% CI", "expert %", "to-expert", "route %", "cost/ep", "rho"
+        "{:<8}{:>11}{:>16}{:>8}{:>9}{:>9}{:>11}{:>9}{:>9}{:>7}",
+        "arm",
+        "correct %",
+        "95% CI",
+        "fact %",
+        "to-fact",
+        "knows %",
+        "defers/ep",
+        "route %",
+        "cost/ep",
+        "rho",
     )
 }
 
@@ -344,24 +361,32 @@ pub(crate) fn detail_row(name: &str, totals: &Aggregate) -> String {
     let (low, high) = wilson(totals.correct, totals.episodes);
     let ci = format!("{low:.1}–{high:.1}");
     let hive_like = deliberates(name);
-    let expert_pct = dash_unless(hive_like && totals.expert_of > 0, || totals.expert_reach());
-    let to_expert = dash_unless(hive_like && totals.expert_spoke > 0, || {
-        totals.expert_latency()
+    let fact_pct = dash_unless(hive_like && totals.expert_of > 0, || totals.fact_reach());
+    let to_fact = dash_unless(hive_like && totals.fact_deposited > 0, || {
+        totals.fact_latency()
     });
+    let knows_pct = dash_unless(hive_like, || totals.knows_rate());
+    let defers = dash_unless(hive_like, || totals.defers_per_episode());
     // Only a ladder arm consults the responder ladder at all, and only a
     // room that names an expert on the deciding topic gives it something to
     // be right or wrong about -- so a uniform room prints `—` rather than a
     // `0.0` that would read as "the ladder always missed".
     let route_pct = dash_unless(totals.routed_of > 0, || totals.routing_precision());
-    let rho = dash_unless(hive_like && totals.rank_rho_count > 0, || {
+    // Two decimals, not one: the number is folded in thousandths and every
+    // deliberating arm lands in the same tenth, so a single decimal printed
+    // `0.7` for every arm of every run and read as a constant the harness had
+    // hard-coded.
+    let rho = dash_unless_2(hive_like && totals.rank_rho_count > 0, || {
         totals.mean_rho() / 1000.0
     });
     let rest = format!(
-        "{:>11.1}{:>16}{:>10}{:>12}{:>10}{:>10.2}{:>8}",
+        "{:>11.1}{:>16}{:>8}{:>9}{:>9}{:>11}{:>9}{:>9.2}{:>7}",
         totals.accuracy(),
         ci,
-        expert_pct,
-        to_expert,
+        fact_pct,
+        to_fact,
+        knows_pct,
+        defers,
         route_pct,
         totals.cost_per_episode(),
         rho,
@@ -376,6 +401,15 @@ pub(crate) fn detail_row(name: &str, totals: &Aggregate) -> String {
 fn dash_unless(available: bool, value: impl FnOnce() -> f64) -> String {
     if available {
         format!("{:.1}", value())
+    } else {
+        "—".to_owned()
+    }
+}
+
+/// [`dash_unless`], to two decimal places.
+fn dash_unless_2(available: bool, value: impl FnOnce() -> f64) -> String {
+    if available {
+        format!("{:.2}", value())
     } else {
         "—".to_owned()
     }
@@ -426,7 +460,8 @@ pub(crate) fn json_line(name: &str, totals: &Aggregate) -> String {
         line,
         "{{\"arm\":\"{name}\",\"turns_per_episode\":{},\"decision_rate\":{},\
          \"correct_pct\":{},\"ci_low\":{},\"ci_high\":{},\"ns_per_step\":{},\
-         \"episodes_per_second\":{},\"expert_pct\":{},\"to_expert\":{},\
+         \"episodes_per_second\":{},\"fact_pct\":{},\"to_fact\":{},\
+         \"knows_pct\":{},\"defers_per_episode\":{},\
          \"expert_led\":{},\"route_pct\":{},\"cost_per_episode\":{},\
          \"accuracy_per_kilo_unit\":{},\"rho\":{}}}",
         json_f64(totals.turns_per_episode()),
@@ -436,11 +471,13 @@ pub(crate) fn json_line(name: &str, totals: &Aggregate) -> String {
         json_f64(high),
         json_f64(totals.nanos_per_step()),
         json_f64(totals.episodes_per_second()),
-        json_f64_if(hive_like && totals.expert_of > 0, totals.expert_reach()),
+        json_f64_if(hive_like && totals.expert_of > 0, totals.fact_reach()),
         json_f64_if(
-            hive_like && totals.expert_spoke > 0,
-            totals.expert_latency()
+            hive_like && totals.fact_deposited > 0,
+            totals.fact_latency()
         ),
+        json_f64_if(hive_like, totals.knows_rate()),
+        json_f64_if(hive_like, totals.defers_per_episode()),
         json_f64_if(hive_like && totals.expert_of > 0, totals.expert_led()),
         json_f64_if(totals.routed_of > 0, totals.routing_precision()),
         json_f64(totals.cost_per_episode()),

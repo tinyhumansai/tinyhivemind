@@ -12,11 +12,40 @@
 //! numbers unreproducible and would confound protocol quality with model
 //! quality; `live` drives the same protocol through a real agent CLI when that
 //! is what is wanted.
+//!
+//! # The evidence-first opening
+//!
+//! Under `--blind-evidence` a member's first turn, while the room is still
+//! [`Visibility::Blind`], is a *deposit* rather than a position: it states its
+//! own reading of the topic it knows best and nothing else. Proposals begin
+//! once the room goes to [`Visibility::Full`].
+//!
+//! This is a **participant policy, not a library mechanism**. Nothing in
+//! `tinyhivemind-hive` can make a member open this way — `step` decides who
+//! speaks, never what they say — and the flag exists because the alternative
+//! makes every floor mechanism unreachable. A room whose members share a bias
+//! puts the same option on the floor four times inside the blind round, which
+//! is already four distinct supporters, which is already quorum: the episode's
+//! first non-blind turn is a commit turn and an arriving fact has nothing left
+//! to change. That is the same finding the live rooms recorded — in every
+//! correct episode of
+//! `docs/experiments/2026-09-01-live-hidden-profile.md` the five blind turns
+//! were five `!evidence` lines, one per member — and the same one
+//! `docs/experiments/2026-09-02-federated-hidden-profile.md` reached from the
+//! other side, where moving a desk's question to *before* it had backed
+//! anything was the difference between the whole federation failing and 77.5%.
+//!
+//! So the flag is off by default, and every published number that does not ask
+//! for it is unchanged. What it buys, and what it costs, is a result rather
+//! than an assumption.
+//!
+//! [`Visibility::Blind`]: tinyhivemind_hive::Visibility::Blind
+//! [`Visibility::Full`]: tinyhivemind_hive::Visibility::Full
 
 use std::fmt::Write as _;
 
 use tinyhivemind_hive::{
-    HiveTurn, Phase, QuorumPolicy, Sequence, SessionMessage,
+    HiveTurn, Phase, QuorumPolicy, Sequence, SessionMessage, Visibility,
     quorum::{TopicStanding, standings},
     trace::{TopicId, Trace, TraceKind, resolve},
 };
@@ -107,62 +136,75 @@ const LAY_NOISE_PERCENT: u32 = 150;
 /// How much the hidden-profile decoy is lifted for everybody except the
 /// member holding the fact that refutes it.
 ///
+/// Added to [`DECOY_QUALITY`], so at 100 the planted decoy reads **140**
+/// against the true option's **100**: a 40-point lead over the answer, for
+/// every member but one.
+///
 /// Bounded on both sides, the way `--bias` is, and both bounds are what make
 /// the problem a hidden profile rather than merely a noisy one.
 ///
-/// *Above* the 60-point gap between the true option and a decoy — far enough
-/// above it to clear the `--hidden-profile` noise default of ±50 — so that a
-/// lay member's own argmax is the planted decoy however its noise fell. At a
-/// lift of 150 the decoy reads 190 against the true option's 100 and the two
-/// error bands barely touch, which is what puts the matched-budget poll at
-/// nearly zero: every independent voter answers the decoy.
+/// *Above* zero by enough that a lay member's own argmax is the decoy however
+/// its noise fell. At the `--hidden-profile` noise default of ±50 the
+/// difference of two independent draws is triangular on ±100, so a 40-point
+/// lead survives it `1 - (60/100)² / 2 ≈ 82%` of the time. Five members
+/// polled independently answer the decoy by plurality essentially always,
+/// which is what puts the matched-budget vote at zero *by construction* —
+/// that is the definition of a hidden profile, not a result.
 ///
-/// *Below* what the room can still overturn. A lay member abandons the decoy
-/// once the decoy's posterior falls under the true option's, which needs the
-/// deposited fact's [`GROUNDS_WEIGHT`] discount *plus* at least one peer's
-/// [`SOCIAL_WEIGHT`] behind the truth to cover the mean gap. The deposit
-/// alone does not do it and the deposit plus a backer does, which is the
-/// pooling the arm is there to measure.
-const HIDDEN_LIFT: i32 = 150;
+/// *Below* [`GROUNDS_WEIGHT`], so that one grounded refutation, once a member
+/// has actually seen it, is enough to put the truth ahead of the decoy on
+/// that member's own arithmetic. At the earlier lift of 150 the lead was 90
+/// against a discount of 120 only because the discount was set higher still;
+/// pinning the lead under a single refutation is what makes the fact
+/// *sufficient* rather than merely *relevant*, and it is the difference
+/// between a room that can pool and a room whose members can only ever
+/// out-vote each other.
+const HIDDEN_LIFT: i32 = 100;
 
 /// How much one deposited refuting fact discounts a topic's posterior.
 ///
 /// Distinct from `refutation_cap`, which caps a topic outright: this is the
 /// softer discount a member applies on its own account, and it is inert
-/// whenever nobody holds a `refutes` topic to deposit one against — which is
-/// every room outside `Expertise::HiddenProfile`, so no published uniform
-/// number moves with it.
+/// whenever nobody deposits a refuting fact — which is every room outside
+/// `Expertise::HiddenProfile`, so no published uniform number moves with it.
 ///
 /// Bounded on both sides, and both bounds are what make the hidden profile
 /// solvable-but-not-trivial. A lay member abandons the planted decoy when the
 /// decoy's posterior falls under the true option's, and the decoy's lead over
-/// the truth for a mean lay member is `HIDDEN_LIFT - 60` on its own reading
-/// plus [`SOCIAL_WEIGHT`] for every peer backing the decoy that is not also
-/// backing the truth.
+/// the truth for a mean lay member is `HIDDEN_LIFT - 60 = 40` on its own
+/// reading plus [`SOCIAL_WEIGHT`] for every peer backing the decoy that is not
+/// also backing the truth.
 ///
-/// - *Below* the lead the moment the fact lands — `90 + 2 × 25 = 140`, with
-///   three lay peers still on the decoy and only the fact-holder on the truth
-///   — so the deposit **alone** does not flip a mean lay member. A hidden
-///   profile that one fact overturns on its own is not hidden; it is a fact
-///   nobody happened to have said yet.
-/// - *Above* the lead once one lay member has moved across — `90 + 0 = 90`,
-///   two peers each side — so the deposit **plus** one peer that has already
-///   crossed does flip the next one. Two signals carry where one does not,
-///   which is what gives the room a route to the answer that pooling can
-///   walk, seeded by whichever lay member's own noise draw put its lead under
-///   the line first.
+/// - *Above* the bare lead of `40`, so the fact **alone** flips a mean lay
+///   member that has seen the deposit and has yet to see anybody back
+///   anything. A hidden profile whose deciding fact cannot move the member
+///   who hears it is not a hidden profile; it is a fact with no route to the
+///   decision, which is what the arm was measuring before.
+/// - *Below* `40 + 25 = 65`, the lead once one peer is already behind the
+///   decoy, so a member reading the fact against a room that has started
+///   backing the decoy is **not** flipped by the fact on its own — it takes
+///   the fact plus a peer that has already crossed. Two signals carry where
+///   one does not, which is the pooling the arm exists to measure.
 ///
-/// At 120 that window is `(90, 140)` and the value sits in the middle of it.
+/// At 45 that window is `(40, 65)` and the value sits near its floor, which
+/// is the conservative end: the fact is decisive for the first reader and has
+/// to be seconded for every reader after that.
+const GROUNDS_WEIGHT: i32 = 45;
+
+/// The sentence a deposit carries when it is a *refutation* of the topic it
+/// names rather than a *reading* of it.
 ///
-/// The arithmetic is the arithmetic; whether an episode ever gets to run it
-/// is a separate question, and under the tuned policy the answer is mostly
-/// no. A `!propose` counts as a supporter, so four lay members each putting
-/// the same planted decoy on the floor carry it inside the blind round,
-/// before anybody has read anybody — and the episode is in `Phase::Commit`
-/// by the time the fact-holder first sees a floor to deposit against. See
-/// the benchmark README's "Delegation" section for what that costs every
-/// arm.
-const GROUNDS_WEIGHT: i32 = 120;
+/// The library's grammar has one marker for both: `!evidence #topic` deposits
+/// grounds, and a pure fold cannot tell grounds that kill a hypothesis from
+/// grounds that merely describe it — that is the finding
+/// `docs/experiments/2026-09-01-live-hidden-profile.md` recorded, and the
+/// reason `!refute` exists as a separate marker at all. The simulated reader
+/// distinguishes them by reading the sentence, which is the modelling
+/// shortcut standing in for a participant that understands what the fact
+/// says. Nothing in the library depends on it, and the distinction only
+/// matters once [`SimAgent::blind_evidence`] has ordinary members depositing
+/// readings of their own.
+const RULES_OUT: &str = "rules this one out";
 
 /// What a specialist's own turn costs, against a lay member's `1`, when a
 /// room is generated with `cost_tiers` set.
@@ -345,7 +387,7 @@ impl Room {
     /// Scoring data, read only after an arm has already decided: it is how
     /// `route %` learns whether the responder ladder picked the member who
     /// actually held the deciding topic, and it is the same member
-    /// `run_episode` scores `expert %` against. Nothing a participant reads
+    /// `run_episode` scores `fact %` against. Nothing a participant reads
     /// may consult it.
     pub(crate) fn deciding_expert(&self) -> Option<&str> {
         if let Some(decisive) = &self.decisive {
@@ -369,6 +411,20 @@ impl Room {
             agent.cost_unit = unit;
         }
         room
+    }
+
+    /// The same room, with every member opening on a deposit rather than a
+    /// position.
+    ///
+    /// Applied once, to the generated room, so every arm that deliberates it
+    /// — and every replay [`Room::resampled`] makes of it — sees the same
+    /// participants. The control arms read nothing but
+    /// [`SimAgent::favourite`], which this does not touch, so `vote` and
+    /// `ladder` are unaffected by construction.
+    pub(crate) fn set_blind_evidence(&mut self, on: bool) {
+        for agent in &mut self.agents {
+            agent.set_blind_evidence(on);
+        }
     }
 
     /// The same room, same private evaluations, with every member's
@@ -650,6 +706,11 @@ pub(crate) struct SimAgent {
     defer_cap: u32,
     /// Turns this member has already deferred.
     deferred: u32,
+    /// Whether this member opens with a deposit rather than a position, and
+    /// puts its own best option on the floor rather than backing a worse one
+    /// somebody else got there first with. See the module docs: it is a
+    /// participant policy, off unless `--blind-evidence` asked for it.
+    blind_evidence: bool,
 }
 
 impl SimAgent {
@@ -708,7 +769,16 @@ impl SimAgent {
             cost_unit: 1,
             defer_cap: 0,
             deferred: 0,
+            blind_evidence: false,
         }
+    }
+
+    /// Open with a deposit rather than a position, under `--blind-evidence`.
+    ///
+    /// Every room leaves this off, so a run that does not ask for the flag is
+    /// bit-identical to one built before the move existed.
+    pub(crate) fn set_blind_evidence(&mut self, on: bool) {
+        self.blind_evidence = on;
     }
 
     /// Fold one outside reading of a topic into this member's own view.
@@ -789,6 +859,18 @@ impl SimAgent {
             );
         }
 
+        // The evidence-first opening: while nobody can read anybody, say what
+        // you know rather than what you want. This is the whole of
+        // `--blind-evidence` on the writing side, and the module docs say why
+        // it is a participant policy rather than something the library could
+        // impose.
+        if self.blind_evidence
+            && turn.visibility == Visibility::Blind
+            && let Some(line) = self.opening_deposit(&view)
+        {
+            return line;
+        }
+
         // A hypothesis this member rates *clearly* below its own — the same
         // 60-point gap that separates the genuinely best option from a decoy —
         // is not a tie to be broken but a claim to be killed. Objecting would
@@ -816,9 +898,7 @@ impl SimAgent {
             && let Some(proposal) = view.proposal(&topic)
             && !view.has_deposited(&self.id, &topic)
         {
-            return format!(
-                "!evidence #{topic} ^{proposal} The reading I hold rules this one out."
-            );
+            return format!("!evidence #{topic} ^{proposal} The reading I hold {RULES_OUT}.");
         }
 
         // Two options are both carrying, which is the one state no amount of
@@ -843,12 +923,50 @@ impl SimAgent {
             return format!("!commit #{topic} ^{grounds} Recording the decision the room reached.");
         }
 
+        // Nothing on the floor is worth as much as something this member is
+        // still holding, so put that up instead of backing a worse option.
+        //
+        // Only under the evidence-first opening, and only because of it: with
+        // the ordinary opening every member's favourite reaches the floor in
+        // the blind round, so there is never anything better left in a hand.
+        // With the floor empty for a whole round, a member that could only
+        // ever back what was already there would hand the decision to whoever
+        // happened to propose first, and the reading it deposited would
+        // decide nothing.
+        if self.blind_evidence
+            && let Some(topic) = view.better_than_floor(self)
+        {
+            // Deliberately uncited. A proposal is a conclusion, and citing the
+            // deposit it happens to agree with would earn its author directory
+            // weight on the topic for the act of arguing it -- which is
+            // precisely the circularity the directory exists to avoid, and
+            // which measurably kills `BidReason::Knows`: it fires in four
+            // episodes in five with the proposal uncited and in fewer than one
+            // in ten with it cited. The grounds go on the *support* instead,
+            // below, where a member is answering something already said.
+            return format!(
+                "!propose #{topic} It rates highest once I weigh what the room has stated \
+                 against my own read."
+            );
+        }
+
         // Back the best option currently on the floor, weighing this member's
         // own signal against how many peers independently backed it. This is
         // the step that pools information across the room.
         if let Some((topic, grounds)) = view.best_proposal(self)
             && !view.has_backed(&self.id, topic)
         {
+            // Under the evidence-first opening the grounds are the deposit
+            // the room actually stated about this option, where there is one,
+            // rather than the proposal restating a preference. That is the
+            // only thing in this file that puts a stated fact at the end of a
+            // citation chain, which is exactly what `require_evidential` asks
+            // a support to have.
+            let grounds = if self.blind_evidence {
+                view.grounds_for(&self.id, topic).unwrap_or(grounds)
+            } else {
+                grounds
+            };
             let mut line = String::new();
             let _ = write!(
                 line,
@@ -905,6 +1023,45 @@ impl SimAgent {
                 self.evidence(&view)
             }
             Role::Proposer | Role::Archivist => self.evidence(&view),
+        }
+    }
+
+    /// The deposit this member opens the room with under `--blind-evidence`:
+    /// its own reading of the one topic it knows best, stated before anybody
+    /// has taken a position.
+    ///
+    /// The topic is the fact this member holds against a planted decoy where
+    /// it holds one, its specialty where it has one, and otherwise its own
+    /// favourite — "what I know best" in each of the three shapes the
+    /// benchmark generates. There is no citation, because nothing is visible
+    /// to cite: an uncited `!evidence` is still a full-weight deposit in the
+    /// directory, which is what gives `BidReason::Knows` something to route
+    /// on later.
+    ///
+    /// `None` once this member has already deposited on that topic, which
+    /// cannot happen inside a blind round that ends when every member has
+    /// spoken once, and is checked anyway so the move stays idempotent.
+    fn opening_deposit(&self, view: &View) -> Option<String> {
+        let topic = self
+            .refutes
+            .clone()
+            .or_else(|| self.specialty.clone())
+            .unwrap_or_else(|| self.favourite.clone());
+        if view.has_deposited(&self.id, &topic) {
+            return None;
+        }
+        let reading = self.score(&topic);
+        // A reading and a refutation are the same marker to the library's
+        // fold; the sentence is what separates them for a reader. See
+        // `RULES_OUT`.
+        if self.refutes.as_ref() == Some(&topic) {
+            Some(format!(
+                "!evidence #{topic} My own read of it is {reading}. The reading I hold {RULES_OUT}."
+            ))
+        } else {
+            Some(format!(
+                "!evidence #{topic} My own read of it is {reading}."
+            ))
         }
     }
 
@@ -1025,13 +1182,19 @@ impl View {
     }
 
     /// Distinct members who have deposited an `!evidence` trace naming
-    /// `topic`.
+    /// `topic` **that argues against it**.
     ///
-    /// This reads the same marker a hidden-profile member's rebuttal
-    /// deposits (see `SimAgent::compose`), and nothing else in this file ever
-    /// attaches a topic to `!evidence`. Under `Expertise::Uniform` nobody
-    /// holds a `refutes` topic, so no participant ever deposits one and this
-    /// stays zero for every topic.
+    /// A deposit is read as a refutation when its sentence says so, and as a
+    /// reading of the option otherwise — see [`RULES_OUT`] for why a
+    /// participant can draw that line and the library's fold cannot. Without
+    /// the distinction the evidence-first opening would be self-defeating:
+    /// four lay members each stating what they read the planted decoy at
+    /// would each be counted as having refuted it, and the decoy would
+    /// collapse under the weight of its own supporters' agreement.
+    ///
+    /// Under `Expertise::Uniform` nobody holds a `refutes` topic, so no
+    /// participant ever deposits a refutation and this stays zero for every
+    /// topic.
     ///
     /// Unlike the peer count above, this deliberately does *not* exclude
     /// `agent` itself. A peer's backing is social evidence and a member
@@ -1044,6 +1207,9 @@ impl View {
         let mut seen: Vec<&str> = Vec::new();
         for trace in &self.traces {
             if trace.kind != TraceKind::Evidence || trace.topic.as_ref() != Some(topic) {
+                continue;
+            }
+            if !trace.text.contains(RULES_OUT) {
                 continue;
             }
             let Some(author) = trace.agent_id() else {
@@ -1074,6 +1240,54 @@ impl View {
             .filter(|topic| agent.specialty.as_ref() != Some(*topic))
             .filter(|topic| agent.expert_elsewhere.contains(topic))
             .max_by_key(|topic| self.backers(topic))
+    }
+
+    /// The grounds this member would cite for a position on `topic`: its own
+    /// deposit about it where it has one, and otherwise the first deposit
+    /// anybody made about it.
+    ///
+    /// Its own first, because a member arguing from what it stated itself is
+    /// the ordinary case; anybody's second, because a member persuaded by
+    /// somebody else's fact is citing that fact, which is the whole of what a
+    /// citation is for.
+    fn grounds_for(&self, agent_id: &str, topic: &TopicId) -> Option<Sequence> {
+        let deposits = || {
+            self.traces.iter().filter(move |trace| {
+                trace.kind == TraceKind::Evidence && trace.topic.as_ref() == Some(topic)
+            })
+        };
+        deposits()
+            .find(|trace| trace.agent_id() != Some(agent_id))
+            .map(|trace| trace.sequence)
+    }
+
+    /// The option this member now rates highest over *everything it holds*,
+    /// when that option is not on the floor and nothing on the floor scores as
+    /// well.
+    ///
+    /// The comparison is over posteriors on both sides, so a peer's backing
+    /// and a deposited refutation both count: a member does not put an option
+    /// up merely because it likes it, only because the room has offered it
+    /// nothing better. Ties go to the floor, which is what keeps this from
+    /// re-opening a question the room has already converged on.
+    fn better_than_floor<'a>(&self, agent: &'a SimAgent) -> Option<&'a TopicId> {
+        let best = agent
+            .evals
+            .iter()
+            .map(|(topic, _)| topic)
+            .max_by_key(|topic| self.posterior(agent, topic))?;
+        if self.proposal(best).is_some() {
+            return None;
+        }
+        let held = self
+            .floor()
+            .into_iter()
+            .map(|(topic, _)| self.posterior(agent, topic))
+            .max();
+        match held {
+            Some(held) if held >= self.posterior(agent, best) => None,
+            _ => Some(best),
+        }
     }
 
     /// The proposed option this participant rates highest once the room's own

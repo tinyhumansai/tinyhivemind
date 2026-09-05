@@ -69,6 +69,8 @@
 //! | `--specialist-model NAME` | model for a seat the scenario marks as a specialist |
 //! | `--specialists N`, `--hidden-profile` | how expertise is distributed |
 //! | `--defer-cap N`, `--history N`, `--cost-tiers` | the delegation arms |
+//! | `--blind-evidence` | members open the blind round with a deposit, not a position |
+//! | `--directory` | fold the directory into the traced episode's own policy |
 //! | `--thinking on\|off` | whether the HTTP backend reasons before answering |
 //!
 //! See `live.rs` and `http.rs` for what the two live backends drive.
@@ -183,6 +185,9 @@ struct Options {
     expertise: Expertise,
     /// Whether a specialist's own turn costs more than a lay member's.
     cost: bool,
+    /// Whether a member's first turn, while the room is still blind, is a
+    /// deposit rather than a position. See `sim.rs`.
+    blind_evidence: bool,
     /// Turns a member may spend deferring to a topic's expert instead of
     /// arguing outside its own specialty. Read by the deferring arms, and by
     /// the `defer_cap` those arms put in their episode policy.
@@ -254,6 +259,7 @@ impl Options {
             agent: None,
             expertise: Expertise::Uniform,
             cost: false,
+            blind_evidence: false,
             defer_cap: 1,
             history: 3,
             json: false,
@@ -381,9 +387,9 @@ impl Options {
     }
 }
 
-/// Apply one of `--specialists`, `--hidden-profile`, `--defer-cap` or
-/// `--cost-tiers` to `options`, or do nothing for a flag it does not
-/// recognise.
+/// Apply one of `--specialists`, `--hidden-profile`, `--defer-cap`,
+/// `--cost-tiers`, `--blind-evidence` or `--directory` to `options`, or do
+/// nothing for a flag it does not recognise.
 fn apply_expertise_flag(
     options: &mut Options,
     flag: &str,
@@ -398,6 +404,12 @@ fn apply_expertise_flag(
         "--defer-cap" => options.defer_cap = next_number(args).unwrap_or(1).max(1),
         "--history" => options.history = next_number(args).unwrap_or(3),
         "--cost-tiers" => options.cost = true,
+        "--blind-evidence" => options.blind_evidence = true,
+        // `--trace` prints one episode at `options.policy`, so without this
+        // there is no way to watch the delegation arm run: `BidReason::Knows`
+        // is unreachable unless a directory is folded, and only an arm sets
+        // that. It moves the same single field `knowing_policy` moves.
+        "--directory" => options.policy.directory = Some(DirectoryPolicy::DEFAULT),
         _ => {}
     }
 }
@@ -705,6 +717,14 @@ fn run(options: &Options) -> Result<(), String> {
                 options.expertise,
                 options.cost,
             )
+        })
+        .map(|mut room| {
+            // Applied to the generated room rather than threaded through
+            // `generate_with`: it changes nothing about the private
+            // evaluations, only what the members do with them, so a run
+            // without the flag draws exactly the room it always drew.
+            room.set_blind_evidence(options.blind_evidence);
+            room
         })
         .collect();
 

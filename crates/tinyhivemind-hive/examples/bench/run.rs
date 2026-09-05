@@ -8,8 +8,8 @@
 use std::time::{Duration, Instant};
 
 use tinyhivemind_hive::{
-    Conversation, Directory, DirectoryPolicy, EpisodePolicy, EpisodeState, HiveStep, HiveTurn,
-    Sequence, SessionAuthor, SessionMessage,
+    BidReason, Conversation, Directory, DirectoryPolicy, EpisodePolicy, EpisodeState, HiveStep,
+    HiveTurn, Phase, Sequence, SessionAuthor, SessionMessage,
     desk::{Desk, DeskSet, ResponderMode},
     directory, project_for,
     roster::{Roster, RosterMember},
@@ -98,18 +98,42 @@ pub(crate) struct EpisodeReport {
     /// at all -- a topic specialist, or a hidden profile's fact-holder.
     /// `false` for a uniform room, which has neither.
     pub(crate) has_expert: bool,
-    /// Whether that member ever spoke. `false` when the room has no such
-    /// member.
-    pub(crate) expert_spoke: bool,
-    /// The turn index at which that member first spoke, if it ever did.
-    pub(crate) expert_at: Option<u32>,
+    /// That member's id, once the episode has ended. `None` for a uniform
+    /// room, which has no such member.
+    pub(crate) decisive: Option<String>,
+    /// Whether that member put its knowledge on the floor -- deposited a
+    /// topiced `!evidence` line -- *before the commit boundary*, while the
+    /// room could still act on it.
+    ///
+    /// Deliberately not "spoke at all". A member's opening `!propose` is a
+    /// position, not the fact, and counting it made this column read 100% on
+    /// every arm and measure nothing: the question is whether the deciding
+    /// knowledge reached the room in time, not whether its holder got a turn.
+    pub(crate) fact_deposited: bool,
+    /// The turn index of that deposit, when it landed in time.
+    pub(crate) fact_at: Option<u32>,
     /// Turns whose content is a `!defer` line.
     pub(crate) defers: u32,
+    /// Turns the attention market handed out for [`BidReason::Knows`] -- the
+    /// directory's holder of the contested topic, brought out because the
+    /// transcript says it knows something it has not said.
+    pub(crate) knows_turns: u32,
     /// Turns taken, by speaker, in desk order.
     pub(crate) speech: Vec<(String, u32)>,
     /// The sum of every speaker's own `Participant::cost_unit` across every
     /// turn taken.
     pub(crate) cost_units: u64,
+    /// The turn index at which each agent id first deposited a topiced
+    /// `!evidence` line, in first-depositing order.
+    ///
+    /// Bookkeeping only, and read the same way `first_spoke` is: `drive`
+    /// records it from the content it already saw, without knowing which
+    /// member's deposit would have mattered.
+    pub(crate) first_deposit: Vec<(String, u32)>,
+    /// The turn index of the first turn the library ran in [`Phase::Commit`],
+    /// if the episode ever got there. Everything deposited at or after it
+    /// arrived too late to change the answer.
+    pub(crate) commit_at: Option<u32>,
     /// The turn index at which each agent id first spoke, in first-speaking
     /// order.
     ///
@@ -274,19 +298,25 @@ pub(crate) fn run_episode_with(
     // hidden-profile holder; only the room knows that, and only after the
     // episode has already ended is it safe to ask.
     let expert = room.deciding_expert();
-    let expert_at = expert.and_then(|id| {
-        report
-            .first_spoke
-            .iter()
-            .find(|(spoken, _)| spoken == id)
-            .map(|(_, turn)| *turn)
-    });
+    // In time, or not at all. A deposit at or after the commit boundary is
+    // compute the room paid for and could not use, and scoring it as a hit
+    // would report exactly the failure this arm exists to find.
+    let fact_at = expert
+        .and_then(|id| {
+            report
+                .first_deposit
+                .iter()
+                .find(|(held, _)| held == id)
+                .map(|(_, turn)| *turn)
+        })
+        .filter(|at| report.commit_at.is_none_or(|boundary| *at < boundary));
 
     let report = EpisodeReport {
         correct: report.decided.as_ref() == Some(&room.truth),
         has_expert: expert.is_some(),
-        expert_spoke: expert_at.is_some(),
-        expert_at,
+        decisive: expert.map(str::to_owned),
+        fact_deposited: fact_at.is_some(),
+        fact_at,
         ..report
     };
     debug_check(&report, &ids, room);
@@ -330,12 +360,20 @@ fn debug_check(report: &EpisodeReport, member_ids: &[&str], room: &Room) {
         report.cost_units,
         "cost_units must equal each speaker's own cost times its turns"
     );
-    if let Some(at) = report.expert_at {
-        debug_assert!(report.expert_spoke, "expert_at implies expert_spoke");
-        debug_assert!(at < report.turns, "expert_at must be a turn actually taken");
+    if let Some(at) = report.fact_at {
+        debug_assert!(report.fact_deposited, "fact_at implies fact_deposited");
+        debug_assert!(at < report.turns, "fact_at must be a turn actually taken");
+        debug_assert!(
+            report.commit_at.is_none_or(|boundary| at < boundary),
+            "a fact counted as deposited must have landed before the commit boundary"
+        );
     } else {
-        debug_assert!(!report.expert_spoke, "expert_spoke without expert_at");
+        debug_assert!(!report.fact_deposited, "fact_deposited without fact_at");
     }
+    debug_assert!(
+        report.knows_turns <= report.turns,
+        "cannot hand out more Knows turns than were taken"
+    );
     if let Some(proposer) = &report.proposer {
         debug_assert!(
             member_ids.contains(&proposer.as_str()),
@@ -365,11 +403,7 @@ pub(crate) fn drive(
     let mut step_calls = 0_u32;
     let mut turns = 0_u32;
     let mut trace = Vec::new();
-    let mut speech: Vec<(String, u32)> =
-        member_ids.iter().map(|id| ((*id).to_owned(), 0)).collect();
-    let mut first_spoke: Vec<(String, u32)> = Vec::new();
-    let mut defers = 0_u32;
-    let mut cost_units = 0_u64;
+    let mut tally = Tally::opened(member_ids);
 
     loop {
         let started = Instant::now();
@@ -400,19 +434,7 @@ pub(crate) fn drive(
                         visible.len(),
                     ));
                 }
-                if let Some(entry) = speech.iter_mut().find(|(id, _)| *id == turn.agent_id) {
-                    if entry.1 == 0 {
-                        first_spoke.push((turn.agent_id.clone(), turns));
-                    }
-                    entry.1 = entry.1.saturating_add(1);
-                } else {
-                    first_spoke.push((turn.agent_id.clone(), turns));
-                    speech.push((turn.agent_id.clone(), 1));
-                }
-                if content.trim_start().starts_with("!defer") {
-                    defers = defers.saturating_add(1);
-                }
-                cost_units = cost_units.saturating_add(u64::from(agent.cost_unit()));
+                tally.record(&turn, &content, agent.cost_unit(), turns);
                 // Durably append the turn, then commit the state it returned.
                 // That ordering is what the `next_state` contract requires.
                 host.agent(&turn.agent_id, content);
@@ -444,7 +466,7 @@ pub(crate) fn drive(
             &state.thresholds,
         )
         .map_err(|error| error.to_string())?;
-        let rho_milli = circularity(&folded, &speech);
+        let rho_milli = circularity(&folded, &tally.speech);
 
         return Ok(EpisodeReport {
             ending,
@@ -456,16 +478,106 @@ pub(crate) fn drive(
             trace,
             proposer,
             has_expert: false,
-            expert_spoke: false,
-            expert_at: None,
-            defers,
-            speech,
-            cost_units,
-            first_spoke,
+            decisive: None,
+            fact_deposited: false,
+            fact_at: None,
+            defers: tally.defers,
+            knows_turns: tally.knows_turns,
+            speech: tally.speech,
+            cost_units: tally.cost_units,
+            first_deposit: tally.first_deposit,
+            commit_at: tally.commit_at,
+            first_spoke: tally.first_spoke,
             traces,
             rho_milli,
         });
     }
+}
+
+/// The per-turn bookkeeping [`drive`] accumulates as an episode runs.
+///
+/// Gathered into one record rather than a dozen locals, so the step loop stays
+/// readable. Every field is filled from what the authorized turn and the
+/// content it produced already say: nothing here knows which member holds what,
+/// which is what keeps `drive` usable for a live room as well as a simulated
+/// one.
+struct Tally {
+    /// Turns taken, by speaker, in desk order.
+    speech: Vec<(String, u32)>,
+    /// The turn index at which each agent first spoke.
+    first_spoke: Vec<(String, u32)>,
+    /// The turn index at which each agent first deposited a topiced fact.
+    first_deposit: Vec<(String, u32)>,
+    /// The turn index of the first turn run in [`Phase::Commit`].
+    commit_at: Option<u32>,
+    /// Turns whose content is a `!defer` line.
+    defers: u32,
+    /// Turns handed out for [`BidReason::Knows`].
+    knows_turns: u32,
+    /// What every turn taken cost, summed.
+    cost_units: u64,
+}
+
+impl Tally {
+    /// Open a tally over a desk, with every member seeded at zero turns.
+    fn opened(member_ids: &[&str]) -> Self {
+        Self {
+            speech: member_ids.iter().map(|id| ((*id).to_owned(), 0)).collect(),
+            first_spoke: Vec::new(),
+            first_deposit: Vec::new(),
+            commit_at: None,
+            defers: 0,
+            knows_turns: 0,
+            cost_units: 0,
+        }
+    }
+
+    /// Fold one taken turn in, `at` being the index it was taken at.
+    fn record(&mut self, turn: &HiveTurn, content: &str, cost: u32, at: u32) {
+        if let Some(entry) = self.speech.iter_mut().find(|(id, _)| *id == turn.agent_id) {
+            if entry.1 == 0 {
+                self.first_spoke.push((turn.agent_id.clone(), at));
+            }
+            entry.1 = entry.1.saturating_add(1);
+        } else {
+            self.first_spoke.push((turn.agent_id.clone(), at));
+            self.speech.push((turn.agent_id.clone(), 1));
+        }
+        if content.trim_start().starts_with("!defer") {
+            self.defers = self.defers.saturating_add(1);
+        }
+        if turn.reason == BidReason::Knows {
+            self.knows_turns = self.knows_turns.saturating_add(1);
+        }
+        if turn.phase == Phase::Commit && self.commit_at.is_none() {
+            self.commit_at = Some(at);
+        }
+        // Read through the library's own grammar rather than by matching a
+        // prefix: a deposit is what `resolve` says a deposit is, whoever
+        // wrote the line.
+        if deposits_a_fact(content)
+            && !self
+                .first_deposit
+                .iter()
+                .any(|(held, _)| *held == turn.agent_id)
+        {
+            self.first_deposit.push((turn.agent_id.clone(), at));
+        }
+        self.cost_units = self.cost_units.saturating_add(u64::from(cost));
+    }
+}
+
+/// Whether one turn's content states a fact about a named option.
+///
+/// A topiced `!evidence` line and nothing else: an untopiced deposit supplies
+/// grounds without saying what they bear on, and a position is a conclusion
+/// rather than the knowledge behind it. Read through the library's own
+/// [`resolve`], with a placeholder author and sequence, because neither
+/// affects what the grammar makes of the line.
+fn deposits_a_fact(content: &str) -> bool {
+    resolve(content, None, &SessionAuthor::Operator, Sequence(0))
+        .iter()
+        .any(|trace| trace.kind == TraceKind::Evidence && trace.topic.is_some())
 }
 
 /// Read every trace out of a finished journal, through the library's own

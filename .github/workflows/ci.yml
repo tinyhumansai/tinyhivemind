@@ -61,8 +61,8 @@ jobs:
           cargo run -p tinyhivemind-hive --example hive
           cargo run -p tinyhivemind-hive --example bench -- --episodes 25
           cargo run -p tinyhivemind-hive --example bench -- --swarm --episodes 10
-          cargo run -p tinyhivemind-hive --example bench -- --specialists 2 --cost-tiers --episodes 25
-          cargo run -p tinyhivemind-hive --example bench -- --hidden-profile --episodes 25
+          cargo run -p tinyhivemind-hive --example bench -- --specialists 2 --cost-tiers --blind-evidence --episodes 25
+          cargo run -p tinyhivemind-hive --example bench -- --hidden-profile --blind-evidence --episodes 25
           cargo run -p tinyhivemind-hive --example bench -- --stats-check
 
       # `tinyhivemind-core` is what a host links on the hot path of every agent
