@@ -850,20 +850,42 @@ fn an_episode_with_a_directory_gives_the_floor_to_the_fact_holder() {
 fn an_episode_without_a_directory_reaches_the_same_decision_as_before() {
     let room = Room::new();
     // Every transcript the rest of this module exercises, stepped with the
-    // shipping default. Turning the two knobs on is the only way to change
-    // what `step` does, and this is the regression that says so.
+    // shipping default. The expected step is pinned as a literal rather than
+    // compared against a second `DEFAULT` run, which would only assert that
+    // the default agrees with itself: a change to what the default decides has
+    // to fail here.
+    let converged = speaking(run(&room, &state(), &converging(), &EpisodePolicy::DEFAULT));
+    assert_eq!(converged.agent_id, "planner");
+    assert_eq!(converged.reason, BidReason::Addressed);
+    assert_eq!(converged.phase, Phase::Commit);
+
+    assert_eq!(
+        run(&room, &state(), &deadlocked(), &EpisodePolicy::DEFAULT),
+        HiveStep::Deadlocked {
+            topics: vec!["stage".into(), "ship".into()],
+        },
+    );
+
+    // The hidden profile the delegating policy solves: without a directory the
+    // floor goes to the proposer on ordinary salience, and the scout's
+    // uncited fact stays uncited.
+    let unrouted = speaking(run(&room, &state(), &unheard(), &EpisodePolicy::DEFAULT));
+    assert_eq!(unrouted.agent_id, "planner");
+    assert_eq!(unrouted.reason, BidReason::Salience);
+    assert_eq!(unrouted.phase, Phase::Deliberate);
+
+    // And turning the two knobs off explicitly reaches the same three steps,
+    // so `None` really is the shipping default rather than a second mode.
     for transcript in [converging(), deadlocked(), unheard()] {
-        let before = run(&room, &state(), &transcript, &EpisodePolicy::DEFAULT);
         let off = EpisodePolicy {
             directory: None,
             defer_cap: None,
             ..EpisodePolicy::DEFAULT
         };
-        assert_eq!(before, run(&room, &state(), &transcript, &off));
-        // And the fact holder does *not* get the floor without one.
-        if let HiveStep::Speak { turn } = &before {
-            assert_ne!(turn.reason, BidReason::Knows);
-        }
+        assert_eq!(
+            run(&room, &state(), &transcript, &EpisodePolicy::DEFAULT),
+            run(&room, &state(), &transcript, &off),
+        );
     }
 }
 
