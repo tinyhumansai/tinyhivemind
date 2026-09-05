@@ -1,28 +1,48 @@
-# A hidden-profile incident with a named specialist, first design.
+# A hidden-profile incident with a named specialist, fifth design.
 #
-# Two designs were tried and discarded before this one.
+# Four designs were tried and discarded before this one.
 #
 # Design 1 made the truth the obvious first move: the on-call channel's own
 # instinct — "a migration just shipped, roll it back" — was also the correct
 # answer. Every member would reach for it unprompted and the matched-budget
-# vote could not lose. Discarded for the same reason the first two checkout-503
-# drafts were: an arm that cannot lose is not a control.
+# vote could not lose. Discarded for the same reason the first two
+# checkout-503 drafts were: an arm that cannot lose is not a control.
 #
-# Design 2 put every fact a room would need behind one member — the database
+# Design 2 put every fact a room needed behind one member: the database
 # engineer held both the index's growth number and the fact that ruled out
-# rolling back. That member could read its own private brief and the shared
-# task and reach `reindex` alone, deletion-check or no. A scenario whose
-# "expert" can solve it solo is not a hidden profile, it is a member with the
-# right answer already in hand.
+# rolling back, and could reach the answer from its own brief alone. A
+# scenario whose "expert" solves it solo is not a hidden profile.
 #
-# This design instead gives the database engineer one number and nothing to do
-# with it alone, and gives every other member exactly one fact that rules out
-# one wrong move and points at nothing. The truth stands only once every
-# elimination has been made and the number has been read alongside it.
+# Design 3 made the truth `#reindex` and gave every other member a fact that
+# only eliminated a wrong move. It leaked, and the leak was measured: polled
+# alone, members picked `#reindex` 15 times out of 15 across three models. The
+# option text stated the diagnosis ("rebuild it against a predicate that
+# actually excludes most of the table"), the narrative made rebuilding an
+# index the model's prior anyway, and because every fact only eliminated, the
+# prior filled the gap the eliminations left.
+#
+# Design 4 fixed all three of those and moved the truth to `#batch`, reachable
+# only by holding `dba`'s batch size against the escalation threshold `scout`
+# reports. Polled on `flash` it behaved: `#rollback` plurality twice, one
+# member on the truth. Polled on a reasoning model it collapsed — three of
+# five picked `#batch` alone. `scout`'s threshold was enough by itself,
+# because the option list named exactly one bulk writer, so "some large
+# transaction is escalating" and "pause the nightly job" were the same
+# sentence.
+#
+# This design closes that. There are now two bulk writers on the floor,
+# `#batch` and `#archive`, and nothing in `scout`'s brief separates them: a
+# threshold with no sizes beside it accuses both equally. `dba` holds the
+# sizes and no threshold, which read as a non-event on their own — neither
+# batch size has moved in a year. 6,200 crosses 5,000 and 500 does not, and
+# that comparison exists in no single brief. `scout` also holds the reason a
+# threshold-holder reaches for the decoy rather than for a job: the setting
+# cannot be put back without rebuilding the table, which is the thing the
+# on-call channel is already asking to undo.
 
-task: Since last night's schema migration, p99 write latency on the orders table has climbed from 80ms to 4s and lock wait timeout errors in the application log are rising by the minute. The on-call channel's first read is that the migration broke something and should be rolled back. Ship exactly one change now, and say which.
+task: Since last night's schema migration finished at 02:14, p99 write latency on the orders table has climbed from 80ms to 4s and lock wait timeout errors in the application log are rising by the minute. The on-call channel's first read is that the migration broke something and should be rolled back. Ship exactly one change now, and say which.
 
-truth: reindex
+truth: batch
 truth_expert: dba
 
 [option rollback]
@@ -31,37 +51,48 @@ Roll last night's migration back in full.
 
 [option reindex]
 expert: dba
-Drop the partial index on orders(status) and rebuild it against a predicate
-that actually excludes most of the table.
+Drop and rebuild the index on orders(status).
 
-[option addreplica]
-Add two read replicas for the orders table and route reporting traffic to
-them.
+[option archive]
+expert: dba
+Pause the hourly archive sweep that bulk-moves old orders out to cold storage.
+
+[option batch]
+expert: dba
+Pause the nightly reconciliation job that corrects mismatched order totals.
 
 [option killqueries]
-Add a two-second statement timeout and kill writers that exceed it.
+expert: sre
+Fit a two-second statement timeout on the orders table and terminate sessions
+that exceed it.
 
 [agent planner]
 role: release manager, who owns what can and cannot be shipped
 expert_on: migrations
-knows: The migration that shipped last night is forward-only and additive. The partial index on orders(status) was created by a separate migration two hours after it, so rolling last night's migration back does not remove, or touch, that index at all.
+knows: Last night's migration is forward-only. Its rollback path drops a column that every order written since 02:14 already depends on, so running it destroys paid orders.
+knows: A statement timeout on the orders write path has been asked for twice this quarter and has never been fitted. Nothing today bounds how long a write may sit waiting.
 
 [agent sre]
 role: SRE on call, who owns the incident
-expert_on: locks
-knows: Every lock wait timeout in the log is on a write to the orders table. The two read replicas already in service report zero lock waits of any kind over the same window.
+expert_on: incident history
+knows: There is no lock wait anywhere in the log before 02:14 and one every few seconds after it. The step change lands on the minute the migration's last statement committed.
+knows: The index on orders(status) was already dropped and rebuilt by hand at 03:40 during this incident. Latency did not move, and the rebuilt index was left in place.
 
 [agent analyst]
 role: data analyst, who owns the traffic numbers
 expert_on: traffic
-knows: Requests per minute against the orders table are flat against the same hour last week, and unique sessions are flat too, so nothing is sending more writes than usual.
+knows: Writes per minute against orders and unique sessions are both flat against the same hour last week, so nothing is sending more work than usual.
+knows: The change log for the last 24 hours across the whole platform has exactly one entry in it, and it is last night's migration.
 
 [agent scout]
 role: application engineer, who owns the write path
-expert_on: app-writes
-knows: A two-second statement timeout was trialled against this exact symptom in staging last week. Queued writers simply retried and the timeout errors reappeared within seconds; the underlying wait never went away.
+expert_on: storage engine settings
+knows: The migration rebuilt the orders table under the engine's default storage settings. The table's lock escalation threshold went with them, from 50,000 row locks per transaction down to the 5,000 default.
+knows: When one transaction holds more row locks on a table than that threshold, the engine converts them into a single lock over the whole table, and every other writer waits behind it until that transaction commits. You have no visibility into how large any job's transactions are, and several jobs write to orders.
+knows: The threshold is a property of the table, not of a setting anyone can change in place. Putting it back where it was means rebuilding the orders table again.
 
 [agent dba]
 role: database engineer, who owns the datastore
-expert_on: indexes
-knows: The partial index on orders(status) filters on status = 'pending'. That predicate matched 4% of the orders table's rows when the index was created six months ago. It matches 91% of the table's rows today.
+expert_on: the orders datastore
+knows: The nightly reconciliation job commits in batches of 6,200 rows per transaction and the hourly archive sweep commits in batches of 500. Neither batch size has changed in a year, and both ran through last night's window exactly as they run every night.
+knows: A two-second statement timeout was trialled against this exact symptom in staging last week. Queued writers simply retried and the timeout errors reappeared within seconds; the underlying wait never went away.

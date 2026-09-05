@@ -1,30 +1,34 @@
 # The index-lock-expert incident, with a cost tier on every seat.
 #
 # Identical facts and options to `index-lock-expert.txt` — see that file's
-# header for the two designs discarded before this one. The only thing added
-# here is `tier:`, one line per agent, so a host can route each seat to a
-# cheaper or a more expensive model and the harness can score what that
-# routing costs.
+# header for the four designs discarded before this one, and for why the truth
+# is `#batch` rather than the change everybody is pointing at. The only thing
+# added here is `tier:`, one line per agent, so a host can route each seat to a
+# cheaper or a more expensive model and the harness can score what that routing
+# costs.
 #
-# Four seats are `cheap`. Each of their tasks is a single elimination: read one
-# stated fact, rule out one named option, done. That is well inside what a
-# small, fast model does reliably — it is a lookup and a negation, not a
-# derivation.
+# Four seats are `cheap`. Each of their jobs is to state a fact and, at most,
+# strike one named option off the list with it: the rollback destroys paid
+# orders, the index was already rebuilt and nothing moved, the traffic is flat,
+# the escalation threshold dropped last night. That is a lookup and a negation,
+# well inside what a small, fast model does reliably.
 #
-# One seat, `dba`, is `reasoning`. It alone holds a number with no conclusion
-# attached — a partial index's predicate now matches 91% of the table it once
-# matched 4% of — and turning that into "this index no longer does what a
-# partial index is for, and its upkeep is now the write path's bottleneck" is
-# an inferential step the cheap seats are never asked to make. `dba` is also
-# `truth_expert`: the one seat whose fact is decisive, and the one seat this
-# scenario asks to reason rather than to look up. The cost claim under test is
-# narrow — that a room can spend its one expensive seat on the member who
-# actually needs it and four cheap seats everywhere else, and still reach the
-# same answer a room of five expensive seats would.
+# One seat, `dba`, is `reasoning`. It holds the two numbers the answer turns on
+# — 6,200 rows per transaction for the reconciliation job, 500 for the archive
+# sweep — with no conclusion attached and every reason to read them as a
+# non-event, since neither has moved in a year. Turning them into an answer
+# means holding them against a threshold somebody else reported, seeing that
+# 6,200 crosses 5,000 and 500 does not, and preferring that over the change the
+# rest of the room is pointing at. That is the one inferential step in the
+# scenario and the cheap seats are never asked to make it. `dba` is also
+# `truth_expert`. The cost claim under test is narrow: that a room can spend its
+# one expensive seat on the member who actually needs it, run four cheap seats
+# everywhere else, and still reach the answer a room of five expensive seats
+# would.
 
-task: Since last night's schema migration, p99 write latency on the orders table has climbed from 80ms to 4s and lock wait timeout errors in the application log are rising by the minute. The on-call channel's first read is that the migration broke something and should be rolled back. Ship exactly one change now, and say which.
+task: Since last night's schema migration finished at 02:14, p99 write latency on the orders table has climbed from 80ms to 4s and lock wait timeout errors in the application log are rising by the minute. The on-call channel's first read is that the migration broke something and should be rolled back. Ship exactly one change now, and say which.
 
-truth: reindex
+truth: batch
 truth_expert: dba
 
 [option rollback]
@@ -33,42 +37,53 @@ Roll last night's migration back in full.
 
 [option reindex]
 expert: dba
-Drop the partial index on orders(status) and rebuild it against a predicate
-that actually excludes most of the table.
+Drop and rebuild the index on orders(status).
 
-[option addreplica]
-Add two read replicas for the orders table and route reporting traffic to
-them.
+[option archive]
+expert: dba
+Pause the hourly archive sweep that bulk-moves old orders out to cold storage.
+
+[option batch]
+expert: dba
+Pause the nightly reconciliation job that corrects mismatched order totals.
 
 [option killqueries]
-Add a two-second statement timeout and kill writers that exceed it.
+expert: sre
+Fit a two-second statement timeout on the orders table and terminate sessions
+that exceed it.
 
 [agent planner]
 role: release manager, who owns what can and cannot be shipped
 expert_on: migrations
 tier: cheap
-knows: The migration that shipped last night is forward-only and additive. The partial index on orders(status) was created by a separate migration two hours after it, so rolling last night's migration back does not remove, or touch, that index at all.
+knows: Last night's migration is forward-only. Its rollback path drops a column that every order written since 02:14 already depends on, so running it destroys paid orders.
+knows: A statement timeout on the orders write path has been asked for twice this quarter and has never been fitted. Nothing today bounds how long a write may sit waiting.
 
 [agent sre]
 role: SRE on call, who owns the incident
-expert_on: locks
+expert_on: incident history
 tier: cheap
-knows: Every lock wait timeout in the log is on a write to the orders table. The two read replicas already in service report zero lock waits of any kind over the same window.
+knows: There is no lock wait anywhere in the log before 02:14 and one every few seconds after it. The step change lands on the minute the migration's last statement committed.
+knows: The index on orders(status) was already dropped and rebuilt by hand at 03:40 during this incident. Latency did not move, and the rebuilt index was left in place.
 
 [agent analyst]
 role: data analyst, who owns the traffic numbers
 expert_on: traffic
 tier: cheap
-knows: Requests per minute against the orders table are flat against the same hour last week, and unique sessions are flat too, so nothing is sending more writes than usual.
+knows: Writes per minute against orders and unique sessions are both flat against the same hour last week, so nothing is sending more work than usual.
+knows: The change log for the last 24 hours across the whole platform has exactly one entry in it, and it is last night's migration.
 
 [agent scout]
 role: application engineer, who owns the write path
-expert_on: app-writes
+expert_on: storage engine settings
 tier: cheap
-knows: A two-second statement timeout was trialled against this exact symptom in staging last week. Queued writers simply retried and the timeout errors reappeared within seconds; the underlying wait never went away.
+knows: The migration rebuilt the orders table under the engine's default storage settings. The table's lock escalation threshold went with them, from 50,000 row locks per transaction down to the 5,000 default.
+knows: When one transaction holds more row locks on a table than that threshold, the engine converts them into a single lock over the whole table, and every other writer waits behind it until that transaction commits. You have no visibility into how large any job's transactions are, and several jobs write to orders.
+knows: The threshold is a property of the table, not of a setting anyone can change in place. Putting it back where it was means rebuilding the orders table again.
 
 [agent dba]
 role: database engineer, who owns the datastore
-expert_on: indexes
+expert_on: the orders datastore
 tier: reasoning
-knows: The partial index on orders(status) filters on status = 'pending'. That predicate matched 4% of the orders table's rows when the index was created six months ago. It matches 91% of the table's rows today.
+knows: The nightly reconciliation job commits in batches of 6,200 rows per transaction and the hourly archive sweep commits in batches of 500. Neither batch size has changed in a year, and both ran through last night's window exactly as they run every night.
+knows: A two-second statement timeout was trialled against this exact symptom in staging last week. Queued writers simply retried and the timeout errors reappeared within seconds; the underlying wait never went away.
