@@ -67,6 +67,24 @@ The bundled example prints a readable episode trace and needs no model:
 cargo run -p tinyhivemind-hive --example hive
 ```
 
+The benchmark's statistics live in an example file, so `cargo test` never runs
+a `#[test]` placed among them. `--stats-check` is that coverage's stand-in: it
+puts known cases through `wilson`, `paired_bootstrap` and `spearman_milli` and
+exits `0` or `1`. CI runs it, along with two short benchmark shapes that
+exercise the expertise and delegation paths the ordinary `--episodes 25` line
+never reaches:
+
+```sh
+cargo run -p tinyhivemind-hive --example bench -- --specialists 2 --cost-tiers --episodes 25
+cargo run -p tinyhivemind-hive --example bench -- --hidden-profile --episodes 25
+cargo run -p tinyhivemind-hive --example bench -- --stats-check
+```
+
+Those three are smoke tests rather than assertions about accuracy: a benchmark
+number is a measurement, and pinning one in CI would turn a finding into a
+regression test for the weather. What they assert is that every arm runs, every
+table formats, and the debug-only bookkeeping invariants in `run.rs` hold.
+
 The live episode mirrors the OpenRouter suite above and is gated the same way:
 
 ```sh
@@ -81,6 +99,23 @@ that exactly one agent speaks per turn, that the episode terminates inside its
 budget by one of its four terminal steps, and that attribution survives. It does
 not assert that the room reached a good answer, and it could not — a matched
 token-budget baseline would be needed to make any such claim.
+
+The `bench` example (`crates/tinyhivemind-hive/examples/bench/`) carries a
+second, unasserted live path of its own: `--agent-cmd` drives a real scenario
+through an agent CLI, and `--api-base` drives the same seats directly over
+HTTP against an OpenAI- or Anthropic-shaped chat endpoint, both through
+`curl` with the whole request — including the API key — sent over its stdin
+rather than as a process argument. Nothing here runs in CI; it is documented
+in `crates/tinyhivemind-hive/examples/bench/LIVE.md`, alongside the harness
+command lines for the CLI and HTTP paths and the environment variables each
+needs.
+
+One backend cannot use the HTTP path at all. `codex exec` speaks the streaming
+Responses API, which the router in front of these runs will not relay, so a
+`codex` seat is driven through `--agent-cmd` against OpenRouter directly rather
+than through `--api-base`. That is a property of the route rather than of the
+harness, and it is why the delegation matrix carries one CLI row for a model
+every other row reaches over HTTP.
 
 End-to-end live verification belongs in the future OpenCompany host adapter,
 where a committed agent reply can pass through the real atomic enqueue port and

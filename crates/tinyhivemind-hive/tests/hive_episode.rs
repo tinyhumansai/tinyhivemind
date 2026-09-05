@@ -13,8 +13,12 @@ mod scripted_agent;
 use hive_harness::{HiveHarness, Outcome};
 use scripted_agent::ScriptedAgent;
 use tinyhivemind_hive::{
-    BidReason, EpisodePolicy, EpisodeState, QuorumPolicy, Visibility,
+    BidReason, EpisodePolicy, EpisodeState, HiveStep, QuorumPolicy, Visibility,
+    desk::DeskSet,
+    directory::DirectoryPolicy,
     quorum::{TopicStanding, standings},
+    roster::Roster,
+    step,
     trace::{TopicId, read},
 };
 
@@ -498,5 +502,84 @@ fn one_refutation_kills_a_hypothesis_the_room_would_otherwise_have_carried() -> 
     );
     assert_eq!(retries.supporters, ["planner", "critic"]);
     assert!(!retries.carried(&majority.quorum));
+    Ok(())
+}
+
+#[test]
+fn knows_surfaces_an_uncited_fact_in_a_hidden_profile_transcript() -> Result<(), String> {
+    // Five members. `#retries` is the decoy and carries the room's attention;
+    // `#pool` is the truth, and the scout deposited the fact that settles it
+    // early, where nobody cited it. This is the shape of the failed rooms in
+    // `docs/experiments/2026-09-01-live-hidden-profile.md`.
+    const ROOM: [&str; 5] = ["planner", "critic", "archivist", "auditor", "scout"];
+    let mut harness = HiveHarness::new("engineering", "Engineering", &ROOM);
+    harness.operator("Why did latency spike at 14:02?");
+    let watermark = harness.watermark();
+    let fact = harness.agent(
+        "scout",
+        "!evidence #pool In-flight requests sit at 24 to 31.",
+    );
+    harness.agent("critic", "!propose #retries A retry storm explains it.");
+    harness.agent("planner", "!support #retries ^1 The graph agrees.");
+    harness.agent("archivist", "!propose #pool ^1 The pool caps at twenty.");
+    harness.agent("auditor", "!propose #pool ^1 The config confirms the cap.");
+    harness.agent(
+        "planner",
+        "!propose #pool ^1 And the cap explains the queue.",
+    );
+    // Nobody ever cites the scout's fact, and the scout never argues a topic.
+    assert!(
+        harness
+            .journal()
+            .iter()
+            .all(|message| !message.content.contains(&format!("^{}", fact.0))),
+    );
+
+    let state = EpisodeState::opened(harness.conversation(), watermark);
+    let quiet = EpisodePolicy {
+        quorum: QuorumPolicy {
+            threshold: 4,
+            window: 100,
+            ..QuorumPolicy::DEFAULT
+        },
+        ..EpisodePolicy::DEFAULT
+    };
+    let delegating = EpisodePolicy {
+        directory: Some(DirectoryPolicy {
+            window: 100,
+            ..DirectoryPolicy::DEFAULT
+        }),
+        ..quiet
+    };
+
+    let (roster_members, desks) = (harness.roster_members(), harness.desks());
+    let roster = Roster::new(&roster_members, &[], &[]);
+    let desk_set = DeskSet::new(&desks, &[], &[], &[], &[]);
+
+    // Without a directory nothing distinguishes the members, so the floor goes
+    // to the first of them in desk order -- a member arguing the decoy.
+    let HiveStep::Speak { turn } = step(&state, harness.journal(), &roster, &desk_set, &quiet)
+        .map_err(|error| error.to_string())?
+    else {
+        return Err("expected a turn".to_owned());
+    };
+    assert_ne!(turn.agent_id, "scout");
+    assert_ne!(turn.reason, BidReason::Knows);
+    let settled = standings(&read(harness.journal()), harness.watermark(), &quiet.quorum)
+        .map_err(|error| error.to_string())?;
+    let retries = settled
+        .iter()
+        .find(|standing| standing.topic == TopicId("retries".into()))
+        .ok_or("the decoy has a standing")?;
+    assert!(retries.supporters.contains(&turn.agent_id));
+
+    // With one, the room hears the member who actually holds the fact.
+    let HiveStep::Speak { turn } = step(&state, harness.journal(), &roster, &desk_set, &delegating)
+        .map_err(|error| error.to_string())?
+    else {
+        return Err("expected a turn".to_owned());
+    };
+    assert_eq!(turn.agent_id, "scout");
+    assert_eq!(turn.reason, BidReason::Knows);
     Ok(())
 }

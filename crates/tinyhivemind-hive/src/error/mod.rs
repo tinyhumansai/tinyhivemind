@@ -48,6 +48,18 @@ pub enum Error {
     /// A refutation cap of zero would cap every topic before anyone spoke.
     #[error("refutation cap must not be zero")]
     ZeroRefutationCap,
+    /// A directory half-life of zero would make deposit decay undefined.
+    #[error("directory half life must not be zero")]
+    ZeroDirectoryHalfLife,
+    /// A directory window of zero would admit no deposit at all.
+    #[error("directory window must not be zero")]
+    ZeroDirectoryWindow,
+    /// A defer cap of zero would cap deferral before anyone could use it.
+    ///
+    /// `None` is how a host switches deferral promotion off; `Some(0)` is a
+    /// configuration error rather than a quieter way of saying the same thing.
+    #[error("defer cap must not be zero")]
+    ZeroDeferCap,
 }
 
 impl From<tinyhivemind_core::error::Error> for Error {

@@ -19,7 +19,7 @@
 use std::time::{Duration, Instant};
 
 use tinyhivemind_hive::{
-    EpisodePolicy,
+    Directory, EpisodePolicy,
     desk::DeskSet,
     responder::{
         ResponderPlan, ResponderRequest, SelectionPolicy, SelectorCandidate, accept_selection,
@@ -43,6 +43,14 @@ pub(crate) struct ArmReport {
     pub(crate) correct: bool,
     /// Turns spent.
     pub(crate) turns: u32,
+    /// What those turns cost, in [`crate::run::Participant::cost_unit`]
+    /// units. One unit per turn unless the room was generated with
+    /// `--cost-tiers` and a specialist answered.
+    pub(crate) cost_units: u64,
+    /// Whether the responder ladder picked the room's expert on the topic
+    /// the answer turns on. `None` for an arm that never consults the
+    /// ladder, and for a room that names no such expert.
+    pub(crate) routed_right: Option<bool>,
     /// Time spent inside the library.
     pub(crate) library_time: Duration,
 }
@@ -59,8 +67,17 @@ pub(crate) struct ArmReport {
 ///
 /// Returns the ladder's own error text for a malformed snapshot.
 pub(crate) fn run_ladder(room: &Room, seed: u64) -> Result<ArmReport, String> {
-    let ids = room.member_ids();
-    let host = Host::new(&ids);
+    // A router with no information about the task picks a candidate. Modelling
+    // it as a uniform choice is the honest reading: nothing in the ladder
+    // knows which member holds the better private signal.
+    let uninformed = |candidates: &[SelectorCandidate]| {
+        let mut rng = Rng::seeded(mix(seed, 0x726F_7574));
+        let index =
+            usize::try_from(rng.below(u32::try_from(candidates.len()).unwrap_or(1))).unwrap_or(0);
+        candidates
+            .get(index)
+            .map_or_else(String::new, |candidate| candidate.id.clone())
+    };
     let candidates: Vec<SelectorCandidate> = room
         .agents
         .iter()
@@ -71,8 +88,141 @@ pub(crate) fn run_ladder(room: &Room, seed: u64) -> Result<ArmReport, String> {
             description: None,
         })
         .collect();
+    route(
+        room,
+        &candidates,
+        "We must choose one rollout strategy. Decide.",
+        &uninformed,
+    )
+}
+
+/// The same ladder, given a directory the room *earned* in earlier episodes.
+///
+/// Three things change and nothing else does. Each candidate carries a
+/// `description` built from that member's own directory lines, so the
+/// selector sees what the transcript says the member has grounded. The
+/// request names `room.truth` as the topic the call turns on. And the
+/// simulated router, instead of drawing uniformly, reads the descriptions it
+/// was given and names the candidate carrying the most weight on that topic.
+/// It is still validated through the real [`accept_selection`], so a router
+/// that named a non-candidate would fall back exactly as the uninformed one
+/// does.
+///
+/// **This arm's score measures the leak as much as the mechanism.** The topic
+/// it names *is* the correct option, so a directory that records who deposited
+/// a reading of `#truth` is already halfway to naming the winner — the
+/// heaviest holder of that topic is usually the member whose favourite is that
+/// option. Read its number knowing the topic was named; the README's
+/// "`ladder+dir` on a uniform room is an artifact, not a result" paragraph
+/// gives the size of the swing.
+///
+/// It takes a [`Directory`] and never [`Room::experts`]: routing on the room's
+/// own scoring data would measure nothing but the harness handing itself the
+/// answer.
+///
+/// # Errors
+///
+/// Returns the ladder's own error text for a malformed snapshot.
+pub(crate) fn run_ladder_directed(
+    room: &Room,
+    known: &Directory,
+    seed: u64,
+) -> Result<ArmReport, String> {
+    let topic = room.truth.clone();
+    let candidates: Vec<SelectorCandidate> = room
+        .agents
+        .iter()
+        .map(|agent| SelectorCandidate {
+            id: agent.id.clone(),
+            label: agent.id.clone(),
+            role: format!("{:?}", agent.role).to_lowercase(),
+            description: describe(known, &agent.id),
+        })
+        .collect();
+    let message =
+        format!("We must choose one rollout strategy. The call turns on #{topic}. Decide.");
+    let informed = |candidates: &[SelectorCandidate]| {
+        // A router that read the descriptions: it picks the candidate whose
+        // own description carries the most weight on the named topic. Ties,
+        // and a room where nobody has grounded the topic at all, fall back to
+        // the uninformed draw rather than to the first seat in desk order.
+        let mut best: Option<(&str, i64)> = None;
+        for candidate in candidates {
+            let Some(weight) = described_weight(candidate.description.as_deref(), &topic) else {
+                continue;
+            };
+            if weight > 0 && best.is_none_or(|(_, held)| weight > held) {
+                best = Some((candidate.id.as_str(), weight));
+            }
+        }
+        if let Some((id, _)) = best {
+            return id.to_owned();
+        }
+        let mut rng = Rng::seeded(mix(seed, 0x726F_7574));
+        let index =
+            usize::try_from(rng.below(u32::try_from(candidates.len()).unwrap_or(1))).unwrap_or(0);
+        candidates
+            .get(index)
+            .map_or_else(String::new, |candidate| candidate.id.clone())
+    };
+    route(room, &candidates, &message, &informed)
+}
+
+/// One member's directory lines, as the `description` a selector reads.
+///
+/// `None` for a member the directory never named, which is the honest shape:
+/// a candidate the transcript says nothing about should not be described as
+/// knowing nothing, it should be described not at all.
+fn describe(known: &Directory, agent_id: &str) -> Option<String> {
+    let mut held: Vec<&tinyhivemind_hive::DirectoryEntry> = known
+        .entries()
+        .iter()
+        .filter(|entry| entry.agent_id == agent_id && entry.weight > 0)
+        .collect();
+    if held.is_empty() {
+        return None;
+    }
+    held.sort_by_key(|entry| std::cmp::Reverse(entry.weight));
+    let described: Vec<String> = held
+        .iter()
+        .map(|entry| format!("#{} {}", entry.topic, entry.weight))
+        .collect();
+    Some(format!("has grounded: {}", described.join(", ")))
+}
+
+/// Read one topic's weight back out of a description [`describe`] wrote.
+///
+/// The router only ever sees the candidate list, so it reads the weight out
+/// of the prose it was given rather than consulting the directory again --
+/// which is what makes this a router that read the descriptions rather than
+/// one holding a private index.
+fn described_weight(description: Option<&str>, topic: &TopicId) -> Option<i64> {
+    let description = description?;
+    let needle = format!("#{topic} ");
+    let at = description.find(&needle)? + needle.len();
+    description[at..]
+        .split(|character: char| !character.is_ascii_digit())
+        .next()
+        .and_then(|digits| digits.parse::<i64>().ok())
+}
+
+/// Walk the real responder ladder once and take the selected member's
+/// unaided answer.
+///
+/// `select` stands in for the host's router on the [`ResponderPlan::Select`]
+/// rung: it is handed exactly the candidates the ladder bounded the choice
+/// to, and whatever it names is validated through [`accept_selection`] the
+/// way a host would validate a model's output.
+fn route(
+    room: &Room,
+    candidates: &[SelectorCandidate],
+    message: &str,
+    select: &dyn Fn(&[SelectorCandidate]) -> String,
+) -> Result<ArmReport, String> {
+    let ids = room.member_ids();
+    let host = Host::new(&ids);
     let request = ResponderRequest {
-        message: "We must choose one rollout strategy. Decide.".to_owned(),
+        message: message.to_owned(),
         chat: Some(crate::run::DESK_ID.to_owned()),
         mentions: Vec::new(),
         orchestrator_id: ids.first().map_or_else(String::new, |id| (*id).to_owned()),
@@ -83,24 +233,14 @@ pub(crate) fn run_ladder(room: &Room, seed: u64) -> Result<ArmReport, String> {
     let plan = {
         let roster: Roster<'_> = host.roster();
         let desks: DeskSet<'_> = host.desks();
-        responder_plan(&request, &roster, &desks, &candidates)
+        responder_plan(&request, &roster, &desks, candidates)
     }
     .map_err(|error| error.to_string())?;
 
     let responder = match plan {
         ResponderPlan::Decided { decision } => decision.responder_id,
         ResponderPlan::Select { request, fallback } => {
-            // A router with no information about the task picks a candidate.
-            // Modelling it as a uniform choice is the honest reading: nothing
-            // in the ladder knows which member holds the better private signal.
-            let mut rng = Rng::seeded(mix(seed, 0x726F_7574));
-            let index =
-                usize::try_from(rng.below(u32::try_from(request.candidates.len()).unwrap_or(1)))
-                    .unwrap_or(0);
-            let named = request
-                .candidates
-                .get(index)
-                .map_or_else(String::new, |candidate| candidate.id.clone());
+            let named = select(&request.candidates);
             accept_selection(&named, &request.candidates).unwrap_or(fallback.responder_id)
         }
     };
@@ -116,6 +256,8 @@ pub(crate) fn run_ladder(room: &Room, seed: u64) -> Result<ArmReport, String> {
         decided,
         correct,
         turns: 1,
+        cost_units: u64::from(room.cost_of(&responder)),
+        routed_right: room.deciding_expert().map(|held| held == responder),
         library_time,
     })
 }
@@ -133,13 +275,17 @@ pub(crate) fn run_vote(room: &Room, budget: u32) -> ArmReport {
             decided: None,
             correct: false,
             turns: 0,
+            cost_units: 0,
+            routed_right: None,
             library_time: Duration::ZERO,
         };
     }
     let mut spent = 0_u32;
+    let mut cost_units = 0_u64;
     while spent < budget {
         let index = usize::try_from(spent).unwrap_or(0) % members;
         if let Some(agent) = room.agents.get(index) {
+            cost_units = cost_units.saturating_add(u64::from(room.cost_of(&agent.id)));
             let favourite = agent.favourite().clone();
             if let Some(entry) = tally.iter_mut().find(|(topic, _)| *topic == favourite) {
                 entry.1 = entry.1.saturating_add(1);
@@ -160,6 +306,8 @@ pub(crate) fn run_vote(room: &Room, budget: u32) -> ArmReport {
         decided,
         correct,
         turns: spent,
+        cost_units,
+        routed_right: None,
         library_time: Duration::ZERO,
     }
 }
@@ -181,10 +329,13 @@ pub(crate) fn run_federated_vote(federation: &Federation) -> ArmReport {
         }
     }
     let decided = plurality(&tally);
+    let turns = u32::try_from(federation.agents.len()).unwrap_or(u32::MAX);
     ArmReport {
         correct: decided.as_ref() == Some(&federation.truth),
         decided,
-        turns: u32::try_from(federation.agents.len()).unwrap_or(u32::MAX),
+        turns,
+        cost_units: u64::from(turns),
+        routed_right: None,
         library_time: Duration::ZERO,
     }
 }
@@ -221,6 +372,8 @@ pub(crate) fn run_merged(
         correct: report.decided.as_ref() == Some(&federation.truth),
         decided: report.decided,
         turns: report.turns,
+        cost_units: report.cost_units,
+        routed_right: None,
         library_time: report.library_time,
     })
 }

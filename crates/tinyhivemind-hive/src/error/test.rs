@@ -20,6 +20,10 @@ fn every_message_is_lowercase_without_trailing_punctuation() {
         Error::ZeroHalfLife,
         Error::ZeroQuorumThreshold,
         Error::ZeroQuorumWindow,
+        Error::ZeroRefutationCap,
+        Error::ZeroDirectoryHalfLife,
+        Error::ZeroDirectoryWindow,
+        Error::ZeroDeferCap,
     ];
     for error in errors {
         let message = error.to_string();
@@ -54,4 +58,28 @@ fn the_result_alias_carries_the_crate_error() {
         Err(Error::ZeroHalfLife)
     }
     assert!(failing().is_err());
+}
+
+#[test]
+fn a_malformed_directory_policy_produces_its_own_variant() {
+    use crate::directory::{DirectoryPolicy, directory};
+    use tinyhivemind::Sequence;
+
+    let zero_half_life = DirectoryPolicy {
+        half_life: 0,
+        ..DirectoryPolicy::DEFAULT
+    };
+    assert!(matches!(
+        directory(&[], Sequence(1), &zero_half_life, &[]),
+        Err(Error::ZeroDirectoryHalfLife),
+    ));
+
+    let zero_window = DirectoryPolicy {
+        window: 0,
+        ..DirectoryPolicy::DEFAULT
+    };
+    assert!(matches!(
+        directory(&[], Sequence(1), &zero_window, &[]),
+        Err(Error::ZeroDirectoryWindow),
+    ));
 }

@@ -21,7 +21,7 @@ dependency direction is enforced by construction.
 | P7 | The mention-dispatch edge, bounded by a host-supplied finite configurable `max_hops` (OpenCompany defaults to 2), with no library hard cap, and explicitly enabled by host policy | **done** |
 | P8 | `crates/tinyhivemind-hive`: bounded group deliberation — the trace grammar, salience, quorum with cross-inhibition, the attention market, and the episode state machine | **done** |
 | P9 | `!refute`, evidential grounding, grounded objections, and the benchmark arm that scored them | **done**, both knobs **off by default** — see below |
-| P10 | A transactive-memory directory folded from traces, and `BidReason::Knows` | planned |
+| P10 | A transactive-memory directory folded from traces, `BidReason::Knows`, and `!defer` | **done**, both knobs **off by default** — see below |
 | P11 | `SessionMessage.parent` and the structured trace sidecar | planned |
 | P12 | Per-conversation read state | planned |
 | P13 | Digests and supersession | planned |
@@ -29,7 +29,7 @@ dependency direction is enforced by construction.
 | P14 | Recall: one selection ranking, roster and desk pickers, bounded transcript search with optional regular expressions, pinning as a fold, and a stated per-message budget | **done** |
 
 P15 is also out of order, and for a related reason: it is not a wire-format
-change either, and it answers a pressure none of P10 through P13 address. Every
+change either, and it answers a pressure none of P11 through P13 address. Every
 mechanism before it stops at the edge of one conversation, so a room of agents
 can pool what its members know and a *company* of them cannot. A desk is a
 correlation boundary — members of one desk are wrong about the same things —
@@ -39,7 +39,7 @@ shares. See [`docs/specs/cross-desk-referral.md`](docs/specs/cross-desk-referral
 [the federated experiment](docs/experiments/2026-09-02-federated-hidden-profile.md).
 
 P14 is out of order on purpose. It is not a wire-format change and does not
-wait on P10 through P13: it answers the same pressure they do — a bounded
+wait on P11 through P13: it answers the same pressure they do — a bounded
 window over an unbounded log — with the two mechanisms that need no new port
 and no new stored state. Search makes the transcript queryable rather than
 something a turn must hold, pinning keeps a small working set arriving whether
@@ -51,7 +51,7 @@ gated live-provider verification in which two agents exchange an attributed
 turn. The adapter initially remains disabled and uses two hops when enabled.
 The hive crate is opt-in and is not part of that first adapter.
 
-P10 through P13 come out of a survey of the biology, the group-decision
+P11 through P13 come out of a survey of the biology, the group-decision
 literature, and the open-source landscape of shared agent memory, recorded in
 [`docs/research/`](docs/research/README.md) and specified in
 [`docs/specs/shared-medium-schema.md`](docs/specs/shared-medium-schema.md). They
@@ -102,6 +102,57 @@ buried. The mechanism stays in the library, opt-in, because the case it was
 built for — a hidden profile, where one member holds the fact that overturns a
 decoy — is not what the simulated benchmark measures. See
 [`docs/experiments/2026-09-01-refutation-and-grounds.md`](docs/experiments/2026-09-01-refutation-and-grounds.md).
+
+## What P10 adds, and why it is off
+
+P10 answers the first finding of
+[the live hidden-profile run](docs/experiments/2026-09-01-live-hidden-profile.md):
+the member holding the fact that overturns the decoy is in the room, has
+already deposited it, and never wins another turn to press it. Before this the
+library could say *who is here* and *who spoke*, and had no way to say *who
+knows*: the one expertise-shaped field, `AgentThreshold.affinity`, was
+host-supplied and never written by anything in the workspace.
+
+It adds `directory`, a pure fold estimating one weight per `(agent, topic)`
+from grounded deposits and the citations they drew — Wegner's transactive
+memory, with Lewis's specialisation and credibility as the two estimators the
+transcript can support. It feeds `BidReason::Knows`, which sits between
+`Dissent` and `Quiet` and gives the floor to the member the transcript says
+holds the contested topic and who has taken no position on it. It also adds
+`!defer #topic`, the abstention that hands a topic to whoever does hold it,
+bounded by `defer_cap`. Nothing is stored: the directory is refolded on every
+step. Recorded in
+[`docs/specs/expert-delegation.md`](docs/specs/expert-delegation.md) and
+[ADR 0007](docs/adr/0007-the-directory-is-folded-from-citations.md), with the
+reading in [`docs/research/delegation.md`](docs/research/delegation.md).
+
+**Both are off in `EpisodePolicy::DEFAULT`, because the benchmark scored them
+and they did not win.** The acceptance criteria were written before any
+numbers: the mechanism must be able to lose and the loss must be published;
+`vote` gets the same turn budget; a mechanism that helps hidden profiles but
+costs more than two points on the uniform 5000-room bench ships off; and
+directory circularity is reported as the rank correlation between directory
+weight and speech share.
+
+The uniform bench predicted zero and delivered zero: `hive+dir` is `hive+` to
+the digit at 82.1% over 5000 rooms, and `BidReason::Knows` never fires there at
+all. On a hidden profile with an evidence-first opening it scores **65.8%
+against `hive+`'s 66.3%** with `Knows` winning the floor in 77.5% of episodes,
+and `hive+defer` moves `±0.5` and never leaves the interval. A *directed*
+router is worse still — `ladder+dir` reaches 45.1% with two specialists against
+the uninformed ladder's 52.6%, while routing to the decisive member more often
+(22.3% against 18.9%) — and it degrades with shared history rather than
+sharpening. The one thing that moves a hidden profile is when a member speaks:
+depositing facts before taking positions takes the same rooms from 15.3% to
+66.3%, `+51.3 [+49.8, +52.8]` over the matched-budget vote, which is a finding
+about participants rather than about this fold. The circularity number `rho`
+falls from `0.83` to `0.07` across those same arms, so the estimator can be
+made to stop measuring speech — it just does not buy accuracy when it does.
+Twenty-four live rounds add the participant half of the same answer: the
+fact-holder spoke before the commit in every room that had one and twelve of
+twenty were still wrong, no turn was ever awarded on `BidReason::Knows`, and
+`!defer` was used on none of 240 turns.
+See [`docs/experiments/2026-09-05-expert-delegation.md`](docs/experiments/2026-09-05-expert-delegation.md).
 
 ## The two defects P4 and P5 fix
 

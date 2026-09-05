@@ -12,11 +12,12 @@ back into the host — so the whole state machine is testable without a fixture,
 an executor, or a mock.
 
 ```text
-validate roster + desks
+validate roster + desks + policy
   └─ budget spent?                          → Exhausted
      └─ fold traces (above the watermark,
         and only from current desk members)
-        └─ fold standings, take consensus
+        └─ fold standings and, when `directory` is set, the directory,
+           both at the same sequence; take consensus
            ├─ Quorum & Commit & !commit recorded → Converged
            ├─ Quorum & Deliberate    → flip phase, emit one commit turn
            ├─ Deadlock & no free member         → Deadlocked
@@ -52,6 +53,25 @@ this turn's decision. If nobody records it after the boundary, the episode
 runs on and stops at its budget — bounded either way, and never silently
 converged on a decision nobody wrote down.
 
+### Who knows what
+
+When `policy.directory` is `Some`, `step` folds a `Directory` from the same
+traces at the same sequence as the standings, and hands it to the attention
+market. The member the transcript says holds the contested topic — and has
+taken no position on it — bids `BidReason::Knows`, between `Dissent` and
+`Quiet`.
+
+Nothing is stored. The directory dies with the step that folded it, so a wrong
+estimate cannot follow a member into the next turn, let alone the next episode.
+`policy.defer_cap` bounds a chain of `!defer` turns; without one the chain is
+bounded only by `turn_budget`, which is finite either way. `Some(0)` is
+rejected as `Error::ZeroDeferCap` rather than read as "off" — `None` is off.
+
+Both knobs are `None` in `EpisodePolicy::DEFAULT`, and both are
+required-but-nullable on the wire, so a policy serialized before they existed
+fails to decode rather than quietly acquiring a default. See
+[`../directory/README.md`](../directory/README.md).
+
 ### The watermark
 
 Only messages *strictly above* `state.watermark` are folded into traces.
@@ -84,7 +104,7 @@ That is the whole answer to "but a hive mind needs fan-out". See
 | --- | --- |
 | `step` | The fold. Returns exactly one outcome. |
 | `project_for` | Filters a transcript to what one authorized turn may see. |
-| `EpisodePolicy` | Budget, blind round, dominance and repetition caps, quorum, weights. |
+| `EpisodePolicy` | Budget, blind round, dominance and repetition caps, directory, defer cap, quorum, weights. |
 | `EpisodeState` | Conversation, spend, phase, thresholds, watermark, commit boundary. |
 | `HiveTurn` | The authorized turn, and the state to commit after it lands. |
 | `HiveStep` | `Speak` \| `Converged` \| `Deadlocked` \| `Exhausted` \| `Idle`. |
@@ -101,5 +121,8 @@ That is the whole answer to "but a hive mind needs fan-out". See
 - **Thresholds must name active desk members.** A stale threshold record for a
   retired agent is rejected rather than ignored, so a roster change cannot
   silently alter who gets the floor.
+- **The directory is refolded, never carried.** It is not in `EpisodeState`,
+  because an iterated per-turn update would not be commutative and stored state
+  would have to be invalidated whenever the transcript is re-paged.
 - **Nothing here uses floating point.** Every score is fixed-point integer, so
   the fold is reproducible and every payload derives `Eq`.

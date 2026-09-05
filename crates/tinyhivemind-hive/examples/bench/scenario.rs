@@ -20,8 +20,10 @@
 //! ```text
 //! task: what the room must decide
 //! truth: the option id that is genuinely right
+//! truth_expert: planner
 //!
 //! [option rollback]
+//! expert: planner
 //! One sentence describing it.
 //!
 //! [desk payments]
@@ -30,6 +32,8 @@
 //! [agent planner]
 //! desk: payments
 //! role: release manager, who owns what can and cannot be shipped
+//! expert_on: migrations
+//! tier: reasoning
 //! knows: a fact this member holds and nobody else does
 //! ```
 //!
@@ -39,6 +43,17 @@
 //! hidden profile is the sharpest form of the test — the facts that overturn
 //! the decoy are not merely held by another member, they are held in another
 //! room.
+//!
+//! Four more keys let a scenario name who the room ought to lean on and how
+//! expensive each seat is meant to be. `expert:` on an option names the agent
+//! it is honest to defer to on that specific call. `expert_on:` on an agent is
+//! repeatable and names the *areas* it specializes in — never an option id, so
+//! knowing who the specialist is does not itself give away the answer — and is
+//! folded into that member's private brief with an explicit caveat that being
+//! leaned on is not the same as being right. `tier: cheap` or `tier:
+//! reasoning` records which model tier a seat stands in for. `truth_expert:`
+//! at the top level names the agent who holds the fact that actually decides
+//! the truth; that agent must hold at least one `knows:` line.
 
 use std::fmt::Write as _;
 
@@ -48,6 +63,8 @@ pub(crate) struct ScenarioOption {
     pub(crate) id: String,
     /// One sentence saying what it is.
     pub(crate) description: String,
+    /// The agent id it is honest to defer to on this option, if any.
+    pub(crate) expert: Option<String>,
 }
 
 /// One channel a scenario's members are split across.
@@ -68,6 +85,13 @@ pub(crate) struct ScenarioAgent {
     pub(crate) role: String,
     /// Facts held by this member and by nobody else.
     pub(crate) knows: Vec<String>,
+    /// Areas this member is the room's specialist on, named as topics rather
+    /// than as option ids, so knowing who the expert is does not itself name
+    /// the answer.
+    pub(crate) expert_on: Vec<String>,
+    /// How expensive a model this seat is meant to stand in for, if the
+    /// scenario says: `cheap` or `reasoning`.
+    pub(crate) tier: Option<String>,
 }
 
 /// A problem a live room is asked to decide.
@@ -76,6 +100,9 @@ pub(crate) struct Scenario {
     pub(crate) task: String,
     /// The option that is genuinely right.
     pub(crate) truth: String,
+    /// The agent id who holds the decisive private fact behind `truth`, if
+    /// the scenario names one.
+    pub(crate) truth_expert: Option<String>,
     /// The options on offer.
     pub(crate) options: Vec<ScenarioOption>,
     /// The channels the members are split across, if the scenario declares any.
@@ -93,6 +120,7 @@ impl Scenario {
     pub(crate) fn parse(text: &str) -> Result<Self, String> {
         let mut task = String::new();
         let mut truth = String::new();
+        let mut truth_expert: Option<String> = None;
         let mut options: Vec<ScenarioOption> = Vec::new();
         let mut agents: Vec<ScenarioAgent> = Vec::new();
         let mut desks: Vec<ScenarioDesk> = Vec::new();
@@ -114,6 +142,13 @@ impl Scenario {
             match (&section, key) {
                 (Section::Top, "task") => value.clone_into(&mut task),
                 (Section::Top, "truth") => value.clone_into(&mut truth),
+                (Section::Top, "truth_expert") => truth_expert = Some(value.to_owned()),
+                (Section::Option, "expert") => {
+                    options
+                        .last_mut()
+                        .ok_or_else(|| "expert outside a section".to_owned())?
+                        .expert = Some(value.to_owned());
+                }
                 (Section::Option, _) => {
                     let option = options
                         .last_mut()
@@ -152,43 +187,35 @@ impl Scenario {
                         .knows
                         .push(value.to_owned());
                 }
+                (Section::Agent, "expert_on") => {
+                    agents
+                        .last_mut()
+                        .ok_or_else(|| "expert_on outside a section".to_owned())?
+                        .expert_on
+                        .push(value.to_owned());
+                }
+                (Section::Agent, "tier") => {
+                    agents
+                        .last_mut()
+                        .ok_or_else(|| "tier outside a section".to_owned())?
+                        .tier = Some(value.to_owned());
+                }
                 (_, key) => return Err(format!("unexpected line {key:?}: {line:?}")),
             }
         }
 
-        if task.is_empty() {
-            return Err("scenario has no task".to_owned());
-        }
-        if options.len() < 2 {
-            return Err("scenario needs at least two options".to_owned());
-        }
-        if agents.len() < 2 {
-            return Err("scenario needs at least two agents".to_owned());
-        }
-        if !options.iter().any(|option| option.id == truth) {
-            return Err(format!("truth {truth:?} is not one of the options"));
-        }
-        for agent in &agents {
-            if let Some(desk) = &agent.desk
-                && !desks.iter().any(|record| record.id == *desk)
-            {
-                return Err(format!(
-                    "agent {:?} sits on unknown desk {desk:?}",
-                    agent.id
-                ));
-            }
-        }
-        if desks.len() > 1
-            && let Some(loose) = agents.iter().find(|agent| agent.desk.is_none())
-        {
-            return Err(format!(
-                "agent {:?} names no desk, and a federated scenario has more than one",
-                loose.id,
-            ));
-        }
+        validate(
+            &task,
+            &truth,
+            truth_expert.as_deref(),
+            &options,
+            &desks,
+            &agents,
+        )?;
         Ok(Self {
             task,
             truth,
+            truth_expert,
             options,
             desks,
             agents,
@@ -217,6 +244,14 @@ impl Scenario {
         );
         for fact in &agent.knows {
             let _ = writeln!(brief, "- {fact}");
+        }
+        if !agent.expert_on.is_empty() {
+            let areas = agent.expert_on.join(", ");
+            let _ = writeln!(
+                brief,
+                "You are the room's specialist on: {areas}. That means the room may lean on \
+                 you for these, and it does not mean you are right about them."
+            );
         }
         brief
     }
@@ -247,6 +282,81 @@ impl Scenario {
     }
 }
 
+/// Check the parsed pieces of a scenario against each other, once the file
+/// has been read in full.
+///
+/// # Errors
+///
+/// Returns a description of the first inconsistency found.
+fn validate(
+    task: &str,
+    truth: &str,
+    truth_expert: Option<&str>,
+    options: &[ScenarioOption],
+    desks: &[ScenarioDesk],
+    agents: &[ScenarioAgent],
+) -> Result<(), String> {
+    if task.is_empty() {
+        return Err("scenario has no task".to_owned());
+    }
+    if options.len() < 2 {
+        return Err("scenario needs at least two options".to_owned());
+    }
+    if agents.len() < 2 {
+        return Err("scenario needs at least two agents".to_owned());
+    }
+    if !options.iter().any(|option| option.id == truth) {
+        return Err(format!("truth {truth:?} is not one of the options"));
+    }
+    for agent in agents {
+        if let Some(desk) = &agent.desk
+            && !desks.iter().any(|record| record.id == *desk)
+        {
+            return Err(format!(
+                "agent {:?} sits on unknown desk {desk:?}",
+                agent.id
+            ));
+        }
+        if let Some(tier) = &agent.tier
+            && tier != "cheap"
+            && tier != "reasoning"
+        {
+            return Err(format!(
+                "agent {:?} names unknown tier {tier:?}, want cheap or reasoning",
+                agent.id
+            ));
+        }
+    }
+    if desks.len() > 1
+        && let Some(loose) = agents.iter().find(|agent| agent.desk.is_none())
+    {
+        return Err(format!(
+            "agent {:?} names no desk, and a federated scenario has more than one",
+            loose.id,
+        ));
+    }
+    for option in options {
+        if let Some(expert) = &option.expert
+            && !agents.iter().any(|agent| agent.id == *expert)
+        {
+            return Err(format!(
+                "option {:?} names unknown expert {expert:?}",
+                option.id
+            ));
+        }
+    }
+    if let Some(expert) = truth_expert {
+        let member = agents
+            .iter()
+            .find(|agent| agent.id == expert)
+            .ok_or_else(|| format!("truth_expert names unknown agent {expert:?}"))?;
+        if member.knows.is_empty() {
+            return Err("truth_expert names a member holding no private facts".to_owned());
+        }
+    }
+    Ok(())
+}
+
 /// Open the section a `[kind id]` header names, and return which it is.
 fn open_section(
     header: &str,
@@ -263,6 +373,7 @@ fn open_section(
             options.push(ScenarioOption {
                 id,
                 description: String::new(),
+                expert: None,
             });
             Ok(Section::Option)
         }
@@ -279,6 +390,8 @@ fn open_section(
                 desk: None,
                 role: String::new(),
                 knows: Vec::new(),
+                expert_on: Vec::new(),
+                tier: None,
             });
             Ok(Section::Agent)
         }

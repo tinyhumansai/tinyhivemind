@@ -40,12 +40,21 @@ Every arm decides the same rooms from the same private evaluations.
 | `hive+` | The same, at the tuned policy: a majority quorum that is never unanimity, and three turns of budget per member. |
 | `hive+ref` | The tuned policy with `refutation_cap: Some(2)` — a cited fact can cap a hypothesis for the whole room. |
 | `hive+ev` | The same, plus `require_evidential`: support counts only if its citation chain reaches a stated fact. |
+| `hive+dir` | The tuned policy with `directory: Some(DirectoryPolicy::DEFAULT)` — the folded transactive-memory directory on, so `BidReason::Knows` is reachable. |
+| `hive+defer` | The tuned policy with `defer_cap: Some(N)` and no directory: members may stand aside on a topic that is not theirs, with nothing routing the vacated turn. |
+| `hive+dir+defer` | Both at once, which is the arrangement `docs/specs/expert-delegation.md` describes end to end. |
+| `ladder+dir` | The responder ladder again, with a directory the room *earned* over `--history` prior episodes of `hive+` on the same room. The selector's candidates carry that directory's per-agent lines as their `description`, the request names the topic the call turns on, and a router that reads the descriptions picks the heaviest holder of it. Validated through the real `accept_selection`. |
+| `hive+cost` `all-reasoning` | Only under `--cost-tiers`, in the cost table: the delegating room against one that puts every seat on the expensive tier. |
 
-The last two lose, reproducibly and by a lot, and the write-up in
+The six rows above `hive+dir` are the published table; the delegation arms are
+appended rather than interleaved, so `--seed 1 --episodes 5000` still prints
+them byte for byte.
+
+`hive+ref` and `hive+ev` lose, reproducibly and by a lot, and the write-up in
 [`docs/experiments/2026-09-01-refutation-and-grounds.md`](../../../../docs/experiments/2026-09-01-refutation-and-grounds.md)
-says by how much and what the harness does not test. They are here because an
-arm that cannot lose is not evidence, and a mechanism scored and reported is
-worth more than one quietly shipped on.
+says by how much. The delegation arms mostly draw, and
+[`DELEGATION.md`](DELEGATION.md) says so. They are all here because an arm that
+cannot lose is not evidence.
 
 A multi-agent result without a matched-budget control is close to meaningless,
 because the multi-agent arm has usually just spent more compute. `vote` is that
@@ -78,7 +87,15 @@ would let a refutation take effect and it rates an option on the floor clearly
 below its own, by the same 60-point gap that separates the true option from a
 decoy. A `None` or unreachable `refutation_cap` turns both the mechanism and the
 move off together, so a control arm differs from its treatment in one thing
-rather than in two.
+rather than in two. It **defers** only under `--defer-cap`, on a topic it knows
+another member owns.
+
+Under `--blind-evidence` it **deposits first**: its opening turn, while the
+room is blind, states its own reading of the topic it knows best rather than
+putting an option on the floor, and once the floor exists it proposes what it
+now rates highest rather than backing a worse option that got there first. Its
+support then cites the deposit the room actually stated about that option. See
+[The evidence-first opening](#the-evidence-first-opening).
 
 It reads the medium through the library's own `resolve` and `standings`, not
 through a private imitation of them, and it emits ordinary prose 6% of the time
@@ -96,7 +113,16 @@ hive          6.16        89.7        73.3          2231         62637
 hive+         6.75        99.4        82.1          2278         56641
 hive+ref      8.99        88.6        75.0          2827         35398
 hive+ev      10.29        60.8        55.9          2971         29816
+hive+dir      6.75        99.4        82.1          2134         60458
+hive+defer    6.75        99.4        82.1          1942         66456
+hive+dir+defer 6.75        99.4        82.1          1995         64680
+ladder+dir    1.00       100.0        49.5           735       1359856
 ```
+
+The three delegation arms score exactly what `hive+` scores, which is what the
+specification predicted for a room of uniform expertise: with nothing to route
+on, a directory routes nowhere. `ladder+dir` is eight points *worse* than the
+uninformed ladder. [`DELEGATION.md`](DELEGATION.md) says why.
 
 The tuned deliberation beats the matched-budget control at half the budget, and
 one responder off the ladder reaches 57.6%. The quorum threshold and the turn
@@ -109,85 +135,183 @@ The two refutation arms lose, which is why both knobs are off in
 `hive+ev` starves the room — it fails to decide two episodes in five. [The benchmark write-up](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks)
 has the tables behind each of those, across desk sizes, plus what the benchmark does not show.
 
-## Live mode
+## Statistics
 
-`--agent-cmd` swaps the simulated participants for a real agent CLI — one
-process per turn, any command that takes a prompt as its final argument and
-prints an answer:
-
-```sh
-cargo run --release -p tinyhivemind-hive --example bench -- \
-  --agent-cmd "opencode run --pure -m openrouter/~openai/gpt-mini-latest" --agents 5
-```
-
-```sh
-cargo run -p tinyhivemind-hive --example bench -- --agent-cmd "claude -p"
-cargo run -p tinyhivemind-hive --example bench -- --agent-cmd "codex exec"
-```
-
-The library still authorizes exactly one speaker per step, so the number of
-processes an episode can start is bounded by its turn budget and by nothing
-else. Coloured output and a banner are stripped before the marker line is read.
-
-The prompt is not a static block of protocol text, because live rooms fail in
-ways the simulation cannot reach. It names the options already on the floor
-with their standings, folded through the library's own `standings`, so support
-does not split across two names for one idea; it shows a participant its own
-last line, because models restate it verbatim; it offers only the moves that
-count in the turn's phase, because a `!commit` written during deliberation adds
-no supporter; and it calls out the grammar's `#` and `^` sigils, because models
-drop them. Each of those is a host obligation rather than something the library
-can impose, and each was found by running the thing.
-
-### A real problem
-
-Without a scenario the live room deliberates a brief with no answer, which
-measures whether a model can hold the grammar and nothing else. `--scenario`
-gives it a problem that has one:
-
-```sh
-cargo run --release -p tinyhivemind-hive --example bench -- \
-  --agent-cmd "opencode run --pure -m openrouter/openai/gpt-5-mini" \
-  --scenario crates/tinyhivemind-hive/examples/bench/scenarios/checkout-503.txt \
-  --repeat 5
-```
-
-A scenario file is a shared brief, the options under the ids the room should
-use, a private brief per member, and the recorded answer:
+A second table is printed under the first, in `metrics.rs`:
 
 ```text
-task: what the room must decide
-truth: the option id that is genuinely right
-
-[option rollback]
-One sentence describing it.
-
-[agent planner]
-role: release manager, who owns what can and cannot be shipped
-knows: a fact this member holds and nobody else does
+arm       correct %          95% CI  fact %  to-fact  knows %  defers/ep  route %  cost/ep    rho
+ladder         57.6       56.2–59.0       —        —        —          —        —     1.00      —
+vote           78.5       77.4–79.6       —        —        —          —        —    15.00      —
+hive           73.3       72.0–74.5       —        —      0.0        0.0        —     6.16   0.01
+hive+          82.1       81.0–83.1       —        —      0.0        0.0        —     6.75   0.19
 ```
 
-The private briefs are deliberately not appended to the shared journal. A fact
-every member can already read is not private information, and a room whose
-members all start from the same facts has nothing to pool.
+`95% CI` is a Wilson score interval on `correct %`, chosen over the plain
+normal approximation because several arms here land near 0% or 100%, where the
+plain interval can cross outside `[0, 100]` and its coverage is worst. Under
+each row, a paired-bootstrap comparison line reports the same arm against
+`vote` at equal turns, e.g. `hive+ − vote: +3.6 [+2.1, +5.0]`: the accuracy
+difference and its 95% interval, resampling episode indices together for both
+arms because they decided the *same* rooms.
 
-Each round runs both arms against the same real agents: one deliberation
-episode, then an independent poll of the same members answering alone, decided
-by plurality and scored as no answer on a tie. `--repeat` runs the pair N
-times, because a live room is sampled rather than computed and one episode is
-an anecdote.
+`fact %` and `to-fact` report how often, and how late, the room's decisive
+member — a `--specialists` topic expert or the `--hidden-profile` fact-holder —
+put its knowledge on the floor **before the commit boundary**, over the
+episodes that *had* such a member. It counts a topiced `!evidence` deposit and
+nothing else: an earlier version of this column counted the member's opening
+`!propose`, read 100% on every arm of every run, and measured only that
+everybody gets a turn in the blind round. A deposit landing at or after the
+commit boundary is compute the room paid for and could not use, and is scored
+as a miss.
 
-The scenario that ships here is a hidden profile — the shared brief plants the
-wrong answer and the right one is reachable only by pooling facts across four
-members. That shape is what lets the poll lose; a scenario whose answer
-survives deleting every private brief measures nothing. Its header comment
-records the two designs that failed that test before this one passed it.
+`knows %` is the share of episodes in which a `BidReason::Knows` bid won the
+floor at least once — the directory's holder of the contested topic, brought
+out because the transcript says it knows something it has not said. Only an arm
+that folds a directory can reach it. `defers/ep` is turns spent on `!defer`.
+`route %` is the share of the scoreable episodes in which the responder ladder
+picked the decisive member as its one responder. `rho` is the
+circularity number `docs/specs/expert-delegation.md` obliges this benchmark to
+print: at the end of every episode the harness folds `directory()` over that
+episode's own journal — always at `DirectoryPolicy::DEFAULT`, whatever the arm
+asked for, so the number is comparable across arms — and takes Pearson's
+correlation on tie-averaged ranks, in exact integer arithmetic, between each
+member's total directory weight and the number of turns it took, averaged over
+the sample. A column reads `—` rather than `0.0` wherever the arm structurally
+cannot produce that number (a control arm never deliberates, so it never has
+an expert or a rho; a uniform room names no expert, so nothing can be routed
+right or wrong).
 
-Live mode asserts nothing and is not part of CI; it is for watching real agents
-hold — or fail to hold — the trace grammar, and for watching whether a room
-pools what its members separately know.
-`crates/tinyhivemind-hive/tests/openrouter_hive_live.rs` is the asserting
-version, behind the `e2e` feature.
+**What `rho` means.** Near `1.0` the directory reproduces the speaking order
+and has learned nothing except who talked — the failure
+`docs/research/delegation.md` names *who spoke becomes who is thought to
+know*. At or below zero it is reading grounded deposits and other members'
+citations rather than turn count. It is printed to two decimals rather than
+one: on a hidden profile under `--blind-evidence`, `hive+defer` reads `-0.02`
+and `hive+dir+defer` reads `-0.00` — one fewer digit would collapse both to
+`0.0` and erase the boundary between weight that has been zeroed by deferral
+and weight that merely tracks turns weakly.
+
+Under the ordinary opening the default bench does not cluster: `hive` reads
+`0.01` and `hive+ref` reads `0.49`, with the directory arms in between at
+`0.19`. Under `--blind-evidence` the same bench moves higher and tighter,
+`0.61`–`0.72`. On a hidden profile it is lower again under the ordinary
+opening, `0.08`–`0.33`, and under `--blind-evidence` it separates by
+mechanism: `0.32` for `hive+`, `0.37` for `hive+dir`, and at or below zero
+once `!defer` is folded in — `-0.02` for `hive+defer`, falling to `-0.08` at
+`--defer-cap 2`. Depositing before arguing lifts weight off pure turn count;
+deferring is what pushes it to zero or below.
+
+`--json` prints one flat JSON object per arm, one per line, ahead of both
+tables, covering every column of both (as `fact_pct`, `to_fact`, `knows_pct`
+and `defers_per_episode`) plus `expert_led` — the share of
+episodes in which the decisive member authored the first `!propose` for the
+topic the room went on to decide, which the tables have no room for. `--stats-check` runs a small set of
+known cases through `wilson`, `paired_bootstrap` and `spearman_milli` — the
+statistics live in an example, so `cargo test` never exercises them — and
+exits `0` or `1`.
+
+## The evidence-first opening
+
+`--blind-evidence` changes one thing about the *participants* and nothing about
+the library: while the room is still `Visibility::Blind`, a member's first turn
+deposits `!evidence #topic` — its own reading of the topic it knows best, with
+no citation, because nothing is visible to cite — instead of proposing an
+option. Proposals begin once the room goes to `Visibility::Full`.
+
+The finding it exists to state is short: **without an evidence-first opening, a
+room whose members share a bias reaches quorum inside the blind round, and no
+floor mechanism can act.** A `!propose` counts as a supporter, so four members
+who privately favour the same planted decoy carry it before anybody has read
+anybody; the episode's first non-blind turn is a commit turn, and a fact
+arriving then has nothing left to change. That is not a hypothesis — the live
+rooms recorded it (in every correct episode of the 2026-09-01 run the five
+blind turns were five `!evidence` lines, one per member) and the federation
+reached it from the other side (moving a desk's question to *before* it had
+backed anything was the difference between failing outright and 77.5%).
+
+It is off by default, so every published number that does not ask for it is
+unchanged, and what it buys is measured rather than assumed:
+
+```text
+5000 rooms                        hive+   hive+dir   vote   ladder   ladder+dir
+uniform                            82.1       82.1   78.5     57.6         49.5
+uniform  --blind-evidence          75.3       75.7   78.5     57.6         98.8
+--specialists 2                    74.2       74.2   71.1     52.6         45.1
+--specialists 2 --blind-evidence   67.6       68.0   71.1     52.6         84.4
+--hidden-profile                   15.3       15.3   15.0     35.1         34.6
+--hidden-profile --blind-evidence  66.3       65.8   15.0     35.1         64.1
+```
+
+On an ordinary room it **costs** about seven points: five of the fifteen turns
+go on deposits nobody needed, and `hive+` fails to decide 7% of the time rather
+than 0.6%. On the hidden profile it is the difference between 15% and 66%. That
+is the trade, stated rather than tuned away.
+
+Two side effects are worth reading before the numbers are:
+
+- **`ladder+dir` on a uniform room is an artifact, not a result.** The arm
+  tells its router which *topic* the call turns on, and that topic is the
+  correct option. With an evidence-first opening the directory records "who
+  deposited a reading of `#truth`", and a member who deposited on `#truth` is
+  usually a member whose favourite *is* `#truth` — so routing to the heaviest
+  holder returns the right answer 98.8% of the time by construction. The
+  92-point swing from the same arm's 49.5% under the ordinary opening is the
+  size of the leak, not the size of the mechanism. Read the `--specialists`
+  row instead, where the deposit is a specialist's tight reading rather than a
+  vote, and even there read it knowing the topic was named.
+- **The two refutation arms fall further.** `hive+ref` and `hive+ev` lose about
+  twenty-five points under the flag. A blind round spent depositing is a blind
+  round not spent proposing, and both arms already had the tightest budget.
+
+## Delegation
+
+`--specialists`, `--hidden-profile`, `--defer-cap`, `--history`,
+`--cost-tiers` and `--blind-evidence` measure whether expert delegation earns
+its place: whether the deciding fact reaches the floor in time, how precisely a
+router routes, and what accuracy costs per unit spent. The arms, the numbers
+they scored, and what makes `BidReason::Knows` reachable at all are in
+[`DELEGATION.md`](DELEGATION.md).
+
+`scenarios/index-lock-expert.txt` is the hidden profile written for a room with
+a named specialist. The brief plants the decoy — a migration finished at 02:14
+and write latency stepped at 02:14 — and three members' private facts back it.
+Only `planner` holds the fact that kills it: the migration is forward-only and
+rolling it back destroys paid orders. The answer, `#batch`, is a conjunction of
+two halves that are inert apart. `scout` reports that the rebuild dropped the
+table's lock escalation threshold from 50,000 to 5,000 and cannot see how large
+any job's transactions are; `dba` reports the two batch sizes, 6,200 and 500,
+neither of which has changed in a year. Two bulk writers are on the option list
+precisely so that the threshold alone accuses both and the sizes alone accuse
+neither. Polled alone against a live model the scenario answers `#rollback`:
+three runs, two models, plurality wrong every time and never more than one
+member on the truth. `scenarios/index-lock-tiers.txt` is the same scenario with
+a `tier:` on every seat — four `cheap` seats whose job is a lookup and a
+negation, one `reasoning` seat on `dba`, the only member asked to hold a number
+against somebody else's threshold — and it exists to price that routing rather
+than to change the answer.
+
+## Live mode
+
+`--agent-cmd` swaps the simulated participants for a real agent CLI, one
+process per turn, and `--api-base` posts each turn straight to an HTTP
+endpoint through `curl` instead. `--scenario` gives the live room a real
+problem with a recorded answer and private facts per member, and `--repeat`
+runs it several times. The prompt, the scenario file format, the two backends
+and what running them actually turned up are in [`LIVE.md`](LIVE.md).
+
+Nine backend rows have been run end to end — the HTTP backend on `flash` and on
+a reasoning model, `claude -p`, `opencode run`, and `codex exec` against
+OpenRouter — over twenty-four rounds. The headline is that **the matched-budget
+poll found the answer in none of them**, while the rooms scored 8 of 24, and
+that the scenario's `truth_expert` spoke before the commit in every round that
+had one and twelve of those twenty rooms were still wrong. `!defer` was used on
+none of the 240 turns and no turn was awarded on `BidReason::Knows`. The `codex`
+row is a CLI row by necessity: the router cannot relay a streaming Responses
+request, so that model cannot go through `--api-base` at all and is driven with
+`codex exec -c model_provider=…` pointed straight at OpenRouter. Every row and
+what the transcripts show is in
+[`DELEGATION.md`](DELEGATION.md#the-live-matrix).
 
 ## Several channels
 
@@ -283,6 +407,13 @@ rather than a failure of the harness.
 | `--topics N` | options on offer, 2–8 (default 4) |
 | `--noise N` | half-width of the error on a private evaluation (default 90) |
 | `--seed N` | room generator seed (default 1) |
+| `--specialists N` | `N` members each read one topic far more tightly than everybody else, and everybody else's read of that topic widens to match -- information is redistributed, not created |
+| `--hidden-profile` | one decoy is planted above every member's own argmax except one member, who alone holds the fact that rules it out |
+| `--cost-tiers` | with `--specialists`, a specialist's own turn costs ten times a lay member's, for the `cost/ep` column |
+| `--blind-evidence` | a member's first turn, while the room is blind, is a deposit rather than a position (off by default) |
+| `--directory` | fold the directory into the traced episode's own policy, so `--trace` can show a `knows` turn |
+| `--defer-cap N` | turns a member may spend deferring to a topic's expert instead of arguing outside its own specialty (default 1, minimum 1); read by `hive+defer` and `hive+dir+defer` |
+| `--history N` | prior episodes of `hive+` the `ladder+dir` arm earns its directory from (default 3) |
 | `--budget N` `--quorum N` `--window N` | episode policy, overriding the tuned values |
 | `--dominance N` `--repetition N` `--no-blind` | episode policy |
 | `--trace` | print one episode turn by turn |
@@ -294,25 +425,54 @@ rather than a failure of the harness.
 | `--agent-cmd CMD` | drive one episode through a real agent CLI |
 | `--scenario PATH` | give the live room a real problem with private facts |
 | `--repeat N` | run a live scenario N times and count both arms |
+| `--json` | print one flat JSON object per arm, ahead of the tables |
+| `--stats-check` | run the statistics module's self-check and exit `0` or `1` |
+| `--timeout SECS` | per-turn deadline for a live agent or HTTP request (default 180) |
+| `--api-base URL` | drive seats directly over HTTP instead of a CLI |
+| `--api-key-env NAME` | env var carrying the HTTP backend's key (default `LADDER_API_KEY`) |
+| `--model NAME` | the HTTP backend's default model (default `flash`) |
+| `--wire openai\|anthropic` | which chat wire format the HTTP backend speaks (default `openai`) |
+| `--model-cost model=N` | cost per 1000 tokens for `model`, for the usage table (repeatable) |
+| `--seat-model agent_id=model` | per-seat model override for the HTTP backend (repeatable) |
+| `--seat-cmd agent_id="command"` | per-seat command override for the CLI backend (repeatable) |
+| `--specialist-model NAME` | model seated for a member the scenario marks `tier: reasoning` (`expert_on:` alone does not move a seat) |
+| `--thinking on\|off` | whether the HTTP backend reasons before answering (default `on`) |
 
 `--swarm --trace` prints the interleaved multi-channel transcript, and
 `--swarm --noise` defaults to ±50 rather than ±90: at the single-room default
 the desk bias is swamped, every desk is individually unbiased, and crossing a
-channel would be measuring nothing.
+channel would be measuring nothing. `--hidden-profile --noise` defaults to ±50
+for the same reason and by the same rule — an explicit `--noise` still wins.
+
+The two constants that shape the hidden profile are bounded on both sides, and
+`sim.rs` writes the arithmetic on each. `HIDDEN_LIFT` is `100`, so the planted
+decoy reads **140** against the true option's **100**: at ±50 the difference of
+two draws is triangular on ±100, so a lay member's own argmax is the decoy
+`1 - (60/100)² / 2 ≈ 82%` of the time and the matched-budget poll scores 15%.
+`GROUNDS_WEIGHT` is `45`, inside the window `(40, 65)`: *above* the decoy's
+bare 40-point lead, so one grounded refutation flips a member that has seen it
+and has yet to see anybody back anything; *below* `40 + 25`, the lead once one
+peer is already behind the decoy, so a member reading the fact against a room
+that has started backing the decoy needs the fact **plus** a peer that has
+already crossed. Two signals carry where one does not, and both bounds are what
+keep the profile solvable but not trivial.
 
 ## Layout
 
 | file | what it holds |
 | --- | --- |
 | `main.rs` | the command line, the tuned policy, the modes, and the tables |
-| `sim.rs` | the rooms, the private evaluations, and what a participant says |
+| `sim.rs` | the rooms, the private evaluations, what a participant says, the `Expertise` shapes (`--specialists`, `--hidden-profile`) that redistribute those evaluations, and the evidence-first opening (`--blind-evidence`) |
 | `federation.rs` | several desks, each with a correlated bias of its own |
 | `swarm.rs` | one journal per channel, the scheduler, and the referral edge |
 | `run.rs` | the host: a journal, a roster, and the step loop |
 | `arms.rs` | the `ladder`, `vote`, `merged` and federated controls |
 | `sweep.rs` | the policy grid and its ranking |
-| `metrics.rs` | aggregation and formatting |
-| `live.rs` | the external agent CLI backend, its prompt, and the solo poll |
+| `metrics.rs` | aggregation, formatting, and the confidence-interval, bootstrap and rank-correlation statistics |
+| `live.rs` | the shared prompt state, the external agent CLI backend, and the solo poll |
+| `http.rs` | the direct-HTTP backend: the same prompt state over `curl`, and its usage table |
 | `scenario.rs` | the scenario file format, the briefs, and the recorded answer |
 | `scenarios/` | the scenario files themselves |
+| `DELEGATION.md` | the delegation arms, the three questions they answer, and what they scored |
+| `LIVE.md` | live rooms: the prompt, the scenario format, and the CLI and HTTP backends |
 | `rng.rs` | a seeded `SplitMix64`, so every run reproduces |

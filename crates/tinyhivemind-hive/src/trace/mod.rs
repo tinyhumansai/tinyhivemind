@@ -46,8 +46,10 @@ pub const TRACE_CAP: usize = 16;
 /// !<kind> [#topic] [>target] [^cite ...] [free text]
 /// ```
 ///
-/// One marker is stricter: `!refute` requires both a `#topic` and at least one
-/// `^cite`, and yields no trace without them.
+/// Two markers are stricter. `!refute` requires both a `#topic` and at least
+/// one `^cite`, and `!defer` requires a `#topic`; either yields no trace at all
+/// without them, rather than a trace that could cap a topic on nothing or
+/// abstain from nothing in particular.
 #[must_use]
 pub fn resolve(
     body: &str,
@@ -159,6 +161,7 @@ fn parse_line(
         "evidence" => TraceKind::Evidence,
         "question" => TraceKind::Question,
         "commit" => TraceKind::Commit,
+        "defer" => TraceKind::Defer,
         _ => return None,
     };
 
@@ -189,6 +192,13 @@ fn parse_line(
     // trace that could cap a topic on nothing -- the same fail-closed rule the
     // rest of the grammar uses for an unrecognised marker.
     if kind == TraceKind::Refute && (topic.is_none() || cites.is_empty()) {
+        return None;
+    }
+
+    // A deferral says "this one is not mine". Without a topic it says nothing
+    // and would still zero a directory weight and promote a contested topic,
+    // so it fails closed for the same reason a refutation does.
+    if kind == TraceKind::Defer && topic.is_none() {
         return None;
     }
 
