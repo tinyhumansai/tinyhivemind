@@ -112,9 +112,15 @@ pub struct Directory {
 /// Sorting here rather than trusting the sender is what keeps that invariant a
 /// property of the type. A repeated `(topic, agent_id)` is rejected instead of
 /// sorted: two weights for one pair is not a directory the fold could have
-/// produced, and silently keeping either one would be a guess.
+/// produced, and silently keeping either one would be a guess. An entry whose
+/// `weight` falls outside `0..=WEIGHT_CEILING` is rejected the same way — the
+/// fold never emits one, so a decoded value out there is not a directory the
+/// fold could have produced either, and [`top`], [`top_among`], [`knows`] and
+/// [`lines`] all read `weight` back unclamped.
 ///
 /// [`top`]: Directory::top
+/// [`top_among`]: Directory::top_among
+/// [`knows`]: Directory::knows
 /// [`lines`]: Directory::lines
 /// [`topics`]: Directory::topics
 impl<'de> Deserialize<'de> for Directory {
@@ -123,6 +129,15 @@ impl<'de> Deserialize<'de> for Directory {
         D: Deserializer<'de>,
     {
         let mut entries = Vec::<DirectoryEntry>::deserialize(deserializer)?;
+        if let Some(entry) = entries
+            .iter()
+            .find(|entry| !(0..=WEIGHT_CEILING).contains(&entry.weight))
+        {
+            return Err(D::Error::custom(format!(
+                "directory weight for {} on #{} is out of range",
+                entry.agent_id, entry.topic
+            )));
+        }
         entries.sort_by(|left, right| {
             left.topic
                 .cmp(&right.topic)

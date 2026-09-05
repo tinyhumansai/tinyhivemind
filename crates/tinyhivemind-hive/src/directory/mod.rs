@@ -64,6 +64,32 @@ const PRIOR_SCALE: i64 = 10;
 /// still be ten if declared relevance were rescaled tomorrow.
 const TENTHS: i64 = 10;
 
+/// Reject a `DirectoryPolicy` that would make its estimate meaningless.
+///
+/// [`directory`] runs this first thing, but a caller that decides whether to
+/// fold at all — [`crate::episode::step`] does, ahead of its own terminal
+/// returns — needs the same check before it ever calls [`directory`], so a
+/// malformed policy is rejected on every step rather than only on the steps
+/// that reach the fold.
+///
+/// # Errors
+///
+/// Returns [`Error::ZeroDirectoryHalfLife`] when `policy.half_life` is zero,
+/// or [`Error::ZeroDirectoryWindow`] when `policy.window` is zero.
+///
+/// Not exported from the crate root: it exists only for [`directory`] and
+/// [`crate::episode::step`] to share, not as a standing part of the public
+/// surface.
+pub(crate) fn validate_policy(policy: &DirectoryPolicy) -> Result<()> {
+    if policy.half_life == 0 {
+        return Err(Error::ZeroDirectoryHalfLife);
+    }
+    if policy.window == 0 {
+        return Err(Error::ZeroDirectoryWindow);
+    }
+    Ok(())
+}
+
 /// Fold the transcript into an estimate of who knows what.
 ///
 /// `priors` are the same [`AgentThreshold`] records the attention market
@@ -115,12 +141,7 @@ pub fn directory(
     policy: &DirectoryPolicy,
     priors: &[AgentThreshold],
 ) -> Result<Directory> {
-    if policy.half_life == 0 {
-        return Err(Error::ZeroDirectoryHalfLife);
-    }
-    if policy.window == 0 {
-        return Err(Error::ZeroDirectoryWindow);
-    }
+    validate_policy(policy)?;
     let indexed = index_priors(priors)?;
 
     let live = live_traces(traces, at, policy.window);

@@ -122,7 +122,7 @@ lets an information cascade form, so it is second-class by construction.
 
 ```rust
 pub struct AgentThreshold { pub agent_id: String, pub threshold: i64, pub affinity: Vec<(TopicId, u8)> }
-pub enum BidReason { Addressed, Dissent, Quiet, Salience }
+pub enum BidReason { Addressed, Dissent, Knows, Quiet, Salience }
 pub struct Bid { pub agent_id: String, pub urge: i64, pub reason: BidReason }
 ```
 

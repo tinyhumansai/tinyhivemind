@@ -16,7 +16,7 @@ pub use types::{EpisodePolicy, EpisodeState, HiveStep, HiveTurn, Phase, Visibili
 
 use crate::{
     attention::{AgentThreshold, BidContext, bids, floor_holder},
-    directory::{Directory, directory},
+    directory::{Directory, directory, validate_policy as validate_directory_policy},
     error::{Error, Result},
     quorum::{ConsensusState, consensus, standings},
     trace::{TraceKind, read_borrowed},
@@ -60,6 +60,9 @@ pub fn step(
     desks.validate()?;
     if policy.defer_cap == Some(0) {
         return Err(Error::ZeroDeferCap);
+    }
+    if let Some(directory_policy) = &policy.directory {
+        validate_directory_policy(directory_policy)?;
     }
     let members = active_members(roster, desks, state)?;
 

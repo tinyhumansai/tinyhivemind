@@ -63,9 +63,11 @@ taken no position on it — bids `BidReason::Knows`, between `Dissent` and
 
 Nothing is stored. The directory dies with the step that folded it, so a wrong
 estimate cannot follow a member into the next turn, let alone the next episode.
-`policy.defer_cap` bounds a chain of `!defer` turns; without one the chain is
-bounded only by `turn_budget`, which is finite either way. `Some(0)` is
-rejected as `Error::ZeroDeferCap` rather than read as "off" — `None` is off.
+`policy.defer_cap` bounds a chain of `!defer` turns; `None` leaves deferral
+promotion uncapped by `defer_cap` specifically, bounded only by `turn_budget`,
+which is finite either way — `None` is uncapped, not off. `Some(0)` is
+rejected as `Error::ZeroDeferCap` rather than read as a quieter way of turning
+deferral off.
 
 Both knobs are `None` in `EpisodePolicy::DEFAULT`, and both are
 required-but-nullable on the wire, so a policy serialized before they existed

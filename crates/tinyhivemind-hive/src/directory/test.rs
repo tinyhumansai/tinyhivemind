@@ -163,6 +163,23 @@ fn a_decoded_directory_rejects_a_repeated_pair() {
     );
 }
 
+#[test]
+fn a_decoded_directory_rejects_an_out_of_range_weight() {
+    let over = serde_json::json!([entry_value("archivist", "pool", WEIGHT_CEILING + 1)]);
+    let error = serde_json::from_value::<Directory>(over).expect_err("weight above the ceiling");
+    assert!(
+        error.to_string().contains("out of range"),
+        "unexpected error: {error}"
+    );
+
+    let under = serde_json::json!([entry_value("archivist", "pool", -1)]);
+    let error = serde_json::from_value::<Directory>(under).expect_err("a negative weight");
+    assert!(
+        error.to_string().contains("out of range"),
+        "unexpected error: {error}"
+    );
+}
+
 /// One entry as it appears on the wire, with only its weight varying.
 fn entry_value(agent_id: &str, topic: &str, weight: i64) -> serde_json::Value {
     serde_json::json!({

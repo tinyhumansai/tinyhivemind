@@ -345,6 +345,23 @@ fn validate(
             ));
         }
     }
+    for agent in agents {
+        // Strip an optional leading `#`: an area written in the topic
+        // spelling the deliberation prompt uses (`#batch`) names the same
+        // option id as the bare one, and `private_brief` would still put it
+        // in the prompt verbatim.
+        if let Some(area) = agent.expert_on.iter().find(|area| {
+            options
+                .iter()
+                .any(|option| option.id == *area.trim_start_matches('#'))
+        }) {
+            return Err(format!(
+                "agent {:?} names option id {area:?} as an expert_on area, which exposes that \
+                 option id in its private brief",
+                agent.id
+            ));
+        }
+    }
     if let Some(expert) = truth_expert {
         let member = agents
             .iter()
