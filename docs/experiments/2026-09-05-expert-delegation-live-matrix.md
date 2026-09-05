@@ -9,28 +9,33 @@ split out to keep that report at or below the 500-line cap.
 
 Ten rows, twenty-seven rounds, two hundred and sixty-six agent turns. Every row ran
 both arms: the room, and the matched-budget poll of the same seats through the
-same backend. `expert` is rounds in which the scenario's `truth_expert` spoke
-before the commit, over rounds whose commit chain reaches something it said.
-Tokens and cost print for the HTTP backend only, in the harness's unit — 1 per
+same backend. `expert` reports two independent counts, not a ratio: rounds in
+which the scenario's `truth_expert` spoke before the commit, and (separately)
+rounds whose winning commit chain reaches something it said. Tokens and cost
+print for the HTTP backend only, in the harness's unit — 1 per
 1000 tokens times the model's price, so a `reasoning` round costs ten times a
 `flash` round of the same length.
 
-`expert`'s first number is capped at a row's decided count: three rows below
-(`index-lock-expert` on `flash`, `opencode` and `codex exec`) each also
-recorded one undecided round, and the corrected metric this follow-up ships
-(the earlier `print_expert` fix) proves that number cannot exceed how many
-rounds actually decided. Their originally recorded values of 3 predate that
-fix and are capped here to 2, each row's decided count, rather than restated
-as a rerun.
+A caveat on `expert`'s first number: this follow-up's `print_expert` fix
+changed what "before" means — it now compares a turn against the round's
+actual first commit-phase turn (`report.commit_at`), gated on the round having
+decided, rather than approximating the boundary as the episode's last turn
+regardless of outcome. Every row below except the freshly-measured mixed-tier
+row was recorded under the old approximation and has not been reprocessed
+against the corrected definition. The two can disagree in either direction —
+not only for a row with an undecided round, but for any decided round whose
+commit phase spanned more than one turn — and the size of any discrepancy is
+not recoverable from the aggregated counts this report keeps; only the raw
+per-round turn indices would settle it, and those were not retained.
 
 | row | backend | rounds | hive ✓/decided | poll ✓ | turns/ep | s/ep | tokens/ep | cost/ep | expert | `!defer` |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `checkout-503` | HTTP `flash` | 3 | **3 / 3** | 0 / 3 | 7.3 | 451 | 27,543 | 24.7 | — | 0 |
-| `index-lock-expert` | HTTP `flash` | 3 | 1 / 2 | 0 / 3 | 11.7 | 842 | 48,483 | 46.0 | 2 / 2 | 0 |
+| `index-lock-expert` | HTTP `flash` | 3 | 1 / 2 | 0 / 3 | 11.7 | 842 | 48,483 | 46.0 | 3 / 2 | 0 |
 | `index-lock-expert` | HTTP, `--specialist-model reasoning` | 3 | 0 / 3 | 0 / 3 | 7.0 | 322 | 19,999 | 197.7 | 3 / 1 | 0 |
 | `index-lock-expert` | `claude -p --model flash` | 3 | **3 / 3** | 0 / 3 | 13.3 | 697 | — | — | 3 / 2 | 0 |
-| `index-lock-expert` | `opencode run -m ladder/flash` | 3 | 1 / 2 | 0 / 3 | 12.3 | 374 | — | — | 2 / 1 | 0 |
-| `index-lock-expert` | `codex exec` → `deepseek/deepseek-v4-flash` | 3 | 0 / 2 | 0 / 3 | 12.3 | 305 | — | — | 2 / 0 | 0 |
+| `index-lock-expert` | `opencode run -m ladder/flash` | 3 | 1 / 2 | 0 / 3 | 12.3 | 374 | — | — | 3 / 1 | 0 |
+| `index-lock-expert` | `codex exec` → `deepseek/deepseek-v4-flash` | 3 | 0 / 2 | 0 / 3 | 12.3 | 305 | — | — | 3 / 0 | 0 |
 | `index-lock-tiers` | HTTP, `--specialist-model reasoning` | 3 | 0 / 3 | 0 / 3 | 6.0 | 318 | 16,865 | 166.0 | 3 / 1 | 0 |
 | `index-lock-tiers` | HTTP, every seat `reasoning` | 2 | 0 / 2 | 0 / 2 | 7.5 | 489 | 20,858 | 207.0 | 2 / 1 | 0 |
 | `checkout-503-federated` | HTTP `flash`, `--swarm` | 1 | 0 / 1 | 0 / 1 | 15 | 764 | 31,192 | 28.0 | — | 0 |
@@ -49,11 +54,11 @@ tied every time. On `index-lock-expert` and `index-lock-tiers` it returned
 `#rollback` or `#archive`; on `checkout-503`, `#retries` three times in three,
 the decoy the brief plants.
 
-**The fact-holder spoke before the commit in every room that decided** — 20 of
-20 decided rounds across eight rows, at turn 4 in eighteen of the first
-twenty. Q1's live answer is yes, and the evidence-first opening buys it. **And
-fourteen of those twenty rooms still got it wrong.** Reaching the holder is not
-the bottleneck; weighing what it says is.
+**The fact-holder spoke before the commit in every room that had one** — 23 of
+23 rounds across eight rows, at turn 4 in eighteen of the first twenty (subject
+to the caveat above). Q1's live answer is yes, and the evidence-first opening
+buys it. **And fourteen of those twenty-three rooms still got it wrong.**
+Reaching the holder is not the bottleneck; weighing what it says is.
 
 **`!defer` was never used.** Not one of the 266 turns, in any harness, on any
 row, although `!defer #topic` sits in the move list every participant reads,

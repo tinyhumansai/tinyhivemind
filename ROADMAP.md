@@ -149,9 +149,9 @@ about participants rather than about this fold. The circularity number `rho`
 falls from `0.83` to `0.07` across those same arms, so the estimator can be
 made to stop measuring speech — it just does not buy accuracy when it does.
 Twenty-seven live rounds add the participant half of the same answer: the
-fact-holder spoke before the commit in every room that decided and fourteen of
-twenty were still wrong, no turn was ever awarded on `BidReason::Knows`, and
-`!defer` was used on none of 266 turns.
+fact-holder spoke before the commit in every room that had one and fourteen of
+twenty-three were still wrong, no turn was ever awarded on `BidReason::Knows`,
+and `!defer` was used on none of 266 turns.
 See [`docs/experiments/2026-09-05-expert-delegation.md`](docs/experiments/2026-09-05-expert-delegation.md).
 
 ## The two defects P4 and P5 fix

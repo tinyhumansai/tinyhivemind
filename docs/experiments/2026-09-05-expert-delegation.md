@@ -333,9 +333,10 @@ Ten rows, twenty-seven rounds, two hundred and sixty-six agent turns, across
 federated round are in
 [`2026-09-05-expert-delegation-live-matrix.md`](2026-09-05-expert-delegation-live-matrix.md),
 split out to keep this report under the 500-line cap. In short: the poll
-never found the answer in any row, the fact-holder spoke before the commit
-in every room that decided and was still wrong in fourteen of twenty,
-`!defer` and `BidReason::Knows` were never used, a reasoning model on the
+never found the answer in any row, the fact-holder spoke before the commit in
+every room that had one and was still wrong in fourteen of twenty-three
+(subject to a caveat on that metric — see the live matrix), `!defer` and
+`BidReason::Knows` were never used, a reasoning model on the
 expert seat did not help, and the corrected mixed-tier row (only `dba` on
 `reasoning`) scored 1 of 3 at roughly half to two-thirds of the all-reasoning
 cost.

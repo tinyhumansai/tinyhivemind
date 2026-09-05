@@ -305,9 +305,10 @@ reasoning model, mixed-tier, `claude -p`, `opencode run`, and `codex exec`
 against OpenRouter — over twenty-seven rounds. The headline is that **the
 matched-budget poll found the answer in none of them**, while the rooms scored
 9 of 27, and that the scenario's `truth_expert` spoke before the commit in
-every round that decided and fourteen of those twenty rooms were still wrong.
-`!defer` was used on none of the 266 turns and no turn was awarded on
-`BidReason::Knows`. The `codex`
+every round that had one and fourteen of those twenty-three rooms were still
+wrong (subject to a caveat on that metric in `DELEGATION.md`). `!defer` was
+used on none of the 266 turns and no turn was awarded on `BidReason::Knows`.
+The `codex`
 row is a CLI row by necessity: the router cannot relay a streaming Responses
 request, so that model cannot go through `--api-base` at all and is driven with
 `codex exec -c model_provider=…` pointed straight at OpenRouter. Every row and
