@@ -40,7 +40,14 @@
 # cannot be put back without rebuilding the table, which is the thing the
 # on-call channel is already asking to undo.
 
-task: Since last night's schema migration finished at 02:14, p99 write latency on the orders table has climbed from 80ms to 4s and lock wait timeout errors in the application log are rising by the minute. The on-call channel's first read is that the migration broke something and should be rolled back. Ship exactly one change now, and say which.
+#
+# The fifth design shipped with a hole the live rooms found in three harnesses
+# out of three: scout's own fact said the threshold could be put back by
+# rebuilding the table, so the rooms converged on a coined `#rebuild`,
+# `#rethreshold` or `#escalate` — a remedy that was correct and not on the
+# list. The fact now says a rebuild takes nine hours with writes blocked, and
+# the task says nothing off the list can ship in this window.
+task: Since last night's schema migration finished at 02:14, p99 write latency on the orders table has climbed from 80ms to 4s and lock wait timeout errors in the application log are rising by the minute. The on-call channel's first read is that the migration broke something and should be rolled back. Ship exactly one of the listed changes now, and say which; nothing off the list can ship in this window.
 
 truth: batch
 truth_expert: dba
@@ -89,7 +96,7 @@ role: application engineer, who owns the write path
 expert_on: storage engine settings
 knows: The migration rebuilt the orders table under the engine's default storage settings. The table's lock escalation threshold went with them, from 50,000 row locks per transaction down to the 5,000 default.
 knows: When one transaction holds more row locks on a table than that threshold, the engine converts them into a single lock over the whole table, and every other writer waits behind it until that transaction commits. You have no visibility into how large any job's transactions are, and several jobs write to orders.
-knows: The threshold is a property of the table, not of a setting anyone can change in place. Putting it back where it was means rebuilding the orders table again.
+knows: The threshold is a property of the table, not of a setting anyone can change in place. Putting it back where it was means rebuilding the orders table again, which takes about nine hours with writes to orders blocked for the whole of it, so it is not something that can ship in this window.
 
 [agent dba]
 role: database engineer, who owns the datastore
