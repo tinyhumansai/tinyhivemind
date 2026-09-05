@@ -42,7 +42,7 @@ the expensive tier).
 arm              correct %   cost/ep    correct/kU
 vote                  71.1     69.00         10.31
 ladder                52.6      4.56        115.39
-ladder+dir            45.0      4.68         96.10
+ladder+dir            45.1      4.71         95.81
 hive+                 74.2     32.30         22.97
 hive+cost             74.3     32.05         23.20
 all-reasoning         74.2     69.80         10.63
@@ -72,14 +72,14 @@ theirs, and finishes marginally sooner. The difference is well inside the
 confidence interval. On a hidden profile it is neutral to slightly negative.
 
 **A directed router is worse than a blind one.** `ladder+dir` routes to the
-decisive member *more* often than `ladder` does (21.7% against 18.9%) and is
-seven and a half points *less* accurate (45.0% against 52.6%). Directory
+decisive member *more* often than `ladder` does (22.3% against 18.9%) and is
+seven and a half points *less* accurate (45.1% against 52.6%). Directory
 weight on a topic is earned by grounding it, so the heaviest holder is the
 member who argued it hardest rather than the one who reads it best. Matching a
 task against a description is the routing rule Claude Code's subagents and
 CrewAI's role strings use, and on this benchmark it loses to a coin flip.
-Per unit spent it is worse too: 96 right answers per thousand units against
-115.
+Per unit spent it is worse too: 95.8 right answers per thousand units against
+115.4.
 
 **On cost, delegation is a rounding error and uniform expense is a
 catastrophe.** `hive+cost` buys 23.2 right answers per thousand units against
@@ -96,9 +96,10 @@ noise the flag defaults to, every member but one answers the decoy. The poll
 scores **0.0%**, which is the construction working: a matched-budget vote
 cannot solve a hidden profile, by definition.
 
-No arm solves it either. Every deliberating arm lands at 0.0–0.5%, and the
+No arm solves it either. Every deliberating arm lands at 0.0–0.4%, and the
 single-responder ladder's 21.2% is simply the chance that the one member drawn
-happens to be the fact-holder. The reason is structural and worth stating
+happens to be the fact-holder — `ladder+dir` reaches 21.4%, inside the
+interval. The reason is structural and worth stating
 plainly, because it bounds what this shape can ever measure: a `!propose`
 counts as a supporter, so four lay members each putting the same decoy on the
 floor carry it *inside the blind round*, before anybody has read anybody. The
@@ -116,19 +117,25 @@ rooms there against 0.4% with the blind round on — which is the shape of the
 finding: the blind opening round, worth 24 points of accuracy on the ordinary
 bench, is what makes this particular hidden profile unsolvable.
 
-`--history 1` and `--history 5` change nothing on this shape, for a related
-reason: nobody ever grounds the true option, so it carries no directory weight
-for a router to read, and `ladder+dir` falls back to the same uninformed draw
-`ladder` makes.
+`--history 1` and `--history 5` barely move it — 22.0% and 22.4% over 2000
+rooms, against 21.9% for the undirected ladder on the same sample — for a
+related reason: almost nobody ever grounds the true option, because the room
+never argues it, so it carries no directory weight for a router to read and
+`ladder+dir` mostly falls back to the same uninformed draw `ladder` makes.
 
 ## How much history is worth
 
-None of it, past the first episode. Over 2000 rooms with two specialists,
-`ladder+dir` scores 52.1% at `--history 0`, which is the null control — an
-empty directory, so every candidate's description is `None` and the router
-falls back to the uninformed draw — and 44.5% at `--history 1`, `3` and `5`
-alike, to the decimal. One episode is enough to fix which member holds the
-most weight on the deciding topic, and four more do not move it. That is worth
-knowing in both directions: the arm is not undertrained, and a host thinking
-about accumulating shared history across episodes should not expect the
-estimate to sharpen with it.
+Less than none. Over 2000 rooms with two specialists:
+
+```text
+--history        0     1     3     5    10
+ladder+dir    52.1  44.8  44.0  43.9  43.6
+```
+
+`--history 0` is the null control: an empty directory, so every candidate's
+description is `None`, the router falls back to the uninformed draw, and the
+arm scores exactly what `ladder` scores on the same sample (52.1%). One
+episode of history costs seven points, and every episode after that costs a
+little more. The estimate is not undertrained and does not sharpen with shared
+history — it converges, slowly, on the wrong member. A host planning to
+accumulate a directory across episodes should read that as the finding it is.

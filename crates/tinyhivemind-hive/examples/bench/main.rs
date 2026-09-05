@@ -890,7 +890,7 @@ fn run_arms(options: &Options, rooms: &[Room]) -> Result<(Totals, std::time::Dur
         }
         let seed = mix(options.seed, u64::try_from(index).unwrap_or(0));
         totals.ladder.add_arm(&arms::run_ladder(room, seed)?);
-        let earned = earn_directory(room, &tuned, options)?;
+        let earned = earn_directory(room, &tuned, options.history, mix(seed, 0x6869_7374))?;
         totals
             .ladder_directed
             .add_arm(&arms::run_ladder_directed(room, &earned, seed)?);
@@ -945,7 +945,8 @@ fn endings(totals: &Totals) {
 /// Each replay is [`Room::resampled`] — the same members and the same private
 /// evaluations, with only the noncompliance draw reseeded — because the
 /// simulated participants are otherwise deterministic and replaying a room
-/// would produce the same transcript N times.
+/// would produce the same transcript N times. `seed` is this room's own
+/// stream, so two rooms do not share a resampling.
 ///
 /// # Errors
 ///
@@ -953,12 +954,13 @@ fn endings(totals: &Totals) {
 fn earn_directory(
     room: &Room,
     tuned: &EpisodePolicy,
-    options: &Options,
+    history: u32,
+    seed: u64,
 ) -> Result<Directory, String> {
     let mut record: Vec<Trace> = Vec::new();
     let mut offset = 0_u64;
-    for episode in 0..options.history {
-        let seed = mix(mix(options.seed, 0x6869_7374), u64::from(episode));
+    for episode in 0..history {
+        let seed = mix(seed, u64::from(episode));
         let report = run_episode(&room.resampled(seed), tuned, TASK, false)?;
         let mut highest = 0_u64;
         for trace in report.traces {

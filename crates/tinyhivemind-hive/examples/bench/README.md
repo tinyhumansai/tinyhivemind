@@ -109,12 +109,12 @@ hive+ev      10.29        60.8        55.9          2971         29816
 hive+dir      6.75        99.4        82.1          2134         60458
 hive+defer    6.75        99.4        82.1          1942         66456
 hive+dir+defer 6.75        99.4        82.1          1995         64680
-ladder+dir    1.00       100.0        50.7           667       1499649
+ladder+dir    1.00       100.0        49.5           735       1359856
 ```
 
 The three delegation arms score exactly what `hive+` scores, which is what the
 specification predicted for a room of uniform expertise: with nothing to route
-on, a directory routes nowhere. `ladder+dir` is seven points *worse* than the
+on, a directory routes nowhere. `ladder+dir` is eight points *worse* than the
 uninformed ladder. [`DELEGATION.md`](DELEGATION.md) says why.
 
 The tuned deliberation beats the matched-budget control at half the budget, and
