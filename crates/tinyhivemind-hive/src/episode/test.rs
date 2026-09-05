@@ -839,6 +839,33 @@ fn a_zero_defer_cap_is_rejected() {
 }
 
 #[test]
+fn a_zero_directory_half_life_is_rejected_even_when_the_budget_is_spent() {
+    // The budget check alone would return `Exhausted` here without ever
+    // reaching the directory fold, which is exactly why the policy has to be
+    // validated ahead of every terminal return rather than only inside the
+    // fold: a malformed `DirectoryPolicy` must fail the same way on every
+    // step, not just the ones that get far enough to call `directory`.
+    let room = Room::new();
+    let policy = EpisodePolicy {
+        turn_budget: 0,
+        directory: Some(DirectoryPolicy {
+            half_life: 0,
+            ..DirectoryPolicy::DEFAULT
+        }),
+        ..EpisodePolicy::DEFAULT
+    };
+    let error = step(
+        &state(),
+        &converging(),
+        &room.roster(),
+        &room.desk_set(),
+        &policy,
+    )
+    .expect_err("zero directory half-life");
+    assert_eq!(error.to_string(), "directory half life must not be zero");
+}
+
+#[test]
 fn an_episode_with_a_directory_gives_the_floor_to_the_fact_holder() {
     let room = Room::new();
     let turn = speaking(run(&room, &state(), &unheard(), &delegating()));
