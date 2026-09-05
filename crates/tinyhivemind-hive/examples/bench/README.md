@@ -435,7 +435,7 @@ rather than a failure of the harness.
 | `--model-cost model=N` | cost per 1000 tokens for `model`, for the usage table (repeatable) |
 | `--seat-model agent_id=model` | per-seat model override for the HTTP backend (repeatable) |
 | `--seat-cmd agent_id="command"` | per-seat command override for the CLI backend (repeatable) |
-| `--specialist-model NAME` | model seated for a member the scenario marks `expert_on:` or `tier: reasoning` |
+| `--specialist-model NAME` | model seated for a member the scenario marks `tier: reasoning` (`expert_on:` alone does not move a seat) |
 | `--thinking on\|off` | whether the HTTP backend reasons before answering (default `on`) |
 
 `--swarm --trace` prints the interleaved multi-channel transcript, and

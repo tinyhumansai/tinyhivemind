@@ -1160,11 +1160,14 @@ fn backend_label(options: &Options) -> String {
 /// Whether the scenario marks `agent` as a specialist `--specialist-model`
 /// should seat instead of the backend's default model.
 ///
-/// True for a member the scenario names as a reasoning-tier seat, or as an
-/// expert on at least one named area — either is a claim the scenario itself
-/// makes about the room, not one the harness infers from a seat's answers.
+/// True only for a member the scenario names as a reasoning-tier seat.
+/// `expert_on:` is deliberately not enough: it names the areas a member's
+/// prompt says it owns, and every seat in a hidden profile owns *some* area,
+/// so reading it here seated the whole room on the specialist model — the
+/// first mixed-tier live row measured an all-reasoning room by mistake. A
+/// seat's model is a `tier:` claim the scenario makes on purpose.
 fn is_specialist(agent: &ScenarioAgent) -> bool {
-    agent.tier.as_deref() == Some("reasoning") || !agent.expert_on.is_empty()
+    agent.tier.as_deref() == Some("reasoning")
 }
 
 /// The model an HTTP seat for `agent` should run under.
