@@ -92,6 +92,16 @@ impl HiveHarness {
         self.conversation.clone()
     }
 
+    /// The roster records this room was built with.
+    pub(crate) fn roster_members(&self) -> Vec<RosterMember> {
+        self.members.clone()
+    }
+
+    /// The desk overlay this room runs on.
+    pub(crate) fn desks(&self) -> Vec<Desk> {
+        self.desks.clone()
+    }
+
     pub(crate) fn journal(&self) -> &[SessionMessage] {
         &self.journal
     }

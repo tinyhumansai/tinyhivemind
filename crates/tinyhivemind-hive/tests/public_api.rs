@@ -6,9 +6,10 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use tinyhivemind_hive::{
-    AgentThreshold, Bid, BidReason, ConsensusState, EpisodePolicy, EpisodeState, HiveStep,
-    HiveTurn, Phase, QuorumPolicy, Salience, SalienceWeights, TRACE_CAP, TopicId, TopicStanding,
-    Trace, TraceKind, Visibility, consensus, floor_holder, project_for, read, resolve, salience,
+    AgentThreshold, Bid, BidReason, ConsensusState, Directory, DirectoryEntry, DirectoryPolicy,
+    EpisodePolicy, EpisodeState, HiveStep, HiveTurn, Phase, QuorumPolicy, Salience,
+    SalienceWeights, TRACE_CAP, TopicId, TopicStanding, Trace, TraceKind, Visibility,
+    WEIGHT_CEILING, consensus, directory, floor_holder, project_for, read, resolve, salience,
     standings, step,
 };
 // The runtime and the pure algebra arrive through this crate, so a host takes
@@ -193,6 +194,62 @@ fn the_default_policy_bounds_every_episode() {
         ),
         (None, false),
     );
+    // Expert delegation is off too, pending the benchmark arm that scores it.
+    assert_eq!(EpisodePolicy::DEFAULT.directory, None);
+    assert_eq!(EpisodePolicy::DEFAULT.defer_cap, None);
+}
+
+#[test]
+fn root_exports_the_directory_fold_and_its_queries() {
+    let transcript = [
+        said(1, "archivist", "!evidence #pool The pool caps at twenty."),
+        said(2, "planner", "!propose #pool ^1 Raise the cap."),
+    ];
+    let policy = DirectoryPolicy {
+        window: 100,
+        ..DirectoryPolicy::DEFAULT
+    };
+    let known: Directory = directory(&read(&transcript), Sequence(2), &policy, &[]).expect("folds");
+
+    let top: &DirectoryEntry = known.top(&TopicId("pool".into())).expect("a holder");
+    assert_eq!(top.agent_id, "archivist");
+    assert!(known.knows("archivist", &TopicId("pool".into()), &policy));
+    assert_eq!(
+        known.top_among(&TopicId("pool".into()), &["planner", "archivist"]),
+        Some("archivist"),
+    );
+    assert_eq!(known.topics(), [&TopicId("pool".into())]);
+    assert!(known.entries().len() >= 2);
+    assert!(known.lines()[0].starts_with("#pool: archivist "));
+    assert_eq!(WEIGHT_CEILING, 1_000_000);
+}
+
+#[test]
+fn root_exports_the_deferral_marker() {
+    let deferred = resolve(
+        "!defer #pool Not my area.",
+        None,
+        &agent("planner"),
+        Sequence(3),
+    );
+    assert_eq!(deferred.len(), 1);
+    assert_eq!(deferred[0].kind, TraceKind::Defer);
+    assert_eq!(deferred[0].topic, Some(TopicId("pool".into())));
+    // A deferral without a topic is not a deferral.
+    assert!(resolve("!defer", None, &agent("planner"), Sequence(3)).is_empty());
+}
+
+#[test]
+fn root_exports_the_knows_bid_reason() {
+    // Ordered between dissent and quiet, which is what decides precedence.
+    assert!(BidReason::Dissent < BidReason::Knows);
+    assert!(BidReason::Knows < BidReason::Quiet);
+    let bid = Bid {
+        agent_id: "scout".into(),
+        urge: 1_250,
+        reason: BidReason::Knows,
+    };
+    assert_eq!(bid.reason, BidReason::Knows);
 }
 
 #[test]

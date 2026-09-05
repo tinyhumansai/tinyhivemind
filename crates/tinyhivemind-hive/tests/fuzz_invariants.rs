@@ -3,7 +3,8 @@
 #![allow(clippy::expect_used)]
 
 use tinyhivemind_hive::{
-    QuorumPolicy, Sequence, SessionAuthor, SessionMessage, TRACE_CAP, read, standings,
+    DirectoryPolicy, QuorumPolicy, Sequence, SessionAuthor, SessionMessage, TRACE_CAP, directory,
+    read, standings,
 };
 
 fn next(state: &mut u64) -> u64 {
@@ -20,7 +21,7 @@ fn author(index: u64) -> SessionAuthor {
 }
 
 fn content(state: &mut u64) -> String {
-    const LINES: [&str; 16] = [
+    const LINES: [&str; 18] = [
         "!propose #stage",
         "!support #stage ^1",
         "!object >1 ^2",
@@ -34,6 +35,8 @@ fn content(state: &mut u64) -> String {
         "~~~\n!support #hidden ^1\n~~~",
         "!unknown #ignored",
         "!support #ship ^3 ^3",
+        "!defer #stage",
+        "!defer",
         "😀",
         "é",
         "\n",
@@ -102,6 +105,18 @@ fn arbitrary_transcripts_have_stable_well_formed_and_idempotent_folds() {
             standings(&traces, at, &evidential).expect("valid policy"),
             standings(&doubled_and_reversed, at, &evidential).expect("valid policy"),
         );
+        // The directory is folded on the same address and must be just as
+        // order-independent: a redelivered or reordered medium folds to the
+        // same estimate of who knows what.
+        let known = DirectoryPolicy {
+            window: 100,
+            ..DirectoryPolicy::DEFAULT
+        };
+        assert_eq!(
+            directory(&traces, at, &known, &[]).expect("valid policy"),
+            directory(&doubled_and_reversed, at, &known, &[]).expect("valid policy"),
+        );
+
         assert!(traces.len() <= messages.len() * TRACE_CAP);
     }
 }

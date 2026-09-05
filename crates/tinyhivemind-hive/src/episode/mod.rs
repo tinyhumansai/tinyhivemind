@@ -16,6 +16,7 @@ pub use types::{EpisodePolicy, EpisodeState, HiveStep, HiveTurn, Phase, Visibili
 
 use crate::{
     attention::{AgentThreshold, BidContext, bids, floor_holder},
+    directory::{Directory, directory},
     error::{Error, Result},
     quorum::{ConsensusState, consensus, standings},
     trace::{TraceKind, read_borrowed},
@@ -29,9 +30,10 @@ const SPEAK_COST: i64 = 500;
 ///
 /// Evaluation order is fixed, and each rung is checked before the next:
 ///
-/// 1. the roster and desk snapshots are validated;
+/// 1. the roster, desk snapshots and policy are validated;
 /// 2. a spent budget returns [`HiveStep::Exhausted`];
-/// 3. traces and standings are folded from the transcript;
+/// 3. traces, standings and — when `policy.directory` is set — the directory
+///    are folded from the transcript, all at the same sequence;
 /// 4. quorum in [`Phase::Commit`] returns [`HiveStep::Converged`];
 /// 5. quorum in [`Phase::Deliberate`] flips the phase and emits one commit turn;
 /// 6. a deadlock nobody can break returns [`HiveStep::Deadlocked`];
@@ -44,8 +46,9 @@ const SPEAK_COST: i64 = 500;
 /// # Errors
 ///
 /// Returns [`Error::Core`] for a malformed roster or desk snapshot,
-/// [`Error::UnknownThresholdMember`] for a threshold naming a non-member, or a
-/// policy error from the quorum and salience folds.
+/// [`Error::UnknownThresholdMember`] for a threshold naming a non-member,
+/// [`Error::ZeroDeferCap`] for `defer_cap: Some(0)`, or a policy error from the
+/// quorum, salience and directory folds.
 pub fn step(
     state: &EpisodeState,
     transcript: &[SessionMessage],
@@ -55,6 +58,9 @@ pub fn step(
 ) -> Result<HiveStep> {
     roster.validate()?;
     desks.validate()?;
+    if policy.defer_cap == Some(0) {
+        return Err(Error::ZeroDeferCap);
+    }
     let members = active_members(roster, desks, state)?;
 
     if state.spent >= policy.turn_budget {
@@ -92,7 +98,23 @@ pub fn step(
         ConsensusState::Deliberating => {}
     }
 
-    let context = context(&traces, &standings, &members, state, policy, at);
+    // The directory is folded at the same sequence as the standings, so the
+    // bid reads one consistent view of the transcript rather than two.
+    let known = match &policy.directory {
+        Some(directory_policy) => {
+            Some(directory(&traces, at, directory_policy, &state.thresholds)?)
+        }
+        None => None,
+    };
+    let context = context(
+        &traces,
+        &standings,
+        &members,
+        state,
+        policy,
+        at,
+        known.as_ref(),
+    );
     let bids = bids(&context)?;
     let Some(bid) = floor_holder(&bids) else {
         return Ok(HiveStep::Idle);
@@ -282,6 +304,7 @@ fn context<'a>(
     state: &'a EpisodeState,
     policy: &'a EpisodePolicy,
     at: tinyhivemind::Sequence,
+    known: Option<&'a Directory>,
 ) -> BidContext<'a> {
     BidContext {
         traces,
@@ -293,9 +316,9 @@ fn context<'a>(
         dominance_cap: policy.dominance_cap,
         repetition_cap: policy.repetition_cap,
         quorum: &policy.quorum,
-        directory: None,
-        directory_policy: None,
-        defer_cap: None,
+        directory: known,
+        directory_policy: policy.directory.as_ref(),
+        defer_cap: policy.defer_cap,
     }
 }
 
