@@ -134,6 +134,23 @@ fn an_undeclared_affinity_is_neutral_rather_than_uninterested() {
 }
 
 #[test]
+fn a_declared_relevance_separates_an_undeclared_topic_from_a_neutral_one() {
+    let declared = AgentThreshold {
+        affinity: vec![("stage".into(), 95), ("ship".into(), 0)],
+        ..AgentThreshold::new("planner", 0)
+    };
+    assert_eq!(declared.declared_relevance(&"stage".into()), Some(95));
+    // Declared as *irrelevant* is a claim; it must not read back as neutral.
+    assert_eq!(declared.declared_relevance(&"ship".into()), Some(0));
+    assert_eq!(declared.declared_relevance(&"pool".into()), None);
+    assert_eq!(declared.relevance(Some(&"pool".into())), 50);
+    assert_eq!(
+        AgentThreshold::new("scout", 0).declared_relevance(&"pool".into()),
+        None
+    );
+}
+
+#[test]
 fn a_duplicate_threshold_record_is_rejected() {
     let fixture = fixture(&[said(1, "planner", "!propose #stage")]);
     let thresholds = [

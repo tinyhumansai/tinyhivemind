@@ -45,18 +45,37 @@ impl AgentThreshold {
         }
     }
 
-    /// Return this member's declared relevance for a topic.
+    /// Return what this member's host actually declared for a topic, if
+    /// anything.
+    ///
+    /// This is the honest shape of the field, and the one the directory fold
+    /// reads: an undeclared topic is *unknown*, which is a different claim
+    /// from the neutral 50 [`relevance`] substitutes. A member nobody
+    /// configured must contribute no prior rather than half of one, or every
+    /// unconfigured roster would look moderately expert in everything.
+    ///
+    /// [`relevance`]: AgentThreshold::relevance
+    #[must_use]
+    pub fn declared_relevance(&self, topic: &TopicId) -> Option<u8> {
+        self.affinity
+            .iter()
+            .find(|(declared, _)| declared == topic)
+            .map(|(_, relevance)| *relevance)
+    }
+
+    /// Return this member's relevance for a topic, defaulting to neutral.
     ///
     /// A member with no declared affinity is neutral rather than uninterested,
-    /// so an unconfigured roster still deliberates.
+    /// so an unconfigured roster still deliberates. That default is right for
+    /// the salience multiplier and wrong for the directory prior, which reads
+    /// [`declared_relevance`] instead.
+    ///
+    /// [`declared_relevance`]: AgentThreshold::declared_relevance
     #[must_use]
     pub fn relevance(&self, topic: Option<&TopicId>) -> u8 {
         const NEUTRAL: u8 = 50;
         let Some(topic) = topic else { return NEUTRAL };
-        self.affinity
-            .iter()
-            .find(|(declared, _)| declared == topic)
-            .map_or(NEUTRAL, |(_, relevance)| *relevance)
+        self.declared_relevance(topic).unwrap_or(NEUTRAL)
     }
 }
 

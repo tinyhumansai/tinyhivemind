@@ -186,15 +186,15 @@ pub(crate) fn paired_bootstrap(a: &[bool], b: &[bool], seed: u64, resamples: u32
     if n == 0 || a.len() != b.len() || resamples == 0 {
         return (0.0, 0.0);
     }
-    let mut differences = Vec::with_capacity(resamples as usize);
+    let bound = u32::try_from(n).unwrap_or(u32::MAX);
+    let denominator = u64::try_from(n).unwrap_or(u64::MAX);
+    let mut differences = Vec::with_capacity(usize::try_from(resamples).unwrap_or(0));
     let mut rng = Rng::seeded(seed);
     for _ in 0..resamples {
         let mut a_hits = 0_u32;
         let mut b_hits = 0_u32;
         for _ in 0..n {
-            let index = usize::try_from(rng.below(u32::try_from(n).unwrap_or(u32::MAX)))
-                .unwrap_or(0)
-                .min(n - 1);
+            let index = usize::try_from(rng.below(bound)).unwrap_or(0).min(n - 1);
             if a[index] {
                 a_hits = a_hits.saturating_add(1);
             }
@@ -202,31 +202,35 @@ pub(crate) fn paired_bootstrap(a: &[bool], b: &[bool], seed: u64, resamples: u32
                 b_hits = b_hits.saturating_add(1);
             }
         }
-        let difference = ratio(a_hits.into(), n as u64) - ratio(b_hits.into(), n as u64);
+        let difference = ratio(a_hits.into(), denominator) - ratio(b_hits.into(), denominator);
         differences.push(difference * 100.0);
     }
-    differences.sort_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal));
-    (percentile(&differences, 2.5), percentile(&differences, 97.5))
+    differences.sort_by(f64::total_cmp);
+    (percentile(&differences, 25), percentile(&differences, 975))
 }
 
 /// Read a percentile out of an already-sorted sample, by linear
 /// interpolation between the two nearest ranks.
-fn percentile(sorted: &[f64], pct: f64) -> f64 {
-    if sorted.is_empty() {
+///
+/// `per_mille` is the percentile scaled by ten (`25` for the 2.5th, `975` for
+/// the 97.5th), so the rank arithmetic stays in integers up to the final
+/// interpolation weight and no float is ever truncated back into an index.
+fn percentile(sorted: &[f64], per_mille: u32) -> f64 {
+    let Some(last) = sorted.len().checked_sub(1) else {
         return 0.0;
-    }
-    if sorted.len() == 1 {
+    };
+    if last == 0 {
         return sorted[0];
     }
-    let rank = (pct / 100.0) * (sorted.len() - 1) as f64;
-    let lower = rank.floor() as usize;
-    let upper = rank.ceil() as usize;
-    let lower = lower.min(sorted.len() - 1);
-    let upper = upper.min(sorted.len() - 1);
-    if lower == upper {
+    let last = u64::try_from(last).unwrap_or(u64::MAX);
+    let numerator = u64::from(per_mille) * last;
+    let lower = usize::try_from(numerator / 1000).unwrap_or(0);
+    let remainder = numerator % 1000;
+    let upper = (lower + 1).min(sorted.len() - 1);
+    if remainder == 0 || lower == upper {
         return sorted[lower];
     }
-    let weight = rank - lower as f64;
+    let weight = f64::from(u32::try_from(remainder).unwrap_or(0)) / 1000.0;
     sorted[lower] + (sorted[upper] - sorted[lower]) * weight
 }
 
@@ -269,7 +273,7 @@ pub(crate) fn spearman_milli(x: &[u32], y: &[u32]) -> i64 {
             d * d
         })
         .sum();
-    let n = n as i64;
+    let n = i64::try_from(n).unwrap_or(i64::MAX);
     1000 - (6000 * sum_d2) / (4 * n * (n * n - 1))
 }
 
@@ -285,9 +289,9 @@ fn doubled_ranks(values: &[u32]) -> Vec<i64> {
             end += 1;
         }
         // 1-based first and last rank of the tie group.
-        let first = position + 1;
-        let last = end + 1;
-        let doubled_rank = (first + last) as i64;
+        let first = i64::try_from(position + 1).unwrap_or(i64::MAX);
+        let last = i64::try_from(end + 1).unwrap_or(i64::MAX);
+        let doubled_rank = first + last;
         for slot in order.iter().take(end + 1).skip(position) {
             doubled[*slot] = doubled_rank;
         }

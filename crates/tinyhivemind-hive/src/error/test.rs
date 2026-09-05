@@ -20,6 +20,10 @@ fn every_message_is_lowercase_without_trailing_punctuation() {
         Error::ZeroHalfLife,
         Error::ZeroQuorumThreshold,
         Error::ZeroQuorumWindow,
+        Error::ZeroRefutationCap,
+        Error::ZeroDirectoryHalfLife,
+        Error::ZeroDirectoryWindow,
+        Error::ZeroDeferCap,
     ];
     for error in errors {
         let message = error.to_string();

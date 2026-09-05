@@ -72,7 +72,7 @@ use tinyhivemind_hive::{EpisodePolicy, QuorumPolicy, trace::TopicId};
 
 use crate::federation::Federation;
 use crate::live::LiveAgent;
-use crate::metrics::{Aggregate, arm_header, arm_row};
+use crate::metrics::{Aggregate, arm_header, arm_row, paired_bootstrap, spearman_milli, wilson};
 use crate::rng::mix;
 use crate::run::{Participant, drive, run_episode};
 use crate::scenario::Scenario;
@@ -136,6 +136,11 @@ struct Options {
     trace: bool,
     /// The agent command, when one was given.
     agent: Option<String>,
+    /// Print one flat JSON object per arm, ahead of the tables.
+    json: bool,
+    /// Run the hidden self-check over `wilson`, `paired_bootstrap` and
+    /// `spearman_milli` and exit, rather than running a mode.
+    stats_check: bool,
 }
 
 /// What this run does.
@@ -170,6 +175,8 @@ impl Options {
             bias: SWARM_BIAS,
             trace: false,
             agent: None,
+            json: false,
+            stats_check: false,
         };
         // The policy is rebuilt once the room size is known, then any explicit
         // policy flag is applied over it, so `--agents` moves the quorum
@@ -255,6 +262,8 @@ impl Options {
                 }
                 "--scenario" => options.scenario = args.next(),
                 "--repeat" => options.repeat = next_number(&mut args).unwrap_or(1).max(1),
+                "--json" => options.json = true,
+                "--stats-check" => options.stats_check = true,
                 _ => {}
             }
         }
@@ -376,10 +385,57 @@ fn quorum_threshold(agents: usize) -> u32 {
 
 fn main() {
     let options = Options::parse();
+    if options.stats_check {
+        if stats_check() {
+            println!("stats-check: ok");
+        } else {
+            eprintln!("stats-check: FAILED");
+            std::process::exit(1);
+        }
+        return;
+    }
     if let Err(error) = run(&options) {
         eprintln!("bench failed: {error}");
         std::process::exit(1);
     }
+}
+
+/// Run known cases through `wilson`, `paired_bootstrap` and `spearman_milli`
+/// and report whether every one came out as it must.
+///
+/// `metrics.rs` is an example file, so `cargo test` never runs a `#[test]`
+/// placed in it; this is that coverage's stand-in, wired to CI through the
+/// join the README's `--stats-check` line names. Each case is a property the
+/// statistic is defined to have, not a fitted expectation, so a break here is
+/// always a real regression rather than a brittle golden number.
+fn stats_check() -> bool {
+    let mut ok = true;
+
+    // wilson(0, n): the observed rate is 0%, so the interval cannot go
+    // negative, and with ten trials of silence it has not pinned the rate to
+    // exactly 0% either.
+    let (zero_low, zero_high) = wilson(0, 10);
+    ok &= zero_low == 0.0 && zero_high > 0.0 && zero_high < 100.0;
+
+    // wilson(n, n): the mirror image, pinned at the top rather than the
+    // bottom.
+    let (full_low, full_high) = wilson(10, 10);
+    ok &= full_high == 100.0 && full_low > 0.0 && full_low < 100.0;
+
+    // Identical rankings correlate perfectly; the reverse of one anti-correlates
+    // perfectly. Both are exact integers by construction, not approximations.
+    let increasing = [1_u32, 2, 3, 4, 5, 6, 7];
+    let decreasing = [7_u32, 6, 5, 4, 3, 2, 1];
+    ok &= spearman_milli(&increasing, &increasing) == 1000;
+    ok &= spearman_milli(&increasing, &decreasing) == -1000;
+
+    // A paired bootstrap of an array against itself can never show a
+    // difference, at any resample, so both bounds collapse to zero.
+    let flags = [true, false, true, true, false, false, true, false];
+    let (diff_low, diff_high) = paired_bootstrap(&flags, &flags, 7, 256);
+    ok &= diff_low == 0.0 && diff_high == 0.0;
+
+    ok
 }
 
 /// Run the selected mode.
