@@ -101,13 +101,20 @@ pub(crate) fn run_ladder(room: &Room, seed: u64) -> Result<ArmReport, String> {
 /// Three things change and nothing else does. Each candidate carries a
 /// `description` built from that member's own directory lines, so the
 /// selector sees what the transcript says the member has grounded. The
-/// request names the topic the call turns on — the *question*, never the
-/// answer: which option is right is exactly what the router is not told. And
-/// the simulated router, instead of drawing uniformly, reads the descriptions
-/// it was given and names the candidate carrying the most weight on that
-/// topic. It is still validated through the real [`accept_selection`], so a
-/// router that named a non-candidate would fall back exactly as the
-/// uninformed one does.
+/// request names `room.truth` as the topic the call turns on. And the
+/// simulated router, instead of drawing uniformly, reads the descriptions it
+/// was given and names the candidate carrying the most weight on that topic.
+/// It is still validated through the real [`accept_selection`], so a router
+/// that named a non-candidate would fall back exactly as the uninformed one
+/// does.
+///
+/// **This arm's score measures the leak as much as the mechanism.** The topic
+/// it names *is* the correct option, so a directory that records who deposited
+/// a reading of `#truth` is already halfway to naming the winner — the
+/// heaviest holder of that topic is usually the member whose favourite is that
+/// option. Read its number knowing the topic was named; the README's
+/// "`ladder+dir` on a uniform room is an artifact, not a result" paragraph
+/// gives the size of the swing.
 ///
 /// It takes a [`Directory`] and never [`Room::experts`]: routing on the room's
 /// own scoring data would measure nothing but the harness handing itself the
