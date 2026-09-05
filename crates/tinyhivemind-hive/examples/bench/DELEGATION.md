@@ -120,3 +120,15 @@ bench, is what makes this particular hidden profile unsolvable.
 reason: nobody ever grounds the true option, so it carries no directory weight
 for a router to read, and `ladder+dir` falls back to the same uninformed draw
 `ladder` makes.
+
+## How much history is worth
+
+None of it, past the first episode. Over 2000 rooms with two specialists,
+`ladder+dir` scores 52.1% at `--history 0`, which is the null control — an
+empty directory, so every candidate's description is `None` and the router
+falls back to the uninformed draw — and 44.5% at `--history 1`, `3` and `5`
+alike, to the decimal. One episode is enough to fix which member holds the
+most weight on the deciding topic, and four more do not move it. That is worth
+knowing in both directions: the arm is not undertrained, and a host thinking
+about accumulating shared history across episodes should not expect the
+estimate to sharpen with it.
