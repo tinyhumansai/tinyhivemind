@@ -87,8 +87,10 @@ plurality on the *whole* budget. `hive+` is the tuned policy, `hive+dir` adds
 `hive+defer` adds `defer_cap: Some(N)` with nothing routing the vacated turn,
 and `hive+dir+defer` is both. `ladder+dir` is the ladder with the earned
 directory's lines as each candidate's `description`, through the real
-`accept_selection`. `hive+cost` and `all-reasoning` appear under `--cost-tiers`
-only; `hive`, `hive+ref` and `hive+ev` are the P8 and P9 arms.
+`accept_selection`. `hive+dir+defer` and `all-reasoning` appear in the cost
+table under `--cost-tiers` only (the table below prints `hive+dir+defer` as
+`hive+cost`, from a run predating the row's rename to match its arms-table
+name); `hive`, `hive+ref` and `hive+ev` are the P8 and P9 arms.
 
 ## Results
 
@@ -332,10 +334,11 @@ federated round are in
 [`2026-09-05-expert-delegation-live-matrix.md`](2026-09-05-expert-delegation-live-matrix.md),
 split out to keep this report under the 500-line cap. In short: the poll
 never found the answer in any row, the fact-holder spoke before the commit
-in every room that had one and was still wrong in fourteen of twenty-three,
+in every room that decided and was still wrong in fourteen of twenty,
 `!defer` and `BidReason::Knows` were never used, a reasoning model on the
 expert seat did not help, and the corrected mixed-tier row (only `dba` on
-`reasoning`) scored 1 of 3 at a third of the all-reasoning cost.
+`reasoning`) scored 1 of 3 at roughly half to two-thirds of the all-reasoning
+cost.
 
 ### What the live arm does not show
 

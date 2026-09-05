@@ -44,7 +44,7 @@ Every arm decides the same rooms from the same private evaluations.
 | `hive+defer` | The tuned policy with `defer_cap: Some(N)` and no directory: members may stand aside on a topic that is not theirs, with nothing routing the vacated turn. |
 | `hive+dir+defer` | Both at once, which is the arrangement `docs/specs/expert-delegation.md` describes end to end. |
 | `ladder+dir` | The responder ladder again, with a directory the room *earned* over `--history` prior episodes of `hive+` on the same room. The selector's candidates carry that directory's per-agent lines as their `description`, the request names the topic the call turns on, and a router that reads the descriptions picks the heaviest holder of it. Validated through the real `accept_selection`. |
-| `hive+cost` `all-reasoning` | Only under `--cost-tiers`, in the cost table: the delegating room against one that puts every seat on the expensive tier. |
+| `all-reasoning` | Only under `--cost-tiers`, in the cost table: `hive+dir+defer` (the delegating room) against a policy that puts every seat on the expensive tier. |
 
 The six rows above `hive+dir` are the published table; the delegation arms are
 appended rather than interleaved, so `--seed 1 --episodes 5000` still prints
@@ -300,13 +300,14 @@ problem with a recorded answer and private facts per member, and `--repeat`
 runs it several times. The prompt, the scenario file format, the two backends
 and what running them actually turned up are in [`LIVE.md`](LIVE.md).
 
-Nine backend rows have been run end to end — the HTTP backend on `flash` and on
-a reasoning model, `claude -p`, `opencode run`, and `codex exec` against
-OpenRouter — over twenty-four rounds. The headline is that **the matched-budget
-poll found the answer in none of them**, while the rooms scored 8 of 24, and
-that the scenario's `truth_expert` spoke before the commit in every round that
-had one and twelve of those twenty rooms were still wrong. `!defer` was used on
-none of the 240 turns and no turn was awarded on `BidReason::Knows`. The `codex`
+Ten backend rows have been run end to end — the HTTP backend on `flash`, on a
+reasoning model, mixed-tier, `claude -p`, `opencode run`, and `codex exec`
+against OpenRouter — over twenty-seven rounds. The headline is that **the
+matched-budget poll found the answer in none of them**, while the rooms scored
+9 of 27, and that the scenario's `truth_expert` spoke before the commit in
+every round that decided and fourteen of those twenty rooms were still wrong.
+`!defer` was used on none of the 266 turns and no turn was awarded on
+`BidReason::Knows`. The `codex`
 row is a CLI row by necessity: the router cannot relay a streaming Responses
 request, so that model cannot go through `--api-base` at all and is driven with
 `codex exec -c model_provider=…` pointed straight at OpenRouter. Every row and

@@ -15,14 +15,22 @@ Tokens and cost print for the HTTP backend only, in the harness's unit — 1 per
 1000 tokens times the model's price, so a `reasoning` round costs ten times a
 `flash` round of the same length.
 
+`expert`'s first number is capped at a row's decided count: three rows below
+(`index-lock-expert` on `flash`, `opencode` and `codex exec`) each also
+recorded one undecided round, and the corrected metric this follow-up ships
+(the earlier `print_expert` fix) proves that number cannot exceed how many
+rounds actually decided. Their originally recorded values of 3 predate that
+fix and are capped here to 2, each row's decided count, rather than restated
+as a rerun.
+
 | row | backend | rounds | hive ✓/decided | poll ✓ | turns/ep | s/ep | tokens/ep | cost/ep | expert | `!defer` |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `checkout-503` | HTTP `flash` | 3 | **3 / 3** | 0 / 3 | 7.3 | 451 | 27,543 | 24.7 | — | 0 |
-| `index-lock-expert` | HTTP `flash` | 3 | 1 / 2 | 0 / 3 | 11.7 | 842 | 48,483 | 46.0 | 3 / 2 | 0 |
+| `index-lock-expert` | HTTP `flash` | 3 | 1 / 2 | 0 / 3 | 11.7 | 842 | 48,483 | 46.0 | 2 / 2 | 0 |
 | `index-lock-expert` | HTTP, `--specialist-model reasoning` | 3 | 0 / 3 | 0 / 3 | 7.0 | 322 | 19,999 | 197.7 | 3 / 1 | 0 |
 | `index-lock-expert` | `claude -p --model flash` | 3 | **3 / 3** | 0 / 3 | 13.3 | 697 | — | — | 3 / 2 | 0 |
-| `index-lock-expert` | `opencode run -m ladder/flash` | 3 | 1 / 2 | 0 / 3 | 12.3 | 374 | — | — | 3 / 1 | 0 |
-| `index-lock-expert` | `codex exec` → `deepseek/deepseek-v4-flash` | 3 | 0 / 2 | 0 / 3 | 12.3 | 305 | — | — | 3 / 0 | 0 |
+| `index-lock-expert` | `opencode run -m ladder/flash` | 3 | 1 / 2 | 0 / 3 | 12.3 | 374 | — | — | 2 / 1 | 0 |
+| `index-lock-expert` | `codex exec` → `deepseek/deepseek-v4-flash` | 3 | 0 / 2 | 0 / 3 | 12.3 | 305 | — | — | 2 / 0 | 0 |
 | `index-lock-tiers` | HTTP, `--specialist-model reasoning` | 3 | 0 / 3 | 0 / 3 | 6.0 | 318 | 16,865 | 166.0 | 3 / 1 | 0 |
 | `index-lock-tiers` | HTTP, every seat `reasoning` | 2 | 0 / 2 | 0 / 2 | 7.5 | 489 | 20,858 | 207.0 | 2 / 1 | 0 |
 | `checkout-503-federated` | HTTP `flash`, `--swarm` | 1 | 0 / 1 | 0 / 1 | 15 | 764 | 31,192 | 28.0 | — | 0 |
@@ -41,11 +49,11 @@ tied every time. On `index-lock-expert` and `index-lock-tiers` it returned
 `#rollback` or `#archive`; on `checkout-503`, `#retries` three times in three,
 the decoy the brief plants.
 
-**The fact-holder spoke before the commit in every room that had one** — 23 of
-23 rounds across eight rows, at turn 4 in eighteen of the first twenty. Q1's
-live answer is yes, and the evidence-first opening buys it. **And fourteen of
-those twenty-three rooms still got it wrong.** Reaching the holder is not the
-bottleneck; weighing what it says is.
+**The fact-holder spoke before the commit in every room that decided** — 20 of
+20 decided rounds across eight rows, at turn 4 in eighteen of the first
+twenty. Q1's live answer is yes, and the evidence-first opening buys it. **And
+fourteen of those twenty rooms still got it wrong.** Reaching the holder is not
+the bottleneck; weighing what it says is.
 
 **`!defer` was never used.** Not one of the 266 turns, in any harness, on any
 row, although `!defer #topic` sits in the move list every participant reads,
@@ -102,9 +110,10 @@ rows with a reasoning model cost 166, 198 and 207 and scored **0 correct in 8
 rounds**. One caveat is load-bearing and was a harness defect, now fixed:
 `is_specialist` was true for any seat with an `expert_on` line, and every seat
 in both scenarios has one, so `--specialist-model reasoning` put the whole room
-on `reasoning` rather than `dba` alone. **So this matrix did not test the
-mixed-tier claim at all** — it compared flash-only rooms against all-reasoning
-rooms, and the cheap rooms won.
+on `reasoning` rather than `dba` alone. **So those three rows did not test the
+mixed-tier claim at all** — they compared flash-only rooms against
+all-reasoning rooms, and the cheap rooms won. The corrected mixed-tier row
+described earlier is the one that does.
 
 Seating by tier fixed the defect (the corrected row above). That run scored 1
 correct in 3 rounds at 108.7 units — better than either buggy all-reasoning

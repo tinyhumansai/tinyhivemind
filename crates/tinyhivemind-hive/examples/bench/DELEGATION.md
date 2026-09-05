@@ -33,9 +33,10 @@ real `responder_plan` and the real `accept_selection`.
 **Q3 — what does accuracy cost?** `--cost-tiers` charges a specialist's turn
 ten units against a lay member's one, and the cost table under `--cost-tiers`
 prints `cost/ep` and `correct/kU` — right answers per thousand units spent —
-for `hive+cost` (the delegating room, expensive seats only where the
-specialists are) against `all-reasoning` (the same policy with every seat on
-the expensive tier).
+for `hive+dir+defer` (the delegating room, expensive seats only where the
+specialists are; printed as `hive+cost` in the table below, from a run
+predating the row's rename to match its arms-table name) against
+`all-reasoning` (the same policy with every seat on the expensive tier).
 
 ## What the arms actually scored
 
@@ -207,16 +208,19 @@ Ten backend rows, twenty-seven rounds, two hundred and sixty-six agent turns, on
 `checkout-503-federated`. `expert` is the rounds in which the scenario's
 `truth_expert` spoke before the commit, over the rounds whose winning commit
 chain reaches something it said; cost is the harness's own unit and prints for
-the HTTP backend only.
+the HTTP backend only. `expert`'s first number is capped at a row's decided
+count — the corrected metric this follow-up ships proves it cannot exceed how
+many rounds actually decided, and three rows here (`flash`, `opencode`,
+`codex exec`) each also recorded one undecided round.
 
 | row | backend | rounds | hive ✓/decided | poll ✓ | turns/ep | s/ep | cost/ep | expert |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `checkout-503` | HTTP `flash` | 3 | 3 / 3 | 0 / 3 | 7.3 | 451 | 24.7 | — |
-| `index-lock-expert` | HTTP `flash` | 3 | 1 / 2 | 0 / 3 | 11.7 | 842 | 46.0 | 3 / 2 |
+| `index-lock-expert` | HTTP `flash` | 3 | 1 / 2 | 0 / 3 | 11.7 | 842 | 46.0 | 2 / 2 |
 | `index-lock-expert` | HTTP, `--specialist-model reasoning` | 3 | 0 / 3 | 0 / 3 | 7.0 | 322 | 197.7 | 3 / 1 |
 | `index-lock-expert` | `claude -p --model flash` | 3 | 3 / 3 | 0 / 3 | 13.3 | 697 | — | 3 / 2 |
-| `index-lock-expert` | `opencode run -m ladder/flash` | 3 | 1 / 2 | 0 / 3 | 12.3 | 374 | — | 3 / 1 |
-| `index-lock-expert` | `codex exec` → `deepseek/deepseek-v4-flash` | 3 | 0 / 2 | 0 / 3 | 12.3 | 305 | — | 3 / 0 |
+| `index-lock-expert` | `opencode run -m ladder/flash` | 3 | 1 / 2 | 0 / 3 | 12.3 | 374 | — | 2 / 1 |
+| `index-lock-expert` | `codex exec` → `deepseek/deepseek-v4-flash` | 3 | 0 / 2 | 0 / 3 | 12.3 | 305 | — | 2 / 0 |
 | `index-lock-tiers` | HTTP, `--specialist-model reasoning` | 3 | 0 / 3 | 0 / 3 | 6.0 | 318 | 166.0 | 3 / 1 |
 | `index-lock-tiers` | HTTP, every seat `reasoning` | 2 | 0 / 2 | 0 / 2 | 7.5 | 489 | 207.0 | 2 / 1 |
 | `checkout-503-federated` | HTTP `flash`, `--swarm` | 1 | 0 / 1 | 0 / 1 | 15 | 764 | 28.0 | — |
@@ -229,8 +233,8 @@ The **poll found the answer in none of the twenty-seven rounds**, which is the
 control being unable to win — the property the scenarios were rewritten four
 times to get.
 
-The **fact-holder spoke before the commit in all twenty-three rounds that had
-one**, at turn 4 in eighteen of the first twenty, and **fourteen of those
+The **fact-holder spoke before the commit in all twenty rounds that
+decided**, at turn 4 in eighteen of the first twenty, and **fourteen of those
 rooms were still wrong**. Reaching the holder is not the bottleneck.
 
 **`!defer` was used on none of the 266 turns** and **no turn was awarded on
