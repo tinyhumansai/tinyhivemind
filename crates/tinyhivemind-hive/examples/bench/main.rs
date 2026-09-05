@@ -1308,9 +1308,16 @@ fn print_expert(scenario: &Scenario, report: &crate::run::EpisodeReport) -> (boo
         return (false, false);
     };
     // Only an episode that recorded a decision has a commit boundary to be
-    // before at all; a round that deadlocked or exhausted its budget never
-    // set `commit_at`, and must not be counted as an early expert turn.
-    let commit_at = report.commit_at;
+    // before at all. `commit_at` alone is not enough to tell that: `Tally`
+    // sets it the moment any turn runs in `Phase::Commit`, and a round can
+    // still enter that phase, never emit a valid `!commit`, and exhaust its
+    // budget with `decided` left `None` — that round must not be counted as
+    // an early expert turn either.
+    let commit_at = report
+        .decided
+        .is_some()
+        .then_some(report.commit_at)
+        .flatten();
     let spoke = report
         .first_spoke
         .iter()
