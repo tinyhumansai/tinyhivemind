@@ -11,9 +11,18 @@ use tinyhivemind::Sequence;
 
 /// One member's standing willingness to take the floor.
 ///
-/// Two scalars per roster entry buy emergent specialisation: a member that
-/// keeps winning the floor on a topic accumulates affinity for it, and a
-/// member that keeps losing drifts down until something in its lane appears.
+/// `threshold` is the only field this crate writes: taking the floor raises it
+/// and staying quiet lowers it, which rotates the floor around the desk. It is
+/// not specialisation, and nothing here reinforces it per topic.
+///
+/// `affinity` is a **host-supplied prior** — a diffuse cue, in Hollingshead's
+/// sense, of the kind a role label carries. It is read and never written. The
+/// estimate that is actually earned from the transcript lives in
+/// [`Directory`], which folds grounded deposits and the citations they drew
+/// into a per-topic weight; `affinity` enters that fold as one term among
+/// three rather than as an authority.
+///
+/// [`Directory`]: crate::directory::Directory
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct AgentThreshold {

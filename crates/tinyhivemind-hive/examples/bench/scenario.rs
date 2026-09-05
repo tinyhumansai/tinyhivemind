@@ -48,6 +48,8 @@ pub(crate) struct ScenarioOption {
     pub(crate) id: String,
     /// One sentence saying what it is.
     pub(crate) description: String,
+    /// The agent id it is honest to defer to on this option, if any.
+    pub(crate) expert: Option<String>,
 }
 
 /// One channel a scenario's members are split across.
@@ -68,6 +70,13 @@ pub(crate) struct ScenarioAgent {
     pub(crate) role: String,
     /// Facts held by this member and by nobody else.
     pub(crate) knows: Vec<String>,
+    /// Areas this member is the room's specialist on, named as topics rather
+    /// than as option ids, so knowing who the expert is does not itself name
+    /// the answer.
+    pub(crate) expert_on: Vec<String>,
+    /// How expensive a model this seat is meant to stand in for, if the
+    /// scenario says: `cheap` or `reasoning`.
+    pub(crate) tier: Option<String>,
 }
 
 /// A problem a live room is asked to decide.
@@ -76,6 +85,9 @@ pub(crate) struct Scenario {
     pub(crate) task: String,
     /// The option that is genuinely right.
     pub(crate) truth: String,
+    /// The agent id who holds the decisive private fact behind `truth`, if
+    /// the scenario names one.
+    pub(crate) truth_expert: Option<String>,
     /// The options on offer.
     pub(crate) options: Vec<ScenarioOption>,
     /// The channels the members are split across, if the scenario declares any.
@@ -93,6 +105,7 @@ impl Scenario {
     pub(crate) fn parse(text: &str) -> Result<Self, String> {
         let mut task = String::new();
         let mut truth = String::new();
+        let mut truth_expert: Option<String> = None;
         let mut options: Vec<ScenarioOption> = Vec::new();
         let mut agents: Vec<ScenarioAgent> = Vec::new();
         let mut desks: Vec<ScenarioDesk> = Vec::new();
@@ -114,6 +127,13 @@ impl Scenario {
             match (&section, key) {
                 (Section::Top, "task") => value.clone_into(&mut task),
                 (Section::Top, "truth") => value.clone_into(&mut truth),
+                (Section::Top, "truth_expert") => truth_expert = Some(value.to_owned()),
+                (Section::Option, "expert") => {
+                    options
+                        .last_mut()
+                        .ok_or_else(|| "expert outside a section".to_owned())?
+                        .expert = Some(value.to_owned());
+                }
                 (Section::Option, _) => {
                     let option = options
                         .last_mut()

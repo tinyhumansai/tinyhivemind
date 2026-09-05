@@ -326,8 +326,13 @@ fn visibility(policy: &EpisodePolicy, live: &[&SessionMessage], members: &[&str]
 
 /// Raise the speaker's threshold and lower everyone else's.
 ///
-/// Speaking costs; silence accrues standing. That is what turns two scalars per
-/// member into emergent specialisation rather than a fixed priority order.
+/// Speaking costs; silence accrues standing. That rotates the floor around the
+/// desk rather than fixing a priority order. It is deliberately *not*
+/// specialisation: only `threshold` moves, the same amount whatever the turn
+/// was about, and `affinity` is host-supplied and never written here. The
+/// per-topic estimate earned from the transcript is
+/// [`directory`](crate::directory::directory), which is folded fresh on every
+/// step rather than carried in state.
 fn charged(thresholds: &[AgentThreshold], members: &[&str], speaker: &str) -> Vec<AgentThreshold> {
     members
         .iter()
