@@ -821,7 +821,7 @@ fn compare(options: &Options, rooms: &[Room]) -> Result<(), String> {
             ("ladder", &totals.ladder),
             ("ladder+dir", &totals.ladder_directed),
             ("hive+", &totals.hive_tuned),
-            ("hive+cost", &totals.hive_both),
+            ("hive+dir+defer", &totals.hive_both),
             ("all-reasoning", &totals.all_reasoning),
         ]);
     }
@@ -1215,14 +1215,12 @@ fn poll_backend(options: &Options) -> Result<Backend, String> {
     if options.api_base.is_some() {
         return Ok(Backend::Http {
             config: http_config(options)?,
-            model: options.model.clone(),
         });
     }
-    let command = options
-        .agent
-        .clone()
-        .ok_or_else(|| "no --agent-cmd or --api-base given".to_owned())?;
-    Ok(Backend::Cli(command))
+    if options.agent.is_none() {
+        return Err("no --agent-cmd or --api-base given".to_owned());
+    }
+    Ok(Backend::Cli)
 }
 
 /// One HTTP seat's usage, kept alongside its boxed participant so it can be
@@ -1309,15 +1307,18 @@ fn print_expert(scenario: &Scenario, report: &crate::run::EpisodeReport) -> (boo
     let Some(expert) = &scenario.truth_expert else {
         return (false, false);
     };
-    // Every turn but the last is before the commit, and the commit turn is
-    // the last one an episode that converged ever took.
-    let commit_at = report.turns.saturating_sub(1);
+    // Only an episode that recorded a decision has a commit boundary to be
+    // before at all; a round that deadlocked or exhausted its budget never
+    // set `commit_at`, and must not be counted as an early expert turn.
+    let commit_at = report.commit_at;
     let spoke = report
         .first_spoke
         .iter()
         .find(|(id, _)| id == expert)
         .map(|(_, turn)| *turn);
-    let before = spoke.is_some_and(|turn| turn < commit_at);
+    let before = spoke
+        .zip(commit_at)
+        .is_some_and(|(turn, commit)| turn < commit);
     match spoke {
         Some(turn) => println!(
             "hive   expert @{expert} first spoke at turn {turn} ({} the commit)",
@@ -1652,7 +1653,7 @@ fn live_round(
     print_usage(options, &usage_seats);
 
     let backend = poll_backend(options)?;
-    let picks = live::poll(scenario, &backend)?;
+    let picks = live::poll(options, scenario, &backend)?;
     for (id, pick) in &picks {
         println!("vote   {id:>10} alone: #{pick}");
     }
@@ -2048,7 +2049,7 @@ fn live_federation(options: &Options, scenario: &Scenario) -> Result<(), String>
     print_usage(options, &usage_seats);
 
     let backend = poll_backend(options)?;
-    let picks = live::poll(scenario, &backend)?;
+    let picks = live::poll(options, scenario, &backend)?;
     for (id, pick) in &picks {
         println!("vote   {id:>16} alone: #{pick}");
     }

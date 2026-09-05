@@ -533,14 +533,11 @@ fn split_command(command: &str) -> Option<(String, Vec<String>)> {
 /// seats themselves ran under.
 pub(crate) enum Backend {
     /// One process per member, such as `claude -p` or `codex exec`.
-    Cli(String),
-    /// Direct HTTP against an `OpenAI`- or `Anthropic`-shaped endpoint, one
-    /// model for every member.
+    Cli,
+    /// Direct HTTP against an `OpenAI`- or `Anthropic`-shaped endpoint.
     Http {
         /// The endpoint and credentials.
         config: crate::http::HttpConfig,
-        /// The model every polled member answers under.
-        model: String,
     },
 }
 
@@ -557,6 +554,7 @@ pub(crate) enum Backend {
 /// Returns a participant's own failure, such as an agent process that did not
 /// answer.
 pub(crate) fn poll(
+    options: &crate::Options,
     scenario: &Scenario,
     backend: &Backend,
 ) -> Result<Vec<(String, String)>, String> {
@@ -573,7 +571,12 @@ pub(crate) fn poll(
             scenario.brief(),
         );
         let text = match backend {
-            Backend::Cli(command) => {
+            Backend::Cli => {
+                // Resolved the same way the seat itself was: a `--seat-cmd`
+                // override for this agent, or the default `--agent-cmd`.
+                // Otherwise the control would run every voter under one
+                // command even when a seat ran under a different one.
+                let command = crate::seat_command(options, agent)?;
                 let (program, args) = split_command(command).ok_or("empty agent command")?;
                 let output = Command::new(&program)
                     .args(&args)
@@ -585,7 +588,15 @@ pub(crate) fn poll(
                 }
                 plain(&String::from_utf8_lossy(&output.stdout))
             }
-            Backend::Http { config, model } => {
+            Backend::Http { config } => {
+                // Resolved per agent the same way `seat_participant` resolves
+                // it for the deliberation seat: a `--seat-model` or
+                // `--specialist-model` override, or the default `--model`.
+                // Without this, a mixed-tier run compared a room containing a
+                // reasoning-tier specialist against a vote where every voter
+                // ran on the default model, invalidating the same-agent
+                // control.
+                let model = crate::seat_model(options, agent);
                 // The poll has never reported its own token spend, so the
                 // handle is a sink; the CLI arm beside it accounts for
                 // nothing either, and one of the two accounting would make
