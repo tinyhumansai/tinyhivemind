@@ -345,6 +345,19 @@ fn validate(
             ));
         }
     }
+    for agent in agents {
+        if let Some(area) = agent
+            .expert_on
+            .iter()
+            .find(|area| options.iter().any(|option| option.id == **area))
+        {
+            return Err(format!(
+                "agent {:?} names option id {area:?} as an expert_on area, which exposes that \
+                 option id in its private brief",
+                agent.id
+            ));
+        }
+    }
     if let Some(expert) = truth_expert {
         let member = agents
             .iter()
