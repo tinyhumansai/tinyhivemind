@@ -192,12 +192,12 @@ above, priced.
 5000 rooms          correct %   fact %    rho   correct %      95% CI   fact %  knows %    rho
 ladder                   35.1        —      —        35.1   33.7–36.4        —        —      —
 vote                     15.0        —      —        15.0   14.1–16.1        —        —      —
-hive+                    15.3      1.5   0.74        66.3   65.0–67.6     96.8      0.0   0.37
-hive+dir                 15.3      1.5   0.74        65.8   64.5–67.1     95.7     77.5   0.42
-hive+defer               15.4      1.4   0.74        66.8   65.4–68.1     96.8      0.0   0.07
-hive+dir+defer           15.4      1.4   0.74        66.6   65.3–67.9     95.7     77.3   0.10
-hive+ref                 15.3      1.8   0.73        53.3   51.9–54.7     96.4      0.0   0.37
-hive+ev                  12.7      7.1   0.74        26.0   24.8–27.2     96.5      0.0   0.54
+hive+                    15.3      1.5   0.17        66.3   65.0–67.6     96.8      0.0   0.32
+hive+dir                 15.3      1.5   0.17        65.8   64.5–67.1     95.7     77.5   0.37
+hive+defer               15.4      1.4   0.17        66.8   65.4–68.1     96.8      0.0  -0.02
+hive+dir+defer           15.4      1.4   0.17        66.6   65.3–67.9     95.7     77.3  -0.00
+hive+ref                 15.3      1.8   0.32        53.3   51.9–54.7     96.4      0.0   0.31
+hive+ev                  12.7      7.1   0.33        26.0   24.8–27.2     96.5      0.0   0.48
 ladder+dir               34.6        —      —        64.1   62.8–65.4        —      0.0      —
 ```
 
@@ -237,21 +237,26 @@ specialists under it — a turn spent arguing outside a member's area converted
 into one somebody else spends inside theirs, finishing marginally sooner, and
 never outside the interval. Raising the cap to two over 2000 rooms moves
 accuracy nothing (`hive+defer` 67.8%, `hive+dir+defer` 67.4% against `hive+`'s
-66.6%, at 0.8 and 0.7 defers per episode) and moves `rho` to `0.06` and `0.08`
-against `0.36`.
+66.6%, at 0.8 and 0.7 defers per episode) and moves `rho` to `-0.08` and
+`-0.06` against `0.31`.
 
 ### What `rho` separates
 
-The spec obliges this benchmark to print the Spearman rank correlation between a
+The spec obliges this benchmark to print the rank correlation between a
 member's final directory weight and its share of the episode's turns, and to
 report the mechanism as having failed if it tracks speech even where accuracy
-rose. Across the runs above it spans `0.06` to `0.85`, and separates the arms.
+rose. `rho` is Pearson's correlation on tie-averaged ranks, computed in exact
+integer arithmetic. Across the runs above it spans `-0.08` to `0.72`, and
+separates the arms.
 
-`hive` on a hidden profile under the ordinary opening reads `0.83`; every
-deliberating arm of the uniform room `0.72`–`0.75`; `hive+dir` with two
-specialists and the evidence-first opening `0.50`; `hive+` on the hidden profile
-under it `0.37`; `hive+defer` on the same shape `0.07`, and `0.06` at
-`--defer-cap 2`.
+`hive+dir` under `--blind-evidence` on the uniform room reads the range's high
+end, `0.72`, and every deliberating arm of that same blind-evidence uniform
+room sits at `0.61`–`0.72`; `hive+dir` with two specialists and the
+evidence-first opening reads `0.46`; `hive+` on the hidden profile under it
+`0.32`; `hive+defer` on the same shape `-0.02`, and `-0.08` at
+`--defer-cap 2`. `hive` on a hidden profile under the ordinary opening reads
+`0.08` — the low end of the range, where the retired shortcut used to report a
+spuriously high number for exactly this kind of tied, uninformative cell.
 
 Neither of the two things doing the separating is the directory. **Depositing
 before arguing** stops weight tracking turn count: an opening turn that states a
@@ -259,10 +264,11 @@ fact earns specialisation without earning a position, so the member who talks
 most is no longer automatically the one who weighs most. **Deferring** does the
 rest — a member that says "not mine" zeroes its own weight on that topic.
 
-So the estimator *can* be made to stop measuring speech; and at `0.72`, where
-every arm of the default bench sits, very little of any result there could be
-credited to the directory having found something. It did not, and the accuracy
-numbers agree.
+So the estimator *can* be made to stop measuring speech; and even at the
+`0.61`–`0.72` the default bench's blind-evidence arms sit at, the directory's
+weight tracks speech share only weakly at best — the accuracy numbers agree
+that little of any result there could be credited to the directory having
+found something.
 
 ### Not a seed artifact
 
@@ -283,7 +289,7 @@ the delegation arms inside a point of each other.
 
 The simulated participants are arithmetic: they do not misread a brief, coin a
 second name for an option, or refuse to defer. The live arm is where those
-become measurable, and it runs on scenarios rather than rooms of numbers.
+become measurable, on scenarios rather than rooms of numbers.
 
 `scenarios/index-lock-expert.txt` is the hidden profile written for a room with
 a named specialist. The answer `#batch` is a conjunction of two halves that are
@@ -291,54 +297,145 @@ inert apart: `scout` holds a lock-escalation threshold with no transaction sizes
 beside it, `dba` holds two batch sizes with no threshold beside them, and only
 `planner` holds the fact that kills the decoy the brief plants. **Four designs
 were tried and discarded before it, by measurement rather than by taste**, and
-the header records each. The first index-lock design leaked outright: polled
-alone, members picked its truth **15 times out of 15 across three harnesses**,
-because the option text stated the diagnosis and every private fact only
-eliminated, so the model's prior filled the gap. The next collapsed on a
-reasoning model because one bulk writer on the option list made "a large
-transaction is escalating" and "pause the nightly job" the same sentence. This
-design puts two on the floor, so the threshold alone accuses both and the sizes
-alone accuse neither.
+the header records each. The first leaked outright — polled alone, members
+picked its truth **15 times out of 15 across three harnesses**, because the
+option text stated the diagnosis. The next collapsed on a reasoning model
+because one bulk writer on the option list made "a large transaction is
+escalating" and "pause the nightly job" the same sentence; this design puts two
+on the floor, so the threshold alone accuses both and the sizes alone accuse
+neither.
 
-Polled alone the scenario answers `#rollback` — three runs, `flash` twice and a
-reasoning model once:
+Polled alone the scenario answers `#rollback` — three seats read the migration
+as the cause, `planner` reads `#killqueries`, and only `dba` ever names the
+truth. Plurality wrong in every poll of every row below, never more than one
+member on it: the control being unable to win, which is what makes a room's
+score mean anything.
 
-| member | run 1 (`flash`) | run 2 (`flash`) | run 3 (reasoning) |
-| --- | --- | --- | --- |
-| `planner` | `#killqueries` | `#killqueries` | `#killqueries` |
-| `sre` | `#rollback` | `#rollback` | `#rollback` |
-| `analyst` | `#rollback` | `#rollback` | `#rollback` |
-| `scout` | `#rollback` | `#rollback` | `#rollback` |
-| `dba` | `#batch` | `#archive` | `#batch` |
-| **plurality** | `#rollback` | `#rollback` | `#rollback` |
+### Scenario designs discarded by measurement
 
-Plurality wrong every time, never more than one member on the truth: the control
-being unable to win, which is what makes a deliberating arm's score mean
-anything.
+Design 5's failure is worth naming on its own. It shipped with a hole that live
+rooms found in three harnesses out of three: `scout`'s fact said the threshold
+could be restored by rebuilding the table, and every room read that as license
+to converge on a coined `#rebuild`, `#rethreshold` or `#escalate` — a remedy
+that was *correct* and simply not on the option list. The fact now says a
+rebuild takes nine hours with writes blocked, and the task says nothing off the
+list can ship. A room that converges on a coined topic is recorded as
+undecided-wrong, so a live scenario must close every remedy it does not list,
+not only the wrong ones.
 
-<!-- LIVE RESULTS: filled in after the matrix completes -->
+### The live matrix
 
-The matrix that is running, and that this section will carry:
+Nine rows, twenty-four rounds, two hundred and forty agent turns. Every row ran
+both arms: the room, and the matched-budget poll of the same seats through the
+same backend. `expert` is rounds in which the scenario's `truth_expert` spoke
+before the commit, over rounds whose commit chain reaches something it said.
+Tokens and cost print for the HTTP backend only, in the harness's unit — 1 per
+1000 tokens times the model's price, so a `reasoning` round costs ten times a
+`flash` round of the same length.
 
-| scenario | backend | repeats |
-| --- | --- | --- |
-| `checkout-503` | HTTP, `flash` | 5 |
-| `index-lock-expert` | HTTP, `flash` | 5 |
-| `index-lock-expert` | HTTP, `--specialist-model reasoning` | 5 |
-| `index-lock-expert` | `claude -p --model flash` | 3 |
-| `index-lock-expert` | `opencode run -m ladder/flash` | 3 |
-| `index-lock-expert` | `codex exec` against OpenRouter `deepseek/deepseek-v4-flash` | 3 |
-| `index-lock-tiers` | HTTP, mixed tiers | 5 |
-| `index-lock-tiers` | HTTP, all-reasoning | 3 |
-| `checkout-503-federated` | HTTP, `flash` | 3 |
+| row | backend | rounds | hive ✓/decided | poll ✓ | turns/ep | s/ep | tokens/ep | cost/ep | expert | `!defer` |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `checkout-503` | HTTP `flash` | 3 | **3 / 3** | 0 / 3 | 7.3 | 451 | 27,543 | 24.7 | — | 0 |
+| `index-lock-expert` | HTTP `flash` | 3 | 1 / 2 | 0 / 3 | 11.7 | 842 | 48,483 | 46.0 | 3 / 2 | 0 |
+| `index-lock-expert` | HTTP, `--specialist-model reasoning` | 3 | 0 / 3 | 0 / 3 | 7.0 | 322 | 19,999 | 197.7 | 3 / 1 | 0 |
+| `index-lock-expert` | `claude -p --model flash` | 3 | **3 / 3** | 0 / 3 | 13.3 | 697 | — | — | 3 / 2 | 0 |
+| `index-lock-expert` | `opencode run -m ladder/flash` | 3 | 1 / 2 | 0 / 3 | 12.3 | 374 | — | — | 3 / 1 | 0 |
+| `index-lock-expert` | `codex exec` → `deepseek/deepseek-v4-flash` | 3 | 0 / 2 | 0 / 3 | 12.3 | 305 | — | — | 3 / 0 | 0 |
+| `index-lock-tiers` | HTTP, `--specialist-model reasoning` | 3 | 0 / 3 | 0 / 3 | 6.0 | 318 | 16,865 | 166.0 | 3 / 1 | 0 |
+| `index-lock-tiers` | HTTP, every seat `reasoning` | 2 | 0 / 2 | 0 / 2 | 7.5 | 489 | 20,858 | 207.0 | 2 / 1 | 0 |
+| `checkout-503-federated` | HTTP `flash`, `--swarm` | 1 | 0 / 1 | 0 / 1 | 15 | 764 | 31,192 | 28.0 | — | 0 |
 
-`codex exec` is a CLI row by necessity: the router cannot relay a streaming
-Responses request, so it cannot go through the harness's own HTTP backend.
+**The poll never found the answer, in any row** — twenty-four rounds, wrong or
+tied every time. On `index-lock-expert` it returned `#rollback` or `#archive`;
+on `checkout-503`, `#retries` three times in three, the decoy the brief plants.
 
-`index-lock-tiers` is the same scenario with a `tier:` on every seat — four
-`cheap` seats whose job is a lookup and a negation, one `reasoning` seat on
-`dba`, the only member asked to hold a number against somebody else's threshold.
-It prices that routing rather than changing the answer: the live form of Q3.
+**The fact-holder spoke before the commit in every room that had one** — 20 of
+20 rounds across six rows, at turn 4 in eighteen of them. Q1's live answer is
+yes, and the evidence-first opening buys it. **And twelve of those twenty rooms
+still got it wrong.** Reaching the holder is not the bottleneck; weighing what
+it says is.
+
+**`!defer` was never used.** Not one of the 240 turns, in any harness, on any
+row, although `!defer #topic` sits in the move list every participant reads,
+with its rules beside the markers they did use. The federated runs established
+that a move *outside* the list is never used; this establishes something
+narrower and less comfortable — a move inside it is not necessarily used either.
+A model asked for one line still prefers a position on a topic it knows nothing
+about to saying so, and the simulated arms that priced `!defer` were pricing a
+move real participants did not make.
+
+**The directory was in the prompt and never won a turn.** `directory_block`
+renders into every deliberation prompt from the moment any topiced trace exists
+— one `#topic: agent weight (spec N, cred N)` line per contested topic, holders
+in descending weight — empty only on the blind first turn and absent from the
+commit prompt. Across all 240 turns none was awarded on `BidReason::Knows`; the
+reasons recorded are `salience`, `dissent`, `addressed` and `quiet`. Same
+structural reason as the simulation: by the time a topic is contested, its top
+holder has taken a position on it.
+
+**The reasoning model on the expert seat did not help, and the rooms with it
+lost faster.** Both `--specialist-model` rows converged on the decoy in six
+turns, half the length of the same scenario on `flash`, because those rooms had
+no deliberation phase at all: three of the five blind opening turns were
+`!propose #rollback`, which is quorum, so the first non-blind turn was a commit
+turn. What `dba` said in them is the finding. It never stated its numbers — in
+all five rounds it spent its blind turn proposing `#rollback`, "the archive and
+reconciliation jobs are unchanged from their year-long pattern", turning the two
+batch sizes into an argument that they are *not* the cause, exactly the
+non-event reading the scenario header predicts of a member holding them.
+`scout`'s threshold was on the floor in the same blind round; nobody held the
+two against each other, because by the time anyone could read both the room had
+carried `#rollback`.
+
+**`claude` scored 3 of 3 on a scenario the same model lost through three other
+harnesses.** Same ladder, same `flash` behind it; what differs is the agent
+around it, and the transcripts differ in three ways. The `claude` rooms are
+longer — 13.3 turns and 697 s an episode against 7.0 and 322 s for the HTTP
+specialist row — and spend the extra turns killing the decoy: `planner` deposits
+the forward-only rollback fact and two members `!object` to `#rollback` on it,
+so `#rollback` is dead before anything else is settled. They carry `#batch` on a
+chain of `!support` lines citing prior turns by sequence, and commit on that
+chain rather than restating a position. And — the honest caveat — they did not
+do the arithmetic the scenario was built around: `scout` names the
+reconciliation job in its *blind* turn, before any threshold or size is on the
+floor, and the room converges on a guess that happens to be right. The room that
+visibly performed the intended inference is an `opencode` one, where `dba` put
+both commit sizes on the floor and used them to refute its own `#archive`
+support — and that round **exhausted** at 15 turns without a commit.
+
+**On cost, the live rows say what the simulation said, more bluntly.** The two
+`flash` rows that decided anything cost 25 and 46 units an episode; the three
+rows with a reasoning model cost 166, 198 and 207 and scored **0 correct in 8
+rounds**. One caveat is load-bearing and is a harness defect rather than a
+result: `is_specialist` is true for any seat the scenario gives an `expert_on`
+line, and *every* seat in both scenarios has one, so `--specialist-model
+reasoning` put the whole room on the reasoning model rather than `dba` alone —
+the per-tier lines confirm it, charging `cheap` the same ~10 units per 1000
+tokens as `reasoning`. **So this matrix does not test the mixed-tier claim at
+all.** It compares flash-only rooms against all-reasoning rooms, and the cheap
+rooms won.
+
+**The federation completed one round and decided wrongly.** Platform and Data
+converged on `#retries`, Release on `#scale`, the plurality was `#retries`, and
+the poll of the same nine returned `#retries` too — both wrong, and the truth
+`#pool` was nobody's. Two messages crossed a channel and nothing was stranded.
+What crossed was accurate and useless: `data-lead` asked `@#release` whether the
+retry path was active, and Release answered — shipped disabled, zero retries
+fired today, the release moved the client timeout 2s→10s — then said the same
+on its own desk. `release-sdk` read it and supported `#scale`; `data-dba` read
+it and committed `#retries`. That is run four of the federated experiment again
+on a different model: the protocol moved the evidence and the rooms reasoned
+past it.
+
+### What the live arm does not show
+
+Three rounds a row, one model family behind every seat, one scenario family, and
+the federated row is a single episode. Nothing here is a rate: `claude`'s 3 of 3
+and the specialist rows' 0 of 8 are a handful of episodes each, and the
+difference between 1 of 3 and 3 of 3 here is one room's turn order. The
+mixed-tier row does not measure what it was built to, for the harness reason
+above. And every row's poll losing is a property of scenarios *selected* until
+it did — what makes a room's score legible, not a result about polls.
 
 ## What the simulation does not show
 

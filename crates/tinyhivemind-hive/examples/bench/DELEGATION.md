@@ -154,13 +154,13 @@ turn index of 2.1, and the arms separate:
 vote                                     15.0        —         —        —
 ladder                                   35.1        —         —        —
 ladder+dir                               64.1        —         —        —
-hive                                     67.0     95.4       0.0     0.36
-hive+                                    66.3     96.8       0.0     0.37
-hive+dir                                 65.8     95.7      77.5     0.42
-hive+defer                               66.8     96.8       0.0     0.07
-hive+dir+defer                           66.6     95.7      77.3     0.10
-hive+ref                                 53.3     96.4       0.0     0.37
-hive+ev                                  26.0     96.5       0.0     0.54
+hive                                     67.0     95.4       0.0     0.29
+hive+                                    66.3     96.8       0.0     0.32
+hive+dir                                 65.8     95.7      77.5     0.37
+hive+defer                               66.8     96.8       0.0    -0.02
+hive+dir+defer                           66.6     95.7      77.3    -0.00
+hive+ref                                 53.3     96.4       0.0     0.31
+hive+ev                                  26.0     96.5       0.0     0.48
 ```
 
 `hive+ − vote` is `+51.3 [+49.8, +52.8]`. That is the whole finding, and it is
@@ -178,10 +178,10 @@ episode never reaches it.
 
 `--defer-cap 2` over 2000 rooms moves nothing outside the interval:
 `hive+defer` 67.8% and `hive+dir+defer` 67.4% against `hive+`'s 66.6%, at
-0.8 and 0.7 defers per episode. What it does move is `rho`, to 0.06 and 0.08
-against 0.36 — a member that says "not mine" zeroes its own directory weight on
-that topic, and doing it twice per episode is enough to pull the estimate off
-the speaking order entirely.
+0.8 and 0.7 defers per episode. What it does move is `rho`, to `-0.08` and
+`-0.06` against `0.31` — a member that says "not mine" zeroes its own
+directory weight on that topic, and doing it twice per episode is enough to
+pull the estimate below zero.
 
 ## How much history is worth
 
@@ -199,3 +199,57 @@ episode of history costs seven points, and every episode after that costs a
 little more. The estimate is not undertrained and does not sharpen with shared
 history — it converges, slowly, on the wrong member. A host planning to
 accumulate a directory across episodes should read that as the finding it is.
+
+## The live matrix
+
+Nine backend rows, twenty-four rounds, two hundred and forty agent turns, on
+`index-lock-expert`, `index-lock-tiers`, `checkout-503` and the federated
+`checkout-503-federated`. `expert` is the rounds in which the scenario's
+`truth_expert` spoke before the commit, over the rounds whose winning commit
+chain reaches something it said; cost is the harness's own unit and prints for
+the HTTP backend only.
+
+| row | backend | rounds | hive ✓/decided | poll ✓ | turns/ep | s/ep | cost/ep | expert |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `checkout-503` | HTTP `flash` | 3 | 3 / 3 | 0 / 3 | 7.3 | 451 | 24.7 | — |
+| `index-lock-expert` | HTTP `flash` | 3 | 1 / 2 | 0 / 3 | 11.7 | 842 | 46.0 | 3 / 2 |
+| `index-lock-expert` | HTTP, `--specialist-model reasoning` | 3 | 0 / 3 | 0 / 3 | 7.0 | 322 | 197.7 | 3 / 1 |
+| `index-lock-expert` | `claude -p --model flash` | 3 | 3 / 3 | 0 / 3 | 13.3 | 697 | — | 3 / 2 |
+| `index-lock-expert` | `opencode run -m ladder/flash` | 3 | 1 / 2 | 0 / 3 | 12.3 | 374 | — | 3 / 1 |
+| `index-lock-expert` | `codex exec` → `deepseek/deepseek-v4-flash` | 3 | 0 / 2 | 0 / 3 | 12.3 | 305 | — | 3 / 0 |
+| `index-lock-tiers` | HTTP, `--specialist-model reasoning` | 3 | 0 / 3 | 0 / 3 | 6.0 | 318 | 166.0 | 3 / 1 |
+| `index-lock-tiers` | HTTP, every seat `reasoning` | 2 | 0 / 2 | 0 / 2 | 7.5 | 489 | 207.0 | 2 / 1 |
+| `checkout-503-federated` | HTTP `flash`, `--swarm` | 1 | 0 / 1 | 0 / 1 | 15 | 764 | 28.0 | — |
+
+Five things the transcripts say, and one harness defect they exposed.
+
+The **poll found the answer in none of the twenty-four rounds**, which is the
+control being unable to win — the property the scenarios were rewritten four
+times to get.
+
+The **fact-holder spoke before the commit in all twenty rounds that had one**,
+at turn 4 in eighteen of them, and **twelve of those rooms were still wrong**.
+Reaching the holder is not the bottleneck.
+
+**`!defer` was used on none of the 240 turns** and **no turn was awarded on
+`BidReason::Knows`**, although the move was in every move list and the directory
+block was in every deliberation prompt.
+
+**Putting a reasoning model on the expert seat made the room worse and faster.**
+Both such rows converged on the decoy in six turns, because three of the five
+blind opening turns were the same `!propose`, which is already quorum, so the
+first non-blind turn was a commit turn. `dba` never stated its numbers in those
+rooms — it spent its blind turn arguing that neither batch size has moved in a
+year and therefore neither is the cause.
+
+**The harness defect:** `is_specialist` is true for any seat the scenario gives
+an `expert_on` line, and every seat in these scenarios has one, so
+`--specialist-model reasoning` put the whole room on the expensive model rather
+than `dba` alone; the per-tier usage lines confirm it by charging the `cheap`
+tier at the reasoning price. The cost rows therefore compare flash-only rooms
+against all-reasoning rooms — where the cheap rooms won, 0 correct in 8 rounds
+at 166–207 units an episode against 25–46 — and say nothing about mixed tiers.
+
+Three rounds a row, one model family, one scenario family, and one federated
+episode. Nothing here is a rate; the full write-up is in
+[`docs/experiments/2026-09-05-expert-delegation.md`](../../../../docs/experiments/2026-09-05-expert-delegation.md).
