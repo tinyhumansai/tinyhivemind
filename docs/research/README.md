@@ -23,6 +23,10 @@ what actually happened when it was run goes in
 - [`shared-context.md`](shared-context.md) — the human and organizational half
   (transactive memory, distributed cognition, grounding, boundary objects,
   awareness) and the open-source landscape of shared agent memory.
+- [`delegation.md`](delegation.md) — how a collective decides which specialist
+  acts: response thresholds, the tremble dance, transactive memory, hidden
+  profiles, and the 2023-2026 landscape of agentic routers, with the honest
+  half of the evidence against each.
 - [`long-context.md`](long-context.md) — position bias in a long window,
   context rot, and recursive language models: why P14 makes the transcript
   queryable instead of making the window bigger.

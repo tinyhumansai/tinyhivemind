@@ -48,6 +48,9 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a complete sample.
 - [`recall.md`](recall.md) — one selection ranking, the roster and desk
   pickers, bounded transcript search with optional regular expressions,
   pinning as a fold, and the stated per-message budget.
+- [`expert-delegation.md`](expert-delegation.md) — a transactive-memory
+  directory folded from grounded deposits and the citations they drew,
+  `BidReason::Knows`, and `!defer`.
 
 ## Draft and proposed specifications
 

@@ -156,6 +156,11 @@ This is the mechanism that would have surfaced scout's refutation in the failed
 rooms of the [live run](../experiments/2026-09-01-live-hidden-profile.md), and
 it is Wegner's directory with the estimators the transcript already carries.
 
+Specified in full in [`expert-delegation.md`](expert-delegation.md) and decided
+in [ADR 0007](../adr/0007-the-directory-is-folded-from-citations.md), which
+also adds `!defer` and settles that the host's `affinity` is a prior rather
+than an authority.
+
 ## Invariants
 
 - Every fold stays pure, order-independent on `(sequence, offset)`, and
