@@ -103,8 +103,16 @@ An objection debits it. For every live `Object` authored by `b ≠ a` whose
 credibility(a, t) -= policy.discredit · 1000 · d(o.sequence) / 10_000
 ```
 
-Credibility is clamped at zero after every term, so no amount of objecting
-drives a member negative.
+Credibility is clamped at zero **once**, after every credit and every debit in
+the live set has been folded — not after each term. Clamping per term would
+make the result depend on the order the traces happened to be folded in: a
+debit that landed before the citation it cancels would be truncated at zero and
+the citation would then start again from there, where the same two traces in
+the other order net out. The fold is defined over a sorted, deduplicated live
+set precisely so no such ordering exists, and one clamp at the end is what
+keeps that true. What survives is the intended guarantee — no amount of
+objecting drives a member's credibility negative — without buying it at the
+cost of commutativity.
 
 **Prior.** `prior(a, t) = declared_relevance(t).map(|r| min(r, 100) · 10)`,
 `0` when the member declared nothing for that topic. Note that this is *not*
@@ -195,14 +203,48 @@ forbid.
 
 The **contested topic** is, in order:
 
-1. the most recent live `Defer` naming a topic, provided the live defer count
-   is below `defer_cap`;
+1. the live `Defer` with the highest `(sequence, offset)` that names a topic,
+   provided the live defer count is below `defer_cap`;
 2. otherwise the standing with the greatest `support` that has not `carried`,
    ties broken by first-advocated order;
 3. otherwise `None`, and `Knows` cannot fire.
 
+*Highest address*, not *last delivered*: `bids` sorts and deduplicates its
+traces by `(sequence, offset)` before reading any of them, exactly as
+`standings` and `directory` do, so a medium that reorders or redelivers a
+message cannot move the contested topic or spend a member's `defer_cap` twice
+on one deferral. The cap counts distinct deferrals, after that deduplication.
+
 Without a directory in the `BidContext` there is no contested topic and the
 reason is unreachable.
+
+#### Two windows decide what a *live* deferral is
+
+They are not the same window, and it is worth being explicit about which does
+what:
+
+- `BidContext.quorum.window` bounds the deferrals `bids` counts against
+  `defer_cap` and promotes to the contested topic, and the grounded share the
+  dominance guard measures.
+- `DirectoryPolicy.window` bounds the live set the directory folds, and so
+  which `Defer` zeroes its author's weight on a topic.
+
+A deferral inside one window and outside the other therefore does half the job:
+outside the quorum window it no longer promotes its topic but still zeroes its
+author's weight; outside the directory window the reverse. `QuorumPolicy`'s and
+`DirectoryPolicy`'s defaults are both `30`, so the two coincide unless a host
+moves one, and a host that moves one should move both or know why not.
+
+#### `BidContext` carries the whole `QuorumPolicy`
+
+`BidContext` used to carry a bare `window: u32`. It now carries
+`quorum: &QuorumPolicy`, from which the window is read. The value passed is the
+same one — an episode has always handed `bids` its own `policy.quorum.window` —
+but a host that constructs a `BidContext` by hand has to pass the policy
+instead of the number. This is source-breaking and deliberate: `bids` also has
+to ask whether a standing has `carried`, which is a question about the whole
+policy rather than about its window, and threading two views of one policy was
+how the window and the carry rule could have drifted apart.
 
 ### An uncited fact must carry `#topic`
 
@@ -331,3 +373,15 @@ Until the benchmark scores it, `EpisodePolicy::DEFAULT` carries
   earned.
 - **Is mutual citation gameable?** Two members that cite each other raise each
   other's credibility for free. Nothing here detects a citation ring.
+- **An objection that cites its own target pays its target.** The credibility
+  fold credits *every* live trace that cites another member's deposit, and an
+  `Object` is not excluded. So `!object #t >N ^N`, objecting to sequence `N`
+  while citing it, credits the objected-to member on `#t` at the same time as
+  it debits them. Under the default weights the credit very nearly cancels the
+  debit: on a four-message probe the objected-to member ends on `925`
+  thousandths of credibility where the same objection written bare, `!object #t
+  >N`, leaves them on `0`. Whether that is a bug or the honest reading of "the
+  objection engaged with the fact" is unsettled — an objection that quotes what
+  it is objecting to *has* used the deposit — but it is at minimum a cheap way
+  for two members to launder credibility past the discredit term, and it should
+  be measured before the directory ships on by default.

@@ -147,8 +147,14 @@ pub struct BidContext<'a> {
     /// When a topic is entitled to carry, and how far back support counts.
     ///
     /// Its `window` is also the window share and deferral are measured over.
-    /// One window rather than two: a second one would be a second thing to
-    /// tune and the two would drift.
+    /// One window rather than two here: a second one beside it would be a
+    /// second thing to tune and the two would drift.
+    ///
+    /// [`DirectoryPolicy::window`] is a *different* window, bounding what the
+    /// directory folds rather than what the market counts, so a `Defer`
+    /// outside this one but inside that one still zeroes its author's weight
+    /// without promoting its topic. Both default to `30`; a host that widens
+    /// one should know why it is not widening the other.
     pub quorum: &'a QuorumPolicy,
     /// Who the transcript says knows what, when the caller folded one.
     pub directory: Option<&'a Directory>,

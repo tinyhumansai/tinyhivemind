@@ -87,6 +87,23 @@ required-but-nullable through a `deserialize_required_*` shim, so an
 silently meaning "off". A host that wants the mechanism off writes
 `"directory": null`.
 
+**`BidContext` takes the quorum policy, not a window.** The field was
+`window: u32`; it is now `quorum: &QuorumPolicy`, and the window is read from
+it. The *value* is unchanged — an episode has always passed its own
+`policy.quorum.window` — but the change is source-breaking for a host that
+constructs a `BidContext` by hand rather than going through `step`. It is worth
+the break because `bids` also has to ask whether a standing has `carried`, and
+that is a question about the whole policy; passing the window alone meant
+carrying a second, partial view of a policy the caller already had, which is
+exactly how the two could have drifted apart.
+
+That leaves two windows in the mechanism, and they answer different questions.
+`QuorumPolicy.window` decides which deferrals are live enough to count against
+`defer_cap` and to promote a contested topic; `DirectoryPolicy.window` decides
+which are live enough to zero their author's weight. Both default to `30`, so
+they coincide out of the box, and a host that widens one without the other gets
+deferrals that do half their job.
+
 ## Consequences
 
 **Positive.** The estimator's inputs are grounds and other members' judgements,
@@ -104,6 +121,15 @@ seven-turn episode is a short window for any estimator, and on a uniform-
 expertise room the expected gain is exactly zero. The mechanism therefore
 carries a published obligation — the rank correlation between directory weight
 and speech share, reported next to accuracy — and it is allowed to lose.
+
+One concrete leak is already known and is recorded as an open question in the
+spec: the credibility term credits every live trace that cites another
+member's deposit, and does not exclude an `Object`. An `!object #t >N ^N` —
+objecting to a sequence while citing it — therefore credits the member it
+objects to, and under the default weights that credit very nearly cancels the
+discredit. It is defensible (the objection did engage with the fact) and it is
+also a cheap way for two members to launder credibility past the debit, and it
+has not been measured.
 
 **On `!defer`.** It is the crate's eighth verb, and every added verb here has
 lost: `!refute` cost 7 points, `require_evidential` cost 26. It is included
