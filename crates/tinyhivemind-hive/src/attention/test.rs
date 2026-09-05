@@ -574,3 +574,63 @@ fn a_deferral_promotes_its_topic_as_the_contested_one() {
     let capped = bids(&context).expect("bids");
     assert!(capped.iter().all(|bid| bid.reason != BidReason::Knows));
 }
+
+#[test]
+fn a_redelivered_deferral_counts_once_against_the_defer_cap() {
+    let mut fixture = fixture(&[
+        said(1, "planner", "!propose #retries A retry storm explains it."),
+        said(2, "critic", "!support #retries ^1 The graph agrees."),
+        said(3, "scout", "!evidence #pool In-flight requests sit at 24."),
+        said(4, "critic", "!defer #pool Not my area."),
+    ]);
+    // The medium hands the same deferral over a second time, at the address it
+    // already occupies. One deferral was authored, so one is what the cap sees.
+    let redelivered = fixture
+        .traces
+        .last()
+        .expect("the deferral was read")
+        .clone();
+    assert_eq!(redelivered.kind, TraceKind::Defer);
+    fixture.traces.push(redelivered);
+
+    delegating!(fixture, known, policy, context);
+    context.defer_cap = Some(2);
+    let bids = bids(&context).expect("bids");
+    assert_eq!(bid_for(&bids, "scout").reason, BidReason::Knows);
+}
+
+#[test]
+fn the_contested_topic_comes_from_the_highest_addressed_deferral() {
+    let transcript = [
+        said(1, "planner", "!propose #retries A retry storm explains it."),
+        said(2, "critic", "!support #retries ^1 The graph agrees."),
+        said(3, "scout", "!evidence #pool In-flight requests sit at 24."),
+        said(4, "critic", "!defer #pool Not my area."),
+        said(5, "planner", "!defer #cache Nor mine."),
+    ];
+    let cache: TopicId = "cache".into();
+
+    let ordered = fixture(&transcript);
+    {
+        delegating!(ordered, known, policy, context);
+        let live = distinct(context.traces);
+        assert_eq!(contested_topic(&context, &live), Some(&cache));
+    }
+
+    // Redelivered out of order and doubled, the same transcript names the same
+    // topic: the winner is the deferral with the highest address, not the one
+    // the medium happened to hand over last.
+    let mut shuffled = fixture(&transcript);
+    shuffled.traces = shuffled
+        .traces
+        .iter()
+        .rev()
+        .chain(shuffled.traces.iter().rev())
+        .cloned()
+        .collect();
+    {
+        delegating!(shuffled, known, policy, context);
+        let live = distinct(context.traces);
+        assert_eq!(contested_topic(&context, &live), Some(&cache));
+    }
+}
