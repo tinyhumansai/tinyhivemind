@@ -191,6 +191,13 @@ when asked, it sends no thinking block, which is what that wire already did.
 An HTTP seat's answer goes through the same `marker_line` a CLI seat's stdout
 does, so the two parse identically.
 
+With `--thinking off` against the local router, `checkout-503` converges on the
+right answer in seven turns and ten seconds for 5729 tokens across five seats,
+while the matched-budget poll ties three ways and returns no answer. That is
+one round and therefore an anecdote, not a result; what it establishes is that
+the cheap regime holds the grammar, which the reasoning regime was needed for
+at a 6000-token ceiling.
+
 A CLI seat's per-turn timeout (`--timeout`, default 180s) runs through
 `timeout`/`gtimeout` when one is on `PATH` — macOS ships neither by default;
 `gtimeout` comes from Homebrew's `coreutils` — and falls back to no deadline,
