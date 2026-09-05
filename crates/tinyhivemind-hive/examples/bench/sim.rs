@@ -202,12 +202,17 @@ pub(crate) struct Room {
     /// The participants.
     pub(crate) agents: Vec<SimAgent>,
     /// The member holding each specialised topic, one entry per topic that
-    /// has an expert. Empty under `Expertise::Uniform`.
+    /// has an expert. Populated under `Expertise::Specialists` only; empty
+    /// under `Expertise::Uniform`, which has no experts, and under
+    /// `Expertise::HiddenProfile`, whose one knowledgeable member is named by
+    /// `decisive` instead.
     ///
     /// Scoring data only: nothing a participant reads may consult this list
     /// directly. A member learns of its own specialty and of anyone else's
-    /// only through `SimAgent::specialty` and `SimAgent::expert_elsewhere`,
-    /// which this list is used to build.
+    /// only through `SimAgent::specialty` and `SimAgent::expert_elsewhere` —
+    /// built from this list for a room of specialists, and from the planted
+    /// decoy for a hidden profile, whose fact-holder is the room's specialist
+    /// on the option it alone can rule out.
     pub(crate) experts: Vec<(TopicId, String)>,
     /// The member holding the fact that refutes the hidden-profile decoy,
     /// under `Expertise::HiddenProfile`. `None` under every other shape.
