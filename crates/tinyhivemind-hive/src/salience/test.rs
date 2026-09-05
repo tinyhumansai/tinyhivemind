@@ -156,6 +156,10 @@ fn importance_orders_the_trace_kinds() {
     assert!(importance(TraceKind::Object) > importance(TraceKind::Evidence));
     assert!(importance(TraceKind::Evidence) > importance(TraceKind::Support));
     assert!(importance(TraceKind::Support) > importance(TraceKind::Question));
+    // A question names something the room has not established; a deferral only
+    // names who will not establish it, so it moves the floor least of all.
+    assert!(importance(TraceKind::Question) > importance(TraceKind::Defer));
+    assert!(importance(TraceKind::Defer) > 0);
 }
 
 #[test]

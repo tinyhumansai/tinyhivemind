@@ -792,3 +792,25 @@ fn requiring_evidential_grounds_implies_requiring_grounds_at_all() {
         ["planner"],
     );
 }
+
+#[test]
+fn a_deferral_moves_no_support_and_creates_no_standing() {
+    let transcript = [
+        said(1, "planner", "!propose #stage Stage the rollout."),
+        said(2, "critic", "!support #stage ^1 Bounds the blast radius."),
+        // Abstention is not a vote in either direction, and it must not be
+        // able to open a standing for a topic nobody advocated.
+        said(3, "scout", "!defer #stage ^1 Not my area."),
+        said(4, "scout", "!defer #pool The archivist measured this."),
+    ];
+    let folded = fold(&transcript, &policy(2));
+    assert_eq!(folded.len(), 1);
+    let stage = standing(&folded, "stage");
+    assert_eq!(stage.supporters, ["planner", "critic"]);
+    assert!(stage.silenced.is_empty());
+    assert!(stage.refuted_by.is_empty());
+
+    // The same room without the two deferrals folds identically.
+    let without = fold(&transcript[..2], &policy(2));
+    assert_eq!(folded, without);
+}

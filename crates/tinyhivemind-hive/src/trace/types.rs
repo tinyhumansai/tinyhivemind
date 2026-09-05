@@ -59,6 +59,20 @@ pub enum TraceKind {
     Question,
     /// Records the decision after quorum.
     Commit,
+    /// Declines a topic as outside what this member knows.
+    ///
+    /// The abstention half of expert delegation, and the cheapest honest thing
+    /// a member can say. It moves no support and touches no standing. It does
+    /// two things instead: it zeroes its author's [`Directory`] weight on the
+    /// named topic, and it promotes that topic as the contested one, so the
+    /// next bid routes toward whoever *does* hold it.
+    ///
+    /// Like [`Refute`] it requires a `#topic` and fails closed without one — a
+    /// deferral that names nothing is not a deferral.
+    ///
+    /// [`Directory`]: crate::directory::Directory
+    /// [`Refute`]: TraceKind::Refute
+    Defer,
 }
 
 /// One typed deposit read out of an authored message.

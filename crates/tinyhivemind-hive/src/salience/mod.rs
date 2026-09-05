@@ -76,11 +76,14 @@ pub(crate) fn with_relevance(standing: i64, weights: &SalienceWeights, relevance
 
 /// Return the standing importance of a trace kind, in thousandths.
 ///
-/// A proposal and a commitment move the room most; a question moves it least.
+/// A proposal and a commitment move the room most; a deferral moves it least.
 /// A refutation outranks an objection because it is directed at a hypothesis
 /// rather than at a person, and is outranked by a proposal because putting a
-/// new option on the floor moves the room further than removing one.
-/// These are ordinal rather than measured, and are deliberately coarse.
+/// new option on the floor moves the room further than removing one. A
+/// deferral falls below a question because a question at least names something
+/// the room has not established, where a deferral only says who will not
+/// answer it. These are ordinal rather than measured, and are deliberately
+/// coarse.
 #[must_use]
 pub fn importance(kind: TraceKind) -> i64 {
     match kind {
@@ -91,6 +94,7 @@ pub fn importance(kind: TraceKind) -> i64 {
         TraceKind::Evidence => 600,
         TraceKind::Support => 500,
         TraceKind::Question => 300,
+        TraceKind::Defer => 200,
     }
 }
 

@@ -73,6 +73,7 @@ fn every_trace_kind_pins_its_wire_spelling() {
         (TraceKind::Evidence, "evidence"),
         (TraceKind::Question, "question"),
         (TraceKind::Commit, "commit"),
+        (TraceKind::Defer, "defer"),
     ] {
         assert_wire_round_trip(&kind, serde_json::json!(spelling));
     }
@@ -102,9 +103,24 @@ fn every_marker_spelling_is_recognized() {
         ("!evidence ^1", TraceKind::Evidence),
         ("!question", TraceKind::Question),
         ("!commit #a", TraceKind::Commit),
+        ("!defer #a", TraceKind::Defer),
     ] {
         assert_eq!(only(body).kind, kind, "for {body:?}");
     }
+}
+
+#[test]
+fn a_deferral_without_a_topic_yields_no_trace() {
+    assert!(resolve("!defer", None, &agent("a"), Sequence(1)).is_empty());
+    assert!(resolve("!defer not mine", None, &agent("a"), Sequence(1)).is_empty());
+    assert!(resolve("!defer ^3", None, &agent("a"), Sequence(1)).is_empty());
+
+    // With one it is a real trace, and a citation stays optional.
+    let deferred = only("!defer #pool ^3 The archivist measured this.");
+    assert_eq!(deferred.kind, TraceKind::Defer);
+    assert_eq!(deferred.topic, Some(TopicId("pool".into())));
+    assert_eq!(deferred.cites, [Sequence(3)]);
+    assert_eq!(only("!defer #pool").cites, []);
 }
 
 #[test]
