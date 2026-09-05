@@ -177,11 +177,21 @@ It fires for a member when all three hold, on the **contested topic**:
 1. the member is `directory.top_among(topic, members)` — the highest-weighted
    holder *on this desk*, ties broken by desk order;
 2. `directory.knows(member, topic, policy)`, that is `weight >= policy.floor`;
-3. the member has deposited no trace naming that topic in the episode.
+3. the member has taken no **position** on that topic in the episode — no
+   `Propose`, `Support`, `Object`, `Refute`, `Commit` or `Defer` naming it.
+   `Evidence` and `Question` do not count.
 
 Condition 3 is what makes this delegation rather than amplification: the bonus
-buys an *uncited* fact its first hearing, and stops paying the moment the
-holder has spoken on the topic.
+buys an unheard fact its hearing, and stops paying the moment the holder argues
+the topic.
+
+*Position* rather than *any trace* is deliberate, and it is the whole case the
+mechanism exists for. In a hidden profile the holder has already deposited the
+fact and nobody cited it; treating that deposit as having spoken would make
+`Knows` unreachable in exactly the situation it was built for. A member that
+keeps depositing grounds without ever taking a position can keep drawing the
+bonus, which the dominance guard and the rising speak cost damp rather than
+forbid.
 
 The **contested topic** is, in order:
 

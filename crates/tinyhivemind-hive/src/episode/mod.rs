@@ -292,7 +292,10 @@ fn context<'a>(
         weights: &policy.weights,
         dominance_cap: policy.dominance_cap,
         repetition_cap: policy.repetition_cap,
-        window: policy.quorum.window,
+        quorum: &policy.quorum,
+        directory: None,
+        directory_policy: None,
+        defer_cap: None,
     }
 }
 

@@ -72,8 +72,8 @@ Three things bound it here, and none of them removes it:
 
 1. **Speech is not the estimator.** Only grounds and stated facts deposit, and
    credibility accrues only from *other* members' citations.
-2. **The bonus stops.** `BidReason::Knows` pays only until the holder has
-   deposited on the topic, so it cannot compound within an episode.
+2. **The bonus stops.** `BidReason::Knows` pays only until the holder takes a
+   position on the topic, so it cannot compound within an episode.
 3. **Nothing persists.** The fold dies with the episode, so a wrong estimate
    cannot follow a member into the next one.
 

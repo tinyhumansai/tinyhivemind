@@ -9,12 +9,17 @@
 //! enforces *one message, one turn*. The bound is not checked after the fact;
 //! there is no way to express two winners.
 //!
-//! Two corrections fold into the bid rather than sitting beside it:
+//! Three corrections fold into the bid rather than sitting beside it:
 //!
 //! - **Dominance.** Equality of conversational turn-taking is one of the few
 //!   robust predictors of a group's collective performance. Share here is
 //!   measured over *grounded, surviving* contributions rather than raw message
 //!   count, because raw count is a proxy an agent inflates for free.
+//! - **Delegation.** When the caller folds a directory, the member the
+//!   transcript says holds the contested topic — and has not said so yet —
+//!   gets one bonus to bring it out. It is off unless a directory is supplied,
+//!   and it stops the moment its holder deposits on the topic, so it cannot
+//!   compound. See [`crate::directory`].
 //! - **Repetition.** Once a topic has `repetition_cap` distinct supporters,
 //!   restating it scores nothing — the rumour has met enough peers who already
 //!   know it. Step repetition is among the most common observed multi-agent
@@ -33,13 +38,18 @@ use crate::{
     error::{Error, Result},
     quorum::TopicStanding,
     salience::{standing, with_relevance},
-    trace::{Trace, TraceKind},
+    trace::{TopicId, Trace, TraceKind},
 };
 
 /// Bonus applied when a trace cited or objected to the member's own message.
 const ADDRESSED_BONUS: i64 = 2_000;
 /// Bonus applied to a member that has backed neither deadlocked side.
 const DISSENT_BONUS: i64 = 1_500;
+/// Bonus applied to the directory's holder of the contested topic.
+///
+/// Between [`DISSENT_BONUS`] and [`QUIET_BONUS`], so the ordering of the
+/// bonuses matches the ordering of the reasons.
+const KNOWS_BONUS: i64 = 1_250;
 /// Bonus applied to the least-heard member when the room is lopsided.
 const QUIET_BONUS: i64 = 1_000;
 /// Penalty applied to a member holding more than `dominance_cap` of the share.
@@ -60,6 +70,7 @@ pub fn bids(context: &BidContext<'_>) -> Result<Vec<Bid>> {
     let total: u32 = shares.values().sum();
     let quiet = quietest(context.members, &shares);
     let deadlocked = deadlocked_topics(context.standings);
+    let contested = contested_topic(context);
 
     // Saturation and the recency-and-importance half of salience are
     // properties of a trace, not of the member reading it, so both are folded
@@ -93,6 +104,9 @@ pub fn bids(context: &BidContext<'_>) -> Result<Vec<Bid>> {
         } else if !deadlocked.is_empty() && !backs_any(&deadlocked, member) {
             urge += DISSENT_BONUS;
             reason = BidReason::Dissent;
+        } else if contested.is_some_and(|topic| holds_uncited(context, member, topic)) {
+            urge += KNOWS_BONUS;
+            reason = BidReason::Knows;
         } else if quiet == Some(*member) && is_lopsided(&shares, total, context.dominance_cap) {
             urge += QUIET_BONUS;
             reason = BidReason::Quiet;
@@ -148,7 +162,10 @@ fn index_thresholds(thresholds: &[AgentThreshold]) -> Result<BTreeMap<&str, &Age
 /// the price of one, so counting those would reward exactly the behaviour the
 /// equality guard exists to damp.
 fn grounded_shares<'a>(context: &BidContext<'a>) -> BTreeMap<&'a str, u32> {
-    let floor = context.at.0.saturating_sub(u64::from(context.window));
+    let floor = context
+        .at
+        .0
+        .saturating_sub(u64::from(context.quorum.window));
     let mut shares: BTreeMap<&str, u32> =
         context.members.iter().map(|member| (*member, 0)).collect();
     for trace in context.traces {
@@ -189,6 +206,96 @@ fn dominates(shares: &BTreeMap<&str, u32>, member: &str, total: u32, cap: u32) -
 
 fn exceeds(share: u32, total: u32, cap: u32) -> bool {
     total > 0 && share * 100 > total * cap
+}
+
+/// The topic the room is currently stuck on, if the caller folded a directory.
+///
+/// A live deferral names it outright: a member saying "not mine" is the
+/// clearest possible statement of what the room needs somebody else for. Below
+/// `defer_cap` live deferrals, the most recent one wins; at or above it the
+/// promotion stops, so a chain of members deferring to each other terminates
+/// instead of spending the whole budget on it.
+///
+/// Failing that it is the standing with the most support that has not yet
+/// carried — the live argument, rather than the settled one — with ties broken
+/// by first-advocated order.
+fn contested_topic<'a>(context: &BidContext<'a>) -> Option<&'a TopicId> {
+    context.directory?;
+    let floor = context
+        .at
+        .0
+        .saturating_sub(u64::from(context.quorum.window));
+    let deferrals: Vec<&Trace> = context
+        .traces
+        .iter()
+        .filter(|trace| trace.kind == TraceKind::Defer)
+        .filter(|trace| trace.sequence.0 >= floor && trace.sequence <= context.at)
+        .collect();
+    let under_cap = context
+        .defer_cap
+        .is_none_or(|cap| u32::try_from(deferrals.len()).is_ok_and(|live| live < cap));
+    if under_cap
+        && let Some(deferred) = deferrals
+            .iter()
+            .rev()
+            .find_map(|trace| trace.topic.as_ref())
+    {
+        return Some(deferred);
+    }
+    context
+        .standings
+        .iter()
+        .filter(|standing| !standing.carried(context.quorum))
+        .reduce(|held, next| {
+            if next.support > held.support {
+                next
+            } else {
+                held
+            }
+        })
+        .map(|standing| &standing.topic)
+}
+
+/// Whether the directory names this member on the contested topic and the
+/// member has taken no position on it.
+///
+/// The last clause is what makes this delegation rather than amplification.
+/// The bonus buys an unheard fact its hearing and stops paying the moment its
+/// holder argues the topic, so it cannot compound within an episode.
+///
+/// *Position*, not *trace*: a member whose only deposit on the topic is a
+/// stated fact is exactly the member this exists for. In a hidden profile the
+/// holder has already put the fact on the floor, nobody cited it, and the
+/// salience field never points at that member again — treating the fact itself
+/// as having spoken would make the mechanism unreachable in the one case it
+/// was built for.
+fn holds_uncited(context: &BidContext<'_>, member: &str, topic: &TopicId) -> bool {
+    let (Some(directory), Some(policy)) = (context.directory, context.directory_policy) else {
+        return false;
+    };
+    directory.top_among(topic, context.members) == Some(member)
+        && directory.knows(member, topic, policy)
+        && !context
+            .traces
+            .iter()
+            .any(|trace| trace.agent_id() == Some(member) && argues(trace, topic))
+}
+
+/// Whether a trace takes a position on a topic, rather than supplying grounds
+/// for one or asking about it.
+fn argues(trace: &Trace, topic: &TopicId) -> bool {
+    if trace.topic.as_ref() != Some(topic) {
+        return false;
+    }
+    match trace.kind {
+        TraceKind::Propose
+        | TraceKind::Support
+        | TraceKind::Object
+        | TraceKind::Refute
+        | TraceKind::Commit
+        | TraceKind::Defer => true,
+        TraceKind::Evidence | TraceKind::Question => false,
+    }
 }
 
 fn addresses(traces: &[Trace], member: &str) -> bool {

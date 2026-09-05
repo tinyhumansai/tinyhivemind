@@ -5,6 +5,7 @@
 use super::*;
 
 use crate::{
+    directory::{Directory, DirectoryPolicy, directory},
     quorum::{QuorumPolicy, standings},
     salience::SalienceWeights,
     trace::read,
@@ -41,6 +42,8 @@ fn fixture(transcript: &[SessionMessage]) -> Fixture {
     }
 }
 
+const QUORUM: QuorumPolicy = QuorumPolicy::DEFAULT;
+
 fn context<'a>(
     fixture: &'a Fixture,
     members: &'a [&'a str],
@@ -56,7 +59,10 @@ fn context<'a>(
         weights,
         dominance_cap: 50,
         repetition_cap: 3,
-        window: 30,
+        quorum: &QUORUM,
+        directory: None,
+        directory_policy: None,
+        defer_cap: None,
     }
 }
 
@@ -108,6 +114,7 @@ fn every_bid_reason_pins_its_wire_spelling() {
     for (reason, spelling) in [
         (BidReason::Addressed, "addressed"),
         (BidReason::Dissent, "dissent"),
+        (BidReason::Knows, "knows"),
         (BidReason::Quiet, "quiet"),
         (BidReason::Salience, "salience"),
     ] {
@@ -374,4 +381,196 @@ fn the_floor_holder_is_the_argmax_and_ties_break_by_desk_order() {
     ];
     assert_eq!(floor_holder(&bids).expect("a winner").agent_id, "critic");
     assert!(floor_holder(&[]).is_none());
+}
+
+// --- Delegation ---
+
+/// The directory policy the delegation tests read, with a window wide enough
+/// to hold the whole fixture transcript.
+fn directory_policy() -> DirectoryPolicy {
+    DirectoryPolicy {
+        window: 100,
+        ..DirectoryPolicy::DEFAULT
+    }
+}
+
+fn folded(fixture: &Fixture) -> Directory {
+    directory(&fixture.traces, fixture.at, &directory_policy(), &[]).expect("folds")
+}
+
+/// Attach a folded directory to a bid context.
+///
+/// Written as a macro rather than a helper because the directory and the
+/// policy have to outlive the borrow the context takes of them.
+macro_rules! delegating {
+    ($fixture:expr, $known:ident, $policy:ident, $context:ident) => {
+        let $known = folded(&$fixture);
+        let $policy = directory_policy();
+        let weights = SalienceWeights::DEFAULT;
+        let mut $context = context(&$fixture, &MEMBERS, &[], &weights);
+        $context.directory = Some(&$known);
+        $context.directory_policy = Some(&$policy);
+    };
+}
+
+/// A room arguing an ungrounded decoy while the scout's fact goes unheard.
+///
+/// The critic's opinion cites nothing, so under `require_grounded` it is not
+/// support and `#retries` stays one supporter short of carrying. The scout has
+/// put the fact that settles it on the floor and taken no position at all.
+fn hidden_profile() -> Fixture {
+    fixture(&[
+        said(1, "planner", "!propose #retries A retry storm explains it."),
+        said(2, "critic", "!support #retries The graph agrees."),
+        said(
+            3,
+            "scout",
+            "!evidence #retries The retry flag has been off for a week.",
+        ),
+    ])
+}
+
+#[test]
+fn knows_gives_the_floor_to_the_holder_of_an_uncited_fact() {
+    let fixture = hidden_profile();
+    delegating!(fixture, known, policy, context);
+    assert_eq!(
+        known
+            .top(&"retries".into())
+            .map(|held| held.agent_id.as_str()),
+        Some("scout")
+    );
+
+    let bids = bids(&context).expect("bids");
+    assert_eq!(bid_for(&bids, "scout").reason, BidReason::Knows);
+    assert_eq!(floor_holder(&bids).expect("a winner").agent_id, "scout");
+}
+
+#[test]
+fn knows_never_fires_without_a_directory() {
+    let fixture = hidden_profile();
+    let weights = SalienceWeights::DEFAULT;
+    // The same room with no directory in the context at all.
+    let blind = bids(&context(&fixture, &MEMBERS, &[], &weights)).expect("bids");
+    assert!(blind.iter().all(|bid| bid.reason != BidReason::Knows));
+
+    // And with a directory but no policy to read it by: the pair is matched.
+    let known = folded(&fixture);
+    let mut half = context(&fixture, &MEMBERS, &[], &weights);
+    half.directory = Some(&known);
+    let half = bids(&half).expect("bids");
+    assert!(half.iter().all(|bid| bid.reason != BidReason::Knows));
+}
+
+#[test]
+fn knows_stops_once_the_member_has_taken_a_position_on_the_topic() {
+    let fixture = fixture(&[
+        said(1, "planner", "!propose #retries A retry storm explains it."),
+        said(2, "critic", "!support #retries The graph agrees."),
+        said(
+            3,
+            "scout",
+            "!evidence #retries The retry flag has been off for a week.",
+        ),
+        // The scout has now argued the topic rather than only grounded it.
+        said(
+            4,
+            "scout",
+            "!refute #retries ^3 So the storm is not the cause.",
+        ),
+    ]);
+    delegating!(fixture, known, policy, context);
+    let bids = bids(&context).expect("bids");
+    assert!(
+        bids.iter().all(|bid| bid.reason != BidReason::Knows),
+        "the bonus buys an unheard fact its hearing and nothing after",
+    );
+}
+
+#[test]
+fn knows_never_fires_on_a_carried_topic() {
+    // A grounded second supporter carries `#retries`, so it is settled rather
+    // than contested and there is nothing left to route to.
+    let fixture = fixture(&[
+        said(1, "planner", "!propose #retries A retry storm explains it."),
+        said(2, "critic", "!support #retries ^1 The graph agrees."),
+        said(
+            3,
+            "scout",
+            "!evidence #retries The retry flag has been off for a week.",
+        ),
+    ]);
+    assert!(fixture.standings[0].carried(&QUORUM));
+    delegating!(fixture, known, policy, context);
+    let bids = bids(&context).expect("bids");
+    assert!(bids.iter().all(|bid| bid.reason != BidReason::Knows));
+}
+
+#[test]
+fn an_addressed_fact_holder_bids_addressed_rather_than_knows() {
+    let fixture = fixture(&[
+        said(1, "planner", "!propose #retries A retry storm explains it."),
+        said(2, "critic", "!support #retries The graph agrees."),
+        said(
+            3,
+            "scout",
+            "!evidence #retries The retry flag has been off for a week.",
+        ),
+        said(4, "critic", "!question ^3 Off since when?"),
+    ]);
+    delegating!(fixture, known, policy, context);
+    let bids = bids(&context).expect("bids");
+    // A question aimed at the scout's message is a fact about *this* message,
+    // where the directory is only an estimate.
+    assert_eq!(bid_for(&bids, "scout").reason, BidReason::Addressed);
+}
+
+#[test]
+fn knows_outranks_quiet_and_is_outranked_by_dissent() {
+    assert!(BidReason::Addressed < BidReason::Dissent);
+    assert!(BidReason::Dissent < BidReason::Knows);
+    assert!(BidReason::Knows < BidReason::Quiet);
+    assert!(BidReason::Quiet < BidReason::Salience);
+
+    // Two proposals deadlock; the scout has backed neither and also tops the
+    // directory. An unbroken deadlock ends the episode, so dissent wins.
+    let fixture = fixture(&[
+        said(1, "planner", "!propose #retries A retry storm explains it."),
+        said(2, "critic", "!propose #stage Stage it instead."),
+        said(
+            3,
+            "scout",
+            "!evidence #retries The retry flag has been off for a week.",
+        ),
+    ]);
+    delegating!(fixture, known, policy, context);
+    assert_eq!(
+        known
+            .top(&"retries".into())
+            .map(|held| held.agent_id.as_str()),
+        Some("scout")
+    );
+    let bids = bids(&context).expect("bids");
+    assert_eq!(bid_for(&bids, "scout").reason, BidReason::Dissent);
+}
+
+#[test]
+fn a_deferral_promotes_its_topic_as_the_contested_one() {
+    let fixture = fixture(&[
+        said(1, "planner", "!propose #retries A retry storm explains it."),
+        said(2, "critic", "!support #retries ^1 The graph agrees."),
+        said(3, "scout", "!evidence #pool In-flight requests sit at 24."),
+        // `#retries` has carried, so without the deferral no topic is
+        // contested and the directory has nothing to route on.
+        said(4, "critic", "!defer #pool Not my area."),
+    ]);
+    delegating!(fixture, known, policy, context);
+    let promoted = bids(&context).expect("bids");
+    assert_eq!(bid_for(&promoted, "scout").reason, BidReason::Knows);
+
+    // At the cap the promotion stops, and the room falls back to a standing
+    // that has already carried -- which is to say, to nothing.
+    context.defer_cap = Some(1);
+    let capped = bids(&context).expect("bids");
+    assert!(capped.iter().all(|bid| bid.reason != BidReason::Knows));
 }

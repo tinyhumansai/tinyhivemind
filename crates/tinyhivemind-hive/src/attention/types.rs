@@ -3,7 +3,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    quorum::TopicStanding,
+    directory::{Directory, DirectoryPolicy},
+    quorum::{QuorumPolicy, TopicStanding},
     salience::SalienceWeights,
     trace::{TopicId, Trace},
 };
@@ -90,6 +91,17 @@ pub enum BidReason {
     Addressed,
     /// The room is deadlocked and this member has backed neither side.
     Dissent,
+    /// The directory says this member holds the contested topic, and it has
+    /// not said so yet.
+    ///
+    /// Below [`Dissent`] because an unbroken deadlock terminates the episode:
+    /// a routing preference must never be able to suppress the one member who
+    /// could break it. Above [`Quiet`] because "this member knows and has not
+    /// said so" is a stronger reason than "somebody has not spoken".
+    ///
+    /// [`Dissent`]: BidReason::Dissent
+    /// [`Quiet`]: BidReason::Quiet
+    Knows,
     /// The equality guard lifted the least-heard member.
     Quiet,
     /// Ordinary pull from the salience field.
@@ -109,6 +121,11 @@ pub struct Bid {
 }
 
 /// Everything the attention market reads, borrowed from the caller.
+///
+/// The directory and its policy are a matched pair: both `Some` enables
+/// [`BidReason::Knows`], and either alone leaves it unreachable. That is what
+/// makes the mechanism opt-in without a flag — a caller that folded no
+/// directory cannot accidentally route on one.
 #[derive(Clone, Copy, Debug)]
 pub struct BidContext<'a> {
     /// Traces folded from the projected transcript.
@@ -127,6 +144,20 @@ pub struct BidContext<'a> {
     pub dominance_cap: u32,
     /// Distinct supporters after which restating a topic scores nothing.
     pub repetition_cap: u32,
-    /// How many sequences back to measure share over.
-    pub window: u32,
+    /// When a topic is entitled to carry, and how far back support counts.
+    ///
+    /// Its `window` is also the window share and deferral are measured over.
+    /// One window rather than two: a second one would be a second thing to
+    /// tune and the two would drift.
+    pub quorum: &'a QuorumPolicy,
+    /// Who the transcript says knows what, when the caller folded one.
+    pub directory: Option<&'a Directory>,
+    /// How to read that directory. `None` leaves [`BidReason::Knows`]
+    /// unreachable.
+    pub directory_policy: Option<&'a DirectoryPolicy>,
+    /// Live deferrals after which a deferred topic stops being promoted.
+    ///
+    /// `None` is unbounded, and the chain is then bounded only by the
+    /// episode's turn budget.
+    pub defer_cap: Option<u32>,
 }
