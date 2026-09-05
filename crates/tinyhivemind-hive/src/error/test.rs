@@ -59,3 +59,27 @@ fn the_result_alias_carries_the_crate_error() {
     }
     assert!(failing().is_err());
 }
+
+#[test]
+fn a_malformed_directory_policy_produces_its_own_variant() {
+    use crate::directory::{DirectoryPolicy, directory};
+    use tinyhivemind::Sequence;
+
+    let zero_half_life = DirectoryPolicy {
+        half_life: 0,
+        ..DirectoryPolicy::DEFAULT
+    };
+    assert!(matches!(
+        directory(&[], Sequence(1), &zero_half_life, &[]),
+        Err(Error::ZeroDirectoryHalfLife),
+    ));
+
+    let zero_window = DirectoryPolicy {
+        window: 0,
+        ..DirectoryPolicy::DEFAULT
+    };
+    assert!(matches!(
+        directory(&[], Sequence(1), &zero_window, &[]),
+        Err(Error::ZeroDirectoryWindow),
+    ));
+}

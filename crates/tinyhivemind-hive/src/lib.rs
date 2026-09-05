@@ -44,6 +44,8 @@
 //! # Modules
 //!
 //! - [`attention`] — the bid each member makes for the floor, and the argmax.
+//! - [`mod@directory`] — who knows what, folded from grounded deposits and the
+//!   citations they drew.
 //! - [`episode`] — the pure state machine, and the visibility filter.
 //! - [`error`] — typed failures from malformed inputs.
 //! - [`quorum`] — standings, cross-inhibition, and the consensus predicate.
@@ -93,14 +95,29 @@
 //!     said(6, agent("auditor"), "!refute #stage ^5 There is nowhere to stage it."),
 //!     said(7, agent("scout"), "!refute #stage ^5 Confirmed, the environment was retired."),
 //! ]);
+//! let contested_transcript = contested.clone();
 //! let contested = standings(&read(&contested), Sequence(7), &policy)?;
 //! assert_eq!(consensus(&contested, &policy), ConsensusState::Deliberating);
 //! assert_eq!(contested[0].refuted_by, ["auditor", "scout"]);
 //! assert_eq!(contested[0].supporters, ["planner", "critic"]);
+//!
+//! // The same transcript also says who *knows* what. The auditor stated the
+//! // fact and two members built on it, so the directory names the auditor on
+//! // `stage` rather than the planner who merely advocated it.
+//! use tinyhivemind_hive::directory::{directory, DirectoryPolicy};
+//!
+//! let policy = DirectoryPolicy { window: 100, ..DirectoryPolicy::DEFAULT };
+//! let known = directory(&read(&contested_transcript), Sequence(7), &policy, &[])?;
+//! assert_eq!(
+//!     known.top(&"stage".into()).map(|entry| entry.agent_id.as_str()),
+//!     Some("auditor"),
+//! );
+//! assert!(known.knows("auditor", &"stage".into(), &policy));
 //! # Ok::<(), tinyhivemind_hive::error::Error>(())
 //! ```
 
 pub mod attention;
+pub mod directory;
 pub mod episode;
 pub mod error;
 pub mod quorum;
@@ -108,6 +125,7 @@ pub mod salience;
 pub mod trace;
 
 pub use attention::{AgentThreshold, Bid, BidReason, bids, floor_holder};
+pub use directory::{Directory, DirectoryEntry, DirectoryPolicy, WEIGHT_CEILING, directory};
 pub use episode::{
     EpisodePolicy, EpisodeState, HiveStep, HiveTurn, Phase, Visibility, project_for, step,
 };
