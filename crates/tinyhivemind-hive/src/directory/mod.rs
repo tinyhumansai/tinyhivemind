@@ -76,7 +76,11 @@ const TENTHS: i64 = 10;
 ///
 /// Returns [`Error::ZeroDirectoryHalfLife`] when `policy.half_life` is zero,
 /// or [`Error::ZeroDirectoryWindow`] when `policy.window` is zero.
-pub fn validate_policy(policy: &DirectoryPolicy) -> Result<()> {
+///
+/// Not exported from the crate root: it exists only for [`directory`] and
+/// [`crate::episode::step`] to share, not as a standing part of the public
+/// surface.
+pub(crate) fn validate_policy(policy: &DirectoryPolicy) -> Result<()> {
     if policy.half_life == 0 {
         return Err(Error::ZeroDirectoryHalfLife);
     }

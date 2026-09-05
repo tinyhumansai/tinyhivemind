@@ -378,7 +378,7 @@ move real participants did not make.
 renders into every deliberation prompt from the moment any topiced trace exists
 — one `#topic: agent weight (spec N, cred N)` line per contested topic, holders
 in descending weight — empty only on the blind first turn and absent from the
-commit prompt. Across all 240 turns none was awarded on `BidReason::Knows`; the
+commit prompt. Across all 266 turns none was awarded on `BidReason::Knows`; the
 reasons recorded are `salience`, `dissent`, `addressed` and `quiet`. Same
 structural reason as the simulation: by the time a topic is contested, its top
 holder has taken a position on it.
@@ -449,9 +449,11 @@ Three rounds a row, one model family behind every seat, one scenario family, and
 the federated row is a single episode. Nothing here is a rate: `claude`'s 3 of 3
 and the specialist rows' 0 of 8 are a handful of episodes each, and the
 difference between 1 of 3 and 3 of 3 here is one room's turn order. The
-mixed-tier row does not measure what it was built to, for the harness reason
-above. And every row's poll losing is a property of scenarios *selected* until
-it did — what makes a room's score legible, not a result about polls.
+corrected mixed-tier row is a genuine measurement now — only `dba` on
+`reasoning`, everyone else on `flash` — but it is one row of three rounds, not a
+rate, and the one correct round was also the longest, which is its own caveat.
+And every row's poll losing is a property of scenarios *selected* until it
+did — what makes a room's score legible, not a result about polls.
 
 ## What the simulation does not show
 
