@@ -202,7 +202,7 @@ accumulate a directory across episodes should read that as the finding it is.
 
 ## The live matrix
 
-Nine backend rows, twenty-four rounds, two hundred and forty agent turns, on
+Ten backend rows, twenty-seven rounds, two hundred and sixty-six agent turns, on
 `index-lock-expert`, `index-lock-tiers`, `checkout-503` and the federated
 `checkout-503-federated`. `expert` is the rounds in which the scenario's
 `truth_expert` spoke before the commit, over the rounds whose winning commit
@@ -220,35 +220,44 @@ the HTTP backend only.
 | `index-lock-tiers` | HTTP, `--specialist-model reasoning` | 3 | 0 / 3 | 0 / 3 | 6.0 | 318 | 166.0 | 3 / 1 |
 | `index-lock-tiers` | HTTP, every seat `reasoning` | 2 | 0 / 2 | 0 / 2 | 7.5 | 489 | 207.0 | 2 / 1 |
 | `checkout-503-federated` | HTTP `flash`, `--swarm` | 1 | 0 / 1 | 0 / 1 | 15 | 764 | 28.0 | — |
+| `index-lock-tiers` | HTTP, four `flash` seats + `dba` on `reasoning` | 3 | 1 / 3 | 0 / 3 | 8.7 | 363 | 108.7 | 3 / 3 |
 
-Five things the transcripts say, and one harness defect they exposed.
+Five things the transcripts say, and one harness defect they exposed — now
+fixed, with a corrected row measuring what the defect had prevented.
 
-The **poll found the answer in none of the twenty-four rounds**, which is the
+The **poll found the answer in none of the twenty-seven rounds**, which is the
 control being unable to win — the property the scenarios were rewritten four
 times to get.
 
-The **fact-holder spoke before the commit in all twenty rounds that had one**,
-at turn 4 in eighteen of them, and **twelve of those rooms were still wrong**.
-Reaching the holder is not the bottleneck.
+The **fact-holder spoke before the commit in all twenty-three rounds that had
+one**, at turn 4 in eighteen of the first twenty, and **fourteen of those
+rooms were still wrong**. Reaching the holder is not the bottleneck.
 
-**`!defer` was used on none of the 240 turns** and **no turn was awarded on
+**`!defer` was used on none of the 266 turns** and **no turn was awarded on
 `BidReason::Knows`**, although the move was in every move list and the directory
 block was in every deliberation prompt.
 
-**Putting a reasoning model on the expert seat made the room worse and faster.**
-Both such rows converged on the decoy in six turns, because three of the five
-blind opening turns were the same `!propose`, which is already quorum, so the
-first non-blind turn was a commit turn. `dba` never stated its numbers in those
-rooms — it spent its blind turn arguing that neither batch size has moved in a
-year and therefore neither is the cause.
+**Putting a reasoning model on the expert seat made the room worse and faster,
+in the two buggy rows that put the whole room on it.** Both converged on the
+decoy inside seven turns — `index-lock-tiers` in six, `index-lock-expert` in
+seven — because three of the five blind opening turns were the same
+`!propose`, which is already quorum, so the first non-blind turn was a commit
+turn. `dba` never stated its numbers in those rooms — it spent its blind turn
+arguing that neither batch size has moved in a year and therefore neither is
+the cause.
 
-**The harness defect:** `is_specialist` is true for any seat the scenario gives
-an `expert_on` line, and every seat in these scenarios has one, so
-`--specialist-model reasoning` put the whole room on the expensive model rather
-than `dba` alone; the per-tier usage lines confirm it by charging the `cheap`
-tier at the reasoning price. The cost rows therefore compare flash-only rooms
-against all-reasoning rooms — where the cheap rooms won, 0 correct in 8 rounds
-at 166–207 units an episode against 25–46 — and say nothing about mixed tiers.
+**The harness defect, now fixed:** `is_specialist` was true for any seat the
+scenario gave an `expert_on` line, and every seat in these scenarios has one,
+so `--specialist-model reasoning` put the whole room on the expensive model
+rather than `dba` alone; the per-tier usage lines confirmed it by charging the
+`cheap` tier at the reasoning price. Those two rows therefore compared
+flash-only rooms against all-reasoning rooms — where the cheap rooms won, 0
+correct in 8 rounds at 166–207 units an episode against 25–46 — and said
+nothing about mixed tiers. Seating the specialist model by tier fixed this;
+the corrected `index-lock-tiers` row above, with only `dba` on `reasoning`,
+scored 1 correct in 3 rounds at 108.7 units an episode — better than either
+buggy all-reasoning row and still costlier than the `flash`-only rows, without
+clearly beating them on accuracy.
 
 Three rounds a row, one model family, one scenario family, and one federated
 episode. Nothing here is a rate; the full write-up is in

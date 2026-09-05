@@ -325,7 +325,7 @@ not only the wrong ones.
 
 ### The live matrix
 
-Nine rows, twenty-four rounds, two hundred and forty agent turns. Every row ran
+Ten rows, twenty-seven rounds, two hundred and sixty-six agent turns. Every row ran
 both arms: the room, and the matched-budget poll of the same seats through the
 same backend. `expert` is rounds in which the scenario's `truth_expert` spoke
 before the commit, over rounds whose commit chain reaches something it said.
@@ -344,18 +344,28 @@ Tokens and cost print for the HTTP backend only, in the harness's unit — 1 per
 | `index-lock-tiers` | HTTP, `--specialist-model reasoning` | 3 | 0 / 3 | 0 / 3 | 6.0 | 318 | 16,865 | 166.0 | 3 / 1 | 0 |
 | `index-lock-tiers` | HTTP, every seat `reasoning` | 2 | 0 / 2 | 0 / 2 | 7.5 | 489 | 20,858 | 207.0 | 2 / 1 | 0 |
 | `checkout-503-federated` | HTTP `flash`, `--swarm` | 1 | 0 / 1 | 0 / 1 | 15 | 764 | 31,192 | 28.0 | — | 0 |
+| `index-lock-tiers` | HTTP, four `flash` seats + `dba` on `reasoning` | 3 | 1 / 3 | 0 / 3 | 8.7 | 363 | 32,979 | 108.7 | 3 / 3 | 0 |
 
-**The poll never found the answer, in any row** — twenty-four rounds, wrong or
-tied every time. On `index-lock-expert` it returned `#rollback` or `#archive`;
-on `checkout-503`, `#retries` three times in three, the decoy the brief plants.
+The last row is the corrected mixed-tier run, the harness defect described
+below now fixed: only `dba` runs on `reasoning`, the other four seats stay on
+`flash`. Round 1 committed `#batch` (correct) in 14 turns, 152 units, 48
+cheap / 104 reasoning; rounds 2 and 3 both committed `#rollback` (wrong) in 6
+turns each, at 108 and 66 units. `dba` spoke before every commit and was cited
+by all three; it wrote 17–43% of a round's tokens for 54–90% of its cost, and
+the one correct round was also the longest.
 
-**The fact-holder spoke before the commit in every room that had one** — 20 of
-20 rounds across six rows, at turn 4 in eighteen of them. Q1's live answer is
-yes, and the evidence-first opening buys it. **And twelve of those twenty rooms
-still got it wrong.** Reaching the holder is not the bottleneck; weighing what
-it says is.
+**The poll never found the answer, in any row** — twenty-seven rounds, wrong or
+tied every time. On `index-lock-expert` and `index-lock-tiers` it returned
+`#rollback` or `#archive`; on `checkout-503`, `#retries` three times in three,
+the decoy the brief plants.
 
-**`!defer` was never used.** Not one of the 240 turns, in any harness, on any
+**The fact-holder spoke before the commit in every room that had one** — 23 of
+23 rounds across eight rows, at turn 4 in eighteen of the first twenty. Q1's
+live answer is yes, and the evidence-first opening buys it. **And fourteen of
+those twenty-three rooms still got it wrong.** Reaching the holder is not the
+bottleneck; weighing what it says is.
+
+**`!defer` was never used.** Not one of the 266 turns, in any harness, on any
 row, although `!defer #topic` sits in the move list every participant reads,
 with its rules beside the markers they did use. The federated runs established
 that a move *outside* the list is never used; this establishes something
@@ -374,18 +384,19 @@ structural reason as the simulation: by the time a topic is contested, its top
 holder has taken a position on it.
 
 **The reasoning model on the expert seat did not help, and the rooms with it
-lost faster.** Both `--specialist-model` rows converged on the decoy in six
-turns, half the length of the same scenario on `flash`, because those rooms had
-no deliberation phase at all: three of the five blind opening turns were
-`!propose #rollback`, which is quorum, so the first non-blind turn was a commit
-turn. What `dba` said in them is the finding. It never stated its numbers — in
-all five rounds it spent its blind turn proposing `#rollback`, "the archive and
-reconciliation jobs are unchanged from their year-long pattern", turning the two
-batch sizes into an argument that they are *not* the cause, exactly the
-non-event reading the scenario header predicts of a member holding them.
-`scout`'s threshold was on the floor in the same blind round; nobody held the
-two against each other, because by the time anyone could read both the room had
-carried `#rollback`.
+lost faster.** Both `--specialist-model` rows converged on the decoy inside
+seven turns — `index-lock-tiers` in six, `index-lock-expert` in seven — well
+under the thirteen-plus turns the same scenario took on `flash`, because those
+rooms had no deliberation phase at all: three of the five blind opening turns
+were `!propose #rollback`, which is quorum, so the first non-blind turn was a
+commit turn. What `dba` said in them is the finding. It never stated its
+numbers — in all five rounds it spent its blind turn proposing `#rollback`,
+"the archive and reconciliation jobs are unchanged from their year-long
+pattern", turning the two batch sizes into an argument that they are *not* the
+cause, exactly the non-event reading the scenario header predicts of a member
+holding them. `scout`'s threshold was on the floor in the same blind round;
+nobody held the two against each other, because by the time anyone could read
+both the room had carried `#rollback`.
 
 **`claude` scored 3 of 3 on a scenario the same model lost through three other
 harnesses.** Same ladder, same `flash` behind it; what differs is the agent
@@ -406,14 +417,19 @@ support — and that round **exhausted** at 15 turns without a commit.
 **On cost, the live rows say what the simulation said, more bluntly.** The two
 `flash` rows that decided anything cost 25 and 46 units an episode; the three
 rows with a reasoning model cost 166, 198 and 207 and scored **0 correct in 8
-rounds**. One caveat is load-bearing and is a harness defect rather than a
-result: `is_specialist` is true for any seat the scenario gives an `expert_on`
-line, and *every* seat in both scenarios has one, so `--specialist-model
-reasoning` put the whole room on the reasoning model rather than `dba` alone —
-the per-tier lines confirm it, charging `cheap` the same ~10 units per 1000
-tokens as `reasoning`. **So this matrix does not test the mixed-tier claim at
-all.** It compares flash-only rooms against all-reasoning rooms, and the cheap
-rooms won.
+rounds**. One caveat is load-bearing and was a harness defect, now fixed:
+`is_specialist` was true for any seat with an `expert_on` line, and every seat
+in both scenarios has one, so `--specialist-model reasoning` put the whole room
+on `reasoning` rather than `dba` alone. **So this matrix did not test the
+mixed-tier claim at all** — it compared flash-only rooms against all-reasoning
+rooms, and the cheap rooms won.
+
+Seating by tier fixed the defect (the corrected row above). That run scored 1
+correct in 3 rounds at 108.7 units — better than either buggy all-reasoning
+row, still costlier than `flash`-only without clearly beating it on accuracy.
+One round is not a rate, but a specialist's presence alone did not fix a room
+that never weighs what it hears — `dba` spoke before and was cited by every
+commit, including the two it got wrong.
 
 **The federation completed one round and decided wrongly.** Platform and Data
 converged on `#retries`, Release on `#scale`, the plurality was `#retries`, and
