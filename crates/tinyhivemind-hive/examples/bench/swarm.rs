@@ -124,6 +124,8 @@ pub(crate) struct SwarmReport {
     pub(crate) crossings: u32,
     /// Answers that arrived after the desk that asked had already finished.
     pub(crate) stranded: u32,
+    /// Turns, across every desk, whose content is a `!defer` line.
+    pub(crate) defers: u32,
     /// Calls into [`step`], including the terminal ones.
     pub(crate) step_calls: u32,
     /// Time spent inside the library.
@@ -467,6 +469,9 @@ impl Board<'_> {
             }
         }
         self.report.turns = self.report.turns.saturating_add(1);
+        if content.trim_start().starts_with("!defer") {
+            self.report.defers = self.report.defers.saturating_add(1);
+        }
         if self.keep_trace {
             self.report
                 .trace

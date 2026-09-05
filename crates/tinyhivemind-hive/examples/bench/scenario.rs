@@ -20,8 +20,10 @@
 //! ```text
 //! task: what the room must decide
 //! truth: the option id that is genuinely right
+//! truth_expert: planner
 //!
 //! [option rollback]
+//! expert: planner
 //! One sentence describing it.
 //!
 //! [desk payments]
@@ -30,6 +32,8 @@
 //! [agent planner]
 //! desk: payments
 //! role: release manager, who owns what can and cannot be shipped
+//! expert_on: migrations
+//! tier: reasoning
 //! knows: a fact this member holds and nobody else does
 //! ```
 //!
@@ -39,6 +43,17 @@
 //! hidden profile is the sharpest form of the test — the facts that overturn
 //! the decoy are not merely held by another member, they are held in another
 //! room.
+//!
+//! Four more keys let a scenario name who the room ought to lean on and how
+//! expensive each seat is meant to be. `expert:` on an option names the agent
+//! it is honest to defer to on that specific call. `expert_on:` on an agent is
+//! repeatable and names the *areas* it specializes in — never an option id, so
+//! knowing who the specialist is does not itself give away the answer — and is
+//! folded into that member's private brief with an explicit caveat that being
+//! leaned on is not the same as being right. `tier: cheap` or `tier:
+//! reasoning` records which model tier a seat stands in for. `truth_expert:`
+//! at the top level names the agent who holds the fact that actually decides
+//! the truth; that agent must hold at least one `knows:` line.
 
 use std::fmt::Write as _;
 

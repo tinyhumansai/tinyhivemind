@@ -3,6 +3,7 @@
 //! Every rate is reported over the whole sample, including the episodes that
 //! never decided anything: an arm cannot buy accuracy by declining to answer.
 
+use std::fmt::Write as _;
 use std::time::Duration;
 
 use crate::arms::ArmReport;
@@ -30,6 +31,45 @@ pub(crate) struct Aggregate {
     pub(crate) step_calls: u64,
     /// Time spent inside the library.
     pub(crate) library_time: Duration,
+    /// Episodes in which the room's decisive member -- its expert, or the
+    /// hidden-profile member who held the deciding fact -- spoke at all.
+    pub(crate) expert_spoke: u32,
+    /// Episodes in which the room *had* a decisive member at all, which is
+    /// the denominator `expert %` is a share of. Zero for a uniform room,
+    /// where nobody holds anything anybody else does not.
+    pub(crate) expert_of: u32,
+    /// Sum of the turn index at which the decisive member first spoke, over
+    /// exactly the episodes counted in `expert_spoke`; the numerator for
+    /// [`Aggregate::expert_latency`].
+    pub(crate) expert_turns: u64,
+    /// Episodes in which the decisive member also authored the first
+    /// `!propose` for the topic the room went on to decide.
+    pub(crate) expert_proposed: u32,
+    /// Episodes in which the responder ladder selected the room's decisive
+    /// member as its one responder. Only a `ladder` arm can ever populate
+    /// this; every other arm leaves it at `0`.
+    pub(crate) routed_right: u32,
+    /// Episodes in which routing *could* be scored at all: the room named an
+    /// expert on the topic the answer turns on, so there was a right answer
+    /// for the ladder to have routed to. Zero for a uniform room, where
+    /// nobody holds anything anybody else does not.
+    pub(crate) routed_of: u32,
+    /// Total cost, in [`crate::run::Participant::cost_unit`] units, spent
+    /// across the sample.
+    pub(crate) cost_units: u64,
+    /// Sum, in thousandths, of each episode's rank correlation between a
+    /// member's folded directory weight and the number of turns it took --
+    /// see [`Aggregate::mean_rho`].
+    pub(crate) rank_rho_milli: i64,
+    /// Episodes over which `rank_rho_milli` was accumulated: fewer than two
+    /// members leaves an episode's correlation undefined, so it is skipped
+    /// rather than counted as zero.
+    pub(crate) rank_rho_count: u32,
+    /// Whether each episode decided correctly, in the order episodes were
+    /// folded in. This is the paired sample [`paired_bootstrap`] resamples
+    /// against another arm's, so two arms decided over the same rooms line
+    /// up index for index.
+    pub(crate) correct_flags: Vec<bool>,
 }
 
 impl Aggregate {
@@ -48,6 +88,26 @@ impl Aggregate {
         self.turns = self.turns.saturating_add(u64::from(report.turns));
         self.step_calls = self.step_calls.saturating_add(u64::from(report.step_calls));
         self.library_time += report.library_time;
+        self.correct_flags.push(report.correct);
+        self.cost_units = self.cost_units.saturating_add(report.cost_units);
+        if report.has_expert {
+            self.expert_of = self.expert_of.saturating_add(1);
+        }
+        if report.expert_spoke {
+            self.expert_spoke = self.expert_spoke.saturating_add(1);
+            if let Some(at) = report.expert_at {
+                self.expert_turns = self.expert_turns.saturating_add(u64::from(at));
+            }
+            if let Some(expert) = expert_id(report)
+                && report.proposer.as_deref() == Some(expert)
+            {
+                self.expert_proposed = self.expert_proposed.saturating_add(1);
+            }
+        }
+        if let Some(rho) = report.rho_milli {
+            self.rank_rho_milli = self.rank_rho_milli.saturating_add(rho);
+            self.rank_rho_count = self.rank_rho_count.saturating_add(1);
+        }
     }
 
     /// Fold one control-arm result in.
@@ -62,6 +122,17 @@ impl Aggregate {
         self.turns = self.turns.saturating_add(u64::from(report.turns));
         self.step_calls = self.step_calls.saturating_add(1);
         self.library_time += report.library_time;
+        self.correct_flags.push(report.correct);
+        // A control arm charges what its own speakers cost, which is one unit
+        // per turn unless the room was generated with `--cost-tiers` and a
+        // specialist answered.
+        self.cost_units = self.cost_units.saturating_add(report.cost_units);
+        if let Some(right) = report.routed_right {
+            self.routed_of = self.routed_of.saturating_add(1);
+            if right {
+                self.routed_right = self.routed_right.saturating_add(1);
+            }
+        }
     }
 
     /// Share of episodes that decided on the best option.
@@ -94,6 +165,89 @@ impl Aggregate {
         }
         f64::from(self.episodes) / seconds
     }
+
+    /// Share of the episodes that *had* a decisive member in which that
+    /// member spoke at all.
+    pub(crate) fn expert_reach(&self) -> f64 {
+        ratio(self.expert_spoke.into(), self.expert_of.into()) * 100.0
+    }
+
+    /// Mean turn index at which the decisive member first spoke, over the
+    /// episodes in which it spoke at all.
+    pub(crate) fn expert_latency(&self) -> f64 {
+        ratio(self.expert_turns, self.expert_spoke.into())
+    }
+
+    /// Share of the episodes it *could* be scored over in which the
+    /// responder ladder routed to the room's expert on the deciding topic.
+    ///
+    /// The denominator is [`Aggregate::routed_of`] rather than the whole
+    /// sample: a uniform room names no expert, so an episode with nobody to
+    /// route to is not a miss.
+    pub(crate) fn routing_precision(&self) -> f64 {
+        ratio(self.routed_right.into(), self.routed_of.into()) * 100.0
+    }
+
+    /// Share of the episodes that had a decisive member in which that member
+    /// also authored the first `!propose` for the topic the room decided.
+    ///
+    /// The sharpest form of Q1 in `DELEGATION.md`: not merely whether the
+    /// member holding the deciding knowledge got a turn, but whether the
+    /// option the room settled on is the one *it* put on the floor. Printed
+    /// only under `--json`, because the detail table is already at the width
+    /// a terminal will hold.
+    pub(crate) fn expert_led(&self) -> f64 {
+        ratio(self.expert_proposed.into(), self.expert_of.into()) * 100.0
+    }
+
+    /// Mean cost, in `Participant::cost_unit` units, per episode.
+    pub(crate) fn cost_per_episode(&self) -> f64 {
+        ratio(self.cost_units, self.episodes.into())
+    }
+
+    /// Correct decisions per thousand cost units spent -- a cost-normalised
+    /// reading of accuracy, so an arm that spends more cannot look better
+    /// than one that spends less for the same number of right answers.
+    pub(crate) fn accuracy_per_kilo_unit(&self) -> f64 {
+        if self.cost_units == 0 {
+            return 0.0;
+        }
+        ratio(u64::from(self.correct) * 1000, self.cost_units)
+    }
+
+    /// Mean per-episode rank correlation between a member's folded directory
+    /// weight and the number of turns it took.
+    ///
+    /// This is the circularity obligation `docs/specs/expert-delegation.md`
+    /// writes down: a value near `1.0` says the directory reproduces the
+    /// speaking order and has learned nothing except who talked, which is the
+    /// failure mode `docs/research/delegation.md` names "who spoke becomes
+    /// who is thought to know". A value well below `1.0` says grounded
+    /// deposits and other members' citations, not turn count, decided who the
+    /// directory named.
+    pub(crate) fn mean_rho(&self) -> f64 {
+        if self.rank_rho_count == 0 {
+            return 0.0;
+        }
+        let sum = i32::try_from(self.rank_rho_milli).unwrap_or(i32::MAX);
+        f64::from(sum) / f64::from(self.rank_rho_count)
+    }
+}
+
+/// Recover the decisive member's id from `first_spoke` by matching the turn
+/// index `expert_at` already pinned.
+///
+/// `first_spoke` maps an agent id to the turn at which it first spoke, and
+/// every turn has exactly one speaker, so at most one id can match a given
+/// turn index. This lets the fold learn *which* id was decisive without
+/// `EpisodeReport` having to carry that id as a separate field.
+fn expert_id(report: &EpisodeReport) -> Option<&str> {
+    let at = report.expert_at?;
+    report
+        .first_spoke
+        .iter()
+        .find(|(_, turn)| *turn == at)
+        .map(|(id, _)| id.as_str())
 }
 
 /// A safe ratio that never divides by zero.
@@ -114,6 +268,28 @@ fn lossy(value: u64) -> f64 {
     high.mul_add(4_294_967_296.0, low)
 }
 
+/// Width of the arm-name column in both tables.
+const NAME_WIDTH: usize = 8;
+
+/// Join an arm's name to an already-formatted row of columns.
+///
+/// A name longer than [`NAME_WIDTH`] eats into the leading whitespace of the
+/// column beside it rather than shoving every column right, so a row for
+/// `hive+defer` still lines up with a row for `hive`. A name that fits
+/// produces exactly what a plain `{:<8}` would, which is what keeps the
+/// published six-row table byte-identical.
+fn row(name: &str, rest: &str) -> String {
+    let mut over = name.chars().count().saturating_sub(NAME_WIDTH);
+    let mut trimmed = rest;
+    // Never eats the last space: a name flush against its first number reads
+    // as one token, which is worse than a column one place out.
+    while over > 0 && trimmed.starts_with("  ") {
+        trimmed = trimmed.get(1..).unwrap_or(trimmed);
+        over -= 1;
+    }
+    format!("{name:<NAME_WIDTH$}{trimmed}")
+}
+
 /// The header for the arm comparison table.
 pub(crate) fn arm_header() -> String {
     format!(
@@ -124,15 +300,175 @@ pub(crate) fn arm_header() -> String {
 
 /// One row of the arm comparison table.
 pub(crate) fn arm_row(name: &str, totals: &Aggregate) -> String {
-    format!(
-        "{:<8}{:>10.2}{:>12.1}{:>12.1}{:>14.0}{:>14.0}",
-        name,
+    let rest = format!(
+        "{:>10.2}{:>12.1}{:>12.1}{:>14.0}{:>14.0}",
         totals.turns_per_episode(),
         totals.decision_rate(),
         totals.accuracy(),
         totals.nanos_per_step(),
         totals.episodes_per_second(),
+    );
+    row(name, &rest)
+}
+
+/// Whether `name` is an arm that actually deliberates, rather than a
+/// matched-budget control.
+///
+/// The expert-tracking and directory-circularity fields are folded from
+/// [`EpisodeReport`] by [`Aggregate::add`], which only a deliberation arm
+/// ever calls; `vote` and `ladder` are folded through [`Aggregate::add_arm`]
+/// instead and never populate them. [`detail_row`] uses this to print `—`
+/// for a column an arm structurally cannot have data for, rather than the
+/// misleading `0.0` a bare zeroed counter would otherwise print.
+fn deliberates(name: &str) -> bool {
+    !matches!(name, "vote" | "ladder")
+}
+
+/// The header for the statistics table: accuracy with its confidence
+/// interval, the expert-delegation and cost columns, and the
+/// directory-circularity proxy.
+pub(crate) fn detail_header() -> String {
+    format!(
+        "{:<8}{:>11}{:>16}{:>10}{:>12}{:>10}{:>10}{:>8}",
+        "arm", "correct %", "95% CI", "expert %", "to-expert", "route %", "cost/ep", "rho"
     )
+}
+
+/// One row of the statistics table.
+///
+/// `—` stands in for a column that does not apply to this arm at all: the
+/// expert and rho columns for a control arm that never deliberates, and the
+/// route column for every arm but a `ladder` one, which is the only kind
+/// that ever consults the responder ladder.
+pub(crate) fn detail_row(name: &str, totals: &Aggregate) -> String {
+    let (low, high) = wilson(totals.correct, totals.episodes);
+    let ci = format!("{low:.1}–{high:.1}");
+    let hive_like = deliberates(name);
+    let expert_pct = dash_unless(hive_like && totals.expert_of > 0, || totals.expert_reach());
+    let to_expert = dash_unless(hive_like && totals.expert_spoke > 0, || {
+        totals.expert_latency()
+    });
+    // Only a ladder arm consults the responder ladder at all, and only a
+    // room that names an expert on the deciding topic gives it something to
+    // be right or wrong about -- so a uniform room prints `—` rather than a
+    // `0.0` that would read as "the ladder always missed".
+    let route_pct = dash_unless(totals.routed_of > 0, || totals.routing_precision());
+    let rho = dash_unless(hive_like && totals.rank_rho_count > 0, || {
+        totals.mean_rho() / 1000.0
+    });
+    let rest = format!(
+        "{:>11.1}{:>16}{:>10}{:>12}{:>10}{:>10.2}{:>8}",
+        totals.accuracy(),
+        ci,
+        expert_pct,
+        to_expert,
+        route_pct,
+        totals.cost_per_episode(),
+        rho,
+    );
+    row(name, &rest)
+}
+
+/// Format a value to one decimal place when `available`, or `—` otherwise.
+///
+/// `value` is a closure rather than a plain `f64` so a caller never has to
+/// compute a ratio whose denominator it already knows is zero.
+fn dash_unless(available: bool, value: impl FnOnce() -> f64) -> String {
+    if available {
+        format!("{:.1}", value())
+    } else {
+        "—".to_owned()
+    }
+}
+
+/// A paired-bootstrap comparison line for one deliberating arm against the
+/// `vote` control, e.g. `hive+ − vote: +3.6 [+2.1, +5.0]`.
+///
+/// Returns `None` when the two arms were not run over the same number of
+/// episodes, which is the one precondition [`paired_bootstrap`] needs to
+/// treat the two flag vectors as paired samples over the same rooms.
+pub(crate) fn paired_diff_line(
+    name: &str,
+    treatment: &Aggregate,
+    control: &Aggregate,
+    seed: u64,
+    resamples: u32,
+) -> Option<String> {
+    if treatment.correct_flags.is_empty()
+        || treatment.correct_flags.len() != control.correct_flags.len()
+    {
+        return None;
+    }
+    let diff = treatment.accuracy() - control.accuracy();
+    let (low, high) = paired_bootstrap(
+        &treatment.correct_flags,
+        &control.correct_flags,
+        seed,
+        resamples,
+    );
+    Some(format!("{name} − vote: {diff:+.1} [{low:+.1}, {high:+.1}]"))
+}
+
+/// One flat JSON object for `name`, covering every column of both tables.
+///
+/// Hand-written with [`write!`] rather than a serialization crate: the
+/// workspace does not depend on `serde_json` here and one flat object with a
+/// dozen known fields does not need one. A value that is not finite --
+/// [`Aggregate::episodes_per_second`] when no library time was spent, chiefly
+/// -- is written as JSON `null` rather than `inf`, which is not valid JSON.
+pub(crate) fn json_line(name: &str, totals: &Aggregate) -> String {
+    let (low, high) = wilson(totals.correct, totals.episodes);
+    let hive_like = deliberates(name);
+    let mut line = String::new();
+    // `write!` into a `String` never fails, so the result is discarded
+    // rather than propagated.
+    let _ = write!(
+        line,
+        "{{\"arm\":\"{name}\",\"turns_per_episode\":{},\"decision_rate\":{},\
+         \"correct_pct\":{},\"ci_low\":{},\"ci_high\":{},\"ns_per_step\":{},\
+         \"episodes_per_second\":{},\"expert_pct\":{},\"to_expert\":{},\
+         \"expert_led\":{},\"route_pct\":{},\"cost_per_episode\":{},\
+         \"accuracy_per_kilo_unit\":{},\"rho\":{}}}",
+        json_f64(totals.turns_per_episode()),
+        json_f64(totals.decision_rate()),
+        json_f64(totals.accuracy()),
+        json_f64(low),
+        json_f64(high),
+        json_f64(totals.nanos_per_step()),
+        json_f64(totals.episodes_per_second()),
+        json_f64_if(hive_like && totals.expert_of > 0, totals.expert_reach()),
+        json_f64_if(
+            hive_like && totals.expert_spoke > 0,
+            totals.expert_latency()
+        ),
+        json_f64_if(hive_like && totals.expert_of > 0, totals.expert_led()),
+        json_f64_if(totals.routed_of > 0, totals.routing_precision()),
+        json_f64(totals.cost_per_episode()),
+        json_f64(totals.accuracy_per_kilo_unit()),
+        json_f64_if(
+            hive_like && totals.rank_rho_count > 0,
+            totals.mean_rho() / 1000.0
+        ),
+    );
+    line
+}
+
+/// Render a float as a JSON number, or `null` when it is not finite.
+fn json_f64(value: f64) -> String {
+    if value.is_finite() {
+        format!("{value:.4}")
+    } else {
+        "null".to_owned()
+    }
+}
+
+/// [`json_f64`], or `null` outright when the column does not apply.
+fn json_f64_if(available: bool, value: f64) -> String {
+    if available {
+        json_f64(value)
+    } else {
+        "null".to_owned()
+    }
 }
 
 /// A 95% Wilson score interval for a binomial rate, as percentages.
@@ -150,11 +486,11 @@ pub(crate) fn arm_row(name: &str, totals: &Aggregate) -> String {
 /// enter no ordering, no policy comparison, and no control flow anywhere in
 /// the harness.
 pub(crate) fn wilson(successes: u32, trials: u32) -> (f64, f64) {
+    // The two-sided 97.5th percentile of the standard normal, to four places.
+    const Z: f64 = 1.96;
     if trials == 0 {
         return (0.0, 0.0);
     }
-    // The two-sided 97.5th percentile of the standard normal, to four places.
-    const Z: f64 = 1.96;
     let n = f64::from(trials);
     let p = f64::from(successes) / n;
     let z2 = Z * Z;
