@@ -5,7 +5,9 @@
 //! attributed transcript projection, ephemeral team initialization, a bounded
 //! index of a desk's live threads, [`search`] and [`pins`] over
 //! that same log, and the
-//! narrow [`Selector`] port used by model-assisted responder choice.
+//! narrow [`Selector`] port used by model-assisted responder choice. A channel
+//! that outgrows every window is folded by [`mod@digest`] into one bounded,
+//! superseding account behind a live tail, through a second narrow port.
 //! Mention dispatch remains pure until one canonical request reaches the
 //! host-owned atomic [`MentionTurnQueue`] boundary, and [`mod@referral`] extends
 //! that same edge across a channel: one child turn that may run on another
@@ -52,6 +54,7 @@
 //! message, because nothing in this crate restricts who may read a row.
 
 pub mod briefing;
+pub mod digest;
 pub mod dispatch;
 pub mod error;
 pub mod pins;
@@ -65,6 +68,11 @@ pub mod threads;
 pub use briefing::{
     BrevityPolicy, BriefedTeammate, BriefingNote, MentionDispatchContext, SessionContext,
     SessionInitialization, TeamBriefing, initialize_session, initialize_session_with_context,
+};
+pub use digest::{
+    ChannelDigest, DigestFuture, DigestOutcome, DigestPlan, DigestPolicy, DigestRejection,
+    DigestRequest, DigestedHistory, Digester, accept_digest, apply_digest, collect_digest_input,
+    plan_digest, refold,
 };
 pub use dispatch::{
     EnqueueOutcome, EnqueueRefusal, MentionDispatchOutcome, MentionTurnFuture, MentionTurnQueue,

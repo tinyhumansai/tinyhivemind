@@ -166,13 +166,24 @@ impl Default for ContextBudget {
 mod test {
     use super::*;
 
+    /// Compare two weights.
+    ///
+    /// The values here are exact in principle — a `rot` of zero discounts
+    /// nothing, an edge is worth one, the exact centre is worth zero — but they
+    /// arrive through floating-point arithmetic, and a test that asserts on the
+    /// bit pattern of a computed `f64` is asserting on the arithmetic rather
+    /// than on the rule.
+    fn close(left: f64, right: f64) -> bool {
+        (left - right).abs() < 1e-9
+    }
+
     #[test]
     fn an_unbounded_budget_changes_nothing() {
         let budget = ContextBudget::UNBOUNDED;
         assert!(budget.is_unbounded());
         assert_eq!(budget.retained(50), (0..50).collect::<Vec<_>>());
         for at in 0..50 {
-            assert_eq!(budget.weight(at, 50), 1.0);
+            assert!(close(budget.weight(at, 50), 1.0));
         }
     }
 
@@ -186,7 +197,10 @@ mod test {
         // Six rows into four: the middle two go.
         assert_eq!(budget.retained(6), vec![0, 1, 4, 5]);
         for at in 0..4 {
-            assert_eq!(budget.weight(at, 4), 1.0, "a flat window discounts nothing");
+            assert!(
+                close(budget.weight(at, 4), 1.0),
+                "a flat window discounts nothing"
+            );
         }
     }
 
@@ -198,11 +212,13 @@ mod test {
             rot: 1.0,
         };
         let held = 5;
-        assert_eq!(budget.weight(0, held), 1.0, "the first row is all edge");
-        assert_eq!(budget.weight(4, held), 1.0, "so is the last");
-        assert_eq!(
-            budget.weight(2, held),
-            0.0,
+        assert!(
+            close(budget.weight(0, held), 1.0),
+            "the first row is all edge"
+        );
+        assert!(close(budget.weight(4, held), 1.0), "so is the last");
+        assert!(
+            close(budget.weight(2, held), 0.0),
             "the exact centre is worth nothing"
         );
         assert!(
@@ -223,8 +239,8 @@ mod test {
             capacity: 16,
             rot: 0.5,
         };
-        assert_eq!(strong.weight(2, 5), 0.0);
-        assert_eq!(half.weight(2, 5), 0.5);
+        assert!(close(strong.weight(2, 5), 0.0));
+        assert!(close(half.weight(2, 5), 0.5));
     }
 
     /// A lone row has no middle to fall into.
@@ -234,7 +250,7 @@ mod test {
             capacity: 8,
             rot: 1.0,
         };
-        assert_eq!(budget.weight(0, 1), 1.0);
+        assert!(close(budget.weight(0, 1), 1.0));
     }
 
     /// The property the whole file exists for, stated correctly.
@@ -256,21 +272,22 @@ mod test {
             capacity: 64,
             rot: 1.0,
         };
-        // Share of rows worth less than half their face value.
+        // Rows worth less than half their face value. Counted rather than
+        // divided: the claim is about a share, and comparing two shares as a
+        // cross-multiplication of counts keeps the assertion in integers.
         let buried = |held: usize| {
             (0..held)
                 .filter(|at| budget.weight(*at, held) < 0.5)
-                .count() as f64
-                / held as f64
+                .count()
         };
-        assert_eq!(buried(1), 0.0, "a lone row is all edge");
+        assert_eq!(buried(1), 0, "a lone row is all edge");
         assert!(
-            buried(21) > 0.4,
-            "most of a full window sits in its own middle: {}",
+            buried(21) * 10 > 21 * 4,
+            "most of a full window sits in its own middle: {} of 21",
             buried(21)
         );
         // And the share does not shrink as it fills further.
-        assert!(buried(41) >= buried(21) - 1e-9);
+        assert!(buried(41) * 21 >= buried(21) * 41);
     }
 
     /// The mechanism that actually drove `hive+pooled` down in the sweep:

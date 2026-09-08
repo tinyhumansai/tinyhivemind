@@ -10,8 +10,9 @@
 use std::{collections::HashMap, fs, sync::PoisonError, time::Duration};
 
 use tinyhivemind::{
-    BrevityPolicy, BriefedTeammate, Conversation, MentionDispatchOutcome, Sequence, SessionAuthor,
-    SessionQuery, TeamBriefing,
+    BrevityPolicy, BriefedTeammate, ChannelDigest, Conversation, DigestOutcome, DigestPolicy,
+    Digester, MentionDispatchOutcome, Sequence, SessionAuthor, SessionQuery, TeamBriefing,
+    apply_digest,
     aside::{Audience, Viewer},
     desk::{Desk, DeskSet, ResponderMode},
     dispatch::{
@@ -20,34 +21,40 @@ use tinyhivemind::{
     },
     initialize_session,
     mention::{MentionAuthor, resolve},
+    refold,
     responder::{ResponderRequest, SelectionPolicy, choose_responder},
     roster::{Person, Roster, RosterMember},
     sharing::{SharingPlan, SharingQuery, SharingState, initialized_state, prepare_delta},
 };
 
 use crate::{
-    BoxError, agent, aside, chat,
+    BoxError, agent,
+    aside::{self, Addressed},
+    chat,
     cli::Options,
-    deskfile, log, memory,
+    deskfile, digest, log, mcp, memory,
     notebook::{files_written, read_notebook},
     prompt::compose_prompt,
     queue::{DeskQueue, PendingTurn},
+    turn,
 };
-
-/// How many times one turn may be restarted after a stalled stream.
-const STALL_RESTARTS: usize = 1;
-
-/// How long a seat gets to land its work: write it down, then speak.
-///
-/// A seat that spends its whole working budget inside tool calls has both
-/// said nothing *and* left nothing behind, so the next seat starts from an
-/// empty directory. This second phase runs in the seat's own session with its
-/// tools still attached, which is what a tool-less wrap-up cannot do: it can
-/// summarize a turn but it cannot save one.
-const LANDING_TIMEOUT: Duration = Duration::from_secs(720);
 
 /// How long a seat gets to write the message it never got round to writing.
 const WRAP_UP_TIMEOUT: Duration = Duration::from_secs(600);
+
+/// Where a turn's tool calls to the room are collected, under the workspace.
+///
+/// One file, truncated before every turn, so a turn drains only its own calls.
+/// It is not a second journal: the transcript is still the only record, and
+/// the host is still what writes it.
+const OUTBOX: &str = ".desk/outbox.jsonl";
+
+/// How long the room's standing account may be, in characters.
+///
+/// Roughly a page: enough to carry what has been established and by whom, and
+/// small enough that it never competes with the live conversation for the
+/// seat's attention.
+const ACCOUNT_CHARS: usize = 4000;
 
 // One function on purpose. This is the host written out as one story — open the
 // desk, choose who answers, run a turn, post it, route the reply — and the
@@ -89,10 +96,28 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
         thread_root: None,
     };
     let transcript = log::JsonlLog::open(&options.transcript)?;
+    // The room is a tool the seat calls, not a fence it writes. The server is
+    // this binary re-executed; the outbox is one file, truncated per turn.
+    let outbox = options.workspace.join(OUTBOX);
+    let agent_config = match std::env::current_exe() {
+        Ok(exe) => Some(mcp::config_block(
+            &exe,
+            &outbox,
+            &options.transcript,
+            options.opencode_config.as_deref(),
+        )),
+        Err(error) => {
+            println!(
+                "!! cannot find this binary to serve the desk tools ({error}); seats will fall \
+                 back to the post fence"
+            );
+            options.opencode_config.clone()
+        }
+    };
     let runner = agent::AgentRunner::new(
         &options.agent_cmd,
         &options.workspace.to_string_lossy(),
-        options.opencode_config.clone(),
+        agent_config,
         options.timeout,
         Some(
             options
@@ -118,6 +143,23 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
         &options.router_model,
         WRAP_UP_TIMEOUT,
     );
+    // The room's own memory. Everything older than the live window is one
+    // bounded account, rewritten as the room moves, so a seat spends its window
+    // on the live conversation rather than on its own scrollback.
+    let folder = options.fold_account.then(|| {
+        digest::RoomDigester::new(chat::Chat::new(
+            &options.router_base,
+            &options.router_key,
+            &options.router_model,
+            WRAP_UP_TIMEOUT,
+        ))
+    });
+    let account_policy = DigestPolicy {
+        keep_live: options.window,
+        budget_chars: ACCOUNT_CHARS,
+        ..DigestPolicy::DEFAULT
+    };
+    let mut account: Option<ChannelDigest> = None;
     // One CLI session per seat, and one watermark per seat: a seat that has
     // spoken before is caught up with `prepare_delta` rather than re-read the
     // whole window it already holds.
@@ -296,6 +338,38 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
         turns += 1;
         since_chair += 1;
 
+        // Fold what has scrolled out of reach into the room's account, before
+        // anything is composed from it. A fold that fails costs the room its
+        // compaction and nothing else: the window is already correct without
+        // one.
+        match refold(
+            &transcript,
+            folder.as_ref().map(|folder| folder as &dyn Digester),
+            &conversation,
+            account.as_ref(),
+            Sequence(transcript.len() as u64),
+            account_policy,
+        )
+        .await?
+        {
+            DigestOutcome::Folded(next) => {
+                println!(
+                    "   room account: generation {} now covers {} messages through [{}] \
+                     ({} chars)",
+                    next.generation,
+                    next.covered,
+                    next.through.0,
+                    next.text.chars().count()
+                );
+                account = Some(next);
+            }
+            DigestOutcome::Rejected { reason } => {
+                println!("   !! the room account was refused: {reason:?}");
+            }
+            DigestOutcome::Unavailable => println!("   !! no folder; the room account stands"),
+            DigestOutcome::Current => {}
+        }
+
         let viewer = Viewer::Agent {
             id: seat.id.clone(),
         };
@@ -352,7 +426,7 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
             ),
             _ => None,
         };
-        let (history, briefing_text, catching_up) = if let Some(SharingPlan::Delta(delta)) = plan {
+        let (window, briefing_text, catching_up) = if let Some(SharingPlan::Delta(delta)) = plan {
             shared.insert(seat.id.clone(), delta.next_state);
             (delta.messages, None, true)
         } else {
@@ -369,9 +443,16 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
             .map(|store| store.recall(&job.trigger))
             .unwrap_or_default();
 
+        // A row the account already stands for is not also shown in full, so
+        // the window is spent on the live conversation. A seat that is only
+        // being caught up already holds the older history in its own session,
+        // so the account is not repeated to it.
+        let composed = apply_digest(if catching_up { None } else { account.as_ref() }, &window);
+        let history = composed.messages;
         let notebook = read_notebook(&options.workspace, &seat.id);
         let prompt = compose_prompt(
             briefing_text.as_deref(),
+            composed.digest.as_deref(),
             &history,
             seat,
             &job,
@@ -390,135 +471,22 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
                 None => "none".to_string(),
             }
         );
-        let mut output = runner.run(
+        let Some((output, dm_to)) = turn::deliver(
+            &turn::Delivery {
+                runner: &runner,
+                wrapup: &wrapup,
+                outbox: &outbox,
+                label: format!("turn-{turns:03}-{}", seat.id),
+                seat_id: &seat.id,
+                resumed: resumed.as_deref(),
+            },
             &prompt,
-            &format!("turn-{turns:03}-{}", seat.id),
-            runner.timeout(),
-            resumed.as_deref(),
-        )?;
-        tokens += output.tokens;
-        if output.timed_out || output.stalled {
-            // The process was killed, so its session is spent. A killed
-            // session cannot be resumed — the next run on it exits at once
-            // having emitted nothing — so keeping the id would make every
-            // later turn resume into silence. That is what turned a room
-            // which had been working into one that stalled on every turn.
-            sessions.remove(&seat.id);
-        } else if let Some(id) = output.session.clone() {
-            sessions.insert(seat.id.clone(), id);
-        }
-        if let Some(error) = output.error.clone() {
-            // Say so. An upstream failure that reads as silence is how an hour
-            // goes into diagnosing a model that was never asked.
-            println!(
-                "   !! agent error: {}",
-                error.chars().take(180).collect::<String>()
-            );
-            if output.message.trim().is_empty() {
-                println!("   retrying the turn once");
-                output = runner.run(
-                    &prompt,
-                    &format!("turn-{turns:03}-{}-retry", seat.id),
-                    runner.timeout(),
-                    output.session.as_deref().or(resumed.as_deref()),
-                )?;
-                tokens += output.tokens;
-            }
-        }
-        // One hung stream should cost a couple of minutes, not the turn. Each
-        // restart is a fresh session on the same prompt; the seat's earlier
-        // work is in the workspace, so what a restart repeats is orientation
-        // rather than the work itself.
-        let mut restarts = 0;
-        while output.stalled && restarts < STALL_RESTARTS {
-            restarts += 1;
-            println!(
-                "   !! stalled after {:?} of silence - restart {restarts}",
-                output.elapsed
-            );
-            output = runner.run(
-                &prompt,
-                &format!("turn-{turns:03}-{}-restart{restarts}", seat.id),
-                runner.timeout(),
-                None,
-            )?;
-            tokens += output.tokens;
-        }
-        if output.timed_out || output.message.trim().is_empty() {
-            // Two phases, because the failure has two halves. First ask the
-            // seat to land what it has: same session, tools still attached, so
-            // the working code and the notes reach the shared workspace where
-            // the next seat can run them. Only if that also runs out of time
-            // does the tool-less channel take over, which can make a seat speak
-            // but cannot make it save.
-            println!(
-                "   !! {} after {:?} - asking the seat to land it",
-                if output.timed_out {
-                    "timed out"
-                } else {
-                    "silent"
-                },
-                output.elapsed
-            );
-            let landing = format!(
-                "Stop the investigation here; do not open a new line of work.\n\n\
-                 Two things, in order. First write down what this turn established, \
-                 so it outlives this process: put your notes in NOTES.md and any \
-                 working code in named .py files in this workspace, which every \
-                 seat shares. Second, post one message to the room wrapped in \
-                 <<<POST and POST>>>, saying what you established, what you did \
-                 not finish, which files you wrote, and the one seat you need \
-                 next - that seat named first.\n\n{prompt}"
-            );
-            let mut landed = runner.run(
-                &landing,
-                &format!("turn-{turns:03}-{}-landing", seat.id),
-                LANDING_TIMEOUT,
-                output.session.as_deref().or(resumed.as_deref()),
-            )?;
-            if !landed.posted && landed.tokens == 0 {
-                // Nothing at all came back — no events, no complaint. Resuming
-                // a session whose process was killed exits silently, and a
-                // landing that cannot start is a landing that cannot save. Try
-                // again on a fresh session: it loses the seat's working
-                // context, which is the lesser of the two losses.
-                println!("   landing on the resumed session produced nothing; retrying fresh");
-                landed = runner.run(
-                    &landing,
-                    &format!("turn-{turns:03}-{}-landing-fresh", seat.id),
-                    LANDING_TIMEOUT,
-                    None,
-                )?;
-            }
-            tokens += landed.tokens;
-            if let Some(id) = landed.session.clone() {
-                sessions.insert(seat.id.clone(), id);
-            }
-            let salvage = if !landed.posted || landed.message.trim().is_empty() {
-                let wrap = format!(
-                    "{prompt}\n\n## What you actually ran this turn\n{}\n\nYou have no \
-                     tools. Your working turn ended before you posted anything. Write the \
-                     message now, in one block wrapped in <<<POST and POST>>>: what you \
-                     established, what you did not finish, and the one seat you need next. \
-                     Ground every claim in the commands above; if they do not establish \
-                     something, say it is not established.",
-                    agent::truncate_work_log(&output.work_log)
-                );
-                let text = wrapup.complete(&wrap);
-                if !text.trim().is_empty() {
-                    println!("   wrap-up posted through the router with no tools attached");
-                }
-                agent::extract_post(&text)
-            } else {
-                println!("   landed in the seat's own session, files included");
-                landed.message
-            };
-            if salvage.trim().is_empty() {
-                println!("   !! nothing salvaged; the seat forfeits this turn");
-                continue;
-            }
-            output.message = salvage;
-        }
+            &mut sessions,
+            &mut tokens,
+        )?
+        else {
+            continue;
+        };
         println!(
             "   {:?}, {} tokens, {} read(s), tools: {}",
             output.elapsed,
@@ -534,15 +502,22 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
             println!("   | {line}");
         }
 
-        let mentions = resolve(
-            &output.message,
-            None,
-            &MentionAuthor::Agent {
-                id: seat.id.clone(),
-            },
-            &roster,
-            &desks,
-        );
+        let author = MentionAuthor::Agent {
+            id: seat.id.clone(),
+        };
+        let mut mentions = resolve(&output.message, None, &author, &roster, &desks);
+        // A message sent through `desk_dm` addresses its recipients whether or
+        // not its text also names them, and the grammar rather than this host
+        // is what turns those names into targets.
+        let addressed_to = dm_to
+            .iter()
+            .map(|id| format!("@{id}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let dm_mentions = resolve(&addressed_to, None, &author, &roster, &desks);
+        if !dm_mentions.is_empty() && aside::addressed(&mentions, &seat.id).is_empty() {
+            mentions = dm_mentions.clone();
+        }
         // Who the line reaches is the library's decision, not this host's
         // reading of the marker: `aside` resolves the audience and refuses
         // with a named reason, and a refusal leaves the row desk-visible.
@@ -550,8 +525,15 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
             &transcript,
             &spec.id,
             &seat.id,
-            &output.message,
-            &mentions,
+            &Addressed {
+                line: &output.message,
+                mentions: if dm_mentions.is_empty() {
+                    &mentions
+                } else {
+                    &dm_mentions
+                },
+                private: !dm_mentions.is_empty(),
+            },
             &roster,
             &desks,
         )?;

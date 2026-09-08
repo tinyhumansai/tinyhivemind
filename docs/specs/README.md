@@ -82,6 +82,11 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a complete sample.
   notebook a seat carries between turns, the one feedthrough row a turn that
   wrote files leaves behind, and the brief appended once. First slice lives in
   the `desk` example.
+- [`thoughts-and-channels.md`](thoughts-and-channels.md) — draft: a seat's
+  output text is its own thinking and it reaches the room through tools with a
+  schema (`desk_post`, `desk_dm`, `desk_read`); a channel carries one bounded,
+  superseding account of everything older than its live tail, folded only from
+  rows every member may read. The library half is `tinyhivemind::digest`.
 
 ## Decisions these specifications rest on
 

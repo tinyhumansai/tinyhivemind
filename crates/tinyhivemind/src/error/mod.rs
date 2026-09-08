@@ -109,6 +109,22 @@ pub enum Error {
         #[source]
         source: tinyhivemind_core::error::Error,
     },
+    /// A bounded scan ended before reaching the range a fold needed.
+    #[error("digest scan of {scanned} rows never reached {after}")]
+    DigestGap {
+        /// The exclusive lower bound the walk was looking for.
+        after: Sequence,
+        /// How many raw rows were inspected before giving up.
+        scanned: usize,
+    },
+    /// A held account belongs to a different channel from the one being folded.
+    #[error("digest holds `{held}` but `{requested}` was requested")]
+    DigestConversationChanged {
+        /// The channel the account covers.
+        held: String,
+        /// The channel the caller asked to fold.
+        requested: String,
+    },
     /// The host-owned mention turn queue failed unexpectedly.
     #[error("mention turn enqueue failed")]
     Enqueue {

@@ -26,5 +26,18 @@ regex = ["dep:regex", "tinyhivemind-core/regex"]
 serde_json = { workspace = true }
 tokio = { workspace = true }
 
+# `cargo test` does not test an example unless the example says so, and the
+# desk example carries unit tests over its event parsing, its tool surface, and
+# what it asks the folder. Declaring the target is what puts them in the
+# contract command rather than behind `--example desk`.
+[[example]]
+name = "desk"
+path = "examples/desk/main.rs"
+test = true
+
+[[example]]
+name = "crosstalk"
+path = "examples/crosstalk/main.rs"
+
 [lints]
 workspace = true

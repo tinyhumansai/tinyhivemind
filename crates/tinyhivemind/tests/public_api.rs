@@ -391,3 +391,79 @@ async fn the_referral_queue_port_is_available_to_consumers() {
     assert!(matches!(quiet, ReferralOutcome::NotReferred { .. }));
     assert_eq!(queue.enqueued.lock().unwrap().len(), 1);
 }
+
+#[test]
+fn root_exports_channel_compaction() {
+    use tinyhivemind::{
+        ChannelDigest, DigestPlan, DigestPolicy, DigestRejection, DigestRequest, accept_digest,
+        apply_digest, plan_digest,
+    };
+
+    let conversation = Conversation {
+        desk_id: "engineering".into(),
+        desk_name: "Engineering".into(),
+        thread_root: None,
+    };
+    let policy = DigestPolicy::DEFAULT;
+
+    // A short channel is left alone; a long one folds in bounded steps.
+    assert_eq!(plan_digest(None, Sequence(20), policy), DigestPlan::Current);
+    assert_eq!(
+        plan_digest(None, Sequence(400), policy),
+        DigestPlan::Fold {
+            after: None,
+            through: Sequence(60),
+        }
+    );
+
+    let folded = SessionMessage {
+        sequence: Sequence(60),
+        author: SessionAuthor::Agent {
+            id: "solver".into(),
+            label: "Solver".into(),
+        },
+        content: "B(g,10^18) = 79414112".into(),
+        audience: Audience::Desk,
+        elided: None,
+    };
+    let request = DigestRequest {
+        conversation: conversation.clone(),
+        prior: None,
+        messages: vec![folded.clone()],
+        through: Sequence(60),
+        budget_chars: 64,
+    };
+    let account = accept_digest(None, &request, "the room verified B at 10^18").expect("accepted");
+    assert_eq!(account.through, Sequence(60));
+    assert_eq!(account.generation, 1);
+    assert_eq!(account.covered, 1);
+
+    // An account that covers no more than the one it replaces is refused, and
+    // that refusal is not a crate error: the held account still stands.
+    assert_eq!(
+        accept_digest(Some(&account), &request, "same ground"),
+        Err(DigestRejection::Regressed {
+            through: Sequence(60),
+            held: Sequence(60),
+        })
+    );
+
+    // A turn is composed of the account plus the rows it does not cover.
+    let live = SessionMessage {
+        sequence: Sequence(61),
+        ..folded.clone()
+    };
+    let history = apply_digest(Some(&account), &[folded, live.clone()]);
+    assert_eq!(
+        history.digest.as_deref(),
+        Some("the room verified B at 10^18")
+    );
+    assert_eq!(history.covered_through, Some(Sequence(60)));
+    assert_eq!(history.messages, vec![live]);
+
+    let stored: ChannelDigest =
+        serde_json::from_str(&serde_json::to_string(&account).expect("serializes"))
+            .expect("deserializes");
+    assert_eq!(stored, account);
+    assert_eq!(stored.conversation, conversation);
+}

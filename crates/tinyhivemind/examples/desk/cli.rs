@@ -56,6 +56,16 @@ pub(crate) struct Options {
     pub(crate) router_key: String,
     /// The model id the wrap-up channel asks for.
     pub(crate) router_model: String,
+    /// Serve the desk tools over stdio instead of running a desk.
+    ///
+    /// The agent CLI spawns this binary in that mode; it takes no turn and
+    /// reads no desk file.
+    pub(crate) serve_mcp: bool,
+    /// Where a turn's tool calls to the room are collected.
+    pub(crate) outbox: Option<PathBuf>,
+    /// Whether messages older than the live window are folded into one
+    /// standing account of the room.
+    pub(crate) fold_account: bool,
 }
 
 impl Options {
@@ -88,6 +98,9 @@ impl Options {
                 .unwrap_or_else(|_| "http://127.0.0.1:6969".into()),
             router_key: std::env::var("LADDER_API_KEY").unwrap_or_default(),
             router_model: "deepseek-flash".into(),
+            serve_mcp: false,
+            outbox: None,
+            fold_account: true,
         };
         let mut args = std::env::args().skip(1);
         while let Some(flag) = args.next() {
@@ -110,11 +123,19 @@ impl Options {
                 "--session-scope" => options.session_scope = value()?,
                 "--router-base" => options.router_base = value()?,
                 "--router-model" => options.router_model = value()?,
+                "--mcp-server" => options.serve_mcp = true,
+                "--outbox" => options.outbox = Some(PathBuf::from(value()?)),
+                "--no-digest" => options.fold_account = false,
                 "--no-memory" => {
                     options.cortex_base = None;
                 }
                 other => return Err(format!("unknown flag {other}").into()),
             }
+        }
+        if options.serve_mcp {
+            // Serving the room as a tool needs a transcript and an outbox and
+            // nothing else.
+            return Ok(options);
         }
         if options.desk.as_os_str().is_empty() {
             return Err("--desk is required".into());

@@ -35,6 +35,21 @@ pub(crate) const ASIDES: AsidePolicy = AsidePolicy {
     require_thread: false,
 };
 
+/// One authored line and what it is trying to reach.
+#[derive(Clone, Copy)]
+pub(crate) struct Addressed<'a> {
+    /// The message itself.
+    pub(crate) line: &'a str,
+    /// The targets it names, or the ones `desk_dm` named for it.
+    pub(crate) mentions: &'a [Mention],
+    /// Whether the seat asked for this to stay off the desk.
+    ///
+    /// A `!aside` marker says so in the prose and is read out of `line`; a
+    /// `desk_dm` call says so in a field, and this is that field. Either way
+    /// the decision is still the library's.
+    pub(crate) private: bool,
+}
+
 /// Decide who one authored line is addressed to.
 ///
 /// The harness never acts on the `!aside` marker itself. It hands the line to
@@ -45,12 +60,16 @@ pub(crate) fn address(
     transcript: &log::JsonlLog,
     desk_id: &str,
     author_id: &str,
-    line: &str,
-    mentions: &[Mention],
+    addressed: &Addressed<'_>,
     roster: &tinyhivemind::roster::Roster<'_>,
     desks: &tinyhivemind::desk::DeskSet<'_>,
 ) -> Result<Audience, BoxError> {
-    if !line.trim_start().starts_with("!aside") {
+    let Addressed {
+        line,
+        mentions,
+        private,
+    } = *addressed;
+    if !private && !line.trim_start().starts_with("!aside") {
         return Ok(Audience::Desk);
     }
     let rows = transcript.rows();
@@ -147,7 +166,7 @@ fn unsettled_aside(rows: &[LogMessage], author_id: &str, mentions: &[Mention]) -
 
 /// The active agent ids a line addresses, without the author and without
 /// repeats, in the order they were written.
-fn addressed(mentions: &[Mention], author_id: &str) -> Vec<String> {
+pub(crate) fn addressed(mentions: &[Mention], author_id: &str) -> Vec<String> {
     let mut ordered: Vec<&Mention> = mentions.iter().collect();
     ordered.sort_by_key(|mention| mention.offset);
     let mut out: Vec<String> = Vec::new();

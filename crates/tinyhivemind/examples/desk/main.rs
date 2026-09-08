@@ -19,12 +19,15 @@
 //!
 //! | file | holds |
 //! | --- | --- |
-//! | `main.rs` | the entry point: parse options, run the desk loop |
+//! | `main.rs` | the entry point: parse options, serve the tools or run the loop |
 //! | `cli.rs` | [`cli::Options`] and its parsing |
 //! | `run.rs` | [`run::run`], the desk loop itself: one function on purpose |
+//! | `turn.rs` | one turn's process, and the ladder of recoveries under it |
 //! | `queue.rs` | [`queue::DeskQueue`], the host's `MentionTurnQueue` |
 //! | `aside.rs` | this desk's aside policy and its host-side bookkeeping |
 //! | `prompt.rs` | [`prompt::compose_prompt`], turning a turn into text |
+//! | `mcp.rs` | the room as a tool: `desk_post`, `desk_dm`, `desk_read` |
+//! | `digest.rs` | the host side of the `Digester` port: the room's account |
 //! | `notebook.rs` | the notebook a seat carries between turns |
 //! | `agent.rs` | one `opencode run` per turn, and its output |
 //! | `chat.rs` | the tool-less wrap-up channel |
@@ -37,12 +40,15 @@ mod aside;
 mod chat;
 mod cli;
 mod deskfile;
+mod digest;
 mod log;
+mod mcp;
 mod memory;
 mod notebook;
 mod prompt;
 mod queue;
 mod run;
+mod turn;
 
 use std::error::Error as StdError;
 
@@ -52,5 +58,12 @@ type BoxError = Box<dyn StdError + Send + Sync + 'static>;
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), BoxError> {
     let options = cli::Options::parse()?;
+    if options.serve_mcp {
+        // This same binary is the MCP server the agent CLI spawns: re-execing
+        // it keeps one artifact and one version of the tool schema. Serving
+        // takes no turn and reads no desk file.
+        let outbox = options.outbox.ok_or("--mcp-server needs --outbox")?;
+        return mcp::serve(&outbox, &options.transcript);
+    }
     run::run(options).await
 }

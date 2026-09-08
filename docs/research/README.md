@@ -39,7 +39,7 @@ what actually happened when it was run goes in
   why no shipping design gives its orchestrator the full context, what a seat
   carries between turns instead (context folding, externalized plans), and the
   feedthrough a shared artifact already emits. The reading behind seat
-  continuity.
+  continuity and [`../specs/thoughts-and-channels.md`](../specs/thoughts-and-channels.md).
 - [`grok-bots/`](grok-bots/README.md) — twelve notes on the open-source Grok
   Bot ecosystem, read at pinned commits: how each one models a roster, what
   makes a message start a turn, and how four of them shipped uncontrolled

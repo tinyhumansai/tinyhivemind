@@ -38,5 +38,16 @@ default = []
 # explicit environment switch documented in docs/testing.md.
 e2e = []
 
+# See the note in `crates/tinyhivemind/Cargo.toml`: an example's unit tests only
+# run when the target declares them.
+[[example]]
+name = "bench"
+path = "examples/bench/main.rs"
+test = true
+
+[[example]]
+name = "hive"
+path = "examples/hive.rs"
+
 [lints]
 workspace = true
