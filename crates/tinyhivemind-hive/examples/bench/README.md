@@ -202,6 +202,19 @@ The two refutation arms lose, which is why both knobs are off in
 `hive+ev` starves the room — it fails to decide two episodes in five. [The benchmark write-up](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks)
 has the tables behind each of those, across desk sizes, plus what the benchmark does not show.
 
+## A task with a horizon
+
+Every mode above measures **one** decision, so nothing compounds and no window
+ever binds. `--stages` runs a chain of them, and adds the control the library's
+own claim is actually about: **one agent working a long task, compacting as it
+goes**. `solo` compacts by eviction and `solo+fold` by a superseding account.
+
+The answer is not the flattering one. A room does beat an *evicting* soloist
+once the window is tight — it splits the same brief five ways. It does not beat
+a *summarising* one, at any horizon or window measured, and it spends about
+seven times the depth trying. [`HORIZON.md`](HORIZON.md) has the tables and the
+one weakness that favours the room.
+
 ## Depth and width
 
 `turns/ep` is what the budget bounds; `rounds/ep` beside it is what a host with
@@ -439,6 +452,8 @@ and why the sweep reports an ordering rather than a value are in
 | `--context N` | rows each member's window holds; `0` (default) disables the window model entirely |
 | `--rot F` | how hard the middle of that window is discounted, `0.0..=1.0` (default `0.0`) |
 | `--context-sweep` | run the window ladder instead of comparing arms once |
+| `--stages N` | run the **chain ladder** instead of comparing arms once: N sub-decisions in sequence on one accumulating window, with `1,2,4,8,16` sweeping a ladder and a bare number running one length |
+| `--fidelity F` | what a summarised row is still worth under `solo+fold`, `0.0..=1.0` (default `0.35`) |
 | `--round-width N` | turns one round may authorize concurrently, read by `hive+wide` and `hive+blind` (default 4); `0` makes both bit-identical to `hive+`. Every published arm runs at width one, so no recorded number moves with it |
 | `--aside-cap N` | pairwise checks one member may open (default 1); under `hive+share` it caps distinct peers contacted instead; `0` makes every aside arm bit-identical to `hive+` |
 | `--aside-cap N` | pairwise checks one member may open (default 1); under `hive+share` it caps distinct peers contacted instead; `0` makes every on-floor and alongside aside arm bit-identical to `hive+` |

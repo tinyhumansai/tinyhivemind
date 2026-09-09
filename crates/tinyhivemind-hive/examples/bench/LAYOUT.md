@@ -27,6 +27,7 @@ resolves it to `sim/mod.rs` transparently.
 | `run/{turns,scoring}.rs` | per-turn machinery (audience, appending a turn, one exchange), then `EpisodeReport`, `Tally`, and an episode's accounting |
 | `arms.rs` | the `ladder`, `vote`, `merged` and federated controls |
 | `scale.rs` | `--scale-sweep`: room size against channel topology, one table per axis |
+| `horizon.rs` | the chain ladder: a task with several stages, the arms that decide one, and the soloist controls |
 | `sweep.rs` | the policy grid and its ranking |
 | `metrics/mod.rs` | aggregation, formatting, and the confidence-interval, bootstrap and rank-correlation statistics: `Aggregate` and the printed/JSON tables |
 | `metrics/{format,stats}.rs` | formatting helpers for those tables, then the small numeric statistics helpers (percentile, rank correlation) |
@@ -37,6 +38,7 @@ resolves it to `sim/mod.rs` transparently.
 | `scenarios/` | the scenario files themselves |
 | `DELEGATION.md` | the delegation arms, the three questions they answer, and what they scored |
 | `LIVE.md` | live rooms: the prompt, the scenario format, and the CLI and HTTP backends |
+| `HORIZON.md` | what a task with a history costs, and whether a room or a soloist pays less |
 | `DEPTH.md` | the two cost columns — depth beside width — and what the concurrency arms scored |
 | `CONTEXT.md` | the context-budget window model, and what a bounded prompt does and does not change about the arms above |
 | `rng.rs` | a seeded `SplitMix64`, so every run reproduces |
