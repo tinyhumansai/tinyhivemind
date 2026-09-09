@@ -244,8 +244,10 @@ consecutive turns in one thread. P5 replaces that gate with a watermark.
   host owns (reactions, board cards, run rows), so a second log cannot be made
   consistent with the first.
 - **A web framework, or HTTP handlers.** Routes stay with the host.
-- **Fan-out.** One message triggers exactly one turn. `@everyone` is a list, not
-  a broadcast — see P7. P8's deliberation episodes do not relax this: an episode
-  is a bounded *sequence* of single turns, and `HiveStep::Speak` cannot
-  represent two. Independence between participants is bought as a visibility
-  filter on the projection, never as concurrency.
+- **Unbounded fan-out.** A step may authorize a *round* of concurrent turns, but
+  never more than `round_width` of them and never without an approval in sight —
+  the bound is the invariant, and the serialization never was. Independence is
+  still a visibility filter: members writing simultaneously cannot read each
+  other, so a concurrent round is a blind round. See
+  [ADR 0014](docs/adr/0014-a-round-authorizes-concurrent-turns.md), which
+  supersedes ADR 0002 on the terms ADR 0002 itself set, and P21 below.
