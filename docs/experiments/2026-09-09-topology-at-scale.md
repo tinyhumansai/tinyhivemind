@@ -104,6 +104,20 @@ many peers exist.
 
 ## The federation collapses too, and for a nameable reason
 
+> **Correction, 2026-09-10.** The diagnosis below names the wrong side of the
+> exchange. It says a referral costs the *answering* desk a floor turn; the code
+> says otherwise — `Board::deliver` appends the answer without calling `step`,
+> so the answering desk spends no budget at all. What costs a turn is the
+> **ask**: `Board::take_turn` lets a member spend the turn the episode
+> authorized on asking, and the host's width bound permits `D - 1` asks against
+> a budget of `3 x per_desk`. At twelve desks of four that is eleven asks
+> against twelve turns, which is the exhaustion reported here. The mechanism is
+> the same one — an exchange tied to the floor cannot pay for itself — and the
+> implied fix is the same, but it belongs on the ask. It is implemented and
+> measured in
+> [`2026-09-10-hive-at-scale.md`](2026-09-10-hive-at-scale.md), which also
+> reproduces this collapse at a hundred desks and closes it.
+
 ```text
 desks          3        6       12       24
 swarm       78.0     66.5      0.0      0.0
@@ -126,9 +140,11 @@ scales with the federation and the budget does not, so the federation spends
 itself answering and never decides. Twenty answers are stranded on top of that.
 
 That is the on-floor exchange law again, one level up: inside a room it costs
-the asker a turn, and between desks it costs the answerer one. The fix implied
-is the same one — a referral should be answerable off the floor — and it is not
-implemented.
+the asker a turn, and between desks it costs the asker one there too — see the
+correction at the head of this section, which replaces the "answerable off the
+floor" reading below. The fix implied is that a referral should be **askable**
+off the floor, and it is implemented and measured in
+[`2026-09-10-hive-at-scale.md`](2026-09-10-hive-at-scale.md).
 
 ## What this does not show
 
