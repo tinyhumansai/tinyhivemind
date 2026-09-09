@@ -98,6 +98,7 @@ mod scenario;
 mod sim;
 mod swarm;
 mod sweep;
+mod variety;
 
 use std::time::Instant;
 
