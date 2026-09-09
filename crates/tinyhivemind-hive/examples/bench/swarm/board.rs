@@ -53,7 +53,7 @@ use super::{Channel, SwarmHost, SwarmMember, SwarmReport, format};
 ///
 /// [ADR 0012]: https://github.com/tinyhumansai/tinyhivemind/blob/main/docs/adr/0012-an-exchange-round-spends-model-calls-not-turns.md
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum AskChannel {
+pub(crate) enum AskChannel {
     /// A member spends the turn the episode authorized asking a peer channel,
     /// and may ask every peer once.
     OnFloor,

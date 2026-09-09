@@ -50,7 +50,9 @@ use crate::federation::Federation;
 use crate::run::Ending;
 use tinyhivemind_hive::aside::Audience;
 
-use board::{AskChannel, Board};
+pub(crate) use board::AskChannel;
+
+use board::Board;
 use member::SwarmSim;
 
 mod board;
