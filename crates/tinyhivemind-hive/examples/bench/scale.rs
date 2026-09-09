@@ -70,6 +70,9 @@ struct Point {
     arm: &'static str,
     correct: f64,
     turns: f64,
+    /// Rounds per episode: the arm's depth, what a host with async seats waits
+    /// for. The whole reason this sweep needed a second cost column.
+    depth: f64,
     rows: f64,
 }
 
@@ -160,6 +163,7 @@ fn one_size(
     let mut rounds = Channel::default();
     let mut off_floor = Channel::default();
     let mut pooled = Channel::default();
+    let mut wide = Channel::default();
 
     for room in rooms {
         ladder.add_arm(&arms::run_ladder(room, options.seed)?);
@@ -199,6 +203,16 @@ fn one_size(
             room.pooled()
         };
         pooled.add(&run_episode(&ceiling, tuned, TASK, false)?);
+        // The same broadcast room, run in concurrent rounds. This is the arm
+        // the scale result asks for: every floor-bound channel dies as the
+        // room grows because turns per member is `budget / n`, and a round is
+        // the only thing that changes that ratio without changing the budget.
+        wide.add(&run_episode(
+            room,
+            &widened_policy(tuned, options.round_width),
+            TASK,
+            false,
+        )?);
     }
 
     let named = [
@@ -209,6 +223,7 @@ fn one_size(
         ("hive+rounds", rounds),
         ("hive+fact°", off_floor),
         ("hive+pooled", pooled),
+        ("hive+wide", wide),
     ];
     Ok(named
         .into_iter()
@@ -217,6 +232,7 @@ fn one_size(
             arm,
             correct: channel.totals.accuracy(),
             turns: channel.totals.turns_per_episode(),
+            depth: channel.totals.rounds_per_episode(),
             rows: channel.rows_per_episode(),
         })
         .collect())
@@ -239,6 +255,7 @@ fn render(points: &[Point], sizes: &[usize], options: &Options) -> String {
     for (title, field) in [
         ("correct %", 0_usize),
         ("turns/ep — rows on the floor", 1),
+        ("rounds/ep — depth, what a host waits for", 3),
         ("contacts/ep — members asked privately", 2),
     ] {
         let _ = write!(out, "{title}\n\narm         ");
@@ -254,6 +271,7 @@ fn render(points: &[Point], sizes: &[usize], options: &Options) -> String {
             "hive+rounds",
             "hive+fact°",
             "hive+pooled",
+            "hive+wide",
         ] {
             let _ = write!(out, "{arm:<12}");
             for size in sizes {
