@@ -208,6 +208,11 @@ fn run(options: &Options) -> Result<(), String> {
         // generates a single-stage room that would then go unused.
         return horizon::sweep(options);
     }
+    if matches!(options.mode, Mode::FacetSweep) {
+        // Its own rooms, one per facet of each task, so nothing here
+        // generates a single-facet room that would then go unused.
+        return variety::sweep(options);
+    }
     if matches!(options.mode, Mode::Swarm) {
         return swarm_compare(options);
     }

@@ -450,6 +450,8 @@ fn as_f64(value: u64) -> f64 {
 
 #[cfg(test)]
 mod test {
+    use tinyhivemind_hive::trace::TopicId;
+
     use super::*;
     use crate::sim::SimAgent;
 

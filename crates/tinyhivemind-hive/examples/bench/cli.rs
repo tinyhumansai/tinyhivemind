@@ -89,6 +89,17 @@ pub(crate) struct Options {
     /// Horizon lengths `--stages` sweeps, in stages. Empty takes the default
     /// ladder in [`crate::horizon::DEFAULT_HORIZONS`].
     pub(crate) horizons: Vec<usize>,
+    /// Task widths `--facets` sweeps, in facets. Empty takes the default
+    /// ladder in [`crate::variety::DEFAULT_SPREADS`].
+    pub(crate) facets: Vec<usize>,
+    /// Whether each facet of a `--facets` task has an owner that reads it far
+    /// more tightly than anybody else.
+    ///
+    /// Off by default, so the sweep's own baseline measures the division of
+    /// labour and nothing else: every member is equally competent and the arms
+    /// differ only in how the load is split. `--roles` adds the second
+    /// mechanism on top, which is what lets the two be told apart.
+    pub(crate) roles: bool,
     /// Whether a specialist's own turn costs more than a lay member's.
     pub(crate) cost: bool,
     /// Whether a member's first turn, while the room is still blind, is a
@@ -193,6 +204,9 @@ pub(crate) enum Mode {
     ContextSweep,
     /// Sweep the horizon: what a task with a history costs, and who pays it.
     StageSweep,
+    /// Sweep the width: what a task with several facets at once costs, and
+    /// whether splitting them across seats beats holding them all.
+    FacetSweep,
     /// Sweep room size against channel topology: at what size does the way
     /// members reach each other start to matter, and which way.
     ScaleSweep,
@@ -226,6 +240,8 @@ impl Options {
             expertise: Expertise::Uniform,
             sizes: crate::scale::DEFAULT_SIZES.to_vec(),
             horizons: Vec::new(),
+            facets: Vec::new(),
+            roles: false,
             fidelity: FOLD_FIDELITY,
             cost: false,
             blind_evidence: false,
@@ -412,6 +428,22 @@ fn apply_expertise_flag(
                 }
             }
         }
+        "--facets" => {
+            options.mode = Mode::FacetSweep;
+            // A list sweeps a ladder of widths; a bare number runs one. Both
+            // spellings are useful, for the reason `--stages` takes both.
+            if let Some(list) = args.next() {
+                let parsed: Vec<usize> = list
+                    .split(',')
+                    .filter_map(|part| part.trim().parse::<usize>().ok())
+                    .filter(|facets| *facets >= 1)
+                    .collect();
+                if !parsed.is_empty() {
+                    options.facets = parsed;
+                }
+            }
+        }
+        "--roles" => options.roles = true,
         "--fidelity" => {
             if let Some(value) = args.next().and_then(|raw| raw.parse::<f64>().ok()) {
                 options.fidelity = value.clamp(0.0, 1.0);
