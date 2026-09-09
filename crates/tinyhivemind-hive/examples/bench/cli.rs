@@ -326,13 +326,15 @@ impl Options {
 }
 
 /// Apply one of `--specialists`, `--hidden-profile`, `--defer-cap`,
-/// `--cost-tiers`, `--blind-evidence` or `--directory` to `options`, or do
-/// nothing for a flag it does not recognise.
+/// `--cost-tiers`, `--blind-evidence` or `--directory` to `options`.
+///
+/// Returns whether the flag was one of them, so [`Options::parse`] can tell a
+/// flag this harness handles somewhere from one it handles nowhere.
 fn apply_expertise_flag(
     options: &mut Options,
     flag: &str,
     args: &mut impl Iterator<Item = String>,
-) {
+) -> bool {
     match flag {
         "--specialists" => {
             let count = usize::try_from(next_number(args).unwrap_or(0)).unwrap_or(0);
@@ -372,14 +374,21 @@ fn apply_expertise_flag(
         // is unreachable unless a directory is folded, and only an arm sets
         // that. It moves the same single field `knowing_policy` moves.
         "--directory" => options.policy.directory = Some(DirectoryPolicy::DEFAULT),
-        _ => {}
+        _ => return false,
     }
+    true
 }
 
 /// Apply one of the live-backend flags (`--timeout` through
-/// `--specialist-model`) to `options`, or do nothing for a flag it does not
-/// recognise.
-fn apply_live_flag(options: &mut Options, flag: &str, args: &mut impl Iterator<Item = String>) {
+/// `--specialist-model`) to `options`.
+///
+/// Returns whether the flag was one of them, on the same contract as
+/// [`apply_expertise_flag`].
+fn apply_live_flag(
+    options: &mut Options,
+    flag: &str,
+    args: &mut impl Iterator<Item = String>,
+) -> bool {
     match flag {
         "--timeout" => options.timeout = u64::from(next_number(args).unwrap_or(180)),
         "--api-base" => {
@@ -443,8 +452,9 @@ fn apply_live_flag(options: &mut Options, flag: &str, args: &mut impl Iterator<I
                 options.thinking = thinking;
             }
         }
-        _ => {}
+        _ => return false,
     }
+    true
 }
 
 /// Read the next argument as a number.
