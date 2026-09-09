@@ -50,7 +50,7 @@ use crate::TASK;
 use crate::arms;
 use crate::cli::Options;
 use crate::metrics::Aggregate;
-use crate::policy::{tuned_policy, widened_policy};
+use crate::policy::{blind_wide_policy, tuned_policy, widened_policy};
 use crate::rng::mix;
 use crate::run::{
     AsideMode, CheckStyle, run_episode, run_episode_checking, run_episode_exchanging_with,
@@ -164,6 +164,7 @@ fn one_size(
     let mut off_floor = Channel::default();
     let mut pooled = Channel::default();
     let mut wide = Channel::default();
+    let mut blind_wide = Channel::default();
 
     for room in rooms {
         ladder.add_arm(&arms::run_ladder(room, options.seed)?);
@@ -213,6 +214,12 @@ fn one_size(
             TASK,
             false,
         )?);
+        blind_wide.add(&run_episode(
+            room,
+            &blind_wide_policy(tuned, options.round_width),
+            TASK,
+            false,
+        )?);
     }
 
     let named = [
@@ -224,6 +231,7 @@ fn one_size(
         ("hive+fact°", off_floor),
         ("hive+pooled", pooled),
         ("hive+wide", wide),
+        ("hive+blind", blind_wide),
     ];
     Ok(named
         .into_iter()
@@ -272,6 +280,7 @@ fn render(points: &[Point], sizes: &[usize], options: &Options) -> String {
             "hive+fact°",
             "hive+pooled",
             "hive+wide",
+            "hive+blind",
         ] {
             let _ = write!(out, "{arm:<12}");
             for size in sizes {
