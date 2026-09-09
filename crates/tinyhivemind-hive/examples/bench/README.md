@@ -204,16 +204,12 @@ has the tables behind each of those, across desk sizes, plus what the benchmark 
 
 ## A task with a horizon
 
-Every mode above measures **one** decision, so nothing compounds and no window
-ever binds. `--stages` runs a chain of them, and adds the control the library's
-own claim is actually about: **one agent working a long task, compacting as it
-goes**. `solo` compacts by eviction and `solo+fold` by a superseding account.
-
-The answer is not the flattering one. A room does beat an *evicting* soloist
-once the window is tight — it splits the same brief five ways. It does not beat
-a *summarising* one, at any horizon or window measured, and it spends about
-seven times the depth trying. [`HORIZON.md`](HORIZON.md) has the tables and the
-one weakness that favours the room.
+Every mode above measures one decision, so nothing compounds and no window ever
+binds. `--stages` runs a chain of them and adds the control the library's own
+claim is about: **one agent working a long task, compacting as it goes**. A room
+beats an *evicting* soloist once the window is tight; it does not beat a
+*summarising* one, at any horizon or window measured, and spends about seven
+times the depth trying. [`HORIZON.md`](HORIZON.md) has the tables.
 
 ## Depth and width
 
