@@ -49,7 +49,6 @@ use tinyhivemind_hive::episode::EpisodePolicy;
 use crate::TASK;
 use crate::cli::Options;
 use crate::context::Compaction;
-use crate::metrics::Aggregate;
 use crate::policy::tuned_policy;
 use crate::rng::mix;
 use crate::run::run_episode;
@@ -185,7 +184,7 @@ fn one_horizon(options: &Options, stages: usize) -> Result<Vec<Point>, String> {
         end_to_end: chain.end_to_end(),
         per_stage: chain.per_stage(),
         held: chain.held_per_chain(),
-        depth: chain.rounds_per_chain().max(chain.turns_per_chain() * 0.0),
+        depth: chain.rounds_per_chain(),
     })
     .collect())
 }
@@ -210,7 +209,7 @@ fn staged(options: &Options, seed: u64, stage: usize, prior: Option<&Room>, wron
     if wrong {
         room = room.poisoned(POISON_LIFT);
     }
-    room.set_budget(options.budget);
+    room.set_budget(options.budget());
     room
 }
 
@@ -279,10 +278,10 @@ fn run_room(
 /// One table per column of interest, horizons across the top.
 fn render(points: &[Point], horizons: &[usize], options: &Options) -> String {
     let mut out = String::new();
-    let window = if options.budget.capacity == 0 {
+    let window = if options.context == 0 {
         "unbounded".to_owned()
     } else {
-        format!("{} rows, rot {:.1}", options.budget.capacity, options.budget.rot)
+        format!("{} rows, rot {:.1}", options.context, options.rot)
     };
     let _ = write!(
         out,
@@ -353,6 +352,3 @@ fn ratio_f64(numerator: f64, denominator: u64) -> f64 {
 fn as_f64(value: u64) -> f64 {
     value as f64
 }
-
-/// Silence the unused import when no arm reads it.
-const _: fn(&Aggregate) = |_| {};

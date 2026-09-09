@@ -84,6 +84,7 @@ mod cli;
 mod compare;
 mod context;
 mod federation;
+mod horizon;
 mod http;
 mod live;
 mod live_single;
@@ -201,6 +202,11 @@ fn run(options: &Options) -> Result<(), String> {
         // Its own rooms, one set per size, so nothing here generates a room
         // at the single `--agents` size that would then go unused.
         return scale::sweep(options);
+    }
+    if matches!(options.mode, Mode::StageSweep) {
+        // Its own rooms, one chain of them per horizon, so nothing here
+        // generates a single-stage room that would then go unused.
+        return horizon::sweep(options);
     }
     if matches!(options.mode, Mode::Swarm) {
         return swarm_compare(options);

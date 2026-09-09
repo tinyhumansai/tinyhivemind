@@ -7,6 +7,7 @@
 //! `--trace`, `--swarm` and friends pick between. See `main.rs`'s crate doc
 //! for the flag table itself.
 
+use crate::context::{Compaction, ContextBudget, FOLD_FIDELITY};
 use crate::http::{Thinking, Wire};
 use crate::policy::tuned_policy;
 use crate::sim::Expertise;
@@ -225,7 +226,7 @@ impl Options {
             expertise: Expertise::Uniform,
             sizes: crate::scale::DEFAULT_SIZES.to_vec(),
             horizons: Vec::new(),
-            fidelity: crate::context::FOLD_FIDELITY,
+            fidelity: FOLD_FIDELITY,
             cost: false,
             blind_evidence: false,
             defer_cap: 1,
