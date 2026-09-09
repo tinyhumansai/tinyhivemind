@@ -96,6 +96,15 @@ impl SimAgent {
         self.blind_evidence = on;
     }
 
+    /// Whether this member opens with a deposit rather than a position.
+    ///
+    /// The read half of [`Self::set_blind_evidence`], for a caller that needs
+    /// to confirm the flag actually reached a room a sweep constructor built
+    /// rather than the default room-generation path.
+    pub(crate) fn blind_evidence(&self) -> bool {
+        self.blind_evidence
+    }
+
     /// Fold one outside reading of a topic into this member's own view.
     ///
     /// Returns whether the reading was taken: a topic this member holds no
