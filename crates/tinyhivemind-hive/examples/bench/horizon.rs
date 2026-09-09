@@ -205,6 +205,10 @@ fn staged(options: &Options, seed: u64, stage: usize, prior: Option<&Room>, wron
         options.cost,
     );
     let mut room = base.for_stage(stage);
+    // `for_stage` bypasses the room-generation path `main.rs` applies
+    // `--blind-evidence` on, so this sweep applies it itself rather than
+    // silently building every stage's room at the default, off.
+    room.set_blind_evidence(options.blind_evidence);
     if let Some(prior) = prior {
         room = room.inheriting(prior);
     }
