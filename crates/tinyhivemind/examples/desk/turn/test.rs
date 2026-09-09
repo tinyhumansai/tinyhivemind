@@ -92,9 +92,7 @@ fn narration_is_not_speech_however_much_of_it_there_is() {
     // named nobody the desk could not hand the turn on either.
     let outbox = scratch("narration");
     mcp::clear_outbox(&outbox);
-    let mut output = narrated(
-        "Let me verify the small cases and understand the structure better.",
-    );
+    let mut output = narrated("Let me verify the small cases and understand the structure better.");
     assert!(
         settle(&outbox, &mut output).is_none(),
         "a turn that called no tool and wrote no fence has not spoken",
