@@ -56,8 +56,7 @@ Every arm decides the same rooms from the same private evaluations.
 | `hive+rounds` | The same continuous exchange run **off the floor**, in rounds between turns: nobody takes the floor for it, so its volume is set by `--exchange-cap` rather than by how many turns the room takes. Priced in the `calls/ep` column. See [ADR 0012](../../../../docs/adr/0012-an-exchange-round-spends-model-calls-not-turns.md). |
 | `hive+quiet` | `hive+rounds` with the answers **discarded**: the same rounds, the same rows, the same sequence numbers consumed, and no information transferred. The control that separates what an off-floor exchange *says* from what merely writing its rows does to salience decay. |
 | `hive+fact°` | The same bounded exchange as `hive+fact`, held **off the floor** — before the episode opens, spending no turn the room could have deliberated with. Its peer is chosen from private room state rather than the transcript, so it bounds what the exchange is worth off the floor rather than isolating scheduling alone. |
-| `hive+wide` | The tuned policy with **every** round widened to `--round-width`, blind and revealed alike. What full concurrency costs. |
-| `hive+blind` | The same width applied **only while the room is blind**, where a member could not read a concurrent peer's row in any case. Scores what `hive+` scores, in under half the rounds. |
+| `hive+wide` / `hive+blind` | The tuned policy run in concurrent rounds — every round, then only while the room is blind. What concurrency costs, and which half of it is free. See [`DEPTH.md`](DEPTH.md). |
 | `hive+pooled` | The **ceiling for equal-weight pooling**: every private reading and every fact already in every member's hands, free, averaged with no regard for whose reading it is. No amount of pairwise exchange beats it on the rooms this benchmark measures (uniform and hidden-profile, where every peer's reading is equally reliable) — under `--specialists`, where readings genuinely differ in reliability, a protocol that could tell them apart could in principle beat indiscriminate averaging. |
 | `ladder+dir` | The responder ladder again, with a directory the room *earned* over `--history` prior episodes of `hive+` on the same room. The selector's candidates carry that directory's per-agent lines as their `description`, the request names the topic the call turns on, and a router that reads the descriptions picks the heaviest holder of it. Validated through the real `accept_selection`. |
 | `all-reasoning` | Only under `--cost-tiers`, in the cost table: `hive+dir+defer` (the delegating room) against a policy that puts every seat on the expensive tier. |
@@ -204,12 +203,11 @@ has the tables behind each of those, across desk sizes, plus what the benchmark 
 
 ## A task with a horizon
 
-Every mode above measures one decision, so nothing compounds and no window ever
-binds. `--stages` runs a chain of them and adds the control the library's own
-claim is about: **one agent working a long task, compacting as it goes**. A room
-beats an *evicting* soloist once the window is tight; it does not beat a
-*summarising* one, at any horizon or window measured, and spends about seven
-times the depth trying. [`HORIZON.md`](HORIZON.md) has the tables.
+Every mode above measures one decision. `--stages` runs a chain of them and adds
+the control the library's claim is about: one agent working a long task,
+compacting as it goes. A room beats an *evicting* soloist once the window is
+tight, and never beats a *summarising* one. [`HORIZON.md`](HORIZON.md) has the
+tables.
 
 ## Depth and width
 
@@ -448,8 +446,8 @@ and why the sweep reports an ordering rather than a value are in
 | `--context N` | rows each member's window holds; `0` (default) disables the window model entirely |
 | `--rot F` | how hard the middle of that window is discounted, `0.0..=1.0` (default `0.0`) |
 | `--context-sweep` | run the window ladder instead of comparing arms once |
-| `--stages N` | run the **chain ladder** instead of comparing arms once: N sub-decisions in sequence on one accumulating window, with `1,2,4,8,16` sweeping a ladder and a bare number running one length |
-| `--fidelity F` | what a summarised row is still worth under `solo+fold`, `0.0..=1.0` (default `0.35`) |
+| `--stages N` | run the chain ladder: N sub-decisions in sequence on one accumulating window; a list sweeps a ladder, a bare number runs one length |
+| `--fidelity F` | what a summarised row is worth under `solo+fold`, `0.0..=1.0` (default `0.35`) |
 | `--round-width N` | turns one round may authorize concurrently, read by `hive+wide` and `hive+blind` (default 4); `0` makes both bit-identical to `hive+`. Every published arm runs at width one, so no recorded number moves with it |
 | `--aside-cap N` | pairwise checks one member may open (default 1); under `hive+share` it caps distinct peers contacted instead; `0` makes every aside arm bit-identical to `hive+` |
 | `--aside-cap N` | pairwise checks one member may open (default 1); under `hive+share` it caps distinct peers contacted instead; `0` makes every on-floor and alongside aside arm bit-identical to `hive+` |
