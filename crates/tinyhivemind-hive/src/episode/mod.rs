@@ -15,7 +15,7 @@ mod types;
 pub use types::{EpisodePolicy, EpisodeState, HiveStep, HiveTurn, Phase, Visibility};
 
 use crate::{
-    attention::{AgentThreshold, BidContext, bids, floor_holder},
+    attention::{AgentThreshold, BidContext, bids, floor_round},
     directory::{Directory, directory, validate_policy as validate_directory_policy},
     error::{Error, Result},
     quorum::{ConsensusState, consensus, standings},
@@ -62,6 +62,9 @@ pub fn step(
     desks.validate()?;
     if policy.defer_cap == Some(0) {
         return Err(Error::ZeroDeferCap);
+    }
+    if policy.round_width == 0 {
+        return Err(Error::ZeroRoundWidth);
     }
     if let Some(directory_policy) = &policy.directory {
         validate_directory_policy(directory_policy)?;
@@ -121,35 +124,63 @@ pub fn step(
         known.as_ref(),
     );
     let bids = bids(&context)?;
-    let Some(bid) = floor_holder(&bids) else {
-        return Ok(HiveStep::Idle);
-    };
 
     let phase = if matches!(consensus, ConsensusState::Quorum { .. }) {
         Phase::Commit
     } else {
         state.phase
     };
-    let commit_boundary = next_commit_boundary(state, phase, at);
-    // `spent < turn_budget <= u32::MAX` was established above, so this
-    // addition cannot saturate; the saturating form is used only to keep the
-    // arithmetic total without an unreachable error branch.
-    let spent = state.spent.saturating_add(1);
 
-    Ok(HiveStep::Speak {
-        turn: Box::new(HiveTurn {
+    // The room records one decision, so a commit round is one turn wide
+    // however wide the policy allows. Widening it would let two members record
+    // different decisions for the same episode.
+    //
+    // The rest of the width is bounded three ways at once, and the narrowest
+    // wins: the policy's `round_width`, how many members actually cleared
+    // their threshold, and how much of `turn_budget` is left. The last is what
+    // keeps the budget a bound on *turns* rather than on rounds.
+    let remaining = policy.turn_budget.saturating_sub(state.spent);
+    let width = if phase == Phase::Commit {
+        1
+    } else {
+        policy.round_width.min(remaining)
+    };
+    let round = floor_round(&bids, width);
+    if round.is_empty() {
+        return Ok(HiveStep::Idle);
+    }
+
+    let commit_boundary = next_commit_boundary(state, phase, at);
+    let visibility = visibility(policy, &live, &members);
+    let speakers: Vec<&str> = round.iter().map(|bid| bid.agent_id.as_str()).collect();
+    // `round.len() <= remaining` by the clamp above, so this cannot exceed
+    // `turn_budget` and cannot saturate; the saturating form keeps the
+    // arithmetic total without an unreachable error branch.
+    let spent = state
+        .spent
+        .saturating_add(u32::try_from(round.len()).unwrap_or(u32::MAX));
+
+    let turns = round
+        .iter()
+        .map(|bid| HiveTurn {
             agent_id: bid.agent_id.clone(),
             phase,
-            visibility: visibility(policy, &live, &members),
+            visibility,
             reason: bid.reason,
-            next_state: EpisodeState {
-                conversation: state.conversation.clone(),
-                spent,
-                phase,
-                thresholds: charged(&state.thresholds, &members, &bid.agent_id),
-                watermark: state.watermark,
-                commit_boundary,
-            },
+            watermark: state.watermark,
+            round_start: at,
+        })
+        .collect();
+
+    Ok(HiveStep::Speak {
+        turns,
+        next_state: Box::new(EpisodeState {
+            conversation: state.conversation.clone(),
+            spent,
+            phase,
+            thresholds: charged(&state.thresholds, &members, &speakers),
+            watermark: state.watermark,
+            commit_boundary,
         }),
     })
 }
@@ -394,7 +425,11 @@ fn visibility(policy: &EpisodePolicy, live: &[&SessionMessage], members: &[&str]
 /// per-topic estimate earned from the transcript is
 /// [`directory`](crate::directory::directory), which is folded fresh on every
 /// step rather than carried in state.
-fn charged(thresholds: &[AgentThreshold], members: &[&str], speaker: &str) -> Vec<AgentThreshold> {
+fn charged(
+    thresholds: &[AgentThreshold],
+    members: &[&str],
+    speakers: &[&str],
+) -> Vec<AgentThreshold> {
     members
         .iter()
         .map(|member| {
@@ -403,7 +438,11 @@ fn charged(thresholds: &[AgentThreshold], members: &[&str], speaker: &str) -> Ve
                 .find(|held| held.agent_id == *member)
                 .cloned()
                 .unwrap_or_else(|| AgentThreshold::new(*member, 0));
-            record.threshold = if *member == speaker {
+            // Every speaker in the round is charged once and everyone silent
+            // through it accrues once, whatever the round's width. Charging
+            // per round rather than per turn would make a wide round cheap and
+            // rotate the floor slower the more concurrent it got.
+            record.threshold = if speakers.contains(member) {
                 record.threshold.saturating_add(SPEAK_COST)
             } else {
                 record.threshold.saturating_sub(SPEAK_COST / 2)
