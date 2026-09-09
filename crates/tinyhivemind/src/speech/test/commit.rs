@@ -104,7 +104,7 @@ fn an_aside_the_policy_disables_is_refused_with_that_reason() {
 fn a_dm_naming_more_peers_than_the_policy_allows_is_refused() {
     let committed = commit("solver", &dm(&["checker", "theory"], "both of you"));
     assert_eq!(committed.audience, Audience::Desk);
-    assert_eq!(committed.refusal, Some(NoAsideReason::TooManyMembers));
+    assert_eq!(committed.refusal, Some(NoAsideReason::AudienceTooLarge));
 }
 
 #[test]
