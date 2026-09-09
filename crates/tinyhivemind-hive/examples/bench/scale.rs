@@ -36,6 +36,13 @@
 //! | `hive+rounds` | broadcast, plus continuous pairwise **off the floor** |
 //! | `hive+fact°` | broadcast, plus one bounded pairwise check off the floor |
 //! | `hive+pooled` | the ceiling: everything every member holds, free |
+//! | `hive+wide` | broadcast, every round widened — concurrency in full |
+//! | `hive+blind` | broadcast, widened only while blind — the free half |
+//!
+//! `rounds/ep` sits beside `turns/ep` because depth and width are different
+//! costs and the ladder is where they diverge most: at sixty-four members
+//! `hive+` is 65.1 rounds deep and `hive+blind` is 31.0, for the same accuracy
+//! to a tenth of a point.
 //!
 //! `rows/ep` is reported beside accuracy because it is the third axis of scale
 //! and the one a host pays for: a channel that buys two points by writing four
