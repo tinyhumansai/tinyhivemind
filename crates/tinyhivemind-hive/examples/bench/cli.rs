@@ -120,6 +120,13 @@ pub(crate) struct Options {
     pub(crate) history: u32,
     /// Print one flat JSON object per arm, ahead of the tables.
     pub(crate) json: bool,
+    /// Threads the per-room loops are spread across.
+    ///
+    /// A wall-clock knob and nothing else: rooms are independent and results
+    /// are folded in room order whatever order the threads finish in, so the
+    /// same `--seed` prints the same bytes at every value. See
+    /// [`crate::parallel`].
+    pub(crate) jobs: usize,
     /// Per-turn timeout for a live agent process or HTTP request, in seconds.
     pub(crate) timeout: u64,
     /// The HTTP backend's base URL, when seats are driven directly over HTTP
@@ -197,6 +204,7 @@ impl Options {
             exchange_cap: 4,
             history: 3,
             json: false,
+            jobs: crate::parallel::default_jobs(),
             timeout: 180,
             api_base: None,
             api_key_env: "LADDER_API_KEY".to_owned(),
@@ -315,6 +323,11 @@ impl Options {
                 "--scenario" => options.scenario = args.next(),
                 "--repeat" => options.repeat = next_number(&mut args).unwrap_or(1).max(1),
                 "--json" => options.json = true,
+                "--jobs" => {
+                    options.jobs = usize::try_from(next_number(&mut args).unwrap_or(1))
+                        .unwrap_or(1)
+                        .max(1);
+                }
                 "--stats-check" => options.mode = Mode::StatsCheck,
                 // Everything below is either the expertise surface or the
                 // live-backend one: a CLI or HTTP seat, per-seat overrides,
