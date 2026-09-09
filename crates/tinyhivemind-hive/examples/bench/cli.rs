@@ -85,6 +85,9 @@ pub(crate) struct Options {
     pub(crate) expertise: Expertise,
     /// Room sizes the scale sweep walks.
     pub(crate) sizes: Vec<usize>,
+    /// Horizon lengths `--stages` sweeps, in stages. Empty takes the default
+    /// ladder in [`crate::horizon::DEFAULT_HORIZONS`].
+    pub(crate) horizons: Vec<usize>,
     /// Whether a specialist's own turn costs more than a lay member's.
     pub(crate) cost: bool,
     /// Whether a member's first turn, while the room is still blind, is a
@@ -162,6 +165,8 @@ pub(crate) enum Mode {
     /// Sweep the context-window model instead: who is still right when the
     /// window is tight.
     ContextSweep,
+    /// Sweep the horizon: what a task with a history costs, and who pays it.
+    StageSweep,
     /// Sweep room size against channel topology: at what size does the way
     /// members reach each other start to matter, and which way.
     ScaleSweep,

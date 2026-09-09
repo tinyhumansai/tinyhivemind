@@ -51,7 +51,7 @@
 
 use tinyhivemind_hive::trace::TopicId;
 
-use crate::context::ContextBudget;
+use crate::context::{Compaction, ContextBudget};
 use crate::rng::{Rng, mix};
 
 mod agent;
@@ -65,6 +65,16 @@ use generation::{
 
 pub(crate) use agent::{CheckStyle, SimAgent};
 pub(crate) use view::check_selfcheck;
+
+/// How far a stage decided wrongly lifts the next stage's decoy.
+///
+/// Bounded on both sides, like `HIDDEN_LIFT` and `GROUNDS_WEIGHT` before it.
+/// *Below* the 60-point gap between the true option and a decoy, so a poisoned
+/// room can still recover — a chain in which one wrong answer made every later
+/// one unwinnable would measure nothing after the first mistake. *Above* zero
+/// by enough to matter against the noise, or a chain would merely be a repeat
+/// with extra steps. Forty is three quarters of the way to unrecoverable.
+pub(crate) const POISON_LIFT: i32 = 40;
 
 /// Names drawn on, in order, for a room's options.
 pub(crate) const TOPIC_NAMES: [&str; 8] = [
@@ -724,6 +734,24 @@ impl Room {
             agent.lift(&decoy, lift);
         }
         room
+    }
+
+    /// Give every member of this room the same window.
+    pub(crate) fn set_budget(&mut self, budget: ContextBudget) {
+        self.budget = budget;
+        for agent in &mut self.agents {
+            agent.set_budget(budget);
+        }
+    }
+
+    /// Change what happens to a row this room's window has no space for,
+    /// leaving its capacity and its curve alone.
+    pub(crate) fn set_compaction(&mut self, compaction: Compaction) {
+        let budget = ContextBudget {
+            compaction,
+            ..self.budget
+        };
+        self.set_budget(budget);
     }
 
     /// What one member's own turn costs, by id.
