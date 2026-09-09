@@ -21,12 +21,12 @@ Everything that waits on something is here, and none of it is in the library:
 | `log.rs` — the transcript, as JSONL on disk | `SessionLog`, the paging port it satisfies |
 | `queue.rs` — `DeskQueue`, the turn queue and its idempotency | `MentionTurnQueue`, and `dispatch_mention` deciding *whether* to enqueue |
 | `agent.rs` — one `opencode run` per turn, and `turn.rs` — the ladder of recoveries under it | nothing: the library never starts a process |
-| `mcp.rs` — the room as a tool a seat calls | `aside` and `dispatch_mention`, deciding what a call to speak *means* |
+| `mcp.rs` and `tools.rs` — serving the room's tools over MCP and as `tinytools::Tool` | `speech`: what the tools are, what a call must look like, and what one accepted utterance becomes |
 | `digest.rs` — one completion that rewrites the room's account | `digest`: when to fold, what a fold may cover, and whether to accept it |
 | `memory.rs` — CortexDB recall and capture | nothing: the library holds no memory |
 | the chair's nudge when the room falls quiet, in `run.rs` | `choose_responder`, deciding who answers the chair |
 | `prompt.rs` — `compose_prompt` | `TeamBriefing::system_text` and `project_session`, which say what a seat may see |
-| `aside.rs` — this desk's aside policy and its bookkeeping | `tinyhivemind_core::aside::aside`, deciding who a `!aside` line reaches |
+| `aside.rs` — this desk's aside policy and its bookkeeping | `speech::commit_utterance`, which folds that policy into an audience and a refusal |
 
 ### File layout
 
@@ -36,11 +36,14 @@ Everything that waits on something is here, and none of it is in the library:
 | `cli.rs` | `Options` and its parsing |
 | `run.rs` | the desk loop itself — open the desk, choose who answers, run a turn, post it, route the reply. One function on purpose; see the module doc |
 | `queue.rs` | `DeskQueue`, the host's `MentionTurnQueue` |
-| `aside.rs` | this desk's aside policy, `address`, and the aside bookkeeping folded from the transcript |
+| `aside.rs` | this desk's aside policy and the bookkeeping folded from the transcript: what an open aside has spent, and what is unsettled |
+| `mcp.rs` | the MCP transport: the JSON-RPC loop, the per-turn outbox, and pricing a `desk_dm` before the turn ends |
+| `tools.rs` | the room's surface rendered twice — JSON Schema for MCP, `tinytools::Tool` for a host running its own loop — over one `invoke` |
+| `room.rs` | the roster and desk snapshots both processes fold over |
 | `prompt.rs` | `compose_prompt`, turning a seat's briefing, history, and trigger into one prompt |
 | `notebook.rs` | the notebook a seat carries between turns: reading back its tail within budget, and naming what a turn wrote |
 | `agent.rs` | one `opencode run` per turn, and its output |
-| `chat.rs` | the tool-less wrap-up channel |
+| `chat.rs` | the tool-less wrap-up channel, on `tinyinference` |
 | `deskfile.rs` | parsing the plain-text desk file |
 | `log.rs` | the JSONL-backed `SessionLog` |
 | `memory.rs` | CortexDB recall and capture |
@@ -87,7 +90,8 @@ information.
 | `--library-scope` `--session-scope` | the durable and per-run memory scopes |
 | `--no-memory` | run with no recall and no capture |
 | `--no-digest` | do not fold older messages into the room's account |
-| `--mcp-server --outbox PATH` | serve the desk tools over stdio; the binary re-execs itself into this mode and takes no turn |
+| `--mcp-server --outbox PATH` | serve the desk tools over stdio; the binary re-execs itself into this mode and takes no turn. `--desk` and `--turn` let it price a `desk_dm` before the turn ends |
+| `--tool-surface` | print the four tools a seat is given, with their schemas, and exit |
 
 `OPENCODE_CONFIG_CONTENT` is passed through to the agent process, which is how
 a run pins one model — for instance a ladder rung that only ever serves
@@ -117,14 +121,30 @@ with a fallible producer, and it has no schema and no way to tell the producer
 it got it wrong; a tool call has both, and a malformed one is refused to the
 seat while it can still fix it.
 
+**The tools are stated once, in the library.** `speech::tool_specs()` holds
+each name, description and argument as data; `tools.rs` renders that into JSON
+Schema for the MCP server and into `tinytools::Tool` for a host that runs an
+agent loop in its own process, and both go through one `invoke`. A seat sees
+the same four tools whichever way it was reached. `--tool-surface` prints them.
+
 `mcp.rs` is that server, and it is this same binary re-executed
 (`--mcp-server`). It never writes the transcript. It appends to a per-turn
 outbox the host truncates before the turn and drains after it, so sequence
 assignment, audience resolution through `aside`, mention resolution and
 dispatch all stay exactly where they were — a tool call is a *request* to
 speak. `desk_dm` in particular goes through the same aside policy as `!aside`
-and can be refused, leaving the row desk-visible. The fence still works, as a
-documented fallback for an agent CLI that cannot reach the tools.
+and can be refused, leaving the row desk-visible. The fence still works
+(`speech::fence`), as a documented fallback for an agent CLI that cannot reach
+the tools.
+
+**A refusal reaches the seat that caused it.** Given `--desk` and `--turn` —
+which the host passes automatically — the server prices a `desk_dm` against
+the aside policy *while the turn is still running*, so a seat is told its
+message is going to the whole desk instead, and why, in time to say it
+differently. A `desk_dm` naming somebody who is not on the desk is refused
+outright and nothing is written. Without those two paths the server answers as
+it did before: the host still resolves the audience when it drains the outbox,
+so the row is never wrong — only the seat is uninformed.
 
 ## The room's standing account
 
