@@ -172,11 +172,12 @@ so the benchmark measures the protocol rather than a formatter.
 5000 rooms, 5 agents, 4 options, `--noise 90`, on one core:
 
 ```text
-arm       turns/ep   decided %   correct %       ns/step    episodes/s
-ladder        1.00       100.0        57.6          1109        901660
-vote         15.00       100.0        78.5             0           inf
-hive          6.16        89.7        73.3          2231         62637
-hive+         6.75        99.4        82.1          2278         56641
+arm       turns/ep rounds/ep   decided %   correct %       ns/step
+ladder        1.00      1.00       100.0        57.6          1109
+vote         15.00      1.00       100.0        78.5             0
+hive          6.16      6.16        89.7        73.3          2231
+hive+         6.75      6.75        99.4        82.1          2278
+hive+blind    6.75      3.75        99.4        82.1          3464
 hive+ref      8.99        88.6        75.0          2827         35398
 hive+ev      10.29        60.8        55.9          2971         29816
 hive+dir      6.75        99.4        82.1          2134         60458
@@ -208,11 +209,10 @@ the library's claim is about — one agent working a long task, compacting as it
 goes. A room beats an *evicting* soloist once the window is tight, and never
 beats a *summarising* one: [`HORIZON.md`](HORIZON.md).
 
-`rounds/ep` sits beside `turns/ep` — depth beside width, what a host with async
-seats waits for beside what the budget bounds. The two were one number until
-ADR 0014, which charged `vote` fifteen turns for one round of fifteen
-independent answers. Widening a blind round is free and a revealed one is not,
-which is why the policy carries two bounds: [`DEPTH.md`](DEPTH.md).
+`rounds/ep` sits beside `turns/ep` — depth beside width. The two were one number
+until ADR 0014, which charged `vote` fifteen turns for one round of fifteen
+independent answers. Widening a blind round is free and a revealed one is not:
+[`DEPTH.md`](DEPTH.md).
 
 ## Statistics
 
