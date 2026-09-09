@@ -23,7 +23,7 @@ use crate::rng::Rng;
 use crate::run::{Ending, EpisodeReport};
 
 /// Running totals over a sample of episodes.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Aggregate {
     /// Episodes in the sample.
     pub(crate) episodes: u32,
@@ -112,6 +112,46 @@ pub(crate) struct Aggregate {
 }
 
 impl Aggregate {
+    /// Fold another sample's totals in, as if its episodes had been added to
+    /// this one in the order they were added to `other`.
+    ///
+    /// This is what lets the per-room loops run across cores: a worker folds
+    /// the rooms it was given into totals of its own, and the parent merges
+    /// those totals **in room order**. `correct_flags` is appended rather than
+    /// combined, which is the whole reason the merge order matters —
+    /// [`paired_bootstrap`] resamples two arms index-for-index because they
+    /// decided the *same* rooms, so a merge out of order would leave the
+    /// accuracy column right and every confidence interval quietly wrong.
+    ///
+    /// Every field is listed explicitly. `merging_matches_folding_in_one_pass`
+    /// in `test.rs` is what keeps a field added later from being silently
+    /// dropped here.
+    pub(crate) fn merge(&mut self, other: &Self) {
+        self.episodes = self.episodes.saturating_add(other.episodes);
+        self.converged = self.converged.saturating_add(other.converged);
+        self.deadlocked = self.deadlocked.saturating_add(other.deadlocked);
+        self.exhausted = self.exhausted.saturating_add(other.exhausted);
+        self.idle = self.idle.saturating_add(other.idle);
+        self.correct = self.correct.saturating_add(other.correct);
+        self.turns = self.turns.saturating_add(other.turns);
+        self.step_calls = self.step_calls.saturating_add(other.step_calls);
+        self.library_time = self.library_time.saturating_add(other.library_time);
+        self.step_time = self.step_time.saturating_add(other.step_time);
+        self.fact_deposited = self.fact_deposited.saturating_add(other.fact_deposited);
+        self.expert_of = self.expert_of.saturating_add(other.expert_of);
+        self.fact_turns = self.fact_turns.saturating_add(other.fact_turns);
+        self.knows = self.knows.saturating_add(other.knows);
+        self.defers = self.defers.saturating_add(other.defers);
+        self.expert_proposed = self.expert_proposed.saturating_add(other.expert_proposed);
+        self.routed_right = self.routed_right.saturating_add(other.routed_right);
+        self.routed_of = self.routed_of.saturating_add(other.routed_of);
+        self.cost_units = self.cost_units.saturating_add(other.cost_units);
+        self.contacts = self.contacts.saturating_add(other.contacts);
+        self.rank_rho_milli = self.rank_rho_milli.saturating_add(other.rank_rho_milli);
+        self.rank_rho_count = self.rank_rho_count.saturating_add(other.rank_rho_count);
+        self.correct_flags.extend_from_slice(&other.correct_flags);
+    }
+
     /// Fold one episode in.
     pub(crate) fn add(&mut self, report: &EpisodeReport) {
         self.episodes = self.episodes.saturating_add(1);
