@@ -527,3 +527,5 @@ fn as_f64(value: u64) -> f64 {
     value as f64
 }
 
+#[cfg(test)]
+mod test;
