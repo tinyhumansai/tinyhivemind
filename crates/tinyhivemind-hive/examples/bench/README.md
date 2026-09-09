@@ -185,10 +185,10 @@ hive+pooled   6.06      6.06       100.0        91.5
 hive+blind    6.75      3.75        99.4        82.1
 ```
 
-The three delegation arms score exactly what `hive+` scores, which is what the
+The three delegation arms score exactly what `hive+` scores, as the
 specification predicted for a room of uniform expertise: with nothing to route
 on, a directory routes nowhere. `ladder+dir` is eight points *worse* than the
-uninformed ladder. [`DELEGATION.md`](DELEGATION.md) says why.
+uninformed ladder; [`DELEGATION.md`](DELEGATION.md) says why.
 
 The tuned deliberation beats the matched-budget control at half the budget, and
 one responder off the ladder reaches 57.6%. The quorum threshold and the turn
@@ -201,17 +201,12 @@ The two refutation arms lose, which is why both knobs are off in
 `hive+ev` starves the room — it fails to decide two episodes in five. [The benchmark write-up](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks)
 has the tables behind each of those, across desk sizes, plus what the benchmark does not show.
 
-## A horizon, and two cost columns
+## A horizon
 
 `--stages` runs a **chain** of decisions rather than one, and adds the control
 the library's claim is about — one agent working a long task, compacting as it
 goes. A room beats an *evicting* soloist once the window is tight, and never
 beats a *summarising* one: [`HORIZON.md`](HORIZON.md).
-
-`rounds/ep` sits beside `turns/ep` — depth beside width. The two were one number
-until ADR 0014, which charged `vote` fifteen turns for one round of fifteen
-independent answers. Widening a blind round is free and a revealed one is not:
-[`DEPTH.md`](DEPTH.md).
 
 ## Statistics
 
