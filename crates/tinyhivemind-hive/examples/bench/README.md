@@ -203,19 +203,16 @@ has the tables behind each of those, across desk sizes, plus what the benchmark 
 
 ## A horizon, and two cost columns
 
-Every mode above measures one decision, priced in turns. Two additions change
-both halves of that.
+`--stages` runs a **chain** of decisions rather than one, and adds the control
+the library's claim is about — one agent working a long task, compacting as it
+goes. A room beats an *evicting* soloist once the window is tight, and never
+beats a *summarising* one: [`HORIZON.md`](HORIZON.md).
 
-`--stages` runs a **chain** of decisions and adds the control the library's
-claim is about — one agent working a long task, compacting as it goes. A room
-beats an *evicting* soloist once the window is tight, and never beats a
-*summarising* one. [`HORIZON.md`](HORIZON.md).
-
-`rounds/ep` sits beside `turns/ep`: depth beside width, what a host with async
+`rounds/ep` sits beside `turns/ep` — depth beside width, what a host with async
 seats waits for beside what the budget bounds. The two were one number until
-ADR 0014, which charged `vote` fifteen turns for what is one round of fifteen
-independent answers. Widening a blind round is free and widening a revealed one
-is not, which is why the policy carries two bounds. [`DEPTH.md`](DEPTH.md).
+ADR 0014, which charged `vote` fifteen turns for one round of fifteen
+independent answers. Widening a blind round is free and a revealed one is not,
+which is why the policy carries two bounds: [`DEPTH.md`](DEPTH.md).
 
 ## Statistics
 
