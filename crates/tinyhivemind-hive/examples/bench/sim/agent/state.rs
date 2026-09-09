@@ -96,14 +96,17 @@ impl SimAgent {
         self.blind_evidence = on;
     }
 
-    /// Whether this member opens with a deposit rather than a position.
+    /// Whether this member's first turn, while the room is still blind, is a
+    /// deposit rather than a position.
     ///
-    /// The read half of [`Self::set_blind_evidence`], for a caller that needs
-    /// to confirm the flag actually reached a room a sweep constructor built
-    /// rather than the default room-generation path. `cfg(test)` because
-    /// nothing in the harness itself reads the flag back once set.
+    /// The read half of [`Self::set_blind_evidence`], read only by the tests
+    /// that assert a sweep's own room constructor did not silently drop
+    /// `--blind-evidence` rather than building every member with the
+    /// default, off, value. The field is private and a turn reads it
+    /// directly, so this is `cfg(test)` rather than dead weight in the built
+    /// benchmark.
     #[cfg(test)]
-    pub(crate) fn blind_evidence(&self) -> bool {
+    pub(crate) fn opens_with_evidence(&self) -> bool {
         self.blind_evidence
     }
 

@@ -221,6 +221,10 @@ pub(crate) enum Mode {
 
 impl Options {
     /// The options every mode starts from before a flag overrides one.
+    ///
+    /// `pub(crate)` so a sweep's own room constructor can be tested against a
+    /// known starting point. [`Self::parse`] reads the process arguments and
+    /// is therefore useless to a test.
     pub(crate) fn defaults() -> Self {
         Self {
             episodes: 500,

@@ -515,14 +515,14 @@ mod test {
         };
         let room = staged(&options, 0xA11CE, 0, None, false);
         assert!(
-            room.agents.iter().all(SimAgent::blind_evidence),
+            room.agents.iter().all(SimAgent::opens_with_evidence),
             "--blind-evidence must reach every member of a staged room, \
              the same way it reaches the default room-generation path",
         );
 
         let off = staged(&Options::defaults(), 0xA11CE, 0, None, false);
         assert!(
-            off.agents.iter().all(|agent| !agent.blind_evidence()),
+            off.agents.iter().all(|agent| !agent.opens_with_evidence()),
             "a staged room built without the flag stays off, exactly as \
              the default room does",
         );

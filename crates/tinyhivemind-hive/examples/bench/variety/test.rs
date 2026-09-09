@@ -217,3 +217,27 @@ fn a_charged_brief_is_one_row_per_option() {
     let after = held.agents.first().map_or(0, SimAgent::held);
     assert_eq!(after - before, names(&held, 0).len());
 }
+
+/// Every room-shaping flag a sweep generates its own rooms under has to be
+/// carried by that sweep's constructor. `--blind-evidence` was dropped here,
+/// so a run that asked for it got a room that had never heard of it — which
+/// reads as a result rather than as an omission.
+#[test]
+fn a_faceted_room_applies_blind_evidence() {
+    let mut options = Options::defaults();
+    options.blind_evidence = true;
+    let room = faceted(&options, 0xFACE7, 0, None);
+    assert!(
+        room.agents.iter().all(SimAgent::opens_with_evidence),
+        "every member of a faceted room opens on a deposit when asked to"
+    );
+
+    let plain = faceted(&Options::defaults(), 0xFACE7, 0, None);
+    assert!(
+        plain
+            .agents
+            .iter()
+            .all(|agent| !agent.opens_with_evidence()),
+        "and none of them does when nobody asked, so no published number moves"
+    );
+}
