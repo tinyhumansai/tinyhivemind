@@ -476,7 +476,8 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
             &prompt,
             &mut sessions,
             &mut tokens,
-        )?
+        )
+        .await?
         else {
             continue;
         };
