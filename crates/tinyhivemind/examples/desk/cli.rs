@@ -72,6 +72,8 @@ pub(crate) struct Options {
     /// Whether messages older than the live window are folded into one
     /// standing account of the room.
     pub(crate) fold_account: bool,
+    /// Print the tool surface a seat is given, then exit.
+    pub(crate) print_tools: bool,
 }
 
 impl Options {
@@ -108,6 +110,7 @@ impl Options {
             outbox: None,
             turn: None,
             fold_account: true,
+            print_tools: false,
         };
         let mut args = std::env::args().skip(1);
         while let Some(flag) = args.next() {
@@ -134,11 +137,17 @@ impl Options {
                 "--outbox" => options.outbox = Some(PathBuf::from(value()?)),
                 "--turn" => options.turn = Some(PathBuf::from(value()?)),
                 "--no-digest" => options.fold_account = false,
+                "--tool-surface" => options.print_tools = true,
                 "--no-memory" => {
                     options.cortex_base = None;
                 }
                 other => return Err(format!("unknown flag {other}").into()),
             }
+        }
+        if options.print_tools {
+            // Printing the surface needs neither a desk nor a task: it is the
+            // library's four tools, rendered.
+            return Ok(options);
         }
         if options.serve_mcp {
             // Serving the room as a tool needs a transcript and an outbox.

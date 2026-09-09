@@ -62,6 +62,15 @@ type BoxError = Box<dyn StdError + Send + Sync + 'static>;
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), BoxError> {
     let options = cli::Options::parse()?;
+    if options.print_tools {
+        tools::print_surface(&mcp::Serving {
+            outbox: options.workspace.join(".desk/outbox.jsonl"),
+            transcript: options.transcript,
+            desk: None,
+            turn: None,
+        });
+        return Ok(());
+    }
     if options.serve_mcp {
         // This same binary is the MCP server the agent CLI spawns: re-execing
         // it keeps one artifact and one version of the tool schema. Serving

@@ -170,5 +170,25 @@ pub(crate) fn desk_tools(serving: &Serving) -> Vec<DeskTool> {
         .collect()
 }
 
+/// Print the surface a seat is given, exactly as a host would register it.
+///
+/// This is what `--tool-surface` runs. It exists because the surface is the
+/// part of a desk that is hardest to inspect while a run is happening — a seat
+/// that will not call a tool and a seat that cannot see one look identical from
+/// the outside — and because a rendering nothing ever reads is a rendering
+/// nobody notices going wrong.
+pub(crate) fn print_surface(serving: &Serving) {
+    for tool in desk_tools(serving) {
+        println!("{}", tool.name());
+        println!("  {}", tool.description());
+        println!(
+            "  {}",
+            serde_json::to_string(&tool.parameters_schema())
+                .unwrap_or_else(|error| format!("(unrenderable schema: {error})"))
+        );
+        println!();
+    }
+}
+
 #[cfg(test)]
 mod test;
