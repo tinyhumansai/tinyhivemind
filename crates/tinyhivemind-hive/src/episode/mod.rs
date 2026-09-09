@@ -137,7 +137,7 @@ pub fn step(
         policy,
         &bids,
         &members,
-        Round {
+        &Round {
             phase,
             at,
             visibility: visibility(policy, &live, &members),
