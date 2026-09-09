@@ -50,7 +50,7 @@ use crate::TASK;
 use crate::arms;
 use crate::cli::Options;
 use crate::metrics::Aggregate;
-use crate::policy::tuned_policy;
+use crate::policy::{tuned_policy, widened_policy};
 use crate::rng::mix;
 use crate::run::{
     AsideMode, CheckStyle, run_episode, run_episode_checking, run_episode_exchanging_with,
@@ -283,6 +283,7 @@ fn render(points: &[Point], sizes: &[usize], options: &Options) -> String {
                         let value = match field {
                             0 => point.correct,
                             1 => point.turns,
+                            3 => point.depth,
                             _ => point.rows,
                         };
                         let _ = write!(out, "{value:>9.1}");
