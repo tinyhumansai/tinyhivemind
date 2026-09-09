@@ -71,7 +71,20 @@ pub(crate) const TOPIC_NAMES: [&str; 8] = [
     "stage", "ship", "revert", "shadow", "canary", "freeze", "split", "pilot",
 ];
 
-/// Names and roles drawn on, in order, for a room's members.
+/// The largest room this harness will build.
+///
+/// Not a property of the library, which has no room-size limit — a bound on
+/// what a *benchmark* will spend. Every arm decides the same rooms, so one
+/// swept size costs every arm at once, and a room of a thousand members would
+/// spend minutes per size to answer a question the shape of the curve already
+/// answers by a hundred.
+pub(crate) const MAX_MEMBERS: usize = 256;
+
+/// Names and roles drawn on, in order, for a room's first eight members.
+///
+/// Beyond them [`member_at`] generates, because a fixed table is a cap on room
+/// size dressed as a convenience: `--agents` clamped to 8 for no reason other
+/// than that this array ends there.
 pub(crate) const MEMBER_ROLES: [(&str, Role); 8] = [
     ("planner", Role::Proposer),
     ("critic", Role::Critic),
@@ -82,6 +95,24 @@ pub(crate) const MEMBER_ROLES: [(&str, Role); 8] = [
     ("builder", Role::Proposer),
     ("reviewer", Role::Critic),
 ];
+
+/// The name and role of member `index`, for a room of any size.
+///
+/// The first eight keep the names the recorded benchmarks were written
+/// against, so every number at those sizes is reproduced exactly rather than
+/// approximately. Past them the roles cycle in the same order — a room of
+/// thirty-two is four of the same rotation, which keeps the mix of proposers,
+/// critics and archivists flat as the room grows instead of letting one role
+/// dominate a large desk by accident.
+pub(crate) fn member_at(index: usize) -> (String, Role) {
+    MEMBER_ROLES.get(index).map_or_else(
+        || {
+            let (_, role) = MEMBER_ROLES[index % MEMBER_ROLES.len()];
+            (format!("seat{index}"), role)
+        },
+        |(name, role)| ((*name).to_string(), *role),
+    )
+}
 
 /// How a participant fills a turn it has no strong move for.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -116,8 +147,14 @@ const SOCIAL_WEIGHT: i32 = 25;
 /// `None` cap, or one above the largest possible desk, is how the control arms
 /// turn refutation off without the simulated members behaving differently in
 /// any other way.
-const REACHABLE_REFUTATION_CAP: u32 = 8;
-const _: () = assert!(MEMBER_ROLES.len() == REACHABLE_REFUTATION_CAP as usize);
+///
+/// It is [`MAX_MEMBERS`] rather than the room's own size on purpose: what it
+/// decides is whether a cap is *conceivably* satisfiable, and making it depend
+/// on the room would change how a member behaves at one size for a reason that
+/// has nothing to do with the room being larger. The recorded numbers at five
+/// members are unaffected either way, because every cap the arms actually pass
+/// is far below both.
+const REACHABLE_REFUTATION_CAP: u32 = MAX_MEMBERS as u32;
 /// How far below its own choice a participant will still close a decision out.
 ///
 /// A room whose members each hold out for a private preference nobody else
@@ -339,7 +376,7 @@ impl Room {
         cost_tiers: bool,
     ) -> Self {
         let topic_count = topics.clamp(2, TOPIC_NAMES.len());
-        let agent_count = agents.clamp(2, MEMBER_ROLES.len());
+        let agent_count = agents.clamp(2, MAX_MEMBERS);
         let names: Vec<TopicId> = TOPIC_NAMES
             .iter()
             .take(topic_count)
@@ -373,17 +410,19 @@ impl Room {
             truth: &truth,
             noise,
         };
-        let members: Vec<SimAgent> = MEMBER_ROLES
-            .iter()
-            .take(agent_count)
-            .enumerate()
-            .map(|(index, (id, role))| match expertise {
-                Expertise::Uniform => SimAgent::new(id, *role, seed, index, &names, &truth, noise),
-                Expertise::Specialists { .. } => {
-                    specialist_agent(id, *role, index, &draw, &expert_of, cost_tiers)
-                }
-                Expertise::HiddenProfile => {
-                    hidden_profile_agent(id, *role, index, &draw, decisive_index, planted_index)
+        let members: Vec<SimAgent> = (0..agent_count)
+            .map(|index| {
+                let (id, role) = member_at(index);
+                match expertise {
+                    Expertise::Uniform => {
+                        SimAgent::new(&id, role, seed, index, &names, &truth, noise)
+                    }
+                    Expertise::Specialists { .. } => {
+                        specialist_agent(&id, role, index, &draw, &expert_of, cost_tiers)
+                    }
+                    Expertise::HiddenProfile => {
+                        hidden_profile_agent(&id, role, index, &draw, decisive_index, planted_index)
+                    }
                 }
             })
             .collect();
