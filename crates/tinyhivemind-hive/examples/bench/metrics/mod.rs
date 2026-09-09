@@ -704,3 +704,6 @@ pub(crate) fn spearman_milli(x: &[u32], y: &[u32]) -> i64 {
         magnitude
     }
 }
+
+#[cfg(test)]
+mod test;
