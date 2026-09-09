@@ -234,7 +234,7 @@ fn descriptor(spec: &ToolSpec) -> serde_json::Value {
     })
 }
 
-fn call(request: &serde_json::Value, outbox: &Path, transcript: &Path) -> Result<String, String> {
+fn call(request: &serde_json::Value, serving: &Serving) -> Result<String, String> {
     let name = request
         .pointer("/params/name")
         .and_then(serde_json::Value::as_str)
@@ -256,19 +256,88 @@ fn call(request: &serde_json::Value, outbox: &Path, transcript: &Path) -> Result
     // library wrote for it rather than as a code this server invents.
     .map_err(|rejection| rejection.to_string())?;
     match interpreted {
-        ToolCall::Read { limit } => Ok(recent(transcript, limit)),
+        ToolCall::Read { limit } => Ok(recent(&serving.transcript, limit)),
         ToolCall::Speak(utterance) => {
-            let acknowledgement = match &utterance {
-                Utterance::Post { .. } => "posted to the desk".to_string(),
-                Utterance::Close { .. } => {
+            let priced = price(&utterance, serving)?;
+            let acknowledgement = match (&utterance, priced) {
+                (Utterance::Post { .. }, _) => "posted to the desk".to_string(),
+                (Utterance::Close { .. }, _) => {
                     "posted to the desk; the desk will close after this turn".to_string()
                 }
-                Utterance::Dm { to, .. } => format!("sent to @{}", to.join(", @")),
+                (Utterance::Dm { to, .. }, None) => format!("sent to @{}", to.join(", @")),
+                (Utterance::Dm { .. }, Some(reason)) => format!(
+                    "your aside was refused ({reason}) and the message goes to the whole desk \
+                     instead; say it as you would in the open, or post it and move on"
+                ),
             };
-            append(outbox, &utterance)?;
+            append(&serving.outbox, &utterance)?;
             Ok(acknowledgement)
         }
     }
+}
+
+/// What the room will do with this utterance, before the turn ends.
+///
+/// Returns the reason a requested aside will be declined, or `None` when it
+/// will be honored — and refuses outright, before anything is appended, the one
+/// rejection a seat can act on and is most likely to trip: naming somebody who
+/// is not on the desk.
+///
+/// A server with no desk file to read prices nothing and says so by answering
+/// `None`. That is the behavior this host had before the check existed: the
+/// host still resolves the audience when it drains the outbox, so the row is
+/// never wrong — only the seat is uninformed.
+fn price(utterance: &Utterance, serving: &Serving) -> Result<Option<String>, String> {
+    if !matches!(utterance, Utterance::Dm { .. }) {
+        return Ok(None);
+    }
+    let (Some(desk_path), Some(turn_path)) = (&serving.desk, &serving.turn) else {
+        return Ok(None);
+    };
+    let Ok(text) = fs::read_to_string(desk_path) else {
+        return Ok(None);
+    };
+    let Ok(spec) = deskfile::parse(&text) else {
+        return Ok(None);
+    };
+    let Ok(seat_id) = fs::read_to_string(turn_path) else {
+        return Ok(None);
+    };
+    let seat_id = seat_id.trim();
+    if seat_id.is_empty() {
+        return Ok(None);
+    }
+    let room = room::Room::new(&spec);
+    let roster = room.roster();
+    let desks = room.desks();
+    check_recipients(utterance, seat_id, &roster).map_err(|rejection| rejection.to_string())?;
+
+    let rows = log::JsonlLog::open(&serving.transcript)
+        .map(|log| log.rows())
+        .unwrap_or_default();
+    let peers = addressed_peers(utterance, seat_id, &roster, &desks);
+    let committed = commit_utterance(&CommitRequest {
+        utterance,
+        speaker_id: seat_id,
+        conversation: &DispatchConversation {
+            desk_id: spec.id.clone(),
+            thread_root: None,
+        },
+        aside: aside::ASIDES,
+        spent: aside::spent_in_aside(&rows),
+        unsettled: aside::unsettled_aside(&rows, seat_id, &peers),
+        roster: &roster,
+        desks: &desks,
+    })
+    .map_err(|error| error.to_string())?;
+    Ok(match committed.audience {
+        Audience::Aside { .. } => None,
+        Audience::Desk => Some(
+            committed
+                .refusal
+                .map_or_else(|| "no audience".to_string(), |reason| format!("{reason:?}")),
+        ),
+    })
 }
 
 /// The `to` argument as owned strings, before the library normalizes it.
