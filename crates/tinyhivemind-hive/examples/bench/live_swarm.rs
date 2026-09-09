@@ -29,7 +29,7 @@ use crate::policy::{quorum_threshold, turn_budget};
 use crate::rng::mix;
 use crate::run;
 use crate::scenario::Scenario;
-use crate::swarm::{self, Channel, SwarmMember, SwarmReport, pooled, run_swarm};
+use crate::swarm::{self, AskChannel, Channel, SwarmMember, SwarmReport, pooled, run_swarm};
 
 /// What every arm decided about one federation.
 ///
@@ -38,6 +38,7 @@ use crate::swarm::{self, Channel, SwarmMember, SwarmReport, pooled, run_swarm};
 struct FederationOutcome {
     siloed: SwarmReport,
     swarmed: SwarmReport,
+    offfloor: SwarmReport,
     free: SwarmReport,
     merged: crate::arms::ArmReport,
     vote: crate::arms::ArmReport,
@@ -130,14 +131,37 @@ pub(crate) fn swarm_compare(options: &Options) -> Result<(), String> {
                     federation,
                     &desk_policy,
                     ReferralPolicy::DEFAULT,
+                    AskChannel::OnFloor,
                     TASK,
                     false,
                 )?,
-                swarmed: run_swarm(federation, &desk_policy, swarm_referrals(), TASK, false)?,
+                swarmed: run_swarm(
+                    federation,
+                    &desk_policy,
+                    swarm_referrals(),
+                    AskChannel::OnFloor,
+                    TASK,
+                    false,
+                )?,
+                // The same federation, the same referral policy, the same
+                // peers — asked off the floor and bounded by `--ask-cap`. The
+                // only difference from `swarm` above is who pays for the
+                // question.
+                offfloor: run_swarm(
+                    federation,
+                    &desk_policy,
+                    swarm_referrals(),
+                    AskChannel::OffFloor {
+                        cap: options.ask_cap,
+                    },
+                    TASK,
+                    false,
+                )?,
                 free: run_swarm(
                     &pooled(federation),
                     &desk_policy,
                     ReferralPolicy::DEFAULT,
+                    AskChannel::OnFloor,
                     TASK,
                     false,
                 )?,
@@ -148,12 +172,14 @@ pub(crate) fn swarm_compare(options: &Options) -> Result<(), String> {
 
     let mut siloed = SwarmTotals::default();
     let mut swarmed = SwarmTotals::default();
+    let mut offfloor = SwarmTotals::default();
     let mut free = SwarmTotals::default();
     let mut merged = Aggregate::default();
     let mut vote = Aggregate::default();
     for outcome in &decided {
         siloed.add(&outcome.siloed);
         swarmed.add(&outcome.swarmed);
+        offfloor.add(&outcome.offfloor);
         free.add(&outcome.free);
         merged.add_arm(&outcome.merged);
         vote.add_arm(&outcome.vote);
@@ -163,6 +189,7 @@ pub(crate) fn swarm_compare(options: &Options) -> Result<(), String> {
     tabulate(
         &siloed,
         &swarmed,
+        &offfloor,
         &free,
         &merged,
         &vote,
@@ -216,6 +243,9 @@ impl SwarmTotals {
         self.turns = self.turns.saturating_add(u64::from(report.turns));
         self.crossings = self.crossings.saturating_add(u64::from(report.crossings));
         self.stranded = self.stranded.saturating_add(u64::from(report.stranded));
+        self.off_floor_asks = self
+            .off_floor_asks
+            .saturating_add(u64::from(report.off_floor_asks));
         self.step_calls = self.step_calls.saturating_add(u64::from(report.step_calls));
         self.library_time += report.library_time;
         for desk in &report.desks {
@@ -407,7 +437,14 @@ fn describe(
 
 /// Print one federated episode, channel by channel.
 fn trace_swarm(first: &Federation, desk_policy: &EpisodePolicy) -> Result<(), String> {
-    let report = run_swarm(first, desk_policy, swarm_referrals(), TASK, true)?;
+    let report = run_swarm(
+        first,
+        desk_policy,
+        swarm_referrals(),
+        AskChannel::OnFloor,
+        TASK,
+        true,
+    )?;
     for line in &report.trace {
         println!("{line}");
     }
