@@ -795,25 +795,48 @@ fn a_head_with_no_count_plans_exactly_as_it_did_before() {
     }
 }
 
+/// One pinned row, as the host's board reports it.
+fn pin(sequence: u64) -> Pin {
+    Pin {
+        sequence: Sequence(sequence),
+        pinned_at: Sequence(sequence + 1),
+        pinned_by: SessionAuthor::Agent {
+            id: "lead".into(),
+            label: "Lead".into(),
+        },
+        label: None,
+        note: None,
+        excerpt: None,
+    }
+}
+
+/// Sixty-one desk rows, newest first, the way a log pages them back.
+fn a_long_channel() -> Vec<LogMessage> {
+    (1..=61)
+        .rev()
+        .map(|sequence| raw(sequence, "said something", Audience::Desk))
+        .collect()
+}
+
 #[tokio::test]
 async fn the_fold_is_told_which_of_its_rows_the_room_pinned() {
-    let log = FakeLog::new(vec![page(1, 40)]);
-    let digester = ScriptedDigester::new(vec!["an account".into()]);
+    let log = FakeLog::new(vec![page(a_long_channel(), None)]);
+    let digester = FixedDigester::new("an account");
     let board = [
-        pin(Sequence(3)),
-        pin(Sequence(9)),
-        // Above the live tail's floor: still a row the reader sees in full,
-        // so the fold is not answerable for it.
-        pin(Sequence(38)),
+        pin(3),
+        pin(9),
+        // Past what this step reaches: still a row the reader is handed in
+        // full, so the fold is not answerable for it.
+        pin(70),
         // Named twice by two markers, and named once here.
-        pin(Sequence(3)),
+        pin(3),
     ];
     refold(
         &log,
         Some(&digester),
-        &conversation(),
+        &engineering(),
         None,
-        ChannelHead::at(Sequence(40)),
+        ChannelHead::at(Sequence(400)),
         &board,
         DigestPolicy::DEFAULT,
     )
@@ -829,14 +852,14 @@ async fn the_fold_is_told_which_of_its_rows_the_room_pinned() {
 
 #[tokio::test]
 async fn a_fold_with_no_pins_is_told_so_rather_than_guessing() {
-    let log = FakeLog::new(vec![page(1, 40)]);
-    let digester = ScriptedDigester::new(vec!["an account".into()]);
+    let log = FakeLog::new(vec![page(a_long_channel(), None)]);
+    let digester = FixedDigester::new("an account");
     refold(
         &log,
         Some(&digester),
-        &conversation(),
+        &engineering(),
         None,
-        ChannelHead::at(Sequence(40)),
+        ChannelHead::at(Sequence(400)),
         &[],
         DigestPolicy::DEFAULT,
     )
