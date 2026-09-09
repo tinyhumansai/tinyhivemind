@@ -316,7 +316,7 @@ impl<'a> Board<'a> {
             visible: project_for(turn, &self.host.journals[desk]),
             peers,
             budget,
-            turn: *turn,
+            turn: turn.clone(),
         })
     }
 

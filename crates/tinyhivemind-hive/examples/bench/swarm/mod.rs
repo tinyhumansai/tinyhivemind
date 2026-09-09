@@ -78,7 +78,7 @@ pub(crate) struct Channel {
 /// channel is a line of text either way, and it is routed by the same mention
 /// grammar and the same `referral` fold whether arithmetic or a language model
 /// wrote it.
-pub(crate) trait SwarmMember {
+pub(crate) trait SwarmMember: Send {
     /// Canonical agent id, matching a desk member.
     fn id(&self) -> &str;
 
