@@ -57,6 +57,23 @@ regex = { version = "1", default-features = false, features = ["std", "perf", "u
 # Drives only the runtime crate's async unit tests. The library itself remains
 # executor-neutral and exposes boxed futures at its host port.
 tokio = { version = "1", features = ["macros", "rt", "sync"] }
+# EXAMPLE-ONLY, and it must stay that way. The provider layer the `desk`
+# example reaches a model through: a `ChatModel` with streaming, OpenAI-shaped
+# adapters, and normalized provider failures, in place of the `curl`
+# subprocess and hand-written request body it used before. It pulls `reqwest`,
+# `tokio` and `futures`, so no library crate may take it — see
+# docs/adr/0013-a-vendored-crate-is-an-example-dependency.md. A consumer builds
+# `crates/*` and never the examples, so it never resolves this.
+tinyinference = { git = "https://github.com/tinyhumansai/tinyinference", rev = "cc8aca484bb995fbab3b7358f0d72ab5056b587c" }
+# EXAMPLE-ONLY, same terms. The tool vocabulary — `Tool`, `ToolResult`, and the
+# classifications a host enforces around a call — which the `desk` example
+# renders `speech::tool_specs()` into, so a host running an agent loop
+# in-process serves the same surface the MCP server does. It pulls `anyhow`,
+# which this repository forbids in every crate.
+tinytools = { git = "https://github.com/tinyhumansai/tinytools", rev = "7dbd5407a5bd6e819acb60154e501ff946f86d3a" }
+# Needed to implement `tinytools::Tool`, which is async. Example-only, for the
+# same reason `tinytools` is.
+async-trait = "0.1"
 
 # Lints apply to every member that opts in with `[lints] workspace = true`, and
 # to every target of that member. CI runs clippy with `-D warnings`, so anything

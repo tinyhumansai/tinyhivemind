@@ -25,6 +25,14 @@ regex = ["dep:regex", "tinyhivemind-core/regex"]
 [dev-dependencies]
 serde_json = { workspace = true }
 tokio = { workspace = true }
+# The `desk` example only. Neither may become a dependency above: `tinytools`
+# pulls `anyhow` and `tinyinference` pulls `reqwest`, both forbidden here, and
+# `.github/scripts/assert-pure.sh` reads `cargo tree -e normal,build` so this
+# section is outside the boundary it guards. See
+# ../../docs/adr/0013-a-vendored-crate-is-an-example-dependency.md.
+async-trait = { workspace = true }
+tinyinference = { workspace = true }
+tinytools = { workspace = true }
 
 # `cargo test` does not test an example unless the example says so, and the
 # desk example carries unit tests over its event parsing, its tool surface, and
