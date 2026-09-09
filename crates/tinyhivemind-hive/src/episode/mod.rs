@@ -141,6 +141,7 @@ pub fn step(
             phase,
             at,
             visibility: visibility(policy, &live, &members),
+            unheard: unheard(&live, &members),
         },
     ))
 }
@@ -159,6 +160,9 @@ struct Round {
     at: tinyhivemind::Sequence,
     /// How much of the transcript every turn in the round may see.
     visibility: Visibility,
+    /// Members that have not yet authored a turn this episode, which is how
+    /// many turns the blind round still has left to run.
+    unheard: usize,
 }
 
 /// Pick the round's members and build the state the episode takes after it.
@@ -187,7 +191,15 @@ fn authorized(
     // the round is concurrent, so widening there is free, while a revealed
     // member's turn depends on exactly the row a concurrent peer is writing.
     let cap = match round.visibility {
-        Visibility::Blind => policy.round_width,
+        // Never past the end of the blind round. Authorizing more would spend
+        // turns on members already heard and carry the round past the boundary
+        // the blind phase ends at, which is what makes a wide blind round
+        // *free* rather than merely cheap: the same turns, the same
+        // projections, fewer waits.
+        Visibility::Blind => policy
+            .round_width
+            .min(u32::try_from(round.unheard).unwrap_or(u32::MAX))
+            .max(1),
         Visibility::Full => policy.revealed_width,
     };
     let width = if round.phase == Phase::Commit {
@@ -467,9 +479,23 @@ fn context<'a>(
 /// only trace authors would keep a room blind forever if any member never
 /// happens to cast a formal vote.
 fn visibility(policy: &EpisodePolicy, live: &[&SessionMessage], members: &[&str]) -> Visibility {
-    if !policy.blind_round {
-        return Visibility::Full;
+    if unheard(live, members) == 0 || !policy.blind_round {
+        Visibility::Full
+    } else {
+        Visibility::Blind
     }
+}
+
+/// How many members have not yet authored a live turn this episode.
+///
+/// The blind round is exactly this many turns long, so it is also the width a
+/// blind round may usefully take: authorizing more would spend turns on
+/// members that have already been heard, and end the blind round somewhere
+/// past its own boundary. "Heard" means *authored a live turn*, not
+/// *deposited a trace* — a member that speaks plain prose with no `!marker`
+/// still took its turn, and counting only trace authors would keep a room
+/// blind forever if any member never happens to cast a formal vote.
+fn unheard(live: &[&SessionMessage], members: &[&str]) -> usize {
     let heard = members
         .iter()
         .filter(|member| {
@@ -481,11 +507,7 @@ fn visibility(policy: &EpisodePolicy, live: &[&SessionMessage], members: &[&str]
             })
         })
         .count();
-    if heard < members.len() {
-        Visibility::Blind
-    } else {
-        Visibility::Full
-    }
+    members.len().saturating_sub(heard)
 }
 
 /// Raise the speaker's threshold and lower everyone else's.
