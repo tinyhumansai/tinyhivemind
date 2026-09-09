@@ -14,6 +14,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+use tinyhivemind::speech::fence;
+
 /// How long a turn may produce nothing at all before it is treated as stalled.
 ///
 /// Set high on purpose, and the reason is a mistake worth recording. A
