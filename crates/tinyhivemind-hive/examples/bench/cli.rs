@@ -114,6 +114,11 @@ pub(crate) struct Options {
     pub(crate) context: usize,
     /// How hard the middle of that window is discounted, `0.0..=1.0`.
     pub(crate) rot: f64,
+    /// What a summarised row is worth under [`Compaction::Fold`], read by the
+    /// `solo+fold` arm of `--stages`. Ignored everywhere else.
+    ///
+    /// [`Compaction::Fold`]: crate::context::Compaction::Fold
+    pub(crate) fidelity: f64,
     /// Private rows one member may write **off the floor**, read by
     /// `hive+rounds`.
     ///
@@ -155,6 +160,26 @@ pub(crate) struct Options {
 }
 
 /// What this run does.
+impl Options {
+    /// The window every member reads through, assembled from the three flags
+    /// that describe it.
+    ///
+    /// `--context 0` is [`ContextBudget::UNBOUNDED`], which every read path
+    /// short-circuits on, so a run that does not ask for a window is
+    /// bit-identical to one built before the model existed.
+    pub(crate) fn budget(&self) -> ContextBudget {
+        if self.context == 0 {
+            return ContextBudget::UNBOUNDED;
+        }
+        ContextBudget {
+            capacity: self.context,
+            compaction: Compaction::Evict,
+            fidelity: self.fidelity,
+            rot: self.rot,
+        }
+    }
+}
+
 pub(crate) enum Mode {
     /// Compare every arm.
     Compare,
@@ -200,6 +225,7 @@ impl Options {
             expertise: Expertise::Uniform,
             sizes: crate::scale::DEFAULT_SIZES.to_vec(),
             horizons: Vec::new(),
+            fidelity: crate::context::FOLD_FIDELITY,
             cost: false,
             blind_evidence: false,
             defer_cap: 1,
@@ -387,7 +413,7 @@ fn apply_expertise_flag(
         }
         "--fidelity" => {
             if let Some(value) = args.next().and_then(|raw| raw.parse::<f64>().ok()) {
-                options.budget.fidelity = value.clamp(0.0, 1.0);
+                options.fidelity = value.clamp(0.0, 1.0);
             }
         }
         "--sizes" => {
