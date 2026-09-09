@@ -153,6 +153,40 @@ impl SimAgent {
         });
     }
 
+    /// Rows this member is still carrying, whatever it can still read of them.
+    ///
+    /// The window's *occupancy*, as against its content: what a long task
+    /// costs a participant is exactly this number growing, and it grows for a
+    /// soloist holding the whole brief `n` times faster than for one member of
+    /// a room of `n`.
+    pub(crate) fn held(&self) -> usize {
+        self.context.len()
+    }
+
+    /// Carry what this member was holding at the end of a previous stage into
+    /// this one, ahead of anything it learns here.
+    ///
+    /// Prepended rather than appended because it *is* older, and the window
+    /// model is positional: history belongs at the head, where a compaction
+    /// keeping both ends will defend it and a U-curve will read it. Making
+    /// history cheap to hold would be assuming away the thing `--stages`
+    /// exists to measure.
+    ///
+    /// The inherited rows name a previous stage's options, which no later
+    /// stage shares, so they can never be scored against this stage's
+    /// question. They can only take up room, which is the point.
+    pub(crate) fn inherit(&mut self, prior: &[ContextEntry]) {
+        let mut carried = prior.to_vec();
+        carried.append(&mut self.context);
+        self.context = carried;
+        self.recompute_favourite();
+    }
+
+    /// Everything this member is carrying, for the next stage to inherit.
+    pub(crate) fn carried(&self) -> &[ContextEntry] {
+        &self.context
+    }
+
     /// Charge this member one row for an exchange it could see but not read.
     pub(crate) fn note_stub(&mut self, topic: &TopicId) {
         self.context.push(ContextEntry {
