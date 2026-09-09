@@ -39,10 +39,24 @@ Three things ADR 0002 relied on have also turned out to point the other way.
 **The conformity argument was about sequence, not about breadth.** Conformity in
 LLM groups rises with *interaction time* and with sight of a peer's position.
 Members who write simultaneously cannot read each other, so a wide round is
-lower-contamination than the same turns taken in series, not higher. This
-repository's own largest measured effect agrees: the blind round is worth **24
-points** (82.1% against 58.0% at full visibility). A concurrent round is a blind
-round, so concurrency should raise accuracy *and* cut depth.
+lower-contamination than the same turns taken in series. This repository's own
+largest measured effect is in that family: the blind round is worth **24
+points** (82.1% against 58.0% at full visibility).
+
+> **Measured, and half of this was wrong.**
+> [`../experiments/2026-09-09-depth-and-width.md`](../experiments/2026-09-09-depth-and-width.md)
+> ran it. Widening a round does **not** raise accuracy: `hive+wide`, at width
+> four throughout, loses five points on a uniform room and loses at every room
+> size on a hidden profile. Independence is worth a great deal *once*, at the
+> opening, and nothing afterwards — a member that cannot read its peers cannot
+> update on them either.
+>
+> What *is* free is widening the round **while the room is blind**, because a
+> blind member could not read that peer's row in any case. `hive+blind` scores
+> what `hive+` scores to a tenth of a point at every room size, in **less than
+> half the rounds** (31.0 against 65.1 at sixty-four members). So width is two
+> mechanisms with opposite prices, and the policy carries two bounds rather
+> than the one this ADR first proposed.
 
 **The sparse-topology results are about who reaches whom, not about how many
 speak at once.** A round of eight members each writing one row to a shared floor
@@ -72,10 +86,20 @@ the round — `spent` advances by the round's width, `thresholds` is charged for
 every speaker in it. A turn is what one member may do; the state is what the
 episode becomes, once.
 
-Selection changes from `floor_holder`'s argmax to the top `round_width` bids in
-descending urge, ties broken by desk order, each still required to clear its own
-threshold. `EpisodePolicy::round_width` is finite, `0` is an error on the
-`defer_cap` precedent, and `1` reproduces the sequential episode bit-for-bit.
+Selection changes from `floor_holder`'s argmax to the top bids in descending
+urge, ties broken by desk order, each still required to clear its own threshold.
+
+The bound is **two** numbers, because the measurement above says width is two
+mechanisms: `round_width` caps a round while the room is
+`Visibility::Blind`, and `revealed_width` caps one after. Both are finite, `0`
+is an error on the `defer_cap` precedent, and `1` in both reproduces the
+sequential episode bit-for-bit. The defaults are four and one — all of the free
+concurrency, none of the paid kind.
+
+A blind round is additionally capped at the number of members **not yet
+heard**. Without that it overshoots the end of the blind phase, spends turns on
+members already heard, and stops being free: the first cut lost 0.4 points and
+1.7 turns to exactly that, and capping it recovered both.
 
 Independence stays a visibility filter, now stated in terms of the round: a peer
 row authored above `round_start` was written concurrently with this turn and is
@@ -89,9 +113,15 @@ serialization, is what was actually protecting anything.
 
 - **Wall-clock latency of an episode is the depth of its rounds, not the sum of
   its turns.** That was listed as a consequence of ADR 0002 and is the thing
-  being reversed. The benchmark gains `rounds/ep` and `calls/ep` as primary cost
-  columns and re-scores every arm, which changes published numbers; that
-  re-baselining is its own recorded experiment.
+  being reversed. The benchmark gains `rounds/ep` beside `turns/ep` — depth
+  beside width — and the first thing it prints is that `vote`, the
+  matched-budget control, is depth **one**: its recorded fifteen turns are one
+  round of fifteen independent answers, so it was never spending more wall
+  clock than the deliberation but about seven times less.
+- **No published number moved.** Every one of the twenty-two recorded arms
+  reproduces bit-for-bit at width one, and the scale table with them, because
+  the harness's arms ask for `policy::SEQUENTIAL` explicitly rather than
+  inheriting a default that changed under them.
 - **Fan-out is bounded rather than forbidden.** `round_width` is finite and
   knowable before the episode runs, and `docs/specs/approval.md` gates crossing
   it. A host cannot wake N agents by accident, which is what the removed rule

@@ -157,6 +157,24 @@ configuration error rather than a quieter way of switching it off.
 `EpisodePolicy::DEFAULT.round_width` is **not** 1. Seats are async sessions and
 the default should say so; the benchmark arms measure what it costs.
 
+### Two bounds, because width is two mechanisms
+
+A blind member cannot read a peer's row whether or not it ran concurrently with
+that peer, so widening a **blind** round changes no projection anybody sees. A
+revealed member's turn depends on exactly the row a concurrent peer is writing,
+so widening there spends information for depth. The benchmark measures both:
+`hive+blind` scores what `hive+` scores to a tenth of a point at every room size
+in under half the rounds, and `hive+wide` loses five points on a uniform room
+and loses at every size on a hidden profile.
+
+So `round_width` caps a blind round and `revealed_width` caps a revealed one,
+defaulting to four and one — all of the free concurrency, none of the paid kind.
+A blind round is additionally capped at the members **not yet heard**, without
+which it overshoots the blind phase, spends turns on members already heard, and
+stops being free.
+
+See [`../experiments/2026-09-09-depth-and-width.md`](../experiments/2026-09-09-depth-and-width.md).
+
 ### What does not change
 
 - `quorum::standings`, `attention::bids` and `directory::directory` are already
