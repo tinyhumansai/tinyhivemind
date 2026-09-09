@@ -161,6 +161,7 @@ fn recipients(to: &[String]) -> Vec<String> {
 /// The two counts are folded by the host from its own journal, exactly as
 /// [`aside`] has always required, because neither is derivable from arguments
 /// this crate is given.
+#[derive(Debug)]
 pub struct CommitRequest<'a> {
     /// What the seat said.
     pub utterance: &'a Utterance,
