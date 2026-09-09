@@ -8,6 +8,8 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
+use tinyhivemind::DigestPolicy;
+
 use crate::BoxError;
 
 /// Command-line options.
@@ -66,6 +68,10 @@ pub(crate) struct Options {
     /// Whether messages older than the live window are folded into one
     /// standing account of the room.
     pub(crate) fold_account: bool,
+    /// How many rows must accumulate past the window before a fold is worth
+    /// spending a completion on. Lower it to exercise the account on a short
+    /// desk; the default only pays off on a long one.
+    pub(crate) fold_after: usize,
 }
 
 impl Options {
@@ -101,6 +107,7 @@ impl Options {
             serve_mcp: false,
             outbox: None,
             fold_account: true,
+            fold_after: DigestPolicy::DEFAULT.fold_after,
         };
         let mut args = std::env::args().skip(1);
         while let Some(flag) = args.next() {
@@ -126,6 +133,7 @@ impl Options {
                 "--mcp-server" => options.serve_mcp = true,
                 "--outbox" => options.outbox = Some(PathBuf::from(value()?)),
                 "--no-digest" => options.fold_account = false,
+                "--fold-after" => options.fold_after = value()?.parse()?,
                 "--no-memory" => {
                     options.cortex_base = None;
                 }
