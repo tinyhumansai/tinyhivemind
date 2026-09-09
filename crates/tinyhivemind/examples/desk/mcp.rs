@@ -17,12 +17,50 @@
 use std::{
     fs::{self, OpenOptions},
     io::{BufRead, Write},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
-use tinyhivemind::speech::{
-    CallArguments, ParameterKind, ToolCall, ToolSpec, Utterance, interpret, tool_specs,
+use tinyhivemind::{
+    aside::Audience,
+    dispatch::DispatchConversation,
+    speech::{
+        CallArguments, CommitRequest, ParameterKind, ToolCall, ToolSpec, Utterance,
+        addressed_peers, check_recipients, commit_utterance, interpret, tool_specs,
+    },
 };
+
+use crate::{aside, deskfile, log, room};
+
+/// Where the server looks up what a call means: the desk it is serving, the
+/// transcript behind it, and whose turn is running.
+///
+/// The server is a separate process from the desk loop, so it is handed paths
+/// rather than state. Everything it needs is on disk already, and reading it
+/// per call costs one small file: a seat calls a tool a handful of times in a
+/// turn that runs for minutes.
+#[derive(Clone, Debug)]
+pub(crate) struct Serving {
+    /// Where a turn's calls to the room are collected.
+    pub(crate) outbox: PathBuf,
+    /// The JSONL transcript `read` pages and an aside is priced against.
+    pub(crate) transcript: PathBuf,
+    /// The desk file naming the seats.
+    pub(crate) desk: Option<PathBuf>,
+    /// The file naming the seat whose turn is running.
+    pub(crate) turn: Option<PathBuf>,
+}
+
+/// Say whose turn is about to run, so the server can price what it says.
+///
+/// Written beside the outbox and truncated with it. A server that cannot read
+/// it answers a `dm` without checking the aside policy, which is the same
+/// answer it gave before this existed.
+pub(crate) fn open_turn(path: &Path, seat_id: &str) {
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let _ = fs::write(path, seat_id);
+}
 
 /// Empty the outbox before a turn, so a turn only ever drains its own calls.
 pub(crate) fn clear_outbox(path: &Path) {
@@ -52,29 +90,35 @@ pub(crate) fn drain_outbox(path: &Path) -> Vec<Utterance> {
 /// The server is this same binary, re-executed. Nothing about it varies per
 /// turn — the outbox is one file the host truncates before each turn — so the
 /// configuration is built once.
-pub(crate) fn config_block(
-    exe: &Path,
-    outbox: &Path,
-    transcript: &Path,
-    existing: Option<&str>,
-) -> String {
+pub(crate) fn config_block(exe: &Path, serving: &Serving, existing: Option<&str>) -> String {
     let mut config = existing
         .and_then(|text| serde_json::from_str::<serde_json::Value>(text).ok())
         .unwrap_or_else(|| serde_json::json!({}));
     if !config.is_object() {
         config = serde_json::json!({});
     }
+    let mut command: Vec<String> = vec![
+        exe.to_string_lossy().into_owned(),
+        "--mcp-server".into(),
+        "--outbox".into(),
+        serving.outbox.to_string_lossy().into_owned(),
+        "--transcript".into(),
+        serving.transcript.to_string_lossy().into_owned(),
+    ];
+    // Both are what let a `desk_dm` be priced against the aside policy inside
+    // the turn that made it, rather than after the process has gone.
+    if let Some(desk) = &serving.desk {
+        command.push("--desk".into());
+        command.push(desk.to_string_lossy().into_owned());
+    }
+    if let Some(turn) = &serving.turn {
+        command.push("--turn".into());
+        command.push(turn.to_string_lossy().into_owned());
+    }
     let block = serde_json::json!({
         "type": "local",
         "enabled": true,
-        "command": [
-            exe.to_string_lossy(),
-            "--mcp-server",
-            "--outbox",
-            outbox.to_string_lossy(),
-            "--transcript",
-            transcript.to_string_lossy(),
-        ],
+        "command": command,
     });
     let object = config.as_object_mut().unwrap_or_else(|| unreachable!());
     let servers = object.entry("mcp").or_insert_with(|| serde_json::json!({}));
@@ -90,10 +134,7 @@ pub(crate) fn config_block(
 ///
 /// Returns a write failure on stdout. A malformed request is answered with a
 /// JSON-RPC error rather than ending the server.
-pub(crate) fn serve(
-    outbox: &Path,
-    transcript: &Path,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub(crate) fn serve(serving: &Serving) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout();
     for line in stdin.lock().lines() {
@@ -116,7 +157,7 @@ pub(crate) fn serve(
             "initialize" => ok(&id, &initialize()),
             "ping" => ok(&id, &serde_json::json!({})),
             "tools/list" => ok(&id, &serde_json::json!({ "tools": tools() })),
-            "tools/call" => match call(&request, outbox, transcript) {
+            "tools/call" => match call(&request, serving) {
                 Ok(text) => ok(
                     &id,
                     &serde_json::json!({ "content": [{ "type": "text", "text": text }] }),
