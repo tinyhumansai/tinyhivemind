@@ -98,11 +98,18 @@ sweep could not tell a win bought by the split from a win bought by the pooling.
 ## What follows
 
 The measured shape is `hive+fold`, and it is the shape this repository builds
-on from here: **one task, one agent; two or more facets, one seat each.** The
-library does not offer it yet — a host gets the floor from
-`tinyhivemind-hive` and would have to assemble the split itself. Making it a
-first-class, bounded, pure fold is P24 in [`ROADMAP.md`](../../ROADMAP.md), and
-the on-floor room stays as the arm it beat rather than being removed.
+on from here: **one task, one agent; two or more facets, one seat each.**
+
+It is now a library mechanism rather than a benchmark arm.
+`tinyhivemind_hive::division` folds a task's facets across the seats that own
+them, `Division::scoped` gives each owner its own facet's rows and none of the
+others', and `DivisionPolicy::DEFAULT` is the one default in this crate that is
+**on** — see [ADR 0015](../adr/0015-the-division-of-labour-is-the-default-shape.md).
+The `hive+fold` arm now calls `divide` rather than assembling its own
+assignment, and reproduces every cell above bit-for-bit; that identity is the
+acceptance criterion, asserted rather than assumed.
+
+The on-floor room stays as the arm it beat rather than being removed.
 
 ## Known weaknesses
 

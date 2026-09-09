@@ -7,7 +7,35 @@
 //! crate lets a room of agents put proposals side by side, accumulate support,
 //! register a grounded objection, and terminate for a reason it can name.
 //!
+//! # One task, one agent. Two or more facets, one seat each
+//!
+//! The benchmark in this repository is specific about when a room is worth its
+//! price, and the answer is **not** "when the task is long". On a task that
+//! merely gets longer, a single agent compacting by a superseding account beat
+//! a room of five at every horizon and every window, at a seventh of the
+//! depth. On a task that gets *wider* — several independent sub-decisions at
+//! once, each wanting different attention — the ordering flips, with the
+//! crossover at two facets:
+//!
+//! ```text
+//! all-facets %       F=1      F=2      F=4      F=8
+//! one agent         78.7     56.9     28.1      7.8
+//! one seat each     78.7     61.1     35.9     13.0
+//! ```
+//!
+//! [`divide`] is that shape, and [`DivisionPolicy::DEFAULT`] is **on** —
+//! the only default in this crate that is, because it is the only mechanism
+//! here that was measured beating the best single agent the benchmark could
+//! build. A task of one facet divides into one seat answering alone, which is
+//! the rule falling out of the general case rather than a branch beside it.
+//!
+//! See `docs/adr/0015-the-division-of-labour-is-the-default-shape.md`.
+//!
 //! # An episode is a sequence of bounded rounds
+//!
+//! [`step`] is what decides one *facet* when its owner cannot decide it alone.
+//! It is not deprecated by the division and is kept as the arm the division was
+//! measured against.
 //!
 //! A hive mind is normally built as fan-out — publish a task, wake N agents,
 //! gather the replies — and the failure of that shape is that nothing bounds
