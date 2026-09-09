@@ -4,7 +4,7 @@
 //! can still shift a later desk row across a quorum window.
 
 use super::super::*;
-use super::support::{Room, aside, operator, run, said, sequential, speaking, state};
+use super::support::{spoke, Room, aside, operator, run, said, sequential, speaking, state};
 use crate::quorum::QuorumPolicy;
 
 #[test]
@@ -68,12 +68,7 @@ fn a_room_that_has_only_said_things_privately_has_not_started() {
         run(&room, &state(), &private, &policy),
         run(&room, &state(), &bare, &policy),
     );
-    assert_eq!(
-        speaking(run(&room, &state(), &private, &policy))
-            .next_state
-            .spent,
-        1
-    );
+    assert_eq!(spoke(run(&room, &state(), &private, &policy)).1.spent, 1);
 }
 
 #[test]

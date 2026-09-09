@@ -3,7 +3,7 @@
 //! by making the speaker costlier and everyone else cheaper to reach.
 
 use super::super::*;
-use super::support::{MEMBERS, Room, converging, conversation, operator, run, said, sequential, speaking, state};
+use super::support::{spoke, MEMBERS, Room, converging, conversation, operator, run, said, sequential, speaking, state};
 use crate::attention::BidReason;
 use tinyhivemind::Sequence;
 use tinyhivemind::aside::Audience;
@@ -74,7 +74,8 @@ fn a_blind_turn_hides_peers_but_keeps_the_task_and_its_own_work() {
         phase: Phase::Deliberate,
         visibility: Visibility::Blind,
         reason: BidReason::Salience,
-        next_state: state(),
+        watermark: state().watermark,
+        round_start: state().watermark,
     };
 
     let blind = project_for(&turn, &transcript);
@@ -106,7 +107,8 @@ fn a_blind_turn_preserves_pre_episode_agent_context() {
         phase: Phase::Deliberate,
         visibility: Visibility::Blind,
         reason: BidReason::Salience,
-        next_state: EpisodeState::opened(conversation(), Sequence(1)),
+        watermark: Sequence(1),
+        round_start: Sequence(1),
     };
 
     let blind = project_for(&turn, &transcript);
@@ -122,10 +124,10 @@ fn a_blind_turn_preserves_pre_episode_agent_context() {
 #[test]
 fn speaking_costs_the_speaker_and_silence_accrues_standing() {
     let room = Room::new();
-    let turn = speaking(run(&room, &state(), &converging(), &sequential()));
+    let (turn, next) = spoke(run(&room, &state(), &converging(), &sequential()));
     let speaker = turn.agent_id.clone();
 
-    let charged = turn.next_state.thresholds;
+    let charged = next.thresholds;
     assert_eq!(charged.len(), MEMBERS.len());
     let spoke = charged
         .iter()

@@ -4,7 +4,7 @@
 //! through.
 
 use super::super::*;
-use super::support::{Room, deadlocked, member, run, said, sequential, state};
+use super::support::{spoke, Room, deadlocked, member, run, said, sequential, state};
 use crate::trace::TopicId;
 
 #[test]
@@ -74,19 +74,11 @@ fn a_grounded_objection_carries_the_room_through_a_deadlock() {
     let mut transcript = deadlocked();
     transcript.push(said(5, "critic", "!object >4 ^3 That precedent differs."));
 
-    let HiveStep::Speak { turn } = run(&room, &state(), &transcript, &sequential())
-    else {
-        panic!("expected the room to move to commit")
-    };
+    let (turn, next) = spoke(run(&room, &state(), &transcript, &sequential()));
     assert_eq!(turn.phase, Phase::Commit);
 
     transcript.push(said(6, &turn.agent_id, "!commit #stage Locking this in."));
-    let HiveStep::Converged { topic, .. } = run(
-        &room,
-        &turn.next_state,
-        &transcript,
-        &sequential(),
-    ) else {
+    let HiveStep::Converged { topic, .. } = run(&room, &next, &transcript, &sequential()) else {
         panic!("expected convergence")
     };
     assert_eq!(topic, TopicId("stage".into()));

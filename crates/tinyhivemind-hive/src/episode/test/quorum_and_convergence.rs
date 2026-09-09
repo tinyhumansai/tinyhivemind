@@ -77,7 +77,7 @@ fn a_commit_trace_before_the_commit_boundary_does_not_converge() {
         said(4, "critic", "!support #stage ^3 Bounds the blast radius."),
     ];
 
-    let turn = speaking(run(&room, &state(), &transcript, &policy));
+    let (turn, next) = spoke(run(&room, &state(), &transcript, &policy));
     assert_eq!(turn.phase, Phase::Commit);
 
     // The authorized commit-phase turn itself does not commit.

@@ -4,7 +4,7 @@
 //! quietly dropped from bidding and from the carried thresholds.
 
 use super::super::*;
-use super::support::{Room, converging, desks, member, run, sequential, speaking, state};
+use super::support::{spoke, Room, converging, desks, member, run, sequential, speaking, state};
 use tinyhivemind::{Conversation, Sequence};
 
 #[test]
@@ -81,11 +81,10 @@ fn a_threshold_naming_a_non_member_is_rejected() {
 fn a_retired_member_neither_bids_nor_holds_a_threshold() {
     let mut room = Room::new();
     room.retired = vec!["scout".into()];
-    let turn = speaking(run(&room, &state(), &converging(), &sequential()));
+    let (turn, next) = spoke(run(&room, &state(), &converging(), &sequential()));
     assert_ne!(turn.agent_id, "scout");
     assert!(
-        turn.next_state
-            .thresholds
+        next.thresholds
             .iter()
             .all(|held| held.agent_id != "scout"),
     );
