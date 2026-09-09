@@ -134,7 +134,8 @@ impl Federation {
 
         let mut agents = Vec::new();
         let mut records = Vec::new();
-        for (desk, (id, name)) in DESK_NAMES.iter().take(desk_count).enumerate() {
+        for desk in 0..desk_count {
+            let (id, name) = desk_at(desk);
             let decoy = decoys.get(desk).cloned().unwrap_or_else(|| truth.clone());
             let mut members = Vec::new();
             for seat in 0..per_desk {
