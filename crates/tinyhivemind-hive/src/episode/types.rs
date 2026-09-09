@@ -20,6 +20,17 @@ use tinyhivemind::{Conversation, Sequence};
 /// concurrent without being a broadcast.
 pub const DEFAULT_ROUND_WIDTH: u32 = 4;
 
+/// The width [`EpisodePolicy::DEFAULT`] runs rounds at once the room can see
+/// itself.
+///
+/// One, and the benchmark is why: widening a *revealed* round costs accuracy on
+/// every task measured, because a member's turn there depends on what it reads
+/// and a concurrent peer's row is exactly what it cannot read. Widening a
+/// **blind** round costs nothing, because a blind member could not read that
+/// row anyway. So the default takes all of the free concurrency and none of the
+/// paid kind. See `docs/experiments/2026-09-09-depth-and-width.md`.
+pub const DEFAULT_REVEALED_WIDTH: u32 = 1;
+
 /// Which class of turn the episode is taking.
 ///
 /// The transition from [`Phase::Deliberate`] to [`Phase::Commit`] is one-way.
@@ -71,6 +82,24 @@ pub struct EpisodePolicy {
     ///
     /// [`Error::ZeroRoundWidth`]: crate::error::Error::ZeroRoundWidth
     pub round_width: u32,
+    /// The same bound, once the room can see itself.
+    ///
+    /// Width is not one mechanism but two, and they have opposite prices.
+    ///
+    /// While the room is [`Visibility::Blind`] a member cannot read its peers
+    /// *whether or not* it runs concurrently with them, so a wide round there
+    /// is free: the same turns, the same projections, fewer waits. Once the
+    /// room is [`Visibility::Full`] a member's turn depends on what it reads,
+    /// and widening starts trading information for depth — the benchmark
+    /// measures that trade rather than assuming it.
+    ///
+    /// Separate from [`Self::round_width`] for the reason `--exchange-cap` is
+    /// separate from `--aside-cap`: it bounds a different resource, and one
+    /// number could not express a room that wants all of the first and none of
+    /// the second. `0` is [`Error::ZeroRoundWidth`], as above.
+    ///
+    /// [`Error::ZeroRoundWidth`]: crate::error::Error::ZeroRoundWidth
+    pub revealed_width: u32,
     /// Whether the opening round is blind.
     pub blind_round: bool,
     /// Percent of grounded share above which a member is damped.
@@ -139,6 +168,7 @@ impl EpisodePolicy {
     pub const DEFAULT: Self = Self {
         turn_budget: 12,
         round_width: DEFAULT_ROUND_WIDTH,
+        revealed_width: DEFAULT_REVEALED_WIDTH,
         blind_round: true,
         dominance_cap: 50,
         repetition_cap: 3,

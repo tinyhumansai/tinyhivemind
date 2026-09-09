@@ -13,7 +13,8 @@ mod test;
 mod types;
 
 pub use types::{
-    DEFAULT_ROUND_WIDTH, EpisodePolicy, EpisodeState, HiveStep, HiveTurn, Phase, Visibility,
+    DEFAULT_REVEALED_WIDTH, DEFAULT_ROUND_WIDTH, EpisodePolicy, EpisodeState, HiveStep, HiveTurn,
+    Phase, Visibility,
 };
 
 use crate::{
@@ -65,7 +66,7 @@ pub fn step(
     if policy.defer_cap == Some(0) {
         return Err(Error::ZeroDeferCap);
     }
-    if policy.round_width == 0 {
+    if policy.round_width == 0 || policy.revealed_width == 0 {
         return Err(Error::ZeroRoundWidth);
     }
     if let Some(directory_policy) = &policy.directory {
@@ -181,10 +182,18 @@ fn authorized(
     // their threshold, and how much of `turn_budget` is left. The last is what
     // keeps the budget a bound on *turns* rather than on rounds.
     let remaining = policy.turn_budget.saturating_sub(state.spent);
+    // Blind and revealed rounds are bounded separately because they cost
+    // different things: a blind member cannot read a peer's row whether or not
+    // the round is concurrent, so widening there is free, while a revealed
+    // member's turn depends on exactly the row a concurrent peer is writing.
+    let cap = match round.visibility {
+        Visibility::Blind => policy.round_width,
+        Visibility::Full => policy.revealed_width,
+    };
     let width = if round.phase == Phase::Commit {
         1
     } else {
-        policy.round_width.min(remaining)
+        cap.min(remaining)
     };
     let speaking = floor_round(bids, width);
     if speaking.is_empty() {
