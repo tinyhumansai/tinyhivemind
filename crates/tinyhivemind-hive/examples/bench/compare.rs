@@ -534,8 +534,6 @@ fn run_arms(options: &Options, rooms: &[Room]) -> Result<(Totals, std::time::Dur
         totals
             .vote
             .add_arm(&arms::run_vote(room, tuned.turn_budget));
-    
-        }
         Ok(totals)
     })?;
 
