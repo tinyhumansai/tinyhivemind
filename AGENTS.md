@@ -257,9 +257,19 @@ releases are reproducible.
 
 ### Vendored dependencies
 
-There are none, and that is deliberate. This repository is itself vendored — a
-consumer pins it as a submodule and takes it as a path dependency — so anything
-it vendored in turn would become a nested submodule in every consumer.
+No library crate has one, and that is deliberate. This repository is itself
+vendored — a consumer pins it as a submodule and takes it as a path dependency —
+so anything a library crate vendored in turn would become a nested submodule in
+every consumer.
+
+An **example** may take one, as a `[dev-dependencies]` git dependency pinned by
+revision. A consumer builds `crates/*` and never the examples, so it never
+resolves them, and `assert-pure.sh` reads `cargo tree -e normal,build` and so
+guards the same boundary unchanged. `tinytools` and `tinyinference` back the
+`desk` example on those terms; see
+[ADR 0013](docs/adr/0013-a-vendored-crate-is-an-example-dependency.md). Neither
+could be a library dependency: `tinytools` pulls `anyhow` and `tinyinference`
+pulls `reqwest`, and both are forbidden in every crate here.
 
 The one submodule here is `wiki/`, the GitHub wiki repository
 (`tinyhumansai/tinyhivemind.wiki`). It carries no code and nothing builds
