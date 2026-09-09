@@ -173,17 +173,18 @@ so the benchmark measures the protocol rather than a formatter.
 
 ```text
 arm       turns/ep rounds/ep   decided %   correct %       ns/step
-ladder        1.00      1.00       100.0        57.6          1109
+ladder        1.00      1.00       100.0        57.6          1524
 vote         15.00      1.00       100.0        78.5             0
-hive          6.16      6.16        89.7        73.3          2231
-hive+         6.75      6.75        99.4        82.1          2278
-hive+blind    6.75      3.75        99.4        82.1          3464
-hive+ref      8.99        88.6        75.0          2827         35398
-hive+ev      10.29        60.8        55.9          2971         29816
-hive+dir      6.75        99.4        82.1          2134         60458
-hive+defer    6.75        99.4        82.1          1942         66456
-hive+dir+defer 6.75        99.4        82.1          1995         64680
-ladder+dir    1.00       100.0        49.5           735       1359856
+hive          6.16      6.16        89.7        73.3          2969
+hive+         6.75      6.75        99.4        82.1          2928
+hive+ref      8.99      8.99        88.6        75.0          3885
+hive+ev      10.29     10.29        60.8        55.9          4081
+hive+dir      6.75      6.75        99.4        82.1          3326
+hive+defer    6.75      6.75        99.4        82.1          2844
+hive+dir+defer 6.75      6.75        99.4        82.1          3041
+ladder+dir    1.00      1.00       100.0        49.5          1688
+hive+pooled   6.06      6.06       100.0        91.5          2906
+hive+blind    6.75      3.75        99.4        82.1          3486
 ```
 
 The three delegation arms score exactly what `hive+` scores, which is what the
