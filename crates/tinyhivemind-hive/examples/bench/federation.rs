@@ -144,7 +144,13 @@ impl Federation {
                 // than there are role names, and because a transcript that
                 // says `platform-critic` reads as what it is.
                 let agent_id = format!("{id}-{role_name}");
-                let index = desk.saturating_mul(per_desk).saturating_add(seat);
+                // The stride is `per_desk`, floored at the legacy fixed-array
+                // width: below that width it would reindex every desk after
+                // the first, changing the seed a legacy four-seat federation
+                // draws and making its recorded results unreproducible.
+                let index = desk
+                    .saturating_mul(per_desk.max(MEMBER_ROLES.len()))
+                    .saturating_add(seat);
                 let mut draws = Rng::seeded(mix(seed, index as u64));
                 let evals = names
                     .iter()
