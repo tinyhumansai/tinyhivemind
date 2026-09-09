@@ -341,26 +341,40 @@ fn next_commit_boundary(
 /// room, which is the one thing the episode may not do.
 #[must_use]
 pub fn project_for(turn: &HiveTurn, messages: &[SessionMessage]) -> Vec<SessionMessage> {
-    let watermark = turn.next_state.watermark;
     let viewer = Viewer::Agent {
         id: turn.agent_id.clone(),
     };
     let visible: Vec<SessionMessage> = messages
         .iter()
-        .filter(|message| match turn.visibility {
-            Visibility::Full => true,
-            Visibility::Blind => match &message.author {
-                SessionAuthor::Agent { id, .. } => {
-                    id == &turn.agent_id || message.sequence <= watermark
-                }
-                SessionAuthor::Operator
-                | SessionAuthor::Person { .. }
-                | SessionAuthor::System { .. } => true,
-            },
-        })
+        .filter(|message| readable(turn, message))
         .cloned()
         .collect();
     project_as(&visible, &viewer)
+}
+
+/// Whether one message is inside this turn's two time filters.
+///
+/// A peer agent's row is withheld when it was authored after the round was
+/// folded — it is *concurrent* with this turn, so this turn cannot have read
+/// it — and additionally, while the room is blind, when it was authored
+/// anywhere within the episode. The turn-holder's own rows, and everything
+/// that is not a peer agent, pass either way.
+fn readable(turn: &HiveTurn, message: &SessionMessage) -> bool {
+    let SessionAuthor::Agent { id, .. } = &message.author else {
+        return true;
+    };
+    if id == &turn.agent_id {
+        return true;
+    }
+    let horizon = match turn.visibility {
+        // Concurrent rows only. At `round_width: 1` nothing is above
+        // `round_start` when the turn composes, so this withholds nothing and
+        // a round of one is bit-identical to the sequential episode.
+        Visibility::Full => turn.round_start,
+        // The whole episode, which is never below the round boundary.
+        Visibility::Blind => turn.watermark.max(turn.round_start),
+    };
+    message.sequence <= horizon
 }
 
 fn context<'a>(
