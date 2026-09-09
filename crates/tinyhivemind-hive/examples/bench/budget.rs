@@ -116,6 +116,7 @@ pub(crate) fn sweep(
     policy: &EpisodePolicy,
     task: &str,
     aside_cap: u32,
+    jobs: usize,
 ) -> Result<Vec<Point>, String> {
     let mut points = Vec::new();
     for rot in ROTS {
@@ -128,9 +129,14 @@ pub(crate) fn sweep(
             }
             let budget = ContextBudget { capacity, rot };
             let mut totals: Vec<(&'static str, Aggregate, f64, usize)> = Vec::new();
-            for room in rooms {
-                let windowed = room.with_budget(budget);
-                for (arm, report) in arms(&windowed, policy, task, aside_cap)? {
+            // Each room's three arms are run in a worker; the fold below stays
+            // in room order, which is what keeps every column identical
+            // whatever `--jobs` is set to. See `crate::parallel`.
+            let decided = parallel::map_in_order(rooms, jobs, |room| {
+                arms(&room.with_budget(budget), policy, task, aside_cap)
+            })?;
+            for room in decided {
+                for (arm, report) in room {
                     if let Some((_, aggregate, rows, count)) =
                         totals.iter_mut().find(|(name, _, _, _)| *name == arm)
                     {
