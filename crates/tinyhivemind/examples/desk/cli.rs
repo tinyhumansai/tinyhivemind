@@ -10,6 +10,21 @@ use std::time::Duration;
 
 use crate::BoxError;
 
+/// What one invocation of this binary is for.
+///
+/// Three, because this one binary is three things: the desk, the MCP server
+/// the agent CLI spawns for each seat, and a way to look at the surface those
+/// seats are given.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum Mode {
+    /// Run the desk.
+    Desk,
+    /// Serve the room's tools over stdio and take no turn.
+    ServeTools,
+    /// Print the tool surface a seat is given, then exit.
+    PrintSurface,
+}
+
 /// Command-line options.
 pub(crate) struct Options {
     /// Path to the desk file describing the room and its seats.
@@ -56,11 +71,8 @@ pub(crate) struct Options {
     pub(crate) router_key: String,
     /// The model id the wrap-up channel asks for.
     pub(crate) router_model: String,
-    /// Serve the desk tools over stdio instead of running a desk.
-    ///
-    /// The agent CLI spawns this binary in that mode; it takes no turn and
-    /// reads no desk file.
-    pub(crate) serve_mcp: bool,
+    /// What this invocation is for.
+    pub(crate) mode: Mode,
     /// Where a turn's tool calls to the room are collected.
     pub(crate) outbox: Option<PathBuf>,
     /// Where the host says whose turn is running.
@@ -72,8 +84,6 @@ pub(crate) struct Options {
     /// Whether messages older than the live window are folded into one
     /// standing account of the room.
     pub(crate) fold_account: bool,
-    /// Print the tool surface a seat is given, then exit.
-    pub(crate) print_tools: bool,
 }
 
 impl Options {
@@ -106,11 +116,10 @@ impl Options {
                 .unwrap_or_else(|_| "http://127.0.0.1:6969".into()),
             router_key: std::env::var("LADDER_API_KEY").unwrap_or_default(),
             router_model: "deepseek-flash".into(),
-            serve_mcp: false,
+            mode: Mode::Desk,
             outbox: None,
             turn: None,
             fold_account: true,
-            print_tools: false,
         };
         let mut args = std::env::args().skip(1);
         while let Some(flag) = args.next() {
@@ -133,23 +142,23 @@ impl Options {
                 "--session-scope" => options.session_scope = value()?,
                 "--router-base" => options.router_base = value()?,
                 "--router-model" => options.router_model = value()?,
-                "--mcp-server" => options.serve_mcp = true,
+                "--mcp-server" => options.mode = Mode::ServeTools,
                 "--outbox" => options.outbox = Some(PathBuf::from(value()?)),
                 "--turn" => options.turn = Some(PathBuf::from(value()?)),
                 "--no-digest" => options.fold_account = false,
-                "--tool-surface" => options.print_tools = true,
+                "--tool-surface" => options.mode = Mode::PrintSurface,
                 "--no-memory" => {
                     options.cortex_base = None;
                 }
                 other => return Err(format!("unknown flag {other}").into()),
             }
         }
-        if options.print_tools {
+        if options.mode == Mode::PrintSurface {
             // Printing the surface needs neither a desk nor a task: it is the
             // library's four tools, rendered.
             return Ok(options);
         }
-        if options.serve_mcp {
+        if options.mode == Mode::ServeTools {
             // Serving the room as a tool needs a transcript and an outbox.
             // A desk file and a turn file are optional and buy one thing: a
             // `desk_dm` the policy will refuse can be said so to its author.

@@ -107,19 +107,16 @@ impl Chat {
     /// reasoning tokens first: at 1200 the whole cap went to reasoning and the
     /// response came back `finish_reason: length` with `content` empty — a
     /// silent seat that looked like a refusal and was a cap set too low. 8000
-    /// bought 21k characters of reasoning and still no answer, on both DeepSeek
+    /// bought 21k characters of reasoning and still no answer, on both `DeepSeek`
     /// tiers. Uncapped, the same call answers in 350 tokens. The deadline here
     /// is wall clock, which is a bound on the *call* rather than a bound on the
     /// thinking inside it.
     pub(crate) async fn complete(&self, prompt: &str) -> Outcome {
         let request = ModelRequest::new(vec![Message::user(prompt)]);
         let call = self.model.invoke(&(), request);
-        let answered = match tokio::time::timeout(self.timeout, call).await {
-            Err(_) => {
-                eprintln!("   [chat] no answer inside {:?}", self.timeout);
-                return Outcome::TimedOut;
-            }
-            Ok(answered) => answered,
+        let Ok(answered) = tokio::time::timeout(self.timeout, call).await else {
+            eprintln!("   [chat] no answer inside {:?}", self.timeout);
+            return Outcome::TimedOut;
         };
         match answered {
             Ok(response) => {

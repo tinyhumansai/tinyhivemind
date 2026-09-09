@@ -62,7 +62,7 @@ type BoxError = Box<dyn StdError + Send + Sync + 'static>;
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), BoxError> {
     let options = cli::Options::parse()?;
-    if options.print_tools {
+    if options.mode == cli::Mode::PrintSurface {
         tools::print_surface(&mcp::Serving {
             outbox: options.workspace.join(".desk/outbox.jsonl"),
             transcript: options.transcript,
@@ -71,7 +71,7 @@ async fn main() -> Result<(), BoxError> {
         });
         return Ok(());
     }
-    if options.serve_mcp {
+    if options.mode == cli::Mode::ServeTools {
         // This same binary is the MCP server the agent CLI spawns: re-execing
         // it keeps one artifact and one version of the tool schema. Serving
         // takes no turn. It reads the desk file only to price a `desk_dm`
