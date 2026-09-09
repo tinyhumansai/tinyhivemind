@@ -116,7 +116,13 @@ pub(crate) const TASK: &str =
     "We must choose one rollout strategy for a risky migration. Decide together.";
 
 fn main() {
-    let options = Options::parse();
+    let options = match Options::parse() {
+        Ok(options) => options,
+        Err(error) => {
+            eprintln!("bench: {error}");
+            std::process::exit(2);
+        }
+    };
     if matches!(options.mode, Mode::StatsCheck) {
         if stats_check() {
             println!("stats-check: ok");
