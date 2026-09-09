@@ -1,28 +1,18 @@
-//! The room as a tool, not as a fence.
+//! Serving the room's tools over MCP, and collecting what a seat called.
 //!
-//! A seat's free text is its *thinking*. What it says to the room is an
-//! action it takes, and this module is the surface it takes it through: a
-//! minimal MCP server the agent CLI spawns and calls, exposing three tools —
-//! `post`, `dm`, and `read`.
-//!
-//! The reason is a defect. A model-authored delimiter is an interface with a
-//! fallible producer: run 26 lost a verified result because a seat closed with
-//! `<<<POST>>> … <<<POST>>>` instead of `<<<POST … POST>>>` and the room
-//! received the three characters `>>>`. A tool call has a schema, the CLI
-//! validates it, and a malformed one is rejected *to the seat*, which can then
-//! try again inside its own turn rather than losing it.
-//!
-//! It also gives agent-to-agent communication a shape. Before this, everything
-//! a seat said went to one shared context and was distinguished only by the
-//! text it happened to contain. Now the address is a field.
+//! Everything about *what* the tools are and *what* a call means lives in
+//! [`tinyhivemind::speech`]: the four specs, their descriptions, the validation,
+//! and the fold from an accepted call to a row. This module is the transport
+//! under that — a minimal MCP server the agent CLI spawns, a JSON-RPC loop, and
+//! a per-turn outbox file — and it decides nothing.
 //!
 //! ## The host still owns storage
 //!
 //! This server never writes the transcript. It appends to a per-turn **outbox**
 //! that the host drains after the process exits, so sequence assignment,
-//! audience resolution through [`aside`](tinyhivemind::aside::aside), mention
-//! resolution and dispatch all stay where they were. A tool call is a request
-//! to speak; the host is still what decides what that means.
+//! audience resolution, mention resolution and dispatch all stay where they
+//! were. A tool call is a request to speak; the host is still what decides what
+//! that means.
 
 use std::{
     fs::{self, OpenOptions},
@@ -30,41 +20,9 @@ use std::{
     path::Path,
 };
 
-/// What a seat asked the room for during one turn.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum Utterance {
-    /// A message for the whole desk.
-    Post {
-        /// The text to append.
-        message: String,
-    },
-    /// A message for named peers only.
-    Dm {
-        /// The peers addressed.
-        to: Vec<String>,
-        /// The text to append.
-        message: String,
-    },
-    /// A message that also asks the desk to close.
-    ///
-    /// The seat is reporting that the work is finished, not ending the desk
-    /// itself: the host still appends the message and still decides. A room
-    /// with no way to say this spends every remaining round being nudged to
-    /// restate an answer it already gave.
-    Close {
-        /// The text to append.
-        message: String,
-    },
-}
-
-impl Utterance {
-    /// The text of the message, whoever it is for.
-    pub(crate) fn message(&self) -> &str {
-        match self {
-            Self::Post { message } | Self::Dm { message, .. } | Self::Close { message } => message,
-        }
-    }
-}
+use tinyhivemind::speech::{
+    CallArguments, ParameterKind, ToolCall, ToolSpec, Utterance, interpret, tool_specs,
+};
 
 /// Empty the outbox before a turn, so a turn only ever drains its own calls.
 pub(crate) fn clear_outbox(path: &Path) {
@@ -83,31 +41,10 @@ pub(crate) fn drain_outbox(path: &Path) -> Vec<Utterance> {
     let Ok(text) = fs::read_to_string(path) else {
         return Vec::new();
     };
-    text.lines().filter_map(parse_utterance).collect()
-}
-
-fn parse_utterance(line: &str) -> Option<Utterance> {
-    let value = serde_json::from_str::<serde_json::Value>(line).ok()?;
-    let message = value.get("message")?.as_str()?.trim().to_string();
-    if message.is_empty() {
-        return None;
-    }
-    match value.get("kind")?.as_str()? {
-        "post" => Some(Utterance::Post { message }),
-        "close" => Some(Utterance::Close { message }),
-        "dm" => {
-            let to: Vec<String> = value
-                .get("to")?
-                .as_array()?
-                .iter()
-                .filter_map(|entry| entry.as_str())
-                .map(|entry| entry.trim_start_matches('@').to_string())
-                .filter(|entry| !entry.is_empty())
-                .collect();
-            (!to.is_empty()).then_some(Utterance::Dm { to, message })
-        }
-        _ => None,
-    }
+    text.lines()
+        .filter_map(|line| serde_json::from_str::<Utterance>(line).ok())
+        .filter(|utterance| !utterance.message().trim().is_empty())
+        .collect()
 }
 
 /// The MCP block to merge into the agent CLI's configuration.
@@ -216,84 +153,44 @@ fn initialize() -> serde_json::Value {
     })
 }
 
+/// The library's tool surface, rendered as MCP tool descriptors.
+///
+/// Nothing here names a tool, writes a description, or decides a bound. It
+/// walks [`tool_specs`] and translates each parameter's shape into JSON Schema.
 fn tools() -> serde_json::Value {
-    serde_json::json!([
+    serde_json::Value::Array(tool_specs().iter().map(descriptor).collect())
+}
+
+fn descriptor(spec: &ToolSpec) -> serde_json::Value {
+    let mut properties = serde_json::Map::new();
+    let mut required: Vec<serde_json::Value> = Vec::new();
+    for parameter in spec.parameters {
+        let mut schema = match parameter.kind {
+            ParameterKind::Text => serde_json::json!({ "type": "string" }),
+            ParameterKind::TextList => {
+                serde_json::json!({ "type": "array", "items": { "type": "string" } })
+            }
+            ParameterKind::Count { .. } => serde_json::json!({ "type": "integer" }),
+        };
+        if let Some(description) = parameter.description
+            && let Some(object) = schema.as_object_mut()
         {
-            "name": "post",
-            "description":
-                "Say one thing to the whole desk. This is the only way to speak: text you \
-                 write outside a tool call is your own thinking and reaches nobody. Mention a \
-                 teammate with @id to hand them the next turn — only the first mention does \
-                 that. Call this exactly once, at the end of your turn.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "message": {
-                        "type": "string",
-                        "description":
-                            "What you established, what you did not finish, and the one seat \
-                             you need next — that seat named first.",
-                    },
-                },
-                "required": ["message"],
-            },
+            object.insert("description".into(), description.into());
+        }
+        properties.insert(parameter.name.to_string(), schema);
+        if parameter.required {
+            required.push(parameter.name.into());
+        }
+    }
+    serde_json::json!({
+        "name": spec.name,
+        "description": spec.description,
+        "inputSchema": {
+            "type": "object",
+            "properties": serde_json::Value::Object(properties),
+            "required": serde_json::Value::Array(required),
         },
-        {
-            "name": "dm",
-            "description":
-                "Say one thing to named peers instead of the whole desk. Use it to settle a \
-                 disagreement without spending the room's attention; the room is told the \
-                 exchange happened and not what it said. It still costs your one message for \
-                 the turn.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "to": {
-                        "type": "array",
-                        "items": { "type": "string" },
-                        "description": "Seat ids, without the @.",
-                    },
-                    "message": { "type": "string" },
-                },
-                "required": ["to", "message"],
-            },
-        },
-        {
-            "name": "close",
-            "description":
-                "Say one last thing and report that the desk's work is finished. Call this \
-                 instead of `post` only when the task is genuinely done and no seat has an \
-                 open step — a result someone still has to verify is not done. If you are \
-                 being asked again about work you have already delivered, this is the call \
-                 that says so.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "message": {
-                        "type": "string",
-                        "description":
-                            "The result, and why nothing is left open.",
-                    },
-                },
-                "required": ["message"],
-            },
-        },
-        {
-            "name": "read",
-            "description":
-                "Read the desk's recent messages. You are handed a bounded window at the top \
-                 of your turn; call this when you need more of it than you were given.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "limit": {
-                        "type": "integer",
-                        "description": "How many recent messages to return. Default 20, max 100.",
-                    },
-                },
-            },
-        },
-    ])
+    })
 }
 
 fn call(request: &serde_json::Value, outbox: &Path, transcript: &Path) -> Result<String, String> {
@@ -305,72 +202,52 @@ fn call(request: &serde_json::Value, outbox: &Path, transcript: &Path) -> Result
         .pointer("/params/arguments")
         .cloned()
         .unwrap_or_else(|| serde_json::json!({}));
-    match name {
-        "post" => {
-            let message = text_argument(&arguments, "message")?;
-            append(
-                outbox,
-                &serde_json::json!({ "kind": "post", "message": message }),
-            )?;
-            Ok("posted to the desk".into())
+    let to = string_list(&arguments, "to");
+    let interpreted = interpret(
+        name,
+        &CallArguments {
+            message: arguments.get("message").and_then(serde_json::Value::as_str),
+            to: &to,
+            limit: arguments.get("limit").and_then(serde_json::Value::as_u64),
+        },
+    )
+    // The refusal is the seat's to read, so it travels as the sentence the
+    // library wrote for it rather than as a code this server invents.
+    .map_err(|rejection| rejection.to_string())?;
+    match interpreted {
+        ToolCall::Read { limit } => Ok(recent(transcript, limit)),
+        ToolCall::Speak(utterance) => {
+            let acknowledgement = match &utterance {
+                Utterance::Post { .. } => "posted to the desk".to_string(),
+                Utterance::Close { .. } => {
+                    "posted to the desk; the desk will close after this turn".to_string()
+                }
+                Utterance::Dm { to, .. } => format!("sent to @{}", to.join(", @")),
+            };
+            append(outbox, &utterance)?;
+            Ok(acknowledgement)
         }
-        "close" => {
-            let message = text_argument(&arguments, "message")?;
-            append(
-                outbox,
-                &serde_json::json!({ "kind": "close", "message": message }),
-            )?;
-            Ok("posted to the desk; the desk will close after this turn".into())
-        }
-        "dm" => {
-            let message = text_argument(&arguments, "message")?;
-            let to: Vec<String> = arguments
-                .get("to")
-                .and_then(serde_json::Value::as_array)
-                .map(|entries| {
-                    entries
-                        .iter()
-                        .filter_map(|entry| entry.as_str())
-                        .map(|entry| entry.trim_start_matches('@').to_string())
-                        .filter(|entry| !entry.is_empty())
-                        .collect()
-                })
-                .unwrap_or_default();
-            if to.is_empty() {
-                return Err("`to` must name at least one seat".into());
-            }
-            append(
-                outbox,
-                &serde_json::json!({ "kind": "dm", "to": to, "message": message }),
-            )?;
-            Ok(format!("sent to @{}", to.join(", @")))
-        }
-        "read" => {
-            let limit = arguments
-                .get("limit")
-                .and_then(serde_json::Value::as_u64)
-                .unwrap_or(20)
-                .clamp(1, 100) as usize;
-            Ok(recent(transcript, limit))
-        }
-        other => Err(format!("unknown tool {other}")),
     }
 }
 
-fn text_argument(arguments: &serde_json::Value, key: &str) -> Result<String, String> {
-    let value = arguments
+/// The `to` argument as owned strings, before the library normalizes it.
+fn string_list(arguments: &serde_json::Value, key: &str) -> Vec<String> {
+    arguments
         .get(key)
-        .and_then(serde_json::Value::as_str)
+        .and_then(serde_json::Value::as_array)
+        .map(|entries| {
+            entries
+                .iter()
+                .filter_map(|entry| entry.as_str())
+                .map(ToString::to_string)
+                .collect()
+        })
         .unwrap_or_default()
-        .trim()
-        .to_string();
-    if value.is_empty() {
-        return Err(format!("`{key}` must be a non-empty string"));
-    }
-    Ok(value)
 }
 
-fn append(outbox: &Path, entry: &serde_json::Value) -> Result<(), String> {
+fn append(outbox: &Path, utterance: &Utterance) -> Result<(), String> {
+    let entry = serde_json::to_string(utterance)
+        .map_err(|error| format!("the desk outbox is unavailable: {error}"))?;
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
