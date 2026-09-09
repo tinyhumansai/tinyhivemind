@@ -52,7 +52,7 @@ use crate::context::Compaction;
 use crate::policy::tuned_policy;
 use crate::rng::mix;
 use crate::run::run_episode;
-use crate::sim::{POISON_LIFT, Room, SimAgent};
+use crate::sim::{POISON_LIFT, Room};
 
 /// One arm's score over a sample of chains.
 #[derive(Default)]
@@ -364,7 +364,12 @@ fn as_f64(value: u64) -> f64 {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::sim::Expertise;
+    use crate::sim::{Expertise, SimAgent};
+
+    /// Compare two percentages, which arrive through floating-point division.
+    fn close(left: f64, right: f64) -> bool {
+        (left - right).abs() < 1e-9
+    }
 
     /// A room for one stage of a chain, at the defaults the sweep uses.
     fn room(stage: usize) -> Room {
@@ -435,18 +440,17 @@ mod test {
             reading(&poisoned, &truth),
             "the truth is never lifted"
         );
-        let lifted = clean
-            .agents
-            .first()
-            .and_then(|agent| {
-                agent
-                    .evals
-                    .iter()
-                    .map(|(topic, _)| topic)
-                    .find(|topic| **topic != truth)
-            })
-            .cloned()
-            .expect("a room has a decoy");
+        let lifted = clean.agents.first().and_then(|agent| {
+            agent
+                .evals
+                .iter()
+                .map(|(topic, _)| topic)
+                .find(|topic| **topic != truth)
+                .cloned()
+        });
+        let Some(lifted) = lifted else {
+            panic!("a room of four options has a decoy")
+        };
         assert_eq!(
             reading(&poisoned, &lifted) - reading(&clean, &lifted),
             POISON_LIFT,
@@ -484,8 +488,8 @@ mod test {
             ..ChainRun::default()
         });
         assert!(chain.end_to_end() <= chain.per_stage());
-        assert_eq!(chain.end_to_end(), 50.0);
-        assert_eq!(chain.per_stage(), 87.5);
+        assert!(close(chain.end_to_end(), 50.0));
+        assert!(close(chain.per_stage(), 87.5));
 
         let mut single = Chain::default();
         single.add(&ChainRun {
@@ -493,6 +497,6 @@ mod test {
             right: 1,
             ..ChainRun::default()
         });
-        assert_eq!(single.end_to_end(), single.per_stage());
+        assert!(close(single.end_to_end(), single.per_stage()));
     }
 }
