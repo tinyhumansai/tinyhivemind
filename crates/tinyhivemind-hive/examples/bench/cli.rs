@@ -199,6 +199,7 @@ impl Options {
             agent: None,
             expertise: Expertise::Uniform,
             sizes: crate::scale::DEFAULT_SIZES.to_vec(),
+            horizons: Vec::new(),
             cost: false,
             blind_evidence: false,
             defer_cap: 1,
@@ -368,6 +369,27 @@ fn apply_expertise_flag(
         }
         "--context-sweep" => options.mode = Mode::ContextSweep,
         "--scale-sweep" => options.mode = Mode::ScaleSweep,
+        "--stages" => {
+            options.mode = Mode::StageSweep;
+            // A list sweeps a ladder of horizons; a bare number runs one. Both
+            // spellings are useful: the ladder is where the crossover lives,
+            // and one length is what a follow-up reproduces.
+            if let Some(list) = args.next() {
+                let parsed: Vec<usize> = list
+                    .split(',')
+                    .filter_map(|part| part.trim().parse::<usize>().ok())
+                    .filter(|stages| *stages >= 1)
+                    .collect();
+                if !parsed.is_empty() {
+                    options.horizons = parsed;
+                }
+            }
+        }
+        "--fidelity" => {
+            if let Some(value) = args.next().and_then(|raw| raw.parse::<f64>().ok()) {
+                options.budget.fidelity = value.clamp(0.0, 1.0);
+            }
+        }
         "--sizes" => {
             if let Some(list) = args.next() {
                 let parsed: Vec<usize> = list
