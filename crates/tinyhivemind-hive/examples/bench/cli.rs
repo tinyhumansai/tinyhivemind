@@ -211,8 +211,14 @@ impl Options {
     }
 
     /// Read the command line, falling back to defaults.
-    pub(crate) fn parse() -> Self {
+    ///
+    /// # Errors
+    ///
+    /// Returns the flags this harness does not recognise, rather than running
+    /// something other than what was asked for.
+    pub(crate) fn parse() -> Result<Self, String> {
         let mut options = Self::defaults();
+        let mut unknown: Vec<String> = Vec::new();
         // The policy is rebuilt once the room size is known, then any explicit
         // policy flag is applied over it, so `--agents` moves the quorum
         // threshold with the desk while `--quorum` still overrides it.
