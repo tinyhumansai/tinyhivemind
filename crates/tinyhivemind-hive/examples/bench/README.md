@@ -440,7 +440,7 @@ numbers and why the sweep reports an ordering rather than a value.
 | `--fidelity F` | what a summarised row is worth under `solo+fold`, `0.0..=1.0` (default `0.35`) |
 | `--facets N` | run the variety ladder: N independent sub-decisions belonging to one task, scored only when every one is right; a list sweeps a ladder, a bare number runs one width |
 | `--roles` | give each facet an owner (`facet % members`) that reads it at the room's base noise while everybody else widens; off by default, so the baseline measures the division of labour alone |
-| `--round-width N` | turns one round may authorize concurrently, read by `hive+wide` and `hive+blind` (default 4); `0` makes both bit-identical to `hive+`. Every published arm runs at width one, so no recorded number moves with it |
+| `--round-width N` | turns one round may authorize concurrently, read by `hive+wide` and `hive+blind` (default 4); `0` makes both bit-identical to `hive+`. Every baseline arm -- everything but `hive+wide` and `hive+blind` -- runs at width one regardless of this flag, so no recorded number for those arms moves with it |
 | `--aside-cap N` | pairwise checks one member may open (default 1); under `hive+share` it caps distinct peers contacted instead; `0` makes every on-floor and alongside aside arm bit-identical to `hive+` |
 | `--exchange-cap N` | private rows one member may write **off the floor** across an episode, read by `hive+rounds` (default 4); a separate knob because it bounds model calls rather than the room's turns; `0` makes `hive+rounds` bit-identical to `hive+` |
 | `--history N` | prior episodes of `hive+` the `ladder+dir` arm earns its directory from (default 3) |
