@@ -433,6 +433,7 @@ fn root_exports_channel_compaction() {
         messages: vec![folded.clone()],
         through: Sequence(60),
         budget_chars: 64,
+        pinned: Vec::new(),
     };
     let account = accept_digest(None, &request, "the room verified B at 10^18").expect("accepted");
     assert_eq!(account.through, Sequence(60));
