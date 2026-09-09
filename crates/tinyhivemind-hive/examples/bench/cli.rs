@@ -316,12 +316,23 @@ impl Options {
                 // `parse` itself stays under the line budget clippy holds
                 // every function to.
                 _ => {
-                    apply_expertise_flag(&mut options, &flag, &mut args);
-                    apply_live_flag(&mut options, &flag, &mut args);
+                    let known = apply_expertise_flag(&mut options, &flag, &mut args)
+                        || apply_live_flag(&mut options, &flag, &mut args);
+                    // An unrecognised flag used to be discarded in silence, so
+                    // `--scale-sweeps` ran the default comparison and reported
+                    // it under the heading the operator thought they had asked
+                    // for. A benchmark that quietly measures something other
+                    // than what was requested is worse than one that refuses.
+                    if !known && flag.starts_with("--") {
+                        unknown.push(flag);
+                    }
                 }
             }
         }
-        options
+        if !unknown.is_empty() {
+            return Err(format!("unrecognised flag(s): {}", unknown.join(", ")));
+        }
+        Ok(options)
     }
 }
 
