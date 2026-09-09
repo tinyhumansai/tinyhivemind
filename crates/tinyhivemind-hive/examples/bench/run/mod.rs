@@ -629,24 +629,8 @@ pub(crate) fn drive_with(
                 // for any of it.
                 if aside_mode == AsideMode::OffFloor {
                     let members = member_ids.len();
-                    // The exchange happens *after* the round, so it reads the
-                    // journal as it now stands rather than as the round was
-                    // authorized against: its boundary advances to the newest
-                    // row. Handing it `last` unchanged would withhold the very
-                    // rows the round just wrote, which is a boundary for a
-                    // moment that has passed.
-                    let after = HiveTurn {
-                        round_start: host
-                            .journal
-                            .iter()
-                            .map(|message| message.sequence)
-                            .max()
-                            .unwrap_or(last.round_start),
-                        ..last
-                    };
-                    let (ran, spent) = one_exchange(
-                        &mut host, agents, &after, &state, &exchange, opened, members,
-                    )?;
+                    let (ran, spent) =
+                        one_exchange(&mut host, agents, &last, &state, &exchange, opened, members)?;
                     contacts = contacts.saturating_add(ran.calls);
                     opened = ran.next;
                     library_time += spent;

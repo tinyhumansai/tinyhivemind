@@ -278,6 +278,20 @@ pub(super) fn one_exchange(
     opened: ExchangeState,
     members: usize,
 ) -> Result<(Round, Duration), String> {
+    // The exchange happens *after* the round that authorized `last`, so it
+    // reads the journal as it now stands rather than as that round was folded
+    // against: its boundary advances to the newest row. Handing `last` through
+    // unchanged would withhold from the exchange the very floor rows the round
+    // just wrote, which is a boundary for a moment that has passed.
+    let last = &HiveTurn {
+        round_start: host
+            .journal
+            .iter()
+            .map(|message| message.sequence)
+            .max()
+            .unwrap_or(last.round_start),
+        ..last.clone()
+    };
     let started = Instant::now();
     let round = {
         let roster = host.roster();
