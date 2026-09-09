@@ -7,6 +7,7 @@ use super::super::*;
 use super::support::{
     MEMBERS, Room, aside, converging, operator, run, said, sequential, speaking, state,
 };
+use crate::attention::BidReason;
 use crate::quorum::QuorumPolicy;
 use tinyhivemind::Sequence;
 
