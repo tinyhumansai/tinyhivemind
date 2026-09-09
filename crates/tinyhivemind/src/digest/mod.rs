@@ -36,7 +36,8 @@
 //!
 //! ```
 //! use tinyhivemind::{
-//!     ChannelDigest, Conversation, DigestPlan, DigestPolicy, Sequence, plan_digest,
+//!     ChannelDigest, ChannelHead, Conversation, DigestPlan, DigestPolicy, Sequence,
+//!     plan_digest,
 //! };
 //!
 //! let policy = DigestPolicy::DEFAULT;
@@ -47,11 +48,12 @@
 //! };
 //!
 //! // A short room is left alone.
-//! assert_eq!(plan_digest(None, Sequence(12), policy), DigestPlan::Current);
+//! let head = ChannelHead::at;
+//! assert_eq!(plan_digest(None, head(Sequence(12)), policy), DigestPlan::Current);
 //!
 //! // A long one folds everything behind the live tail, in bounded steps.
 //! assert_eq!(
-//!     plan_digest(None, Sequence(400), policy),
+//!     plan_digest(None, head(Sequence(400)), policy),
 //!     DigestPlan::Fold { after: None, through: Sequence(60) },
 //! );
 //!
@@ -64,8 +66,16 @@
 //!     text: "the room chose the sublinear rank".into(),
 //! };
 //! assert_eq!(
-//!     plan_digest(Some(&held), Sequence(400), policy),
+//!     plan_digest(Some(&held), head(Sequence(400)), policy),
 //!     DigestPlan::Fold { after: Some(Sequence(60)), through: Sequence(120) },
+//! );
+//!
+//! // Or it folds because the room grew expensive rather than long: 24 rows
+//! // of derivations is a fold the row count would never have planned.
+//! let big = ChannelHead { sequence: Sequence(34), unfolded_chars: 200_001 };
+//! assert_eq!(
+//!     plan_digest(None, big, DigestPolicy::from_token_budget(50_000)),
+//!     DigestPlan::Fold { after: None, through: Sequence(4) },
 //! );
 //! ```
 
