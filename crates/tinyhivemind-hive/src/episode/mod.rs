@@ -154,18 +154,6 @@ pub fn step(
 
     let commit_boundary = next_commit_boundary(state, phase, at);
     let visibility = visibility(policy, &live, &members);
-    // The round boundary is the newest row of *any* kind, not the newest row
-    // the fold counted. `at` is the last desk row authored by a member, so a
-    // private aside addressed to this very turn can sit above it — and a
-    // boundary at `at` would withhold a row the member is entitled to read and
-    // that predates the round. What the boundary must separate is what existed
-    // when the round was authorized from what the round itself writes.
-    let round_start = transcript
-        .iter()
-        .map(|message| message.sequence)
-        .max()
-        .unwrap_or(state.watermark)
-        .max(state.watermark);
     let speakers: Vec<&str> = round.iter().map(|bid| bid.agent_id.as_str()).collect();
     // `round.len() <= remaining` by the clamp above, so this cannot exceed
     // `turn_budget` and cannot saturate; the saturating form keeps the
@@ -182,7 +170,7 @@ pub fn step(
             visibility,
             reason: bid.reason,
             watermark: state.watermark,
-            round_start,
+            round_start: at,
         })
         .collect();
 
@@ -380,18 +368,25 @@ fn readable(turn: &HiveTurn, message: &SessionMessage) -> bool {
     if id == &turn.agent_id {
         return true;
     }
-    let horizon = match turn.visibility {
-        // Concurrent rows only. At `round_width: 1` nothing is above
-        // `round_start` when the turn composes, so this withholds nothing and
-        // a round of one is bit-identical to the sequential episode.
-        Visibility::Full => turn.round_start,
-        // The whole episode. `round_start` is the sequence of the last row
-        // folded and every folded row is above the watermark, so the watermark
-        // is never above the round boundary and is always the stricter of the
-        // two — a blind turn reads no peer row this episode, concurrent or not.
-        Visibility::Blind => turn.watermark,
-    };
-    message.sequence <= horizon
+    match turn.visibility {
+        // Concurrent rows only, and only on the floor. A round authorizes
+        // *floor* turns, so it is desk rows it withholds: a private row is
+        // governed by its audience, which `project_as` applies after this, and
+        // is never part of the round. Scoping the clause this way is also what
+        // keeps a private row from moving the episode at all — `round_start`
+        // is folded from desk rows, so appending an aside cannot shift it, and
+        // the addition invariant in `tests/fuzz_invariants.rs` holds.
+        //
+        // At `round_width: 1` nothing is above `round_start` when the turn
+        // composes, so this withholds nothing and a round of one is
+        // bit-identical to the sequential episode.
+        Visibility::Full => !message.audience.is_desk() || message.sequence <= turn.round_start,
+        // The whole episode. `round_start` is the last desk row folded and
+        // every folded row is above the watermark, so the watermark is always
+        // the stricter of the two — a blind turn reads no peer row authored
+        // this episode, concurrent or not.
+        Visibility::Blind => message.sequence <= turn.watermark,
+    }
 }
 
 fn context<'a>(
