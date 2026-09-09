@@ -84,6 +84,12 @@ pub(crate) struct Options {
     /// Whether messages older than the live window are folded into one
     /// standing account of the room.
     pub(crate) fold_account: bool,
+    /// Tokens of desk-visible scrollback that trigger a fold on their own.
+    ///
+    /// Converted to a character threshold by
+    /// [`DigestPolicy::from_token_budget`](tinyhivemind::DigestPolicy::from_token_budget),
+    /// which states the ratio it assumes. Zero leaves only the row trigger.
+    pub(crate) fold_tokens: usize,
 }
 
 impl Options {
@@ -120,6 +126,9 @@ impl Options {
             outbox: None,
             turn: None,
             fold_account: true,
+            // Low enough that a desk of the shape run 28 had folds at least
+            // once, which no run has yet done.
+            fold_tokens: 50_000,
         };
         let mut args = std::env::args().skip(1);
         while let Some(flag) = args.next() {
@@ -146,6 +155,7 @@ impl Options {
                 "--outbox" => options.outbox = Some(PathBuf::from(value()?)),
                 "--turn" => options.turn = Some(PathBuf::from(value()?)),
                 "--no-digest" => options.fold_account = false,
+                "--fold-tokens" => options.fold_tokens = value()?.parse()?,
                 "--tool-surface" => options.mode = Mode::PrintSurface,
                 "--no-memory" => {
                     options.cortex_base = None;

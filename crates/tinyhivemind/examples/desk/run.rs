@@ -143,10 +143,14 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
             WRAP_UP_TIMEOUT,
         ))
     });
+    // Two triggers. `fold_after` says the room has *moved*; `--fold-tokens`
+    // says its scrollback has grown expensive, and on this desk the second
+    // arrives long before the first — run 28 solved PE 1006 in 23 rows and
+    // 604k tokens, which is a fold the row count would never have planned.
     let account_policy = DigestPolicy {
         keep_live: options.window,
         budget_chars: ACCOUNT_CHARS,
-        ..DigestPolicy::DEFAULT
+        ..DigestPolicy::from_token_budget(options.fold_tokens)
     };
     let mut account: Option<ChannelDigest> = None;
     // One CLI session per seat, and one watermark per seat: a seat that has
