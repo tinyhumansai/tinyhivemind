@@ -163,6 +163,57 @@ fn one_size(
     size: usize,
     tuned: &EpisodePolicy,
 ) -> Result<Vec<Point>, String> {
+    // Every room's seven arms are computed in a worker and the reports are
+    // folded here, in room order. The fold has to stay ordered even though the
+    // work does not: `Aggregate::correct_flags` is positional and the paired
+    // bootstrap under the table resamples arms index-for-index because they
+    // decided the *same* rooms. See `crate::parallel`.
+    let decided: Vec<RoomOutcome> = parallel::map_in_order(rooms, options.jobs, |room| {
+        Ok(RoomOutcome {
+            ladder: arms::run_ladder(room, options.seed)?,
+            vote: arms::run_vote(room, tuned.turn_budget),
+            broadcast: run_episode(room, tuned, TASK, false)?,
+            on_floor: run_episode_checking(
+                room,
+                tuned,
+                TASK,
+                false,
+                0,
+                AsideMode::Private,
+                options.aside_cap,
+                CheckStyle::FACT,
+            )?,
+            rounds: run_episode_exchanging_with(
+                room,
+                tuned,
+                TASK,
+                false,
+                options.exchange_cap,
+                CheckStyle::EXCHANGE,
+            )?,
+            off_floor: run_episode(
+                &room.pre_checked(options.aside_cap, true),
+                tuned,
+                TASK,
+                false,
+            )?,
+            // `--aside-cap 0` is documented and used as the kill switch that
+            // leaves every aside arm bit-identical to `hive+`, `hive+pooled`
+            // included (see `compare.rs`), so honor it here too by skipping the
+            // pool rather than silently pooling regardless of the cap.
+            pooled: run_episode(
+                &if options.aside_cap == 0 {
+                    room.clone()
+                } else {
+                    room.pooled()
+                },
+                tuned,
+                TASK,
+                false,
+            )?,
+        })
+    })?;
+
     let mut ladder = Channel::default();
     let mut vote = Channel::default();
     let mut broadcast = Channel::default();
@@ -170,45 +221,14 @@ fn one_size(
     let mut rounds = Channel::default();
     let mut off_floor = Channel::default();
     let mut pooled = Channel::default();
-
-    for room in rooms {
-        ladder.add_arm(&arms::run_ladder(room, options.seed)?);
-        vote.add_arm(&arms::run_vote(room, tuned.turn_budget));
-        broadcast.add(&run_episode(room, tuned, TASK, false)?);
-        on_floor.add(&run_episode_checking(
-            room,
-            tuned,
-            TASK,
-            false,
-            0,
-            AsideMode::Private,
-            options.aside_cap,
-            CheckStyle::FACT,
-        )?);
-        rounds.add(&run_episode_exchanging_with(
-            room,
-            tuned,
-            TASK,
-            false,
-            options.exchange_cap,
-            CheckStyle::EXCHANGE,
-        )?);
-        off_floor.add(&run_episode(
-            &room.pre_checked(options.aside_cap, true),
-            tuned,
-            TASK,
-            false,
-        )?);
-        // `--aside-cap 0` is documented and used as the kill switch that
-        // leaves every aside arm bit-identical to `hive+`, `hive+pooled`
-        // included (see `compare.rs`), so honor it here too by skipping the
-        // pool rather than silently pooling regardless of the cap.
-        let ceiling = if options.aside_cap == 0 {
-            room.clone()
-        } else {
-            room.pooled()
-        };
-        pooled.add(&run_episode(&ceiling, tuned, TASK, false)?);
+    for outcome in &decided {
+        ladder.add_arm(&outcome.ladder);
+        vote.add_arm(&outcome.vote);
+        broadcast.add(&outcome.broadcast);
+        on_floor.add(&outcome.on_floor);
+        rounds.add(&outcome.rounds);
+        off_floor.add(&outcome.off_floor);
+        pooled.add(&outcome.pooled);
     }
 
     let named = [
