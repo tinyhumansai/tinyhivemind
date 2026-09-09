@@ -13,7 +13,7 @@ struct NeverAnswers;
 
 #[async_trait::async_trait]
 impl ChatModel<()> for NeverAnswers {
-    async fn invoke(&self, _: &(), _: Request) -> tinyinference::Result<ModelResponse> {
+    async fn invoke(&self, (): &(), _: Request) -> tinyinference::Result<ModelResponse> {
         std::future::pending().await
     }
 }
