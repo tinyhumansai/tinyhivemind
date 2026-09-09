@@ -519,7 +519,11 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
             },
             aside: aside::ASIDES,
             spent: aside::spent_in_aside(&rows),
-            unsettled: aside::unsettled_aside(&rows, &seat.id, &said.utterance),
+            unsettled: aside::unsettled_aside(
+                &rows,
+                &seat.id,
+                &addressed_peers(&said.utterance, &seat.id, &roster, &desks),
+            ),
             roster: &roster,
             desks: &desks,
         })?;
