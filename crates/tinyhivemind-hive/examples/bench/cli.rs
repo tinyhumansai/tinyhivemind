@@ -338,15 +338,6 @@ impl Options {
                 "--scenario" => options.scenario = args.next(),
                 "--repeat" => options.repeat = next_number(&mut args).unwrap_or(1).max(1),
                 "--json" => options.json = true,
-                "--ask-cap" => {
-                    options.ask_cap =
-                        usize::try_from(next_number(&mut args).unwrap_or(2)).unwrap_or(2);
-                }
-                "--jobs" => {
-                    options.jobs = usize::try_from(next_number(&mut args).unwrap_or(1))
-                        .unwrap_or(1)
-                        .max(1);
-                }
                 "--stats-check" => options.mode = Mode::StatsCheck,
                 // Everything below is either the expertise surface or the
                 // live-backend one: a CLI or HTTP seat, per-seat overrides,
@@ -354,7 +345,8 @@ impl Options {
                 // `parse` itself stays under the line budget clippy holds
                 // every function to.
                 _ => {
-                    let known = apply_expertise_flag(&mut options, &flag, &mut args)
+                    let known = apply_scale_flag(&mut options, &flag, &mut args)
+                        || apply_expertise_flag(&mut options, &flag, &mut args)
                         || apply_live_flag(&mut options, &flag, &mut args);
                     // An unrecognised flag used to be discarded in silence, so
                     // `--scale-sweeps` ran the default comparison and reported
@@ -372,6 +364,31 @@ impl Options {
         }
         Ok(options)
     }
+}
+
+/// Apply one of the scale flags (`--jobs`, `--ask-cap`) to `options`.
+///
+/// Returns whether the flag was one of them, on the same contract as
+/// [`apply_expertise_flag`]. These two are together because they are the two
+/// knobs that decide what a large run costs: how many cores it spreads over,
+/// and how many questions a desk puts to other channels.
+fn apply_scale_flag(
+    options: &mut Options,
+    flag: &str,
+    args: &mut impl Iterator<Item = String>,
+) -> bool {
+    match flag {
+        "--jobs" => {
+            options.jobs = usize::try_from(next_number(args).unwrap_or(1))
+                .unwrap_or(1)
+                .max(1);
+        }
+        "--ask-cap" => {
+            options.ask_cap = usize::try_from(next_number(args).unwrap_or(2)).unwrap_or(2);
+        }
+        _ => return false,
+    }
+    true
 }
 
 /// Apply one of `--specialists`, `--hidden-profile`, `--defer-cap`,
