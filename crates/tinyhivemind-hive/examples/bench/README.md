@@ -10,6 +10,8 @@ cargo run --release -p tinyhivemind-hive --example bench -- --trace # one episod
 cargo run --release -p tinyhivemind-hive --example bench -- --sweep # tune the policy
 cargo run --release -p tinyhivemind-hive --example bench -- --swarm # several desks
 cargo run --release -p tinyhivemind-hive --example bench -- \
+  --scale-sweep --hidden-profile          # room size against channel topology
+cargo run --release -p tinyhivemind-hive --example bench -- \
   --agent-cmd "opencode run --pure -m openrouter/~openai/gpt-mini-latest"
 ```
 
@@ -414,7 +416,7 @@ and why the sweep reports an ordering rather than a value are in
 | flag | meaning |
 | --- | --- |
 | `--episodes N` | rooms to simulate (default 500) |
-| `--agents N` | members per room, 2–8 (default 5); moves the tuned quorum and budget with it |
+| `--agents N` | members per room, 2–256 (default 5); moves the tuned quorum and budget with it. The ceiling is what this harness will spend, not a library limit — `tinyhivemind-hive` places none |
 | `--topics N` | options on offer, 2–8 (default 4) |
 | `--noise N` | half-width of the error on a private evaluation (default 90) |
 | `--seed N` | room generator seed (default 1) |
@@ -433,11 +435,13 @@ and why the sweep reports an ordering rather than a value are in
 | `--history N` | prior episodes of `hive+` the `ladder+dir` arm earns its directory from (default 3) |
 | `--budget N` `--quorum N` `--window N` | episode policy, overriding the tuned values |
 | `--dominance N` `--repetition N` `--no-blind` | episode policy |
+| `--scale-sweep` | sweep room size against channel topology instead of comparing arms once: seven channels, from nobody talking to everything shared, at every size in `--sizes`. Reports accuracy, floor rows and private contacts separately, because a channel that buys two points by writing four times the traffic has not obviously bought anything |
+| `--sizes A,B,C` | the room sizes `--scale-sweep` walks (default `3,5,8,16,32,64`) |
 | `--trace` | print one episode turn by turn |
 | `--sweep` | score the policy grid, swept relative to the desk size |
 | `--swarm` | run a federation of desks instead of one room |
-| `--desks N` | channels in the federation, 2–4 (default 3) |
-| `--per-desk N` | members on each channel, 2–8 (default 4) |
+| `--desks N` | channels in the federation, 2–64 (default 3) |
+| `--per-desk N` | members on each channel, 2–256 (default 4) |
 | `--bias N` | how much a desk overrates its own decoy (default 110) |
 | `--agent-cmd CMD` | drive one episode through a real agent CLI |
 | `--scenario PATH` | give the live room a real problem with private facts |
