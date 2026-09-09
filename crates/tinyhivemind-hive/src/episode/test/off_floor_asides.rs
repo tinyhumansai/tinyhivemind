@@ -191,7 +191,12 @@ fn a_concurrent_private_row_addressed_to_a_peer_is_hidden_from_that_round() {
 
     // The same row, authored at or before `round_start`, is not concurrent
     // and must remain visible to the member it addresses.
-    let settled = [aside(1, "planner", &["critic"], "Between us, go with stage.")];
+    let settled = [aside(
+        1,
+        "planner",
+        &["critic"],
+        "Between us, go with stage.",
+    )];
     let seen = project_for(&turn, &settled);
     assert_eq!(
         seen.iter().map(|m| m.sequence.0).collect::<Vec<_>>(),

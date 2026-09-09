@@ -169,7 +169,10 @@ fn a_continuing_wide_blind_round_selects_the_unheard_member_over_a_louder_heard_
 
     let (turns, _) = round(run(&room, &state(), &transcript, &policy));
     assert_eq!(
-        turns.iter().map(|turn| turn.agent_id.as_str()).collect::<Vec<_>>(),
+        turns
+            .iter()
+            .map(|turn| turn.agent_id.as_str())
+            .collect::<Vec<_>>(),
         vec!["scout"],
         "the still-blind round must pick the one member left unheard, \
          not the louder bid from a member already heard",
