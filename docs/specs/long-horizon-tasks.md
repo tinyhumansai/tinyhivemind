@@ -1,6 +1,7 @@
 # Long-horizon tasks
 
-**Status:** Accepted
+**Status:** Accepted — implemented; the result is in
+[`../experiments/2026-09-09-the-long-horizon.md`](../experiments/2026-09-09-the-long-horizon.md)
 **Owner:** tinyhivemind maintainers
 **Reading:** [`../research/multi-context.md`](../research/multi-context.md),
 [`../research/long-context.md`](../research/long-context.md)
@@ -119,5 +120,19 @@ room from a soloist: a room of *n* splits the same brief *n* ways.
 5. `Compaction::Evict` is the default; a run that does not ask for `Fold` is
    bit-identical to one built before it existed.
 6. `solo` beats `hive+` at short horizons with a generous window, or the
-   experiment records that it does not.
+   experiment records that it does not. **Met:** it does, and the crossover
+   arrives at a window of about sixteen rows.
 7. The result is recorded in `docs/experiments/` whether or not the room wins.
+   **Met, and the room loses:** `solo+fold` beats `hive+` at every horizon and
+   every window measured.
+
+## Known weakness
+
+A window never binds for a member of the room, because its pooling happens
+through the floor and this harness does not charge a transcript read to
+anybody's window — only what a member was told *privately* occupies a row. The
+room therefore runs the comparison with a free channel. That favours the room,
+and the room loses anyway, so the conclusion is robust in the direction that
+matters; charging the read would move `hive+` down and could not move it up.
+Making that charge real is the obvious next piece of work and is not
+implemented.
