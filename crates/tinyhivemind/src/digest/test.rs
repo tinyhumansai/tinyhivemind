@@ -782,7 +782,11 @@ fn a_token_budget_becomes_a_character_threshold_and_nothing_else() {
 fn a_head_with_no_count_plans_exactly_as_it_did_before() {
     for sequence in [12_u64, 30, 50, 51, 400] {
         assert_eq!(
-            plan_digest(None, ChannelHead::at(Sequence(sequence)), DigestPolicy::DEFAULT),
+            plan_digest(
+                None,
+                ChannelHead::at(Sequence(sequence)),
+                DigestPolicy::DEFAULT
+            ),
             plan_digest(
                 None,
                 ChannelHead {

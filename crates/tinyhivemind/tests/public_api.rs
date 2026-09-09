@@ -5,8 +5,7 @@
 use tinyhivemind::aside::Audience;
 use tinyhivemind::aside::Viewer;
 use tinyhivemind::{
-    ChannelHead,
-    Conversation, EnqueueOutcome, EnqueueRefusal, MentionDispatchOutcome, PAGE_SIZE,
+    ChannelHead, Conversation, EnqueueOutcome, EnqueueRefusal, MentionDispatchOutcome, PAGE_SIZE,
     PRESENT_SET_LIMIT, SCAN_LIMIT, SESSION_WINDOW, Sequence, SessionAuthor, SessionMessage,
     initialized_state, note_present,
     responder::{ResponderRung, SelectionDisposition},
@@ -408,7 +407,10 @@ fn root_exports_channel_compaction() {
     let policy = DigestPolicy::DEFAULT;
 
     // A short channel is left alone; a long one folds in bounded steps.
-    assert_eq!(plan_digest(None, ChannelHead::at(Sequence(20)), policy), DigestPlan::Current);
+    assert_eq!(
+        plan_digest(None, ChannelHead::at(Sequence(20)), policy),
+        DigestPlan::Current
+    );
     assert_eq!(
         plan_digest(None, ChannelHead::at(Sequence(400)), policy),
         DigestPlan::Fold {

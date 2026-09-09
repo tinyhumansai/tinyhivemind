@@ -71,9 +71,9 @@ pub use briefing::{
     SessionInitialization, TeamBriefing, initialize_session, initialize_session_with_context,
 };
 pub use digest::{
-    ChannelDigest, ChannelHead, DigestFuture, DigestOutcome, DigestPlan, DigestPolicy, DigestRejection,
-    DigestRequest, DigestedHistory, Digester, accept_digest, apply_digest, collect_digest_input,
-    plan_digest, refold,
+    ChannelDigest, ChannelHead, DigestFuture, DigestOutcome, DigestPlan, DigestPolicy,
+    DigestRejection, DigestRequest, DigestedHistory, Digester, accept_digest, apply_digest,
+    collect_digest_input, plan_digest, refold,
 };
 pub use dispatch::{
     EnqueueOutcome, EnqueueRefusal, MentionDispatchOutcome, MentionTurnFuture, MentionTurnQueue,

@@ -10,9 +10,9 @@
 use std::{collections::HashMap, fs, sync::PoisonError, time::Duration};
 
 use tinyhivemind::{
-    BrevityPolicy, BriefedTeammate, ChannelDigest, LogMessage, Conversation, DigestOutcome, DigestPolicy,
-    Digester, MentionDispatchOutcome, Sequence, SessionAuthor, SessionQuery, TeamBriefing,
-    apply_digest,
+    BrevityPolicy, BriefedTeammate, ChannelDigest, ChannelHead, Conversation, DigestOutcome,
+    DigestPolicy, Digester, LogMessage, MentionDispatchOutcome, Sequence, SessionAuthor,
+    SessionQuery, TeamBriefing, apply_digest,
     aside::{Audience, Viewer},
     dispatch::{
         DispatchConversation, DispatchKey, MentionDispatchInput, MentionDispatchPolicy,
@@ -20,10 +20,9 @@ use tinyhivemind::{
     },
     initialize_session,
     mention::{MentionAuthor, resolve},
-    refold,
-    ChannelHead,
-    responder::{ResponderRequest, SelectionPolicy, choose_responder},
     pins::{PIN_LIMIT, fold_pins},
+    refold,
+    responder::{ResponderRequest, SelectionPolicy, choose_responder},
     sharing::{SharingPlan, SharingQuery, SharingState, initialized_state, prepare_delta},
     speech::{CommitRequest, addressed_peers, commit_utterance},
 };
@@ -366,7 +365,8 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
                     next.generation,
                     next.covered,
                     next.through.0,
-                    next.text.chars().count()
+                    next.text.chars().count(),
+                    head.unfolded_chars,
                 );
                 account = Some(next);
             }
