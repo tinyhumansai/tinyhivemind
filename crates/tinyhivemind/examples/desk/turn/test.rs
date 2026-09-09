@@ -3,7 +3,7 @@
 #![allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)]
 
 use super::*;
-use std::path::PathBuf;
+use std::{fs, path::PathBuf};
 
 fn scratch(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("tinyhivemind-turn-{name}-{}", std::process::id()));
