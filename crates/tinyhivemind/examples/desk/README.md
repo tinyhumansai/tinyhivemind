@@ -116,7 +116,13 @@ A seat says one thing per turn by **calling a tool**, not by writing a marker:
 | `desk_close(message)` | say one last thing and report the work finished |
 
 Text a seat produces outside a tool call is its own thinking and reaches
-nobody. The reason is a defect: in run 26 a seat closed with `<<<POST>>> …
+nobody — and the host enforces that rather than only asking for it. A turn that
+called no room tool and wrote no fence has **not spoken**, whatever text it
+left behind, so it goes to the landing rung instead of having its narration
+appended as a message. Run 29 is why: a provider failed mid-flight on both
+turns, and twenty minutes of real work each time reached the room as
+"Let me verify the small cases and understand the structure better" — a row
+that addressed nobody, so the desk could not hand the turn on either. The reason is a defect: in run 26 a seat closed with `<<<POST>>> …
 <<<POST>>>` rather than `<<<POST … POST>>>` and a verified result reached the
 room as the three characters `>>>`. A model-authored delimiter is an interface
 with a fallible producer, and it has no schema and no way to tell the producer
