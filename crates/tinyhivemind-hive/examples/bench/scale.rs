@@ -197,7 +197,7 @@ fn render(points: &[Point], sizes: &[usize], options: &Options) -> String {
     ] {
         out.push_str(&format!("{title}\n\narm         "));
         for size in sizes {
-            out.push_str(&format!("{size:>9}");
+            out.push_str(&format!("{size:>9}"));
         }
         out.push('\n');
         for arm in [
