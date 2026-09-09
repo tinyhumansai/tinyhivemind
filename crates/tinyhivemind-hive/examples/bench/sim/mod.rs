@@ -66,10 +66,34 @@ use generation::{
 pub(crate) use agent::{CheckStyle, SimAgent};
 pub(crate) use view::check_selfcheck;
 
-/// Names drawn on, in order, for a room's options.
+/// Names drawn on, in order, for a room's first eight options.
+///
+/// Beyond them [`topic_at`] generates, for the same reason [`member_at`]
+/// does: a fixed table is a cap on the slate dressed as a convenience.
 pub(crate) const TOPIC_NAMES: [&str; 8] = [
     "stage", "ship", "revert", "shadow", "canary", "freeze", "split", "pilot",
 ];
+
+/// The largest slate this harness will put on the floor.
+///
+/// The same kind of bound as [`MAX_MEMBERS`]: a limit on what a benchmark
+/// will spend, not a property of the library, which places no ceiling on how
+/// many topics a transcript may carry.
+pub(crate) const MAX_TOPICS: usize = 256;
+
+/// The id of option `index`, for a slate of any size.
+///
+/// The first eight keep the names every recorded number was written against,
+/// so those numbers reproduce exactly rather than approximately. Past them the
+/// ids are generated, which is what lets the slate grow with the room: a
+/// thousand members choosing between four options is a task a plurality solves
+/// by itself, and a benchmark run there measures the law of large numbers
+/// rather than the library.
+pub(crate) fn topic_at(index: usize) -> TopicId {
+    TOPIC_NAMES
+        .get(index)
+        .map_or_else(|| TopicId::from(format!("topic{index}")), |name| TopicId::from(*name))
+}
 
 /// The largest room this harness will build, as a `u32`.
 ///
