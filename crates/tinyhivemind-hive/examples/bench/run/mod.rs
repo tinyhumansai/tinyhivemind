@@ -668,6 +668,7 @@ pub(crate) fn drive_with(
             decided,
             correct: false,
             turns,
+            rounds,
             context_rows: mean_context_rows(agents),
             step_calls,
             library_time,
