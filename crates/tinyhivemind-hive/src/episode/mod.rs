@@ -152,8 +152,7 @@ pub fn step(
 /// Three values [`step`] has computed and [`authorized`] needs, grouped so the
 /// hand-off is one argument rather than three positional ones of the same
 /// shape.
-#[derive(Clone, Copy)]
-struct Round {
+struct Round<'a> {
     /// Which class of turn the round is taking.
     phase: Phase,
     /// The sequence the round was folded at, and so its boundary.
