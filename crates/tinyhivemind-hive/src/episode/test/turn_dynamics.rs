@@ -127,6 +127,35 @@ fn a_blind_turn_preserves_pre_episode_agent_context() {
 }
 
 #[test]
+fn a_continuing_blind_round_selects_the_unheard_member_over_a_louder_heard_one() {
+    // `unheard` bounded the blind round's *width*, but `floor_round` still
+    // ranked bids from every member -- heard and unheard alike. A member
+    // already heard this episode can out-bid an unheard one (here, `planner`
+    // is addressed by `critic`'s citation and picks up `ADDRESSED_BONUS`),
+    // and the round would reselect that heard member instead of the one
+    // still owed a turn: budget spent, the blind phase no closer to closing.
+    //
+    // `scout` has not spoken. `planner` and `critic` both have, and
+    // `planner`'s citation bonus dwarfs anything `scout` can bid at zero
+    // threshold, so this pins the fix: the round is filtered to unheard
+    // identities, not merely capped at their count.
+    let room = Room::new();
+    let policy = sequential();
+    let transcript = vec![
+        said(1, "planner", "!propose #stage"),
+        said(2, "critic", "!support #stage ^1"),
+    ];
+
+    let turn = speaking(run(&room, &state(), &transcript, &policy));
+    assert_eq!(
+        turn.agent_id, "scout",
+        "the still-blind round must pick the one member left unheard, \
+         not the louder bid from a member already heard",
+    );
+    assert_eq!(turn.visibility, Visibility::Blind);
+}
+
+#[test]
 fn speaking_costs_the_speaker_and_silence_accrues_standing() {
     let room = Room::new();
     let (turn, next) = spoke(run(&room, &state(), &converging(), &sequential()));
