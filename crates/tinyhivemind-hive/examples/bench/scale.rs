@@ -74,9 +74,10 @@ struct Point {
 
 /// One channel's running totals over one size's rooms.
 ///
-/// `Aggregate` carries everything except the transcript length, which lives on
-/// the episode report and is the third axis this sweep exists to show, so it is
-/// accumulated here rather than pushed into the shared metric.
+/// `Aggregate` carries everything except the private-message count, which is
+/// the third axis this sweep exists to show — floor rows are `turns/ep`, and
+/// what a channel writes *beside* the floor is this. Accumulated here rather
+/// than pushed into the shared metric, which no other mode needs it in.
 #[derive(Default)]
 struct Channel {
     totals: Aggregate,
@@ -86,14 +87,14 @@ struct Channel {
 
 impl Channel {
     fn add(&mut self, report: &crate::run::EpisodeReport) {
-        self.rows += report.context_rows;
+        self.rows += f64::from(report.contacts);
         self.episodes = self.episodes.saturating_add(1);
         self.totals.add(report);
     }
 
-    /// A control arm writes one row per turn and holds no private ones.
+    /// A control arm holds no private channel at all, so it contacts nobody.
     fn add_arm(&mut self, report: &crate::arms::ArmReport) {
-        self.rows += f64::from(report.turns);
+        let _ = report;
         self.episodes = self.episodes.saturating_add(1);
         self.totals.add_arm(report);
     }
@@ -226,8 +227,8 @@ fn render(points: &[Point], sizes: &[usize], options: &Options) -> String {
 
     for (title, field) in [
         ("correct %", 0_usize),
-        ("turns/ep", 1),
-        ("rows/ep", 2),
+        ("turns/ep — rows on the floor", 1),
+        ("contacts/ep — members asked privately", 2),
     ] {
         out.push_str(&format!("{title}\n\narm         "));
         for size in sizes {
