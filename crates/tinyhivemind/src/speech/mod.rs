@@ -209,13 +209,7 @@ pub fn commit_utterance(request: &CommitRequest<'_>) -> Result<CommittedUtteranc
     let author = MentionAuthor::Agent {
         id: request.speaker_id.to_string(),
     };
-    let written = resolve(
-        &content,
-        None,
-        &author,
-        request.roster,
-        request.desks,
-    )?;
+    let written = resolve(&content, None, &author, request.roster, request.desks);
 
     let addressed = match request.utterance {
         Utterance::Dm { to, .. } => targets(to),
