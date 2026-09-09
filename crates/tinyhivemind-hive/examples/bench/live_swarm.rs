@@ -373,6 +373,10 @@ fn live_federation(options: &Options, scenario: &Scenario) -> Result<(), String>
                 cap: options.ask_cap,
             }
         },
+        // Live desks, so this is where the concurrency is worth having: each
+        // desk authorizes exactly one speaker, and `--jobs` decides how many
+        // of those model calls are in flight at once.
+        options.jobs,
         &scenario.brief(),
         true,
     )?;

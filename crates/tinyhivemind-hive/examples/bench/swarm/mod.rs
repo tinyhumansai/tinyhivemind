@@ -47,6 +47,7 @@ use tinyhivemind_hive::{
 };
 
 use crate::federation::Federation;
+use crate::parallel;
 use crate::run::Ending;
 use tinyhivemind_hive::aside::Audience;
 
@@ -464,12 +465,18 @@ pub(crate) fn run_swarm(
     // them: every member access a desk makes is to its own seats, so grouping
     // turns a lookup across the whole federation into one across a desk.
     let mut members = group_by_desk(&channels, simulated.iter_mut().map(|member| member as _));
+    // One job, deliberately. A simulated turn is arithmetic, so there is
+    // nothing here worth a thread — and the caller is already running whole
+    // federations in parallel, so spawning again inside each one would
+    // oversubscribe the machine rather than speed anything up. The concurrent
+    // path exists for live desks, where a turn is a model call.
     let report = drive_swarm(
         &channels,
         &mut members,
         policy,
         referrals,
         asking,
+        1,
         task,
         keep_trace,
     )?;
