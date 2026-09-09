@@ -259,6 +259,7 @@ fn render(points: &[Point], sizes: &[usize], options: &Options) -> String {
     let task = match options.expertise {
         Expertise::HiddenProfile => "hidden profile",
         Expertise::Specialists { .. } => "specialists",
+        Expertise::Roles { .. } => "roles",
         Expertise::Uniform => "uniform noise",
     };
     let _ = write!(
