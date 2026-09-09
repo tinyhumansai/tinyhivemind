@@ -100,7 +100,7 @@ pub(crate) fn topic_at(index: usize) -> TopicId {
 /// Declared first and widened into [`MAX_MEMBERS`] rather than the other way
 /// round, so the refutation cap below is a plain constant rather than a cast
 /// that has to argue it cannot truncate.
-const MAX_MEMBERS_U32: u32 = 256;
+const MAX_MEMBERS_U32: u32 = 1024;
 
 /// The largest room this harness will build.
 ///
