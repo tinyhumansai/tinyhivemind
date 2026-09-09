@@ -99,6 +99,12 @@ pub(crate) struct Options {
     /// each other only in who may read the answer. `0` turns both off, and
     /// makes them bit-identical to `hive+`.
     pub(crate) aside_cap: u32,
+    /// Turns one round may authorize concurrently, for the `hive+wide` arm.
+    ///
+    /// Every published arm runs at `policy::SEQUENTIAL`, so this changes only
+    /// the concurrency arm and no recorded number moves. `0` makes `hive+wide`
+    /// bit-identical to `hive+`, the discipline every other cap here follows.
+    pub(crate) round_width: u32,
     /// Rows each member's context window holds. `0` disables the window model
     /// entirely, which is the default and is bit-identical to a build without
     /// it.
@@ -192,6 +198,8 @@ impl Options {
             blind_evidence: false,
             defer_cap: 1,
             aside_cap: 1,
+            // A round of four is the width `EpisodePolicy::DEFAULT` runs at.
+            round_width: tinyhivemind_hive::DEFAULT_ROUND_WIDTH,
             context: 0,
             rot: 0.0,
             exchange_cap: 4,
@@ -341,6 +349,10 @@ fn apply_expertise_flag(
         "--hidden-profile" => options.expertise = Expertise::HiddenProfile,
         "--defer-cap" => options.defer_cap = next_number(args).unwrap_or(1).max(1),
         "--aside-cap" => options.aside_cap = next_number(args).unwrap_or(1),
+        "--round-width" => {
+            options.round_width =
+                next_number(args).unwrap_or(tinyhivemind_hive::DEFAULT_ROUND_WIDTH);
+        }
         "--context" => options.context = next_number(args).unwrap_or(0) as usize,
         "--rot" => {
             options.rot = args
