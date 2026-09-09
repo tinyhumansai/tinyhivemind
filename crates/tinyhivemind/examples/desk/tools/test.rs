@@ -111,7 +111,7 @@ async fn a_refused_call_is_a_tool_error_the_seat_reads_rather_than_a_failure() {
         .expect("the tool ran; it is the call that was wrong");
     assert!(result.is_error, "{result:?}");
     assert!(
-        result.content.contains("must name at least one seat"),
+        result.text().contains("must name at least one seat"),
         "the seat is handed the library's sentence: {result:?}",
     );
     assert!(
