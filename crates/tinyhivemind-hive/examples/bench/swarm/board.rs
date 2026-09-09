@@ -38,6 +38,11 @@ pub(super) struct Board<'a> {
     pending: Vec<VecDeque<Referral>>,
     /// Peer channels each desk has already asked.
     asks: Vec<usize>,
+    /// Where an ask is paid for, and how many one desk may make.
+    asking: AskChannel,
+    /// Members of each desk offered the off-floor ask so far, so the offer
+    /// rotates rather than always landing on seat zero.
+    askers: Vec<usize>,
     /// What this run has decided and spent so far.
     report: SwarmReport,
 }
@@ -48,6 +53,7 @@ impl<'a> Board<'a> {
         channels: &'a [Channel],
         referrals: ReferralPolicy,
         keep_trace: bool,
+        asking: AskChannel,
     ) -> Self {
         let count = channels.len();
         Self {
@@ -55,6 +61,8 @@ impl<'a> Board<'a> {
             channels,
             referrals,
             keep_trace,
+            asking,
+            askers: vec![0; count],
             pending: vec![VecDeque::new(); count],
             // Asks are counted per desk rather than per member, and capped at one
             // per peer channel. The answer lands in the desk's own transcript,
