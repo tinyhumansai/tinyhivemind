@@ -8,6 +8,7 @@ with `--desk crates/tinyhivemind/examples/desk/desks/pe1006.txt --window 12
 one `opencode run … -m ladder/max-reasoning` per turn.
 **Spec** [`../specs/the-utterance-surface.md`](../specs/the-utterance-surface.md)
 **Sample** one run, stopped at turn 3. Read it as a defect report, not a result.
+Run 30, on the fixes below, is the rerun.
 
 ## What it was for
 
@@ -99,6 +100,24 @@ is speech because the fence is the documented fallback for a CLI that cannot
 reach the tools, and everything else is `None`. A `None` goes to the landing
 rung and, failing that, to a forfeit. Five regression tests, including the
 run-29 sentence verbatim.
+
+### 3. A rescued turn's files were not announced — ours, found in run 30
+
+Not a run-29 defect, but the same shape and found while watching the fix work.
+`run.rs` announces `output.files_written` in the feedthrough row, and a landing
+writes its files into the separate rescue turn — which `land` never folded
+back. A turn that spends its whole budget before writing anything therefore
+saves everything in the landing and the room is told about *none* of it.
+
+Run 30's turn 1 is exactly that case: 2400s, deadline hit, nothing written
+until the landing, and no `@theory wrote …` row in the transcript. It cost
+nothing only because the seat happened to list its files in its own message,
+which is luck rather than design — the same argument as defect 3 of
+[`2026-09-09-desk-lessons.md`](2026-09-09-desk-lessons.md), where the workspace
+rescued a failure by accident.
+
+**Fixed.** `land` folds the rescue turn's written paths into the turn the room
+is told about, in written order, naming a path written in both phases once.
 
 ## What this says about the tool surface
 
