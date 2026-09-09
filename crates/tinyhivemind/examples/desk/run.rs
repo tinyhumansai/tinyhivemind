@@ -79,12 +79,17 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
     let transcript = log::JsonlLog::open(&options.transcript)?;
     // The room is a tool the seat calls, not a fence it writes. The server is
     // this binary re-executed; the outbox is one file, truncated per turn.
-    let outbox = options.workspace.join(OUTBOX);
+    let serving = mcp::Serving {
+        outbox: options.workspace.join(OUTBOX),
+        transcript: options.transcript.clone(),
+        desk: Some(options.desk.clone()),
+        turn: Some(options.workspace.join(TURN)),
+    };
+    let outbox = serving.outbox.clone();
     let agent_config = match std::env::current_exe() {
         Ok(exe) => Some(mcp::config_block(
             &exe,
-            &outbox,
-            &options.transcript,
+            &serving,
             options.opencode_config.as_deref(),
         )),
         Err(error) => {

@@ -63,9 +63,15 @@ async fn main() -> Result<(), BoxError> {
     if options.serve_mcp {
         // This same binary is the MCP server the agent CLI spawns: re-execing
         // it keeps one artifact and one version of the tool schema. Serving
-        // takes no turn and reads no desk file.
+        // takes no turn. It reads the desk file only to price a `desk_dm`
+        // against the aside policy while the seat can still act on the answer.
         let outbox = options.outbox.ok_or("--mcp-server needs --outbox")?;
-        return mcp::serve(&outbox, &options.transcript);
+        return mcp::serve(&mcp::Serving {
+            outbox,
+            transcript: options.transcript,
+            desk: options.turn.as_ref().map(|_| options.desk),
+            turn: options.turn,
+        });
     }
     run::run(options).await
 }
