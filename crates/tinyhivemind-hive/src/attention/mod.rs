@@ -171,7 +171,7 @@ pub fn floor_holder(bids: &[Bid]) -> Option<&Bid> {
 ///
 /// [`HiveStep::Idle`]: crate::episode::HiveStep::Idle
 #[must_use]
-pub fn floor_round<'a>(bids: &'a [Bid], width: u32) -> Vec<&'a Bid> {
+pub fn floor_round(bids: &[Bid], width: u32) -> Vec<&Bid> {
     let width = width as usize;
     if width == 0 || bids.is_empty() {
         return Vec::new();

@@ -434,7 +434,7 @@ fn a_round_is_bounded_distinct_and_accounted_for() {
             })
             .collect();
 
-        for width in 1..=MEMBERS.len() as u32 {
+        for width in 1..=u32::try_from(MEMBERS.len()).expect("a desk this small fits") {
             let policy = EpisodePolicy {
                 round_width: width,
                 ..EpisodePolicy::DEFAULT
@@ -460,7 +460,7 @@ fn a_round_is_bounded_distinct_and_accounted_for() {
 
             assert_eq!(
                 next_state.spent,
-                opened().spent + turns.len() as u32,
+                opened().spent + u32::try_from(turns.len()).expect("a round this small fits"),
                 "the round's state accounts for exactly the turns it authorized"
             );
 
