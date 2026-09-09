@@ -273,11 +273,11 @@ answers is the answer:
     │
     ├─ budget spent? ─────────────────────────▶ Exhausted { spent }
     ├─ quorum, and phase = Commit? ───────────▶ Converged { topic, .. }
-    ├─ quorum, and phase = Deliberate? ───────▶ Speak { the commit turn }
-    │                                           and the phase flips, once
+    ├─ quorum, and phase = Deliberate? ───────▶ Speak { turns, next_state }
+    │                                           one commit turn; phase flips
     ├─ two topics carry, nobody to break it ──▶ Deadlocked { topics }
     │
-    └─ highest bid clears its threshold? ─────▶ Speak { turn }
+    └─ highest bid clears its threshold? ─────▶ Speak { turns, next_state }
                                     otherwise ▶ Idle
 ```
 
