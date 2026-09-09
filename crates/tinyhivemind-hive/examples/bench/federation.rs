@@ -33,6 +33,24 @@ const DESK_NAMES: [(&str, &str); 4] = [
     ("data", "Data"),
 ];
 
+/// The largest federation this harness will build.
+///
+/// The same kind of bound as [`MAX_MEMBERS`]: a spending limit, not a property
+/// of the library, which places no ceiling on how many channels a referral may
+/// cross. Beyond the four named desks the names are generated.
+const MAX_DESKS: usize = 64;
+
+/// The id and label of desk `index`, for a federation of any size.
+///
+/// The first four keep the names every recorded swarm number was written
+/// against, so those numbers reproduce exactly rather than approximately.
+fn desk_at(index: usize) -> (String, String) {
+    DESK_NAMES.get(index).map_or_else(
+        || (format!("desk{index}"), format!("Desk {index}")),
+        |(id, label)| ((*id).to_string(), (*label).to_string()),
+    )
+}
+
 /// Evaluation of the genuinely best option, before bias and noise.
 const TRUE_QUALITY: i32 = 100;
 /// Evaluation of every other option, before bias and noise.
@@ -85,7 +103,7 @@ impl Federation {
         bias: i32,
     ) -> Self {
         let topics = topics.clamp(2, TOPIC_NAMES.len());
-        let desk_count = desks.clamp(2, DESK_NAMES.len());
+        let desk_count = desks.clamp(2, MAX_DESKS);
         let per_desk = per_desk.clamp(2, MAX_MEMBERS);
         let names: Vec<TopicId> = TOPIC_NAMES
             .iter()
