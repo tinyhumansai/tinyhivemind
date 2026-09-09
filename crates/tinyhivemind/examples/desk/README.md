@@ -174,7 +174,13 @@ Three properties are worth knowing while reading a run:
   already correct without one.
 - **It folds on size as well as on length.** `--fold-tokens` (default 50,000)
   triggers a fold once the unfolded scrollback would cost about that many
-  tokens, whichever binds first with the row count. Run 28 closed at 23 rows
+  tokens, whichever binds first with `--fold-after`. It measures the
+  *transcript*, not what a turn spent producing it, and on this desk those
+  differ by more than an order of magnitude: run 30 wrote about 470 characters
+  per row while spending 30k-140k tokens per turn. So the size trigger is a
+  safety net for a room whose rows are long, the row trigger is what fires on
+  an ordinary desk, and a run that wants to exercise folding should lower
+  `--fold-after` rather than reach for this. Run 28 closed at 23 rows
   against a row threshold of 32 and spent 604k tokens getting there, so the
   account was built, shipped, and never once folded in a live run — the size
   trigger is what makes that impossible to repeat.

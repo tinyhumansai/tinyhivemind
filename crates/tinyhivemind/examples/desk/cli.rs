@@ -135,8 +135,14 @@ impl Options {
             turn: None,
             fold_account: true,
             fold_after: DigestPolicy::DEFAULT.fold_after,
-            // Low enough that a desk of the shape run 28 had would fold at
-            // least once, which no run has yet done.
+            // A safety net for a desk whose *rows* are long, not a number
+            // tuned to make a fold happen. Measured on run 30: a desk of this
+            // shape writes about 470 characters of transcript per row while
+            // spending 30k-140k tokens inside the turn producing them, so a
+            // threshold set from turn spend overshoots the thing it measures
+            // by more than an order of magnitude. The row trigger is what
+            // fires on an ordinary desk; this one catches the run where a
+            // seat pastes a derivation into the room.
             fold_tokens: 50_000,
         };
         let mut args = std::env::args().skip(1);
