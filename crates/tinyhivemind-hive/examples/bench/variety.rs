@@ -154,7 +154,14 @@ struct Point {
 }
 
 /// Every arm this sweep scores, in the order the tables print them.
-const ARMS: [&str; 5] = ["solo", "solo+fold", "hive+fold", "hive+", "hive+pooled"];
+const ARMS: [&str; 6] = [
+    "solo",
+    "solo+fold",
+    "hive+fold",
+    "hive+alone",
+    "hive+",
+    "hive+pooled",
+];
 
 /// The task widths swept when `--facets` names only one.
 ///
@@ -192,6 +199,7 @@ fn one_spread(options: &Options, facets: usize) -> Result<Vec<Point>, String> {
     let mut solo = Spread::default();
     let mut folding = Spread::default();
     let mut split = Spread::default();
+    let mut alone = Spread::default();
     let mut room_arm = Spread::default();
     let mut pooled = Spread::default();
 
@@ -199,7 +207,8 @@ fn one_spread(options: &Options, facets: usize) -> Result<Vec<Point>, String> {
         let seed = mix(options.seed, u64::from(episode));
         solo.add(&run_alone(options, seed, facets, Compaction::Evict));
         folding.add(&run_alone(options, seed, facets, Compaction::Fold));
-        split.add(&run_split(options, seed, facets));
+        split.add(&run_split(options, seed, facets, true));
+        alone.add(&run_split(options, seed, facets, false));
         room_arm.add(&run_room(options, seed, facets, &tuned, false)?);
         pooled.add(&run_room(options, seed, facets, &tuned, true)?);
     }
@@ -208,6 +217,7 @@ fn one_spread(options: &Options, facets: usize) -> Result<Vec<Point>, String> {
         ("solo", solo),
         ("solo+fold", folding),
         ("hive+fold", split),
+        ("hive+alone", alone),
         ("hive+", room_arm),
         ("hive+pooled", pooled),
     ]
@@ -289,15 +299,27 @@ fn run_alone(options: &Options, seed: u64, facets: usize, compaction: Compaction
     run
 }
 
-/// One task, each facet decided alone by the member whose facet it is.
+/// One task, each facet decided by the member whose facet it is.
 ///
-/// The arm under test. Member `f % n` answers facet `f` from its own reading,
-/// folding what overflows its window, and carries **only the facets it owns** —
-/// so the load one participant holds grows with `F / n` rather than with `F`.
-/// Every facet is independent of every other, so the turns that answer them
-/// are authorized against the same transcript and none can read another: one
-/// round covers `n` of them.
-fn run_split(options: &Options, seed: u64, facets: usize) -> TaskRun {
+/// The arm under test, and its own matched control. Member `f % n` answers
+/// facet `f`, folding what overflows its window, and carries **only the facets
+/// it owns** — so the load one participant holds grows with `F / n` rather
+/// than with `F`. Every facet is independent of every other, so the turns that
+/// answer them are authorized against the same transcript and none can read
+/// another: one round covers `n` of them.
+///
+/// `pool` is the difference between the two:
+///
+/// - **`true` — `hive+fold`.** The owner reads its peers' readings *of its own
+///   facet*, which is the same information the soloist has about that facet
+///   and none of what the soloist has about the others. It is the user's
+///   proposal stated exactly: keep `solo+fold`, and make one of them a seat.
+/// - **`false` — `hive+alone`.** The same seat with the pooling removed and
+///   nothing else changed, so what the pooling is worth is a measured
+///   difference rather than an assumption. Splitting a task and *not* sharing
+///   what the room knows about each piece is the failure mode this control
+///   exists to price.
+fn run_split(options: &Options, seed: u64, facets: usize, pool: bool) -> TaskRun {
     let mut run = TaskRun::default();
     let count = members(options);
     let mut priors: Vec<Option<Room>> = vec![None; count];
@@ -311,6 +333,14 @@ fn run_split(options: &Options, seed: u64, facets: usize) -> TaskRun {
         // exactly one room at a time.
         let prior = slot.take();
         let mut room = faceted(options, seed, facet, prior.as_ref());
+        if pool {
+            // Its peers' readings **of this facet only**. A facet's room holds
+            // that facet's options and no other, so pooling it hands the owner
+            // everything the room knows about its own question and nothing at
+            // all about anybody else's — which is the whole difference between
+            // this arm and the soloist that pools all of them.
+            room = room.pooled();
+        }
         room.set_compaction(Compaction::Fold);
         let Some(agent) = room.agents.get(owner) else {
             break;
