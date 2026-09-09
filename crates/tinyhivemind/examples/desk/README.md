@@ -165,6 +165,17 @@ Three properties are worth knowing while reading a run:
   transcript at the number it cites, and `desk_read` reaches it.
 - **A fold that fails costs the compaction and nothing else.** The window is
   already correct without one.
+- **It folds on size as well as on length.** `--fold-tokens` (default 50,000)
+  triggers a fold once the unfolded scrollback would cost about that many
+  tokens, whichever binds first with the row count. Run 28 closed at 23 rows
+  against a row threshold of 32 and spent 604k tokens getting there, so the
+  account was built, shipped, and never once folded in a live run — the size
+  trigger is what makes that impossible to repeat.
+- **It is told what the room pinned.** The pinned sequences at or below the
+  fold's reach are named in the prompt, with the instruction that whatever each
+  one established survives in full. A fold that dropped a pinned message would
+  have undone a decision the room made on purpose, and nothing would have said
+  so.
 
 `desk_close` exists because run 28 had no way to end. The answer was signed off
 on turn 3; turns 4-12 are the chair nudging `@lead` once per remaining round and

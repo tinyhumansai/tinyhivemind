@@ -1,6 +1,7 @@
 # Folding by size: an account a joining seat can always be given
 
-**Status:** Draft — extends `tinyhivemind::digest`, which is implemented
+**Status:** Implemented — `DigestPolicy::fold_after_chars`, `ChannelHead`, and
+`DigestRequest::pinned`. The live run that folds is still pending
 **Owner:** tinyhivemind maintainers
 **Reading:** [`thoughts-and-channels.md`](thoughts-and-channels.md)
 **Evidence:** [`../experiments/2026-09-08-pe1006-tool-room.md`](../experiments/2026-09-08-pe1006-tool-room.md),
@@ -36,6 +37,17 @@ the room is *large*, which is exactly when it needs one.
 3. A seat joining a large room is always handed an account of it.
 4. Nothing about the existing row trigger changes for a host that does not set
    the new one.
+
+### 4. A pinned message survives the fold
+
+A pin is the room saying one message must not scroll away, and the fold is the
+only thing between a pinned row and the moment it leaves the window. `refold`
+takes the board and passes the pinned sequences at or below `through` in
+`DigestRequest::pinned`; the digester is told, in the prompt, that whatever each
+one established survives in full rather than as a mention that it happened.
+
+Only sequences cross the boundary, never content, so a pin to a private row
+could not launder one into a shared account even if a host offered it.
 
 ## Non-goals
 
@@ -114,18 +126,26 @@ whose first turn is on a room of hundreds of rows.
 ## Acceptance criteria
 
 1. A channel of 24 rows whose content exceeds `fold_after_chars` folds, where
-   today it does not, and the resulting prompt contains an account.
+   today it does not, and the resulting prompt contains an account. **Met** —
+   `folds_a_short_channel_that_has_grown_expensive`.
 2. A channel of 40 short rows still folds on the row trigger with
-   `fold_after_chars: 0`.
+   `fold_after_chars: 0`. **Met** —
+   `a_channel_of_short_rows_still_folds_on_the_row_count_alone`.
 3. `from_token_budget(50_000)` yields a policy that folds a room of roughly
    50,000 tokens of desk-visible content and not one appreciably smaller.
+   **Met** — `a_token_budget_becomes_a_character_threshold_and_nothing_else`.
 4. A seat taking its first turn on a folded room is handed the account, proven
-   by a host-level test rather than by inspection.
+   by a host-level test rather than by inspection. **Met** —
+   `crates/tinyhivemind/tests/joining_a_folded_room.rs`.
 5. No account contains a non-desk row, at any size. Carried from
-   [`thoughts-and-channels.md`](thoughts-and-channels.md) criterion 4.
+   [`thoughts-and-channels.md`](thoughts-and-channels.md) criterion 4. **Met**
+   — `collect_digest_input` is unchanged, and the host's character count skips
+   private rows so one cannot trigger a fold either.
 6. A live run on PE 1006 folds at least once and the account appears in a
-   prompt. This is the criterion that has never been met.
+   prompt. **Open.** This is the criterion that has never been met, and it is
+   the reason `--fold-tokens` defaults to 50,000 rather than to off.
 7. The four contract commands and `.github/scripts/assert-pure.sh` pass.
+   **Met.**
 
 ## Open questions
 
