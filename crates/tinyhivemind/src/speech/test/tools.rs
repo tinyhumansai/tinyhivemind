@@ -36,7 +36,11 @@ fn every_tool_says_what_it_is_for_and_what_it_takes() {
             spec.name,
         );
         for parameter in spec.parameters {
-            assert!(!parameter.name.is_empty(), "{} has a nameless argument", spec.name);
+            assert!(
+                !parameter.name.is_empty(),
+                "{} has a nameless argument",
+                spec.name
+            );
         }
     }
 }

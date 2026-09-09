@@ -3,5 +3,5 @@
 mod commit;
 mod fence;
 mod parse;
-mod tools;
 mod support;
+mod tools;

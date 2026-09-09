@@ -62,8 +62,8 @@ pub mod referral;
 pub mod responder;
 pub mod search;
 pub mod session;
-pub mod speech;
 pub mod sharing;
+pub mod speech;
 pub mod threads;
 
 pub use briefing::{
@@ -94,11 +94,6 @@ pub use search::{
     EXCERPT_CHARS, MessageHit, SEARCH_LIMIT, SEARCH_SCAN, SearchPattern, SearchQuery, ThreadHit,
     search_messages, search_threads,
 };
-pub use speech::{
-    CallArguments, CommitRequest, CommittedUtterance, ToolCall, ToolParameter, ToolSpec,
-    Utterance, UtteranceRejection, addressed_peers, check_recipients, commit_utterance, interpret,
-    tool_specs,
-};
 pub use session::{
     Conversation, Elision, LogMessage, PAGE_SIZE, SCAN_LIMIT, SESSION_WINDOW, Sequence,
     SessionAuthor, SessionFuture, SessionLog, SessionMessage, SessionPage, SessionQuery,
@@ -107,6 +102,10 @@ pub use session::{
 pub use sharing::{
     PRESENT_SET_LIMIT, ReinitializeReason, SessionDelta, SharingPlan, SharingQuery, SharingState,
     initialized_state, note_present, prepare_delta,
+};
+pub use speech::{
+    CallArguments, CommitRequest, CommittedUtterance, ToolCall, ToolParameter, ToolSpec, Utterance,
+    UtteranceRejection, addressed_peers, check_recipients, commit_utterance, interpret, tool_specs,
 };
 pub use threads::{
     THREAD_INDEX_LIMIT, THREAD_INDEX_SCAN, THREAD_OPENING_CHARS, ThreadLine, fold_thread_index,

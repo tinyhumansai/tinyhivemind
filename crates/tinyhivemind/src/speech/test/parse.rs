@@ -40,7 +40,10 @@ fn a_close_carries_its_message_and_says_the_work_is_finished() {
         },
     );
     assert!(utterance.closing());
-    assert_eq!(utterance.message(), "Psi(10^18) = 62418970; checker signed off");
+    assert_eq!(
+        utterance.message(),
+        "Psi(10^18) = 62418970; checker signed off"
+    );
     assert!(!post("anything").closing(), "only a close closes");
 }
 

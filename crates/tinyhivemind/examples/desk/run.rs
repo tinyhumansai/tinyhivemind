@@ -27,15 +27,13 @@ use tinyhivemind::{
 };
 
 use crate::{
-    BoxError, agent,
-    aside, chat,
+    BoxError, agent, aside, chat,
     cli::Options,
     deskfile, digest, log, mcp, memory,
-    room,
     notebook::{files_written, read_notebook},
     prompt::compose_prompt,
     queue::{DeskQueue, PendingTurn},
-    turn,
+    room, turn,
 };
 
 /// How long a seat gets to write the message it never got round to writing.

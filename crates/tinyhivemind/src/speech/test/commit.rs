@@ -130,8 +130,7 @@ fn a_close_appends_its_row_and_says_the_work_is_finished() {
     assert!(committed.closing, "the host is told, and the host decides");
     assert_eq!(committed.audience, Audience::Desk);
     assert_eq!(
-        committed.content,
-        "Psi(10^18) = 62418970, signed off by @checker",
+        committed.content, "Psi(10^18) = 62418970, signed off by @checker",
         "the message is never lost to the closing",
     );
 }

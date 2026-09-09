@@ -341,8 +341,7 @@ pub fn addressed_peers(
 /// Whether a message's own text hands the turn to somebody other than its author.
 fn names_a_peer(mentions: &[Mention], speaker_id: &str) -> bool {
     mentions.iter().any(|mention| {
-        !mention.quiet
-            && matches!(&mention.target, MentionTarget::Agent { id } if id != speaker_id)
+        !mention.quiet && matches!(&mention.target, MentionTarget::Agent { id } if id != speaker_id)
     })
 }
 

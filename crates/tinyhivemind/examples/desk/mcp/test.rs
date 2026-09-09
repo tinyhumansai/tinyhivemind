@@ -257,7 +257,10 @@ fn a_refused_call_reaches_the_seat_and_not_the_room() {
             request("dm", serde_json::json!({ "to": [], "message": "hi" })),
             "`to` must name at least one seat",
         ),
-        (request("shout", serde_json::json!({})), "unknown tool shout"),
+        (
+            request("shout", serde_json::json!({})),
+            "unknown tool shout",
+        ),
         (
             request("close", serde_json::json!({ "message": "   " })),
             "`message` must be a non-empty string",
