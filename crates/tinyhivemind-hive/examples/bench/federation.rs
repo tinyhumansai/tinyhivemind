@@ -143,7 +143,7 @@ impl Federation {
                         )
                     })
                     .collect();
-                agents.push(SimAgent::assembled(&agent_id, *role, seed, index, evals));
+                agents.push(SimAgent::assembled(&agent_id, role, seed, index, evals));
                 members.push(agent_id);
             }
             records.push(FederatedDesk {
