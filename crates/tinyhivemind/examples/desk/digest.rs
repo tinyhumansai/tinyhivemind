@@ -71,6 +71,29 @@ fn compose(request: &DigestRequest) -> String {
             message.sequence.0, message.content
         );
     }
+    if !request.pinned.is_empty() {
+        // A pin is the room saying *this one does not scroll away*. The fold
+        // is the only thing standing between a pinned message and the moment
+        // it leaves the window, so it is told which rows carry that claim and
+        // told, in as many words, that dropping one undoes a decision the room
+        // made on purpose.
+        let cited = request
+            .pinned
+            .iter()
+            .map(|sequence| format!("^{}", sequence.0))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let _ = write!(
+            prompt,
+            "\n\n## Pinned by the room: {cited}\n\
+             These messages were pinned, which is the room saying they must not \
+             scroll away. Whatever each one established has to survive into the new \
+             account in full — the number, the file, the decision, not a mention \
+             that it happened — and cited as ^N. Everything else here may be \
+             compressed or dropped; these may not. If a later message superseded a \
+             pinned one, say what replaced it rather than silently dropping either.\n"
+        );
+    }
     let _ = write!(
         prompt,
         "\n\n## Write the new account\n\
@@ -83,7 +106,8 @@ fn compose(request: &DigestRequest) -> String {
          - what is open, and who was last working on it;\n\
          - any decision the room made about how it is working.\n\n\
          Drop: greetings, restated instructions, the room's own coordination, and anything \
-         a later message superseded. Attribute a claim to the seat that made it (@id) and \
+         a later message superseded — except a pinned message, which is kept whatever else \
+         goes. Attribute a claim to the seat that made it (@id) and \
          cite the message number as ^N where it matters. Never write a number the messages \
          above do not contain.",
         request.budget_chars
