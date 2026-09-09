@@ -159,11 +159,11 @@ fn run_federated_arms(
     // another, so this is the same fold spread across cores — see
     // `crate::parallel`.
     let decided: Vec<FederationOutcome> =
-        parallel::map_in_order(&federations, options.jobs, |federation| {
+        parallel::map_in_order(federations, options.jobs, |federation| {
             Ok(FederationOutcome {
                 siloed: run_swarm(
                     federation,
-                    &desk_policy,
+                    desk_policy,
                     ReferralPolicy::DEFAULT,
                     AskChannel::OnFloor,
                     TASK,
@@ -171,7 +171,7 @@ fn run_federated_arms(
                 )?,
                 swarmed: run_swarm(
                     federation,
-                    &desk_policy,
+                    desk_policy,
                     swarm_referrals(),
                     AskChannel::OnFloor,
                     TASK,
@@ -183,7 +183,7 @@ fn run_federated_arms(
                 // question.
                 offfloor: run_swarm(
                     federation,
-                    &desk_policy,
+                    desk_policy,
                     swarm_referrals(),
                     AskChannel::OffFloor {
                         cap: options.ask_cap,
@@ -193,13 +193,13 @@ fn run_federated_arms(
                 )?,
                 free: run_swarm(
                     &pooled(federation),
-                    &desk_policy,
+                    desk_policy,
                     ReferralPolicy::DEFAULT,
                     AskChannel::OnFloor,
                     TASK,
                     false,
                 )?,
-                merged: arms::run_merged(federation, &merged_policy, TASK)?,
+                merged: arms::run_merged(federation, merged_policy, TASK)?,
                 vote: arms::run_federated_vote(federation),
             })
         })?;
@@ -515,16 +515,15 @@ fn trace_swarm(first: &Federation, desk_policy: &EpisodePolicy) -> Result<(), St
 }
 
 /// Print the federated comparison table and the totals under it.
-fn tabulate(
-    siloed: &SwarmTotals,
-    swarmed: &SwarmTotals,
-    offfloor: &SwarmTotals,
-    free: &SwarmTotals,
-    merged: &Aggregate,
-    vote: &Aggregate,
-    wall: std::time::Duration,
-    federations: usize,
-) {
+fn tabulate(totals: &FederatedTotals, wall: std::time::Duration, federations: usize) {
+    let FederatedTotals {
+        siloed,
+        swarmed,
+        offfloor,
+        free,
+        merged,
+        vote,
+    } = totals;
     println!(
         "{:<9} {:>8} {:>8} {:>9} {:>10} {:>9} {:>8}",
         "arm", "correct", "decided", "turns", "crossings", "stranded", "asks/ep",
