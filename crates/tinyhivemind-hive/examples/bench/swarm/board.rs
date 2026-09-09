@@ -215,6 +215,11 @@ impl<'a> Board<'a> {
         &mut self.host
     }
 
+    /// Whether a desk has nothing waiting to be answered.
+    pub(super) fn pending_empty(&self, desk: usize) -> bool {
+        self.pending[desk].is_empty()
+    }
+
     /// Take the next referral queued for a desk, if one is waiting.
     pub(super) fn pop_pending(&mut self, desk: usize) -> Option<Referral> {
         self.pending[desk].pop_front()

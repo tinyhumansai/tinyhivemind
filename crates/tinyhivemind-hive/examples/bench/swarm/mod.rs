@@ -52,7 +52,7 @@ use tinyhivemind_hive::aside::Audience;
 
 pub(crate) use board::AskChannel;
 
-use board::Board;
+use board::{Board, PlannedTurn, fill_turn};
 use member::SwarmSim;
 
 mod board;
@@ -299,6 +299,7 @@ pub(crate) fn drive_swarm(
     policy: &EpisodePolicy,
     referrals: ReferralPolicy,
     asking: AskChannel,
+    jobs: usize,
     task: &str,
     keep_trace: bool,
 ) -> Result<SwarmReport, String> {
@@ -320,6 +321,10 @@ pub(crate) fn drive_swarm(
 
     loop {
         let mut progressed = false;
+        // Phase one, sequential and cheap: settle what every desk owes before
+        // anybody speaks. A pending answer and an off-floor question are both
+        // desk-local and both rare next to turns, so they stay here rather
+        // than joining the concurrent phase below.
         for desk in 0..count {
             if finished[desk].is_some() {
                 board.strand(desk);
@@ -336,9 +341,16 @@ pub(crate) fn drive_swarm(
             // this cannot keep the loop alive on its own.
             if board.ask_off_floor(members, desk)? {
                 progressed = true;
+            }
+        }
+
+        // Phase two, sequential and cheap: ask the library who speaks next on
+        // each desk, and retire the desks that are done.
+        let mut planned: Vec<PlannedTurn> = Vec::new();
+        for desk in 0..count {
+            if finished[desk].is_some() || !board.pending_empty(desk) {
                 continue;
             }
-
             let started = Instant::now();
             let decision = {
                 let host = board.host();
@@ -356,9 +368,7 @@ pub(crate) fn drive_swarm(
 
             match decision.map_err(|error| error.to_string())? {
                 HiveStep::Speak { turn } => {
-                    let turn = *turn;
-                    board.take_turn(members, desk, &turn)?;
-                    states[desk] = turn.next_state;
+                    planned.push(board.plan_turn(members, desk, &turn)?);
                 }
                 HiveStep::Converged { topic, .. } => {
                     finished[desk] = Some(member::outcome(
@@ -367,20 +377,55 @@ pub(crate) fn drive_swarm(
                         Ending::Converged,
                         Some(topic),
                     ));
+                    progressed = true;
                 }
                 HiveStep::Deadlocked { .. } => {
                     finished[desk] =
                         Some(member::outcome(channels, desk, Ending::Deadlocked, None));
+                    progressed = true;
                 }
                 HiveStep::Exhausted { .. } => {
                     finished[desk] = Some(member::outcome(channels, desk, Ending::Exhausted, None));
+                    progressed = true;
                 }
                 HiveStep::Idle => {
                     finished[desk] = Some(member::outcome(channels, desk, Ending::Idle, None));
+                    progressed = true;
                 }
             }
+        }
+
+        // Phase three, concurrent: every desk fills its one authorized turn at
+        // the same time. This is the whole point of the phasing — with real
+        // agents a turn is a model call, and a hundred desks each authorizing
+        // exactly one speaker is a hundred model calls that need not wait on
+        // each other. One message, one turn is untouched: each desk still runs
+        // a single turn, authorized by its own episode.
+        let spoken = {
+            let mut work: Vec<(&PlannedTurn, &mut Vec<&mut dyn SwarmMember>)> = Vec::new();
+            let mut seats: Vec<&mut Vec<&mut dyn SwarmMember>> = members.iter_mut().collect();
+            for plan in &planned {
+                // Each desk appears at most once in `planned`, so the take
+                // below cannot hand the same desk out twice.
+                let Some(slot) = seats.get_mut(plan.desk) else {
+                    continue;
+                };
+                work.push((plan, slot));
+            }
+            parallel::map_mut_in_order(&mut work, jobs, |(plan, seats)| fill_turn(seats, plan))?
+        };
+
+        // Phase four, sequential and in desk order: land what was said. The
+        // order is load-bearing rather than tidy — a row consumes a sequence
+        // number, and the quorum window and salience decay read raw sequence
+        // distance, so landing in completion order would let one seed decide
+        // two different things.
+        for (turn, said) in planned.iter().zip(&spoken) {
+            board.land_turn(members, said, turn.budget)?;
+            states[turn.desk] = turn.turn.next_state;
             progressed = true;
         }
+
         if !progressed {
             break;
         }
