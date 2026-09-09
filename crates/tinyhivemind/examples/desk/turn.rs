@@ -15,6 +15,8 @@
 
 use std::{collections::HashMap, path::Path, time::Duration};
 
+use tinyhivemind::speech::Utterance;
+
 use crate::{BoxError, agent, chat, mcp};
 
 /// How many times one turn may be restarted after a stalled stream.
@@ -47,10 +49,13 @@ pub(crate) struct Delivery<'a> {
 
 /// What a turn asked the room to do, once its tool calls are drained.
 pub(crate) struct Said {
-    /// The seats a `desk_dm` addressed; empty for a message to the whole desk.
-    pub(crate) dm_to: Vec<String>,
-    /// Whether the seat reported the desk's work finished.
-    pub(crate) closing: bool,
+    /// The utterance the room commits, as the library names it.
+    ///
+    /// A turn that reached the tools drained one; a turn that fell back to the
+    /// fence, or that was wrapped up by a tool-less completion, spoke to the
+    /// whole desk and is carried as a [`Utterance::Post`] so that every path
+    /// out of a turn commits through the same fold.
+    pub(crate) utterance: Utterance,
 }
 
 /// Run one turn and get something out of it, or nothing at all.
@@ -245,8 +250,9 @@ fn settle(outbox: &Path, output: &mut agent::TurnOutput) -> Said {
     let spoken = mcp::drain_outbox(outbox);
     let Some(utterance) = spoken.last() else {
         return Said {
-            dm_to: Vec::new(),
-            closing: false,
+            utterance: Utterance::Post {
+                message: output.message.clone(),
+            },
         };
     };
     if spoken.len() > 1 {
@@ -257,18 +263,7 @@ fn settle(outbox: &Path, output: &mut agent::TurnOutput) -> Said {
     }
     output.message = utterance.message().to_string();
     output.posted = true;
-    match utterance {
-        mcp::Utterance::Post { .. } => Said {
-            dm_to: Vec::new(),
-            closing: false,
-        },
-        mcp::Utterance::Dm { to, .. } => Said {
-            dm_to: to.clone(),
-            closing: false,
-        },
-        mcp::Utterance::Close { .. } => Said {
-            dm_to: Vec::new(),
-            closing: true,
-        },
+    Said {
+        utterance: utterance.clone(),
     }
 }
