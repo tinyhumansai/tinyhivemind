@@ -125,6 +125,7 @@ struct Point {
     per_stage: f64,
     held: f64,
     depth: f64,
+    width: f64,
 }
 
 /// The horizons swept when `--stages` names only one length.
@@ -185,6 +186,7 @@ fn one_horizon(options: &Options, stages: usize) -> Result<Vec<Point>, String> {
         per_stage: chain.per_stage(),
         held: chain.held_per_chain(),
         depth: chain.rounds_per_chain(),
+        width: chain.turns_per_chain(),
     })
     .collect())
 }
@@ -298,6 +300,7 @@ fn render(points: &[Point], horizons: &[usize], options: &Options) -> String {
         ("stage % — per-decision", 1),
         ("held/ep — rows one participant carries", 2),
         ("rounds/ep — depth over the whole chain", 3),
+        ("turns/ep — width over the whole chain", 4),
     ] {
         let _ = write!(out, "{title}\n\narm          ");
         for stages in horizons {
@@ -316,7 +319,8 @@ fn render(points: &[Point], horizons: &[usize], options: &Options) -> String {
                             0 => point.end_to_end,
                             1 => point.per_stage,
                             2 => point.held,
-                            _ => point.depth,
+                            3 => point.depth,
+                            _ => point.width,
                         };
                         let _ = write!(out, "{value:>9.1}");
                     }
@@ -355,4 +359,140 @@ fn ratio_f64(numerator: f64, denominator: u64) -> f64 {
 )]
 fn as_f64(value: u64) -> f64 {
     value as f64
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::sim::Expertise;
+
+    /// A room for one stage of a chain, at the defaults the sweep uses.
+    fn room(stage: usize) -> Room {
+        Room::generate_with(0xA11CE, 5, 4, 50, Expertise::Uniform, false).for_stage(stage)
+    }
+
+    /// The property the whole chain rests on: no reading taken at one stage
+    /// can be scored against another stage's question.
+    #[test]
+    fn every_stage_names_its_options_differently() {
+        let first = room(0);
+        let second = room(1);
+        let names = |held: &Room| -> Vec<String> {
+            held.agents
+                .first()
+                .map(|agent| {
+                    agent
+                        .evals
+                        .iter()
+                        .map(|(topic, _)| topic.0.clone())
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
+        let (early, late) = (names(&first), names(&second));
+        assert!(!early.is_empty(), "a stage has options");
+        for name in &early {
+            assert!(
+                !late.contains(name),
+                "option {name} appears at two stages and could be scored at the wrong one"
+            );
+        }
+        assert_ne!(first.truth, second.truth);
+    }
+
+    /// A member carries what it held at the previous stage into this one.
+    #[test]
+    fn a_later_stage_inherits_the_window_of_an_earlier_one() {
+        let mut first = room(0);
+        first.charge_brief();
+        let carried = first.agents.first().map_or(0, |agent| agent.held());
+        assert!(carried > 0, "the brief occupies rows");
+
+        let mut second = room(1).inheriting(&first);
+        second.charge_brief();
+        let held = second.agents.first().map_or(0, |agent| agent.held());
+        assert_eq!(
+            held,
+            carried * 2,
+            "stage two carries stage one's rows as well as its own"
+        );
+    }
+
+    /// Poisoning lifts one decoy and never the truth, so a poisoned chain is
+    /// harder rather than unwinnable.
+    #[test]
+    fn poison_lifts_a_decoy_and_leaves_the_truth_alone() {
+        let clean = room(0);
+        let poisoned = clean.poisoned(POISON_LIFT);
+        let truth = clean.truth.clone();
+        let reading = |held: &Room, topic: &tinyhivemind_hive::trace::TopicId| {
+            held.agents
+                .first()
+                .map_or(0, |agent| agent.own_reading(topic))
+        };
+        assert_eq!(
+            reading(&clean, &truth),
+            reading(&poisoned, &truth),
+            "the truth is never lifted"
+        );
+        let lifted = clean
+            .agents
+            .first()
+            .and_then(|agent| {
+                agent
+                    .evals
+                    .iter()
+                    .map(|(topic, _)| topic)
+                    .find(|topic| **topic != truth)
+            })
+            .cloned()
+            .expect("a room has a decoy");
+        assert_eq!(
+            reading(&poisoned, &lifted) - reading(&clean, &lifted),
+            POISON_LIFT,
+        );
+    }
+
+    /// A soloist handed every peer's brief carries `agents` times what one
+    /// member of the room does. That ratio is the whole quantity under test.
+    #[test]
+    fn a_soloist_carries_the_whole_room_s_brief() {
+        let mut shared = room(0);
+        shared.charge_brief();
+        let one = shared.agents.first().map_or(0, |agent| agent.held());
+        let pooled = shared.pooled();
+        let alone = pooled.agents.first().map_or(0, |agent| agent.held());
+        assert!(
+            alone > one,
+            "a soloist holding every peer's readings carries more than one member: {alone} vs {one}"
+        );
+    }
+
+    /// End-to-end can never exceed the per-stage rate, and equals it at one
+    /// stage — the accounting invariant the headline column rests on.
+    #[test]
+    fn a_whole_chain_is_never_likelier_than_one_of_its_stages() {
+        let mut chain = Chain::default();
+        chain.add(&ChainRun {
+            stages: 4,
+            right: 3,
+            ..ChainRun::default()
+        });
+        chain.add(&ChainRun {
+            stages: 4,
+            right: 4,
+            ..ChainRun::default()
+        });
+        assert!(chain.end_to_end() <= chain.per_stage());
+        assert_eq!(chain.end_to_end(), 50.0);
+        assert_eq!(chain.per_stage(), 87.5);
+
+        let mut single = Chain::default();
+        single.add(&ChainRun {
+            stages: 1,
+            right: 1,
+            ..ChainRun::default()
+        });
+        assert_eq!(single.end_to_end(), single.per_stage());
+    }
 }
