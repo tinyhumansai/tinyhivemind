@@ -26,6 +26,7 @@ resolves it to `sim/mod.rs` transparently.
 | `run/mod.rs` | the host: a journal, a roster, and the step loop — `Host`, `Ending`, and the episode entry points |
 | `run/{turns,scoring}.rs` | per-turn machinery (audience, appending a turn, one exchange), then `EpisodeReport`, `Tally`, and an episode's accounting |
 | `arms.rs` | the `ladder`, `vote`, `merged` and federated controls |
+| `scale.rs` | `--scale-sweep`: room size against channel topology, one table per axis |
 | `sweep.rs` | the policy grid and its ranking |
 | `metrics/mod.rs` | aggregation, formatting, and the confidence-interval, bootstrap and rank-correlation statistics: `Aggregate` and the printed/JSON tables |
 | `metrics/{format,stats}.rs` | formatting helpers for those tables, then the small numeric statistics helpers (percentile, rank correlation) |
