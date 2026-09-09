@@ -24,6 +24,69 @@ use tinyhivemind_hive::{
 use super::{Channel, SwarmHost, SwarmMember, SwarmReport, format};
 
 /// The scheduler's own state: the journals, what is in flight, and the tally.
+/// Where a desk pays for a question it puts to another channel.
+///
+/// The two settings differ in one thing and it is the one that matters at
+/// scale: whether asking costs the asking desk a turn it could have
+/// deliberated with.
+///
+/// [`Self::OnFloor`] is what the recorded swarm numbers were taken against —
+/// a member the episode authorized spends its authorized turn asking instead
+/// of arguing. That is affordable in a federation of three and fatal in one of
+/// fifty: the number of peers grows with the federation while the desk's turn
+/// budget stays whatever its own size earns, so above roughly `budget / 3`
+/// desks every desk spends its entire budget asking and never decides. The
+/// measured collapse is total — 100% correct at twelve desks, 0.0% at
+/// twenty-five, every desk `exhausted`.
+///
+/// [`Self::OffFloor`] writes the same question, to the same peer, read by the
+/// same members, without the episode authorizing a turn for it. It is the
+/// same move [ADR 0012] made for a private aside, for the same reason and with
+/// the same accounting: what it spends is a model call, not a turn, and the
+/// price is reported separately rather than hidden in `turns`.
+///
+/// The library is unchanged by either, and deliberately so.
+/// `ReferralPolicy`'s own documentation says a width bound is *deliberately
+/// absent* — "`max_hops` bounds the depth of a chain, and bounding its width
+/// is the host's job, because only the host knows what a question costs it."
+/// This type is that host doing that job.
+///
+/// [ADR 0012]: https://github.com/tinyhumansai/tinyhivemind/blob/main/docs/adr/0012-an-exchange-round-spends-model-calls-not-turns.md
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum AskChannel {
+    /// A member spends the turn the episode authorized asking a peer channel,
+    /// and may ask every peer once.
+    OnFloor,
+    /// A desk asks off the floor, taking no turn, at most `cap` times.
+    ///
+    /// `cap` is finite and stated by the caller rather than derived from the
+    /// federation, which is the whole correction: a bound that grows with the
+    /// number of peers is not a bound on what the federation costs.
+    OffFloor {
+        /// Questions one desk may put to other channels, across the episode.
+        cap: usize,
+    },
+}
+
+impl AskChannel {
+    /// How many peer channels one desk may ask, given how many there are.
+    ///
+    /// On the floor this is every peer, which is the behaviour the recorded
+    /// numbers were taken against and the defect described above. Off the
+    /// floor it is the stated cap, whichever is smaller.
+    fn width(self, peers: usize) -> usize {
+        match self {
+            Self::OnFloor => peers,
+            Self::OffFloor { cap } => cap.min(peers),
+        }
+    }
+
+    /// Whether a member may spend an authorized turn asking.
+    const fn on_floor(self) -> bool {
+        matches!(self, Self::OnFloor)
+    }
+}
+
 pub(super) struct Board<'a> {
     /// The desks-and-journals host every episode runs against.
     host: SwarmHost,
