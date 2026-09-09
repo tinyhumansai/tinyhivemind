@@ -232,7 +232,11 @@ impl Options {
         if let Some(agents) = flag_number(&args, "--agents") {
             // Clamped to what `Room::generate` will actually build, so the
             // quorum threshold cannot be set for a desk that does not exist.
-            options.agents = usize::try_from(agents).unwrap_or(5).clamp(2, 8);
+            // The ceiling is a spending bound rather than a property of the
+            // library, which has no room-size limit.
+            options.agents = usize::try_from(agents)
+                .unwrap_or(5)
+                .clamp(2, crate::sim::MAX_MEMBERS);
             options.policy = tuned_policy(options.agents);
         }
         let mut args = args.into_iter();

@@ -23,7 +23,7 @@
 use tinyhivemind_hive::trace::TopicId;
 
 use crate::rng::{Rng, mix};
-use crate::sim::{MEMBER_ROLES, SimAgent, TOPIC_NAMES};
+use crate::sim::{MAX_MEMBERS, SimAgent, TOPIC_NAMES, member_at};
 
 /// Names drawn on, in order, for a federation's desks.
 const DESK_NAMES: [(&str, &str); 4] = [
@@ -86,7 +86,7 @@ impl Federation {
     ) -> Self {
         let topics = topics.clamp(2, TOPIC_NAMES.len());
         let desk_count = desks.clamp(2, DESK_NAMES.len());
-        let per_desk = per_desk.clamp(2, MEMBER_ROLES.len());
+        let per_desk = per_desk.clamp(2, MAX_MEMBERS);
         let names: Vec<TopicId> = TOPIC_NAMES
             .iter()
             .take(topics)
@@ -119,12 +119,13 @@ impl Federation {
         for (desk, (id, name)) in DESK_NAMES.iter().take(desk_count).enumerate() {
             let decoy = decoys.get(desk).cloned().unwrap_or_else(|| truth.clone());
             let mut members = Vec::new();
-            for (seat, (role_name, role)) in MEMBER_ROLES.iter().take(per_desk).enumerate() {
+            for seat in 0..per_desk {
+                let (role_name, role) = member_at(seat);
                 // Ids are desk-qualified because a federation has more seats
                 // than there are role names, and because a transcript that
                 // says `platform-critic` reads as what it is.
                 let agent_id = format!("{id}-{role_name}");
-                let index = desk.saturating_mul(MEMBER_ROLES.len()).saturating_add(seat);
+                let index = desk.saturating_mul(per_desk).saturating_add(seat);
                 let mut draws = Rng::seeded(mix(seed, index as u64));
                 let evals = names
                     .iter()
