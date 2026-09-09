@@ -63,6 +63,7 @@ pub mod responder;
 pub mod search;
 pub mod session;
 pub mod sharing;
+pub mod speech;
 pub mod threads;
 
 pub use briefing::{
@@ -70,9 +71,9 @@ pub use briefing::{
     SessionInitialization, TeamBriefing, initialize_session, initialize_session_with_context,
 };
 pub use digest::{
-    ChannelDigest, DigestFuture, DigestOutcome, DigestPlan, DigestPolicy, DigestRejection,
-    DigestRequest, DigestedHistory, Digester, accept_digest, apply_digest, collect_digest_input,
-    plan_digest, refold,
+    ChannelDigest, ChannelHead, DigestFuture, DigestOutcome, DigestPlan, DigestPolicy,
+    DigestRejection, DigestRequest, DigestedHistory, Digester, accept_digest, apply_digest,
+    collect_digest_input, plan_digest, refold,
 };
 pub use dispatch::{
     EnqueueOutcome, EnqueueRefusal, MentionDispatchOutcome, MentionTurnFuture, MentionTurnQueue,
@@ -101,6 +102,10 @@ pub use session::{
 pub use sharing::{
     PRESENT_SET_LIMIT, ReinitializeReason, SessionDelta, SharingPlan, SharingQuery, SharingState,
     initialized_state, note_present, prepare_delta,
+};
+pub use speech::{
+    CallArguments, CommitRequest, CommittedUtterance, ToolCall, ToolParameter, ToolSpec, Utterance,
+    UtteranceRejection, addressed_peers, check_recipients, commit_utterance, interpret, tool_specs,
 };
 pub use threads::{
     THREAD_INDEX_LIMIT, THREAD_INDEX_SCAN, THREAD_OPENING_CHARS, ThreadLine, fold_thread_index,

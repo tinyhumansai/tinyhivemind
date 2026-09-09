@@ -39,6 +39,7 @@ fn request(prior: Option<&str>) -> DigestRequest {
         ],
         through: Sequence(8),
         budget_chars: 4000,
+        pinned: Vec::new(),
     }
 }
 

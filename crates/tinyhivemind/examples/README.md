@@ -13,3 +13,16 @@ and each says in its own README what it establishes and what it does not.
 Both need a live endpoint or an agent CLI (`--api-base`/`--agent-cmd`); see
 each example's own README for flags, backend options, and the host
 obligations each run surfaced.
+
+## Dependencies these examples take, and the library does not
+
+`desk` takes three crates as `[dev-dependencies]` of `crates/tinyhivemind`:
+`tinyinference` for the provider layer behind the wrap-up channel and the
+`Digester` port, `tinytools` for rendering the room's tool surface, and
+`anyhow` because `tinytools::Tool` returns it.
+
+None of the three may be a dependency of any crate under `crates/*`, and none
+is: `assert-pure.sh` reads `cargo tree -e normal,build`, which excludes
+dev-dependencies, and a consumer takes the crates as path dependencies and
+never builds an example. See
+[ADR 0013](../../../docs/adr/0013-a-vendored-crate-is-an-example-dependency.md).

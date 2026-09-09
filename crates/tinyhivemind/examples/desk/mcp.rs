@@ -1,69 +1,66 @@
-//! The room as a tool, not as a fence.
+//! Serving the room's tools over MCP, and collecting what a seat called.
 //!
-//! A seat's free text is its *thinking*. What it says to the room is an
-//! action it takes, and this module is the surface it takes it through: a
-//! minimal MCP server the agent CLI spawns and calls, exposing three tools —
-//! `post`, `dm`, and `read`.
-//!
-//! The reason is a defect. A model-authored delimiter is an interface with a
-//! fallible producer: run 26 lost a verified result because a seat closed with
-//! `<<<POST>>> … <<<POST>>>` instead of `<<<POST … POST>>>` and the room
-//! received the three characters `>>>`. A tool call has a schema, the CLI
-//! validates it, and a malformed one is rejected *to the seat*, which can then
-//! try again inside its own turn rather than losing it.
-//!
-//! It also gives agent-to-agent communication a shape. Before this, everything
-//! a seat said went to one shared context and was distinguished only by the
-//! text it happened to contain. Now the address is a field.
+//! Everything about *what* the tools are and *what* a call means lives in
+//! [`tinyhivemind::speech`]: the four specs, their descriptions, the validation,
+//! and the fold from an accepted call to a row. Rendering that surface and
+//! running one call against it lives in [`crate::tools`], shared with the
+//! `tinytools` path. This module is the transport under both — a minimal MCP
+//! server the agent CLI spawns, a JSON-RPC loop, and a per-turn outbox file —
+//! and it decides nothing.
 //!
 //! ## The host still owns storage
 //!
 //! This server never writes the transcript. It appends to a per-turn **outbox**
 //! that the host drains after the process exits, so sequence assignment,
-//! audience resolution through [`aside`](tinyhivemind::aside::aside), mention
-//! resolution and dispatch all stay where they were. A tool call is a request
-//! to speak; the host is still what decides what that means.
+//! audience resolution, mention resolution and dispatch all stay where they
+//! were. A tool call is a request to speak; the host is still what decides what
+//! that means.
 
 use std::{
     fs::{self, OpenOptions},
     io::{BufRead, Write},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
-/// What a seat asked the room for during one turn.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum Utterance {
-    /// A message for the whole desk.
-    Post {
-        /// The text to append.
-        message: String,
+use tinyhivemind::{
+    aside::Audience,
+    dispatch::DispatchConversation,
+    speech::{
+        CommitRequest, Utterance, addressed_peers, check_recipients, commit_utterance, tool_specs,
     },
-    /// A message for named peers only.
-    Dm {
-        /// The peers addressed.
-        to: Vec<String>,
-        /// The text to append.
-        message: String,
-    },
-    /// A message that also asks the desk to close.
-    ///
-    /// The seat is reporting that the work is finished, not ending the desk
-    /// itself: the host still appends the message and still decides. A room
-    /// with no way to say this spends every remaining round being nudged to
-    /// restate an answer it already gave.
-    Close {
-        /// The text to append.
-        message: String,
-    },
+};
+
+use crate::{aside, deskfile, log, room, tools};
+
+/// Where the server looks up what a call means: the desk it is serving, the
+/// transcript behind it, and whose turn is running.
+///
+/// The server is a separate process from the desk loop, so it is handed paths
+/// rather than state. Everything it needs is on disk already, and reading it
+/// per call costs one small file: a seat calls a tool a handful of times in a
+/// turn that runs for minutes.
+#[derive(Clone, Debug)]
+pub(crate) struct Serving {
+    /// Where a turn's calls to the room are collected.
+    pub(crate) outbox: PathBuf,
+    /// The JSONL transcript `read` pages and an aside is priced against.
+    pub(crate) transcript: PathBuf,
+    /// The desk file naming the seats.
+    pub(crate) desk: Option<PathBuf>,
+    /// The file naming the seat whose turn is running.
+    pub(crate) turn: Option<PathBuf>,
 }
 
-impl Utterance {
-    /// The text of the message, whoever it is for.
-    pub(crate) fn message(&self) -> &str {
-        match self {
-            Self::Post { message } | Self::Dm { message, .. } | Self::Close { message } => message,
-        }
+/// Say whose turn is about to run, so the server can price what it says.
+///
+/// Written beside the outbox and truncated with it. A server that cannot read
+/// it answers a `dm` without checking the aside policy, which is the same
+/// answer it gave before this existed.
+pub(crate) fn open_turn(path: &Path, seat_id: &str) {
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
     }
+    let _ = fs::write(path, seat_id);
 }
 
 /// Empty the outbox before a turn, so a turn only ever drains its own calls.
@@ -83,31 +80,10 @@ pub(crate) fn drain_outbox(path: &Path) -> Vec<Utterance> {
     let Ok(text) = fs::read_to_string(path) else {
         return Vec::new();
     };
-    text.lines().filter_map(parse_utterance).collect()
-}
-
-fn parse_utterance(line: &str) -> Option<Utterance> {
-    let value = serde_json::from_str::<serde_json::Value>(line).ok()?;
-    let message = value.get("message")?.as_str()?.trim().to_string();
-    if message.is_empty() {
-        return None;
-    }
-    match value.get("kind")?.as_str()? {
-        "post" => Some(Utterance::Post { message }),
-        "close" => Some(Utterance::Close { message }),
-        "dm" => {
-            let to: Vec<String> = value
-                .get("to")?
-                .as_array()?
-                .iter()
-                .filter_map(|entry| entry.as_str())
-                .map(|entry| entry.trim_start_matches('@').to_string())
-                .filter(|entry| !entry.is_empty())
-                .collect();
-            (!to.is_empty()).then_some(Utterance::Dm { to, message })
-        }
-        _ => None,
-    }
+    text.lines()
+        .filter_map(|line| serde_json::from_str::<Utterance>(line).ok())
+        .filter(|utterance| !utterance.message().trim().is_empty())
+        .collect()
 }
 
 /// The MCP block to merge into the agent CLI's configuration.
@@ -115,29 +91,35 @@ fn parse_utterance(line: &str) -> Option<Utterance> {
 /// The server is this same binary, re-executed. Nothing about it varies per
 /// turn — the outbox is one file the host truncates before each turn — so the
 /// configuration is built once.
-pub(crate) fn config_block(
-    exe: &Path,
-    outbox: &Path,
-    transcript: &Path,
-    existing: Option<&str>,
-) -> String {
+pub(crate) fn config_block(exe: &Path, serving: &Serving, existing: Option<&str>) -> String {
     let mut config = existing
         .and_then(|text| serde_json::from_str::<serde_json::Value>(text).ok())
         .unwrap_or_else(|| serde_json::json!({}));
     if !config.is_object() {
         config = serde_json::json!({});
     }
+    let mut command: Vec<String> = vec![
+        exe.to_string_lossy().into_owned(),
+        "--mcp-server".into(),
+        "--outbox".into(),
+        serving.outbox.to_string_lossy().into_owned(),
+        "--transcript".into(),
+        serving.transcript.to_string_lossy().into_owned(),
+    ];
+    // Both are what let a `desk_dm` be priced against the aside policy inside
+    // the turn that made it, rather than after the process has gone.
+    if let Some(desk) = &serving.desk {
+        command.push("--desk".into());
+        command.push(desk.to_string_lossy().into_owned());
+    }
+    if let Some(turn) = &serving.turn {
+        command.push("--turn".into());
+        command.push(turn.to_string_lossy().into_owned());
+    }
     let block = serde_json::json!({
         "type": "local",
         "enabled": true,
-        "command": [
-            exe.to_string_lossy(),
-            "--mcp-server",
-            "--outbox",
-            outbox.to_string_lossy(),
-            "--transcript",
-            transcript.to_string_lossy(),
-        ],
+        "command": command,
     });
     let object = config.as_object_mut().unwrap_or_else(|| unreachable!());
     let servers = object.entry("mcp").or_insert_with(|| serde_json::json!({}));
@@ -153,10 +135,7 @@ pub(crate) fn config_block(
 ///
 /// Returns a write failure on stdout. A malformed request is answered with a
 /// JSON-RPC error rather than ending the server.
-pub(crate) fn serve(
-    outbox: &Path,
-    transcript: &Path,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub(crate) fn serve(serving: &Serving) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout();
     for line in stdin.lock().lines() {
@@ -179,7 +158,7 @@ pub(crate) fn serve(
             "initialize" => ok(&id, &initialize()),
             "ping" => ok(&id, &serde_json::json!({})),
             "tools/list" => ok(&id, &serde_json::json!({ "tools": tools() })),
-            "tools/call" => match call(&request, outbox, transcript) {
+            "tools/call" => match call(&request, serving) {
                 Ok(text) => ok(
                     &id,
                     &serde_json::json!({ "content": [{ "type": "text", "text": text }] }),
@@ -216,87 +195,28 @@ fn initialize() -> serde_json::Value {
     })
 }
 
+/// The library's tool surface, rendered as MCP tool descriptors.
+///
+/// Nothing here names a tool, writes a description, or decides a bound. It
+/// walks [`tool_specs`] and asks [`tools::parameters_schema`] for each shape,
+/// so the descriptors a seat reads over MCP and the ones it reads through
+/// `tinytools` are rendered from the same statement.
 fn tools() -> serde_json::Value {
-    serde_json::json!([
-        {
-            "name": "post",
-            "description":
-                "Say one thing to the whole desk. This is the only way to speak: text you \
-                 write outside a tool call is your own thinking and reaches nobody. Mention a \
-                 teammate with @id to hand them the next turn — only the first mention does \
-                 that. Call this exactly once, at the end of your turn.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "message": {
-                        "type": "string",
-                        "description":
-                            "What you established, what you did not finish, and the one seat \
-                             you need next — that seat named first.",
-                    },
-                },
-                "required": ["message"],
-            },
-        },
-        {
-            "name": "dm",
-            "description":
-                "Say one thing to named peers instead of the whole desk. Use it to settle a \
-                 disagreement without spending the room's attention; the room is told the \
-                 exchange happened and not what it said. It still costs your one message for \
-                 the turn.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "to": {
-                        "type": "array",
-                        "items": { "type": "string" },
-                        "description": "Seat ids, without the @.",
-                    },
-                    "message": { "type": "string" },
-                },
-                "required": ["to", "message"],
-            },
-        },
-        {
-            "name": "close",
-            "description":
-                "Say one last thing and report that the desk's work is finished. Call this \
-                 instead of `post` only when the task is genuinely done and no seat has an \
-                 open step — a result someone still has to verify is not done. If you are \
-                 being asked again about work you have already delivered, this is the call \
-                 that says so.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "message": {
-                        "type": "string",
-                        "description":
-                            "The result, and why nothing is left open.",
-                    },
-                },
-                "required": ["message"],
-            },
-        },
-        {
-            "name": "read",
-            "description":
-                "Read the desk's recent messages. You are handed a bounded window at the top \
-                 of your turn; call this when you need more of it than you were given.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "limit": {
-                        "type": "integer",
-                        "description": "How many recent messages to return. Default 20, max 100.",
-                    },
-                },
-            },
-        },
-    ])
+    serde_json::Value::Array(
+        tool_specs()
+            .iter()
+            .map(|spec| {
+                serde_json::json!({
+                    "name": spec.name,
+                    "description": spec.description,
+                    "inputSchema": tools::parameters_schema(spec),
+                })
+            })
+            .collect(),
+    )
 }
 
-fn call(request: &serde_json::Value, outbox: &Path, transcript: &Path) -> Result<String, String> {
+fn call(request: &serde_json::Value, serving: &Serving) -> Result<String, String> {
     let name = request
         .pointer("/params/name")
         .and_then(serde_json::Value::as_str)
@@ -305,72 +225,76 @@ fn call(request: &serde_json::Value, outbox: &Path, transcript: &Path) -> Result
         .pointer("/params/arguments")
         .cloned()
         .unwrap_or_else(|| serde_json::json!({}));
-    match name {
-        "post" => {
-            let message = text_argument(&arguments, "message")?;
-            append(
-                outbox,
-                &serde_json::json!({ "kind": "post", "message": message }),
-            )?;
-            Ok("posted to the desk".into())
-        }
-        "close" => {
-            let message = text_argument(&arguments, "message")?;
-            append(
-                outbox,
-                &serde_json::json!({ "kind": "close", "message": message }),
-            )?;
-            Ok("posted to the desk; the desk will close after this turn".into())
-        }
-        "dm" => {
-            let message = text_argument(&arguments, "message")?;
-            let to: Vec<String> = arguments
-                .get("to")
-                .and_then(serde_json::Value::as_array)
-                .map(|entries| {
-                    entries
-                        .iter()
-                        .filter_map(|entry| entry.as_str())
-                        .map(|entry| entry.trim_start_matches('@').to_string())
-                        .filter(|entry| !entry.is_empty())
-                        .collect()
-                })
-                .unwrap_or_default();
-            if to.is_empty() {
-                return Err("`to` must name at least one seat".into());
-            }
-            append(
-                outbox,
-                &serde_json::json!({ "kind": "dm", "to": to, "message": message }),
-            )?;
-            Ok(format!("sent to @{}", to.join(", @")))
-        }
-        "read" => {
-            let limit = arguments
-                .get("limit")
-                .and_then(serde_json::Value::as_u64)
-                .unwrap_or(20)
-                .clamp(1, 100) as usize;
-            Ok(recent(transcript, limit))
-        }
-        other => Err(format!("unknown tool {other}")),
-    }
+    tools::invoke(name, &arguments, serving)
 }
 
-fn text_argument(arguments: &serde_json::Value, key: &str) -> Result<String, String> {
-    let value = arguments
-        .get(key)
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or_default()
-        .trim()
-        .to_string();
-    if value.is_empty() {
-        return Err(format!("`{key}` must be a non-empty string"));
+/// What the room will do with this utterance, before the turn ends.
+///
+/// Returns the reason a requested aside will be declined, or `None` when it
+/// will be honored — and refuses outright, before anything is appended, the one
+/// rejection a seat can act on and is most likely to trip: naming somebody who
+/// is not on the desk.
+///
+/// A server with no desk file to read prices nothing and says so by answering
+/// `None`. That is the behavior this host had before the check existed: the
+/// host still resolves the audience when it drains the outbox, so the row is
+/// never wrong — only the seat is uninformed.
+pub(crate) fn price(utterance: &Utterance, serving: &Serving) -> Result<Option<String>, String> {
+    if !matches!(utterance, Utterance::Dm { .. }) {
+        return Ok(None);
     }
-    Ok(value)
+    let (Some(desk_path), Some(turn_path)) = (&serving.desk, &serving.turn) else {
+        return Ok(None);
+    };
+    let Ok(text) = fs::read_to_string(desk_path) else {
+        return Ok(None);
+    };
+    let Ok(spec) = deskfile::parse(&text) else {
+        return Ok(None);
+    };
+    let Ok(seat_id) = fs::read_to_string(turn_path) else {
+        return Ok(None);
+    };
+    let seat_id = seat_id.trim();
+    if seat_id.is_empty() {
+        return Ok(None);
+    }
+    let room = room::Room::new(&spec);
+    let roster = room.roster();
+    let desks = room.desks();
+    check_recipients(utterance, seat_id, &roster).map_err(|rejection| rejection.to_string())?;
+
+    let rows = log::JsonlLog::open(&serving.transcript)
+        .map(|log| log.rows())
+        .unwrap_or_default();
+    let peers = addressed_peers(utterance, seat_id, &roster, &desks);
+    let committed = commit_utterance(&CommitRequest {
+        utterance,
+        speaker_id: seat_id,
+        conversation: &DispatchConversation {
+            desk_id: spec.id.clone(),
+            thread_root: None,
+        },
+        aside: aside::ASIDES,
+        spent: aside::spent_in_aside(&rows),
+        unsettled: aside::unsettled_aside(&rows, seat_id, &peers),
+        roster: &roster,
+        desks: &desks,
+    })
+    .map_err(|error| error.to_string())?;
+    Ok(match committed.audience {
+        Audience::Aside { .. } => None,
+        Audience::Desk => Some(
+            committed
+                .refusal
+                .map_or_else(|| "no audience".to_string(), |reason| format!("{reason:?}")),
+        ),
+    })
 }
 
-fn append(outbox: &Path, entry: &serde_json::Value) -> Result<(), String> {
+pub(crate) fn append(outbox: &Path, utterance: &Utterance) -> Result<(), String> {
+    let entry = serde_json::to_string(utterance)
+        .map_err(|error| format!("the desk outbox is unavailable: {error}"))?;
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
@@ -380,7 +304,7 @@ fn append(outbox: &Path, entry: &serde_json::Value) -> Result<(), String> {
 }
 
 /// The tail of the transcript, rendered the way a turn's prompt renders it.
-fn recent(transcript: &Path, limit: usize) -> String {
+pub(crate) fn recent(transcript: &Path, limit: usize) -> String {
     let Ok(text) = fs::read_to_string(transcript) else {
         return "(the desk has no messages yet)".into();
     };

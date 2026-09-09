@@ -15,6 +15,8 @@
 
 use std::{collections::HashMap, path::Path, time::Duration};
 
+use tinyhivemind::speech::{Utterance, fence};
+
 use crate::{BoxError, agent, chat, mcp};
 
 /// How many times one turn may be restarted after a stalled stream.
@@ -47,10 +49,13 @@ pub(crate) struct Delivery<'a> {
 
 /// What a turn asked the room to do, once its tool calls are drained.
 pub(crate) struct Said {
-    /// The seats a `desk_dm` addressed; empty for a message to the whole desk.
-    pub(crate) dm_to: Vec<String>,
-    /// Whether the seat reported the desk's work finished.
-    pub(crate) closing: bool,
+    /// The utterance the room commits, as the library names it.
+    ///
+    /// A turn that reached the tools drained one; a turn that fell back to the
+    /// fence, or that was wrapped up by a tool-less completion, spoke to the
+    /// whole desk and is carried as a [`Utterance::Post`] so that every path
+    /// out of a turn commits through the same fold.
+    pub(crate) utterance: Utterance,
 }
 
 /// Run one turn and get something out of it, or nothing at all.
@@ -65,7 +70,7 @@ pub(crate) struct Said {
 ///
 /// Returns a spawn or wait failure from the agent CLI. A model that answers
 /// nothing is not an error here; it is the ladder's whole reason for existing.
-pub(crate) fn deliver(
+pub(crate) async fn deliver(
     delivery: &Delivery<'_>,
     prompt: &str,
     sessions: &mut HashMap<String, String>,
@@ -129,11 +134,20 @@ pub(crate) fn deliver(
     // What the seat said, it said by calling a tool. Free text is its own
     // thinking and reaches nobody; the fence remains only as a fallback for
     // an agent CLI that cannot reach the desk's tools.
-    let said = settle(delivery.outbox, &mut output);
-    if !output.timed_out && !output.message.trim().is_empty() {
+    //
+    // The gate is whether the seat *spoke*, not whether it produced text. A
+    // turn whose provider fails mid-flight still leaves its narration in
+    // `output.message`, and a host that reads that as speech appends
+    // "Let me verify the small cases" to the transcript as though it were a
+    // message — which is what run 29 did on both of its turns, twice
+    // stranding twenty minutes of real work behind a sentence that addressed
+    // nobody.
+    if !output.timed_out
+        && let Some(said) = settle(delivery.outbox, &mut output)
+    {
         return Ok(Some((output, said)));
     }
-    let Some(said) = land(delivery, prompt, &mut output, sessions, tokens)? else {
+    let Some(said) = land(delivery, prompt, &mut output, sessions, tokens).await? else {
         return Ok(None);
     };
     Ok(Some((output, said)))
@@ -152,7 +166,7 @@ pub(crate) fn deliver(
 /// # Errors
 ///
 /// Returns a spawn or wait failure from the agent CLI.
-fn land(
+async fn land(
     delivery: &Delivery<'_>,
     prompt: &str,
     output: &mut agent::TurnOutput,
@@ -207,8 +221,18 @@ fn land(
     if let Some(id) = landed.session.clone() {
         sessions.insert(delivery.seat_id.to_string(), id);
     }
-    let said = settle(delivery.outbox, &mut landed);
-    let salvage = if !landed.posted || landed.message.trim().is_empty() {
+    // The landing's whole purpose is to get the work onto disk, so what it
+    // wrote is exactly what the room most needs told about. Without this the
+    // feedthrough row reports the *working* turn's files and silently omits
+    // the ones the rescue produced — which is every file, on a turn that ran
+    // out of budget before it wrote anything.
+    absorb_written(output, &landed);
+    if let Some(said) = settle(delivery.outbox, &mut landed) {
+        println!("   landed in the seat's own session, files included");
+        output.message = said.utterance.message().to_string();
+        return Ok(Some(said));
+    }
+    let salvage = {
         let wrap = format!(
             "{prompt}\n\n## What you actually ran this turn\n{}\n\nYou have no \
              tools. Your working turn ended before you posted anything. Write the \
@@ -218,57 +242,90 @@ fn land(
              something, say it is not established.",
             agent::truncate_work_log(&output.work_log)
         );
-        let text = delivery.wrapup.complete(&wrap);
-        if !text.trim().is_empty() {
-            println!("   wrap-up posted through the router with no tools attached");
+        // One retry, and only for a failure that says trying again could
+        // work. A refusal answered twice is a refusal; a rate limit answered
+        // once is a turn thrown away for a reason the provider named.
+        let mut answer = delivery.wrapup.complete(&wrap).await;
+        if answer.worth_retrying() {
+            println!("   wrap-up is worth one more attempt; retrying");
+            answer = delivery.wrapup.complete(&wrap).await;
         }
-        agent::extract_post(&text)
-    } else {
-        println!("   landed in the seat's own session, files included");
-        landed.message
+        match &answer {
+            chat::Outcome::Answered(_) => {
+                println!("   wrap-up posted through the router with no tools attached");
+            }
+            other => println!("   !! the wrap-up channel produced nothing: {other:?}"),
+        }
+        fence::extract_post(answer.text())
     };
     if salvage.trim().is_empty() {
         println!("   !! nothing salvaged; the seat forfeits this turn");
         return Ok(None);
     }
-    output.message = salvage;
-    Ok(Some(said))
+    output.message.clone_from(&salvage);
+    // The tool-less rung has no tool to call, so what it produced is a post
+    // to the whole desk or it is nothing.
+    Ok(Some(Said {
+        utterance: Utterance::Post { message: salvage },
+    }))
 }
 
-/// Take what a turn said through the room's tools, over what it narrated.
+/// Fold a rescue turn's written paths into the turn the room is told about.
+///
+/// Order is the order they were written, the working turn's first, and a path
+/// written in both phases is named once.
+fn absorb_written(output: &mut agent::TurnOutput, landed: &agent::TurnOutput) {
+    for path in &landed.files_written {
+        if !output.files_written.contains(path) {
+            output.files_written.push(path.clone());
+        }
+    }
+}
+
+/// What a turn said to the room, or `None` when it said nothing.
+///
+/// Three outcomes, and the third is the one worth naming. A seat that called a
+/// room tool spoke; a seat that wrote a fence spoke, because the fence is the
+/// documented fallback for an agent CLI that cannot reach the tools. A seat
+/// that did neither *narrated*, and narration reaches nobody — that is what
+/// [`agent::TurnOutput::posted`] has always meant, and returning it as a
+/// message is how twenty minutes of real work reached the room as
+/// "Let me verify the small cases and understand the structure better."
 ///
 /// A seat may call `desk_post` more than once — it is told not to, and it will
 /// anyway. The last call stands: a seat that posts a partial result and then a
 /// settled one meant the second, and one message per turn is the rule the whole
 /// design rests on.
-fn settle(outbox: &Path, output: &mut agent::TurnOutput) -> Said {
+fn settle(outbox: &Path, output: &mut agent::TurnOutput) -> Option<Said> {
     let spoken = mcp::drain_outbox(outbox);
-    let Some(utterance) = spoken.last() else {
-        return Said {
-            dm_to: Vec::new(),
-            closing: false,
-        };
-    };
-    if spoken.len() > 1 {
-        println!(
-            "   {} messages this turn; the last one stands",
-            spoken.len()
-        );
+    if let Some(utterance) = spoken.last() {
+        if spoken.len() > 1 {
+            println!(
+                "   {} messages this turn; the last one stands",
+                spoken.len()
+            );
+        }
+        output.message = utterance.message().to_string();
+        output.posted = true;
+        return Some(Said {
+            utterance: utterance.clone(),
+        });
     }
-    output.message = utterance.message().to_string();
-    output.posted = true;
-    match utterance {
-        mcp::Utterance::Post { .. } => Said {
-            dm_to: Vec::new(),
-            closing: false,
-        },
-        mcp::Utterance::Dm { to, .. } => Said {
-            dm_to: to.clone(),
-            closing: false,
-        },
-        mcp::Utterance::Close { .. } => Said {
-            dm_to: Vec::new(),
-            closing: true,
-        },
+    // No tool call. The fence is the documented fallback for an agent CLI
+    // that cannot reach the desk's tools, and `posted` is exactly whether one
+    // was written — so a fenced message still counts as speech.
+    if output.posted && !output.message.trim().is_empty() {
+        println!("   spoke through the fence rather than the tools");
+        return Some(Said {
+            utterance: Utterance::Post {
+                message: output.message.clone(),
+            },
+        });
     }
+    // Everything else is thinking. It reaches nobody, and saying so here is
+    // what stops it reaching the transcript instead.
+    None
 }
+
+#[cfg(test)]
+mod test;

@@ -82,6 +82,15 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a complete sample.
   notebook a seat carries between turns, the one feedthrough row a turn that
   wrote files leaves behind, and the brief appended once. First slice lives in
   the `desk` example.
+- [`folding-by-size.md`](folding-by-size.md) — draft: the standing account
+  folds when the room is large rather than only when it is long, stated as a
+  character budget a host writes as a token budget, so a seat joining a big
+  room is always handed an account of it.
+- [`the-utterance-surface.md`](the-utterance-surface.md) — draft: the algebra of
+  what a seat says moves out of the `desk` example and into
+  `tinyhivemind::speech` — the tool descriptions as data, one fold from an
+  utterance to a row, and a policy refusal that reaches its author while the
+  turn is still running. The mention grammar keeps the routing.
 - [`thoughts-and-channels.md`](thoughts-and-channels.md) — draft: a seat's
   output text is its own thinking and it reaches the room through tools with a
   schema (`desk_post`, `desk_dm`, `desk_read`); a channel carries one bounded,

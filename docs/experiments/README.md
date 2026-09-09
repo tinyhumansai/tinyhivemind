@@ -34,6 +34,7 @@ does.
 | [2026-09-07](2026-09-07-why-asides-lose.md) | Why did asides lose, and what is peer information actually worth? | +9 to +31 points for the information; the floor turn was what cost too much |
 | [2026-09-07](2026-09-07-pe1006-desk.md) | Can a desk of real agents close one genuinely hard problem? | The harness works; the problem is not closed |
 | [2026-09-09](2026-09-09-topology-at-scale.md) | At what room size does the channel start to matter, and which channel? | Every floor-bound mechanism reaches 0% on a hidden profile by 32 members; only an off-floor aimed check survives, and a federation of twelve desks exhausts itself answering referrals |
+| [2026-09-09](2026-09-09-run29-narration-as-speech.md) | Does the account fold on a live run? | Aborted at turn 2: a router rung advance killed both turns, and the host delivered their narration as speech. Both fixed; nothing about folding established |
 | [2026-09-09](2026-09-09-desk-lessons.md) | What should be built next after PE 1006? | Working notes and measurements from runs 21–27 |
 | [2026-09-08](2026-09-08-pe1006-tool-room.md) | Does a tool-call room with a standing account beat a fenced one? | PE 1006 solved; re-reading fell to 3% of calls, but no fold ever fired |
 
@@ -53,6 +54,10 @@ happened, then what to build because of it.
 [`2026-09-08-pe1006-tool-room.md`](2026-09-08-pe1006-tool-room.md) closes that
 thread: the desk finally solves PE 1006, and the record separates the part of
 the win that was measured from the mechanism that never ran.
+[`2026-09-09-run29-narration-as-speech.md`](2026-09-09-run29-narration-as-speech.md)
+is the first attempt to run that mechanism, and is a defect report rather than
+a measurement: it establishes nothing about folding and two things about how a
+turn can fail without anybody noticing.
 
 The harnesses that produce these numbers are documented in
 [`../../crates/tinyhivemind-hive/examples/bench/README.md`](../../crates/tinyhivemind-hive/examples/bench/README.md)
