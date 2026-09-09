@@ -448,13 +448,13 @@ mod test {
                 .find(|topic| **topic != truth)
                 .cloned()
         });
-        let Some(lifted) = lifted else {
-            panic!("a room of four options has a decoy")
-        };
-        assert_eq!(
-            reading(&poisoned, &lifted) - reading(&clean, &lifted),
-            POISON_LIFT,
-        );
+        assert!(lifted.is_some(), "a room of four options has a decoy");
+        if let Some(lifted) = lifted {
+            assert_eq!(
+                reading(&poisoned, &lifted) - reading(&clean, &lifted),
+                POISON_LIFT,
+            );
+        }
     }
 
     /// A soloist handed every peer's brief carries `agents` times what one
