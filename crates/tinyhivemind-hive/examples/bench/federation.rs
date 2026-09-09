@@ -38,15 +38,23 @@ const DESK_NAMES: [(&str, &str); 4] = [
 /// The same kind of bound as [`MAX_MEMBERS`]: a spending limit, not a property
 /// of the library, which places no ceiling on how many channels a referral may
 /// cross. Beyond the four named desks the names are generated.
-const MAX_DESKS: usize = 64;
+const MAX_DESKS: usize = 256;
 
 /// The id and label of desk `index`, for a federation of any size.
 ///
 /// The first four keep the names every recorded swarm number was written
 /// against, so those numbers reproduce exactly rather than approximately.
+///
+/// A generated label carries **no whitespace**, and that is load-bearing
+/// rather than cosmetic. [`crate::swarm::format::readings`] identifies a desk
+/// on the wire by the single word preceding `reads`, so a label of `Desk 12`
+/// puts `12` on the wire while [`crate::swarm::member::SwarmSim::absorb`]
+/// matches against the display name `Desk 12` — the two never agree and every
+/// reading crossing a generated desk is silently dropped. That made the swarm
+/// wire protocol quietly broken above four desks.
 fn desk_at(index: usize) -> (String, String) {
     DESK_NAMES.get(index).map_or_else(
-        || (format!("desk{index}"), format!("Desk {index}")),
+        || (format!("desk{index}"), format!("Desk-{index}")),
         |(id, label)| ((*id).to_string(), (*label).to_string()),
     )
 }
