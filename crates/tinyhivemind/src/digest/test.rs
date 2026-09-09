@@ -202,11 +202,11 @@ fn digest_values_pin_deterministic_wire_shapes() {
 #[test]
 fn leaves_a_channel_shorter_than_the_live_tail_alone() {
     assert_eq!(
-        plan_digest(None, Sequence(12), DigestPolicy::DEFAULT),
+        plan_digest(None, ChannelHead::at(Sequence(12)), DigestPolicy::DEFAULT),
         DigestPlan::Current
     );
     assert_eq!(
-        plan_digest(None, Sequence(30), DigestPolicy::DEFAULT),
+        plan_digest(None, ChannelHead::at(Sequence(30)), DigestPolicy::DEFAULT),
         DigestPlan::Current
     );
 }
@@ -216,11 +216,11 @@ fn waits_for_slack_to_accumulate_behind_the_live_tail() {
     // Twenty rows behind the tail is the threshold, and it is not crossed by
     // reaching it: folding on every row would spend a call to move one message.
     assert_eq!(
-        plan_digest(None, Sequence(50), DigestPolicy::DEFAULT),
+        plan_digest(None, ChannelHead::at(Sequence(50)), DigestPolicy::DEFAULT),
         DigestPlan::Current
     );
     assert_eq!(
-        plan_digest(None, Sequence(51), DigestPolicy::DEFAULT),
+        plan_digest(None, ChannelHead::at(Sequence(51)), DigestPolicy::DEFAULT),
         DigestPlan::Fold {
             after: None,
             through: Sequence(21)
@@ -231,7 +231,7 @@ fn waits_for_slack_to_accumulate_behind_the_live_tail() {
 #[test]
 fn advances_by_at_most_one_input_limit_per_fold() {
     assert_eq!(
-        plan_digest(None, Sequence(400), DigestPolicy::DEFAULT),
+        plan_digest(None, ChannelHead::at(Sequence(400)), DigestPolicy::DEFAULT),
         DigestPlan::Fold {
             after: None,
             through: Sequence(60)
