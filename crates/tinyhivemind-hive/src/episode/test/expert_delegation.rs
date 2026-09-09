@@ -31,7 +31,7 @@ fn delegating() -> EpisodePolicy {
             window: 100,
             ..DirectoryPolicy::DEFAULT
         }),
-        ..EpisodePolicy::DEFAULT
+        ..sequential()
     }
 }
 
@@ -65,7 +65,7 @@ fn a_zero_defer_cap_is_rejected() {
     let room = Room::new();
     let policy = EpisodePolicy {
         defer_cap: Some(0),
-        ..EpisodePolicy::DEFAULT
+        ..sequential()
     };
     let error = step(
         &state(),
@@ -92,7 +92,7 @@ fn a_zero_directory_half_life_is_rejected_even_when_the_budget_is_spent() {
             half_life: 0,
             ..DirectoryPolicy::DEFAULT
         }),
-        ..EpisodePolicy::DEFAULT
+        ..sequential()
     };
     let error = step(
         &state(),
@@ -121,13 +121,13 @@ fn an_episode_without_a_directory_reaches_the_same_decision_as_before() {
     // compared against a second `DEFAULT` run, which would only assert that
     // the default agrees with itself: a change to what the default decides has
     // to fail here.
-    let converged = speaking(run(&room, &state(), &converging(), &EpisodePolicy::DEFAULT));
+    let converged = speaking(run(&room, &state(), &converging(), &sequential()));
     assert_eq!(converged.agent_id, "planner");
     assert_eq!(converged.reason, BidReason::Addressed);
     assert_eq!(converged.phase, Phase::Commit);
 
     assert_eq!(
-        run(&room, &state(), &deadlocked(), &EpisodePolicy::DEFAULT),
+        run(&room, &state(), &deadlocked(), &sequential()),
         HiveStep::Deadlocked {
             topics: vec!["stage".into(), "ship".into()],
         },
@@ -136,7 +136,7 @@ fn an_episode_without_a_directory_reaches_the_same_decision_as_before() {
     // The hidden profile the delegating policy solves: without a directory the
     // floor goes to the proposer on ordinary salience, and the scout's
     // uncited fact stays uncited.
-    let unrouted = speaking(run(&room, &state(), &unheard(), &EpisodePolicy::DEFAULT));
+    let unrouted = speaking(run(&room, &state(), &unheard(), &sequential()));
     assert_eq!(unrouted.agent_id, "planner");
     assert_eq!(unrouted.reason, BidReason::Salience);
     assert_eq!(unrouted.phase, Phase::Deliberate);
@@ -147,10 +147,10 @@ fn an_episode_without_a_directory_reaches_the_same_decision_as_before() {
         let off = EpisodePolicy {
             directory: None,
             defer_cap: None,
-            ..EpisodePolicy::DEFAULT
+            ..sequential()
         };
         assert_eq!(
-            run(&room, &state(), &transcript, &EpisodePolicy::DEFAULT),
+            run(&room, &state(), &transcript, &sequential()),
             run(&room, &state(), &transcript, &off),
         );
     }
