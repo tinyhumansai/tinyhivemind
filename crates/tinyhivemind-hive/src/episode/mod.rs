@@ -505,35 +505,38 @@ fn context<'a>(
 /// only trace authors would keep a room blind forever if any member never
 /// happens to cast a formal vote.
 fn visibility(policy: &EpisodePolicy, live: &[&SessionMessage], members: &[&str]) -> Visibility {
-    if unheard(live, members) == 0 || !policy.blind_round {
+    if unheard(live, members).is_empty() || !policy.blind_round {
         Visibility::Full
     } else {
         Visibility::Blind
     }
 }
 
-/// How many members have not yet authored a live turn this episode.
+/// Which members have not yet authored a live turn this episode.
 ///
-/// The blind round is exactly this many turns long, so it is also the width a
-/// blind round may usefully take: authorizing more would spend turns on
-/// members that have already been heard, and end the blind round somewhere
-/// past its own boundary. "Heard" means *authored a live turn*, not
-/// *deposited a trace* — a member that speaks plain prose with no `!marker`
-/// still took its turn, and counting only trace authors would keep a room
-/// blind forever if any member never happens to cast a formal vote.
-fn unheard(live: &[&SessionMessage], members: &[&str]) -> usize {
-    let heard = members
+/// The blind round is exactly this many turns long, so its length is also the
+/// width a blind round may usefully take: authorizing more would spend turns
+/// on members that have already been heard, and end the blind round somewhere
+/// past its own boundary. The *identities* returned are what a blind round
+/// must pick from — bounding only the count would still let `floor_round`
+/// reselect a heard member whose bid outranks an unheard one's. "Heard" means
+/// *authored a live turn*, not *deposited a trace* — a member that speaks
+/// plain prose with no `!marker` still took its turn, and counting only trace
+/// authors would keep a room blind forever if any member never happens to
+/// cast a formal vote.
+fn unheard<'a>(live: &[&SessionMessage], members: &[&'a str]) -> Vec<&'a str> {
+    members
         .iter()
+        .copied()
         .filter(|member| {
-            live.iter().any(|message| match &message.author {
-                SessionAuthor::Agent { id, .. } => id == **member,
+            !live.iter().any(|message| match &message.author {
+                SessionAuthor::Agent { id, .. } => id == *member,
                 SessionAuthor::Operator
                 | SessionAuthor::Person { .. }
                 | SessionAuthor::System { .. } => false,
             })
         })
-        .count();
-    members.len().saturating_sub(heard)
+        .collect()
 }
 
 /// Raise the speaker's threshold and lower everyone else's.
