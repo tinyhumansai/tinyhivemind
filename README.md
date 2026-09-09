@@ -62,8 +62,9 @@ The shape of it is a loop, and your application holds both ends:
       Converged · Deadlocked · Exhausted · Idle ◀────┘
 ```
 
-Nothing in the box on the right opens a file, a socket or a database. It reads
-what you hand it and returns what should happen next.
+`Speak { turns }` above is shorthand for `Speak { turns, next_state }`, kept
+off the diagram to stay narrow, not because it stopped mattering. Nothing in
+the box on the right opens a file, a socket or a database — it reads what you hand it and returns what should happen next.
 
 ## The mechanics
 
@@ -273,11 +274,11 @@ answers is the answer:
     │
     ├─ budget spent? ─────────────────────────▶ Exhausted { spent }
     ├─ quorum, and phase = Commit? ───────────▶ Converged { topic, .. }
-    ├─ quorum, and phase = Deliberate? ───────▶ Speak { the commit turn }
-    │                                           and the phase flips, once
+    ├─ quorum, and phase = Deliberate? ───────▶ Speak { turns, next_state }
+    │                                           one commit turn; phase flips
     ├─ two topics carry, nobody to break it ──▶ Deadlocked { topics }
     │
-    └─ highest bid clears its threshold? ─────▶ Speak { turn }
+    └─ highest bid clears its threshold? ─────▶ Speak { turns, next_state }
                                     otherwise ▶ Idle
 ```
 
@@ -332,11 +333,10 @@ that gets *wider* — several sub-decisions at once — it flips:
 | rows one participant holds | 20 | 40 → 20 | 80 → 20 | 160 → 32 |
 
 At one facet they are identical and the room is the wrong tool. From two on, a
-seat's accuracy is flat in width where the soloist's decays — a seat never holds
-the facets it is not deciding — and eight facets cost two rounds, not eight. The
-advantage is entirely the context window, and it is bought by dividing the work
-along a line where competence differs; divide it anywhere else and it vanishes.
-[Task variety](https://github.com/tinyhumansai/tinyhivemind/wiki/Task-variety) has the controls.
+seat's accuracy stays flat in width where the soloist's decays — a seat never
+holds facets it is not deciding — and eight facets cost two rounds, not eight.
+The advantage is the context window, bought by dividing along a line where
+competence differs; divide it anywhere else and it vanishes. [Task variety](https://github.com/tinyhumansai/tinyhivemind/wiki/Task-variety) has the controls.
 
 ## Not an agent council
 

@@ -9,7 +9,8 @@ resolves it to `sim/mod.rs` transparently.
 | file | what it holds |
 | --- | --- |
 | `main.rs` | the crate doc, the `mod` declarations, and top-level dispatch: `main`, `stats_check`, `run`, `trace`, and the `sweep_*` entry points |
-| `cli.rs` | `Options`, `Mode`, and command-line parsing |
+| `cli/mod.rs` | `Options`, `Mode`, and command-line parsing |
+| `cli/test.rs` | unit tests for CLI flag parsing |
 | `policy.rs` | `default_policy`, `tuned_policy`, and the delegation-arm policy variants built from it |
 | `compare.rs` | the simulated multi-arm comparison engine: `compare`, `Totals`, `run_arms`, `endings`, and the cost table |
 | `backend.rs` | seat/backend configuration shared by both live drivers: API keys, HTTP config, seat model and command resolution, usage accounting |
@@ -29,7 +30,8 @@ resolves it to `sim/mod.rs` transparently.
 | `run/{turns,scoring}.rs` | per-turn machinery (audience, appending a turn, one exchange), then `EpisodeReport`, `Tally`, and an episode's accounting |
 | `arms.rs` | the `ladder`, `vote`, `merged` and federated controls |
 | `scale.rs` | `--scale-sweep`: room size against channel topology, one table per axis |
-| `horizon.rs` | the chain ladder: a task with several stages, the arms that decide one, and the soloist controls |
+| `horizon/mod.rs` | the chain ladder: a task with several stages, the arms that decide one, and the soloist controls |
+| `horizon/test.rs` | its unit tests, promoted out to match the house convention |
 | `variety/mod.rs` | the variety ladder: a task with several facets at once, one owner each, and whether splitting them across seats beats holding them all. `hive+fold` asks `tinyhivemind_hive::division` who owns what rather than deciding for itself |
 | `variety/test.rs` | its unit tests, promoted out when the sweep passed the file cap |
 | `sweep.rs` | the policy grid and its ranking |

@@ -40,9 +40,11 @@
 //! A hive mind is normally built as fan-out — publish a task, wake N agents,
 //! gather the replies — and the failure of that shape is that nothing bounds
 //! it. [`HiveStep::Speak`] carries a **round**: the [`HiveTurn`]s authorized to
-//! run concurrently, at most [`EpisodePolicy::round_width`] of them, plus the
-//! one [`EpisodeState`] the episode takes once all of them are appended. The
-//! bound is the invariant; the serialization it replaced never was.
+//! run concurrently, at most [`EpisodePolicy::round_width`] of them while the
+//! round is blind or [`EpisodePolicy::revealed_width`] of them once it is
+//! revealed, plus the one [`EpisodeState`] the episode takes once all of them
+//! are appended. The bound is the invariant; the serialization it replaced
+//! never was.
 //!
 //! Independence is still bought as [`Visibility`] rather than hoped for, and a
 //! round strengthens it rather than threatening it: members writing at the same

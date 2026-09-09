@@ -449,7 +449,17 @@ fn apply_expertise_flag(
         }
         "--roles" => options.roles = true,
         "--fidelity" => {
-            if let Some(value) = args.next().and_then(|raw| raw.parse::<f64>().ok()) {
+            // `f64::parse` accepts `"nan"`, `"inf"` and `"-inf"`, and
+            // `f64::clamp` leaves a `NaN` exactly as it found it rather than
+            // bounding it, so an unfiltered non-finite value would reach
+            // `ContextBudget::worth` and poison every folded row's score.
+            // Reject it the same way an unparsable value already is: leave
+            // the prior value in place.
+            if let Some(value) = args
+                .next()
+                .and_then(|raw| raw.parse::<f64>().ok())
+                .filter(|value| value.is_finite())
+            {
                 options.fidelity = value.clamp(0.0, 1.0);
             }
         }
@@ -559,3 +569,6 @@ fn flag_number(args: &[String], flag: &str) -> Option<u32> {
     let at = args.iter().position(|argument| argument == flag)?;
     args.get(at + 1)?.parse().ok()
 }
+
+#[cfg(test)]
+mod test;
