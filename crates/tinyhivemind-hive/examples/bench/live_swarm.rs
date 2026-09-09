@@ -331,6 +331,17 @@ fn live_federation(options: &Options, scenario: &Scenario) -> Result<(), String>
         &mut members,
         &policy,
         swarm_referrals(),
+        // A live federation asks off the floor too, and for the same reason a
+        // simulated one does: a desk that spends its authorized turns asking
+        // has none left to decide with. `--ask-cap 0` puts it back on the
+        // floor, which is what every recorded live run used.
+        if options.ask_cap == 0 {
+            AskChannel::OnFloor
+        } else {
+            AskChannel::OffFloor {
+                cap: options.ask_cap,
+            }
+        },
         &scenario.brief(),
         true,
     )?;

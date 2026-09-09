@@ -120,6 +120,14 @@ pub(crate) struct Options {
     pub(crate) history: u32,
     /// Print one flat JSON object per arm, ahead of the tables.
     pub(crate) json: bool,
+    /// Questions one desk may put to other channels, off the floor.
+    ///
+    /// `0` puts asking back on the floor, where a member spends the turn the
+    /// episode authorized on it and every peer may be asked once — the
+    /// behaviour every recorded swarm number was taken against, and the one
+    /// that collapses above roughly eight desks. Above `0` a desk asks without
+    /// taking a turn, at most this many times, however many peers it has.
+    pub(crate) ask_cap: usize,
     /// Threads the per-room loops are spread across.
     ///
     /// A wall-clock knob and nothing else: rooms are independent and results
@@ -204,6 +212,13 @@ impl Options {
             exchange_cap: 4,
             history: 3,
             json: false,
+            // Two, because one outside reading is already enough to overturn
+            // a desk's decoy at the default bias — see `SWARM_BIAS` above —
+            // and a second covers the case where the first peer asked shares
+            // the blind spot. It is a default, not a finding: `--ask-cap`
+            // exists because the right width depends on what a question costs
+            // the host.
+            ask_cap: 2,
             jobs: crate::parallel::default_jobs(),
             timeout: 180,
             api_base: None,
@@ -323,6 +338,10 @@ impl Options {
                 "--scenario" => options.scenario = args.next(),
                 "--repeat" => options.repeat = next_number(&mut args).unwrap_or(1).max(1),
                 "--json" => options.json = true,
+                "--ask-cap" => {
+                    options.ask_cap =
+                        usize::try_from(next_number(&mut args).unwrap_or(2)).unwrap_or(2);
+                }
                 "--jobs" => {
                     options.jobs = usize::try_from(next_number(&mut args).unwrap_or(1))
                         .unwrap_or(1)
