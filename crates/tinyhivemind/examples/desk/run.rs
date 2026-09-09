@@ -48,6 +48,9 @@ const WRAP_UP_TIMEOUT: Duration = Duration::from_secs(600);
 /// the host is still what writes it.
 const OUTBOX: &str = ".desk/outbox.jsonl";
 
+/// Where the host says whose turn is running, for the server serving it.
+const TURN: &str = ".desk/turn";
+
 /// How long the room's standing account may be, in characters.
 ///
 /// Roughly a page: enough to carry what has been established and by whom, and
