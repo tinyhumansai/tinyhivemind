@@ -4,7 +4,7 @@
 //! quietly dropped from bidding and from the carried thresholds.
 
 use super::super::*;
-use super::support::{spoke, Room, converging, desks, member, run, sequential, state};
+use super::support::{Room, converging, desks, member, run, sequential, spoke, state};
 use tinyhivemind::{Conversation, Sequence};
 
 #[test]
@@ -83,11 +83,7 @@ fn a_retired_member_neither_bids_nor_holds_a_threshold() {
     room.retired = vec!["scout".into()];
     let (turn, next) = spoke(run(&room, &state(), &converging(), &sequential()));
     assert_ne!(turn.agent_id, "scout");
-    assert!(
-        next.thresholds
-            .iter()
-            .all(|held| held.agent_id != "scout"),
-    );
+    assert!(next.thresholds.iter().all(|held| held.agent_id != "scout"),);
 }
 
 #[test]

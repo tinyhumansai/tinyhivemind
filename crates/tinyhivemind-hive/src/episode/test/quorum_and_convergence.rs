@@ -5,7 +5,9 @@
 //! can carry a topic there at all.
 
 use super::super::*;
-use super::support::{spoke, Room, converging, conversation, operator, run, said, sequential, speaking, state};
+use super::support::{
+    Room, converging, conversation, operator, run, said, sequential, speaking, spoke, state,
+};
 use crate::trace::TopicId;
 use tinyhivemind::Sequence;
 
@@ -33,9 +35,7 @@ fn quorum_flips_the_phase_once_and_then_converges() {
     // Once the authorized speaker actually commits the carried topic, the
     // episode reports its decision.
     transcript.push(said(4, &turn.agent_id, "!commit #stage Locking this in."));
-    let HiveStep::Converged { topic, standing } =
-        run(&room, &next, &transcript, &policy)
-    else {
+    let HiveStep::Converged { topic, standing } = run(&room, &next, &transcript, &policy) else {
         panic!("expected convergence")
     };
     assert_eq!(topic, TopicId("stage".into()));

@@ -546,7 +546,8 @@ fn run_round(
         if let Some(trace) = log.trace.as_deref_mut() {
             trace.push(trace_line(turn, &content, visible.len()));
         }
-        log.tally.record(turn, &content, agent.cost_unit(), *log.turns);
+        log.tally
+            .record(turn, &content, agent.cost_unit(), *log.turns);
         append_turn(host, turn, content, private, aside_mode, members);
         last = Some(turn.clone());
         *log.turns = log.turns.saturating_add(1);
@@ -603,7 +604,10 @@ pub(crate) fn drive_with(
         step_calls = step_calls.saturating_add(1);
 
         let (ending, decided) = match decision.map_err(|error| error.to_string())? {
-            HiveStep::Speak { turns: round, next_state } => {
+            HiveStep::Speak {
+                turns: round,
+                next_state,
+            } => {
                 let last = run_round(
                     &mut host,
                     agents,

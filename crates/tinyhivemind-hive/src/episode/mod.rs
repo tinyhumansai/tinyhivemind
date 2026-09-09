@@ -154,6 +154,18 @@ pub fn step(
 
     let commit_boundary = next_commit_boundary(state, phase, at);
     let visibility = visibility(policy, &live, &members);
+    // The round boundary is the newest row of *any* kind, not the newest row
+    // the fold counted. `at` is the last desk row authored by a member, so a
+    // private aside addressed to this very turn can sit above it — and a
+    // boundary at `at` would withhold a row the member is entitled to read and
+    // that predates the round. What the boundary must separate is what existed
+    // when the round was authorized from what the round itself writes.
+    let round_start = transcript
+        .iter()
+        .map(|message| message.sequence)
+        .max()
+        .unwrap_or(state.watermark)
+        .max(state.watermark);
     let speakers: Vec<&str> = round.iter().map(|bid| bid.agent_id.as_str()).collect();
     // `round.len() <= remaining` by the clamp above, so this cannot exceed
     // `turn_budget` and cannot saturate; the saturating form keeps the
@@ -170,7 +182,7 @@ pub fn step(
             visibility,
             reason: bid.reason,
             watermark: state.watermark,
-            round_start: at,
+            round_start,
         })
         .collect();
 

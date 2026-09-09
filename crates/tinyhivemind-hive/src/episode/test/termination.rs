@@ -4,7 +4,7 @@
 //! past its budget.
 
 use super::super::*;
-use super::support::{spoke, MEMBERS, Room, converging, operator, run, said, sequential, state};
+use super::support::{MEMBERS, Room, converging, operator, run, said, sequential, spoke, state};
 
 #[test]
 fn a_speaking_step_authorizes_exactly_one_turn() {

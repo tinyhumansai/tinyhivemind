@@ -9,8 +9,9 @@ use tinyhivemind_hive::{
     SessionMessage, TRACE_CAP,
     attention::{BidContext, bids},
     desk::{Desk, DeskSet, ResponderMode},
-    directory, exchange, read,
+    directory,
     episode::{HiveStep, Phase, Visibility, project_for},
+    exchange, read,
     roster::{Roster, RosterMember},
     standings, step,
 };

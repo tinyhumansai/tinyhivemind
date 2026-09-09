@@ -4,7 +4,9 @@
 //! contested topic rather than to ordinary salience.
 
 use super::super::*;
-use super::support::{Room, converging, deadlocked, operator, run, said, sequential, speaking, state};
+use super::support::{
+    Room, converging, deadlocked, operator, run, said, sequential, speaking, state,
+};
 use crate::{attention::BidReason, directory::DirectoryPolicy};
 
 /// A room arguing an ungrounded decoy while the scout's fact goes unheard.
