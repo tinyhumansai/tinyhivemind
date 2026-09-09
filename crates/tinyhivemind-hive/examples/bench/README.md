@@ -201,21 +201,21 @@ The two refutation arms lose, which is why both knobs are off in
 `hive+ev` starves the room — it fails to decide two episodes in five. [The benchmark write-up](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks)
 has the tables behind each of those, across desk sizes, plus what the benchmark does not show.
 
-## A task with a horizon
+## A horizon, and two cost columns
 
-Every mode above measures one decision. `--stages` runs a chain of them and adds
-the control the library's claim is about: one agent working a long task,
-compacting as it goes. A room beats an *evicting* soloist once the window is
-tight, and never beats a *summarising* one. [`HORIZON.md`](HORIZON.md) has the
-tables.
+Every mode above measures one decision, priced in turns. Two additions change
+both halves of that.
 
-## Depth and width
+`--stages` runs a **chain** of decisions and adds the control the library's
+claim is about — one agent working a long task, compacting as it goes. A room
+beats an *evicting* soloist once the window is tight, and never beats a
+*summarising* one. [`HORIZON.md`](HORIZON.md).
 
-`turns/ep` is what the budget bounds; `rounds/ep` beside it is what a host with
-async seats waits for. The two were one number until ADR 0014, which charged
-`vote` fifteen turns for what is **one round** of fifteen independent answers.
-Widening a blind round is free and widening a revealed one is not, which is why
-the policy carries two bounds. [`DEPTH.md`](DEPTH.md) has the tables.
+`rounds/ep` sits beside `turns/ep`: depth beside width, what a host with async
+seats waits for beside what the budget bounds. The two were one number until
+ADR 0014, which charged `vote` fifteen turns for what is one round of fifteen
+independent answers. Widening a blind round is free and widening a revealed one
+is not, which is why the policy carries two bounds. [`DEPTH.md`](DEPTH.md).
 
 ## Statistics
 
