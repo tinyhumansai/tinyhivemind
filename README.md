@@ -322,9 +322,9 @@ honest section on what none of it shows.
 
 A room is not a longer agent — it is a **wider** one, and the benchmark is
 specific about where that line falls. On a task that merely gets *longer*, a
-single agent compacting by a superseding account wins at every horizon and pays
-a seventh of the depth to do it. On a task that gets *wider* — several
-sub-decisions at once, each wanting a different kind of attention — it flips:
+single agent compacting by a superseding account wins at every horizon, at a
+seventh of the depth. On a task that gets *wider* — several
+sub-decisions at once, each wanting different attention — it flips:
 
 | facets in one task | 1 | 2 | 4 | 8 |
 | --- | --- | --- | --- | --- |
