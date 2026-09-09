@@ -13,6 +13,7 @@ use tinyhivemind_hive::{DirectoryPolicy, EpisodePolicy, QuorumPolicy};
 /// whole episode so the two hive arms differ only in the knobs the sweep moved.
 pub(crate) fn default_policy() -> EpisodePolicy {
     EpisodePolicy {
+        round_width: SEQUENTIAL,
         quorum: QuorumPolicy {
             window: 100,
             ..QuorumPolicy::DEFAULT
@@ -20,6 +21,16 @@ pub(crate) fn default_policy() -> EpisodePolicy {
         ..EpisodePolicy::DEFAULT
     }
 }
+
+/// The width every published arm runs at.
+///
+/// `EpisodePolicy::DEFAULT` runs wider rounds, because a seat is an async
+/// session. Every number recorded before ADR 0014 was measured at width one,
+/// and an arm that silently changed width would make a comparison against
+/// those numbers meaningless — so the published arms ask for width one and the
+/// concurrency arms ask for what they are testing. `--round-width` overrides
+/// it, and `docs/experiments/` carries what the wider rounds scored.
+pub(crate) const SEQUENTIAL: u32 = 1;
 
 /// The policy `--sweep` picks, scaled to the size of the desk.
 ///
@@ -43,6 +54,7 @@ pub(crate) fn default_policy() -> EpisodePolicy {
 pub(crate) fn tuned_policy(agents: usize) -> EpisodePolicy {
     EpisodePolicy {
         turn_budget: turn_budget(agents),
+        round_width: SEQUENTIAL,
         blind_round: true,
         dominance_cap: 40,
         repetition_cap: 2,
