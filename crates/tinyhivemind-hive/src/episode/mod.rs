@@ -176,7 +176,7 @@ fn authorized(
     policy: &EpisodePolicy,
     bids: &[crate::attention::Bid],
     members: &[&str],
-    round: Round<'_>,
+    round: &Round<'_>,
 ) -> HiveStep {
     // The room records one decision, so a commit round is one turn wide
     // however wide the policy allows. Widening it would let two members record
