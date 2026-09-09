@@ -325,6 +325,12 @@ fn exchange_round(
         // visibility, same watermark, this reader's audience.
         let as_member = HiveTurn {
             agent_id: member.clone(),
+            round_start: host
+                .journal
+                .iter()
+                .map(|message| message.sequence)
+                .max()
+                .unwrap_or(last.round_start),
             ..last.clone()
         };
         let started = Instant::now();
