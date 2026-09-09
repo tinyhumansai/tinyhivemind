@@ -313,3 +313,99 @@ fn reading_a_desk_that_has_not_spoken_says_so() {
         Ok("(the desk has no messages yet)".into()),
     );
 }
+
+#[test]
+fn a_dm_the_policy_will_honour_is_acknowledged_as_sent() {
+    let dir = scratch("dm-ok");
+    let serving = priced(&dir, "solver");
+    clear_outbox(&serving.outbox);
+    let _ = fs::remove_file(&serving.transcript);
+    assert_eq!(
+        call(
+            &request(
+                "dm",
+                serde_json::json!({ "to": ["checker"], "message": "recheck the depth" })
+            ),
+            &serving
+        ),
+        Ok("sent to @checker".into()),
+    );
+}
+
+#[test]
+fn a_dm_naming_somebody_who_is_not_here_is_refused_before_it_is_written() {
+    let dir = scratch("dm-unknown");
+    let serving = priced(&dir, "solver");
+    clear_outbox(&serving.outbox);
+    assert_eq!(
+        call(
+            &request(
+                "dm",
+                serde_json::json!({ "to": ["johnny"], "message": "hello" })
+            ),
+            &serving
+        ),
+        Err("`to` names @johnny, who is not an active seat on this desk".into()),
+    );
+    assert!(
+        drain_outbox(&serving.outbox).is_empty(),
+        "nothing the room cannot deliver reaches the outbox",
+    );
+}
+
+#[test]
+fn a_dm_the_policy_will_refuse_says_so_while_the_seat_can_still_act() {
+    let dir = scratch("dm-refused");
+    let serving = priced(&dir, "solver");
+    clear_outbox(&serving.outbox);
+    // Six private rows is the budget; a seventh cannot join the same aside.
+    let spent: String = (1..=6)
+        .map(|sequence| {
+            format!(
+                "{{\"sequence\":{sequence},\"author\":{{\"type\":\"agent\",\"id\":\"solver\",\
+                  \"label\":\"Solver\"}},\"content\":\"...\",\
+                  \"audience\":{{\"kind\":\"aside\",\"members\":[\"checker\"]}}}}\n"
+            )
+        })
+        .collect();
+    fs::write(&serving.transcript, spent).expect("writes");
+    let answer = call(
+        &request(
+            "dm",
+            serde_json::json!({ "to": ["checker"], "message": "one more" }),
+        ),
+        &serving,
+    )
+    .expect("a refused aside is still a delivered message");
+    assert!(
+        answer.contains("refused") && answer.contains("BudgetSpent"),
+        "the seat is told why, by name: {answer}",
+    );
+    assert!(
+        answer.contains("whole desk"),
+        "and told where the message went instead: {answer}",
+    );
+    assert_eq!(
+        drain_outbox(&serving.outbox).len(),
+        1,
+        "failing toward the room: the message is still said",
+    );
+}
+
+#[test]
+fn a_server_with_no_desk_to_read_still_serves_a_dm() {
+    let outbox = scratch("dm-unpriced").join("said.jsonl");
+    clear_outbox(&outbox);
+    assert_eq!(
+        call(
+            &request(
+                "dm",
+                serde_json::json!({ "to": ["checker"], "message": "recheck" })
+            ),
+            &serving(&outbox, Path::new("/nope"))
+        ),
+        Ok("sent to @checker".into()),
+        "the host resolves the audience when it drains; only the seat is uninformed",
+    );
+    assert_eq!(drain_outbox(&outbox).len(), 1);
+}
