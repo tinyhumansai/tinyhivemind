@@ -467,9 +467,23 @@ fn run_arms(options: &Options, rooms: &[Room]) -> Result<(Totals, std::time::Dur
     let knowing = knowing_policy(&tuned);
     let deferring = deferring_policy(&tuned, options.defer_cap);
     let both = knowing_deferring_policy(&tuned, options.defer_cap);
-    let mut totals = Totals::default();
     let wall = Instant::now();
-    for (index, room) in rooms.iter().enumerate() {
+    // Each room is decided into totals of its own, in a worker, and those are
+    // merged here in room order. The body below is exactly the sequential
+    // fold it replaced — what changed is who owns the `Totals` it folds into.
+    // See `crate::parallel` for why the merge order is not a detail.
+    let per_room: Vec<Totals> = parallel::map_in_order(rooms, options.jobs, |room| {
+        let index = rooms
+            .as_ptr_range()
+            .start
+            .addr()
+            .abs_diff(std::ptr::from_ref(room).addr())
+            / size_of::<Room>();
+        let mut totals = Totals::default();
+        let totals_ref = &mut totals;
+        {
+            let totals = totals_ref;
+
         totals
             .hive_default
             .add(&run_episode(room, &default, TASK, false)?);
@@ -523,8 +537,17 @@ fn run_arms(options: &Options, rooms: &[Room]) -> Result<(Totals, std::time::Dur
         totals
             .vote
             .add_arm(&arms::run_vote(room, tuned.turn_budget));
+    
+        }
+        Ok(totals)
+    })?;
+
+    let mut totals = Totals::default();
+    for chunk in &per_room {
+        totals.merge(chunk);
     }
     Ok((totals, wall.elapsed()))
+
 }
 
 /// Print how each deliberating arm's episodes ended.
