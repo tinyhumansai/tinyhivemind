@@ -33,6 +33,7 @@
 //! | `chat.rs` | the tool-less wrap-up channel |
 //! | `deskfile.rs` | parsing the plain-text desk file |
 //! | `log.rs` | the JSONL-backed `SessionLog` |
+//! | `room.rs` | the roster and desk snapshots both processes fold over |
 //! | `memory.rs` | CortexDB recall and capture |
 
 mod agent;
@@ -47,6 +48,7 @@ mod memory;
 mod notebook;
 mod prompt;
 mod queue;
+mod room;
 mod run;
 mod turn;
 

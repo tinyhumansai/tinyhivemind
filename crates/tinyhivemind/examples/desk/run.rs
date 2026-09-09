@@ -14,7 +14,6 @@ use tinyhivemind::{
     Digester, MentionDispatchOutcome, Sequence, SessionAuthor, SessionQuery, TeamBriefing,
     apply_digest,
     aside::{Audience, Viewer},
-    desk::{Desk, DeskSet, ResponderMode},
     dispatch::{
         DispatchConversation, DispatchKey, MentionDispatchInput, MentionDispatchPolicy,
         dispatch_mention,
@@ -23,7 +22,6 @@ use tinyhivemind::{
     mention::{MentionAuthor, resolve},
     refold,
     responder::{ResponderRequest, SelectionPolicy, choose_responder},
-    roster::{Person, Roster, RosterMember},
     sharing::{SharingPlan, SharingQuery, SharingState, initialized_state, prepare_delta},
     speech::{CommitRequest, addressed_peers, commit_utterance},
 };
@@ -33,6 +31,7 @@ use crate::{
     aside, chat,
     cli::Options,
     deskfile, digest, log, mcp, memory,
+    room,
     notebook::{files_written, read_notebook},
     prompt::compose_prompt,
     queue::{DeskQueue, PendingTurn},
@@ -66,27 +65,9 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
     let spec = deskfile::parse(&fs::read_to_string(&options.desk)?)?;
     fs::create_dir_all(&options.workspace)?;
 
-    let members: Vec<RosterMember> = spec
-        .agents
-        .iter()
-        .map(|seat| RosterMember {
-            id: seat.id.clone(),
-            name: Some(seat.label.clone()),
-        })
-        .collect();
-    let people = vec![Person {
-        id: spec.person_id.clone(),
-        label: spec.person_label.clone(),
-    }];
-    let roster = Roster::new(&members, &people, &[]);
-    let declared = [Desk {
-        id: spec.id.clone(),
-        name: spec.name.clone(),
-        description: None,
-        members: spec.agents.iter().map(|seat| seat.id.clone()).collect(),
-        responder_mode: ResponderMode::Lead,
-    }];
-    let desks = DeskSet::new(&declared, &[], &[], &[], &[]);
+    let room = room::Room::new(&spec);
+    let roster = room.roster();
+    let desks = room.desks();
     roster.validate()?;
     desks.validate()?;
 
