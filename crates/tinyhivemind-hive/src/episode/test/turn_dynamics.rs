@@ -149,6 +149,17 @@ fn a_continuing_wide_blind_round_selects_the_unheard_member_over_a_louder_heard_
     let policy = EpisodePolicy {
         round_width: 2,
         revealed_width: 2,
+        // A three-member desk with the default two-supporter threshold would
+        // already be at quorum once `planner` and `critic` are both counted,
+        // flipping the phase to `Commit` -- which this fix deliberately
+        // leaves unfiltered (see the comment on `authorized`). Raise the
+        // threshold so the room is still genuinely deliberating, and the
+        // round under test is closing the blind phase rather than
+        // announcing a decision.
+        quorum: crate::quorum::QuorumPolicy {
+            threshold: 3,
+            ..crate::quorum::QuorumPolicy::DEFAULT
+        },
         ..EpisodePolicy::DEFAULT
     };
     let transcript = vec![
