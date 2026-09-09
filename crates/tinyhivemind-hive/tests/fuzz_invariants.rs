@@ -438,6 +438,7 @@ fn a_round_is_bounded_distinct_and_accounted_for() {
         for width in 1..=u32::try_from(MEMBERS.len()).expect("a desk this small fits") {
             let policy = EpisodePolicy {
                 round_width: width,
+                revealed_width: width,
                 ..EpisodePolicy::DEFAULT
             };
             let Ok(HiveStep::Speak { turns, next_state }) =
@@ -490,6 +491,7 @@ fn a_round_of_one_is_the_sequential_episode() {
     let desk_set = DeskSet::new(&rooms, &[], &[], &[], &retired);
     let narrow = EpisodePolicy {
         round_width: 1,
+        revealed_width: 1,
         ..EpisodePolicy::DEFAULT
     };
 
@@ -540,6 +542,7 @@ fn a_zero_round_width_is_rejected() {
     let desk_set = DeskSet::new(&rooms, &[], &[], &[], &retired);
     let policy = EpisodePolicy {
         round_width: 0,
+        revealed_width: 1,
         ..EpisodePolicy::DEFAULT
     };
     assert!(matches!(

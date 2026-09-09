@@ -546,6 +546,7 @@ fn knows_surfaces_an_uncited_fact_in_a_hidden_profile_transcript() -> Result<(),
         // out ahead of the rest -- so it runs the sequential episode. A wide
         // round would carry the fact-holder either way and assert nothing.
         round_width: 1,
+        revealed_width: 1,
         ..EpisodePolicy::DEFAULT
     };
     let delegating = EpisodePolicy {

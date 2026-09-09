@@ -14,6 +14,7 @@ use tinyhivemind_hive::{DirectoryPolicy, EpisodePolicy, QuorumPolicy};
 pub(crate) fn default_policy() -> EpisodePolicy {
     EpisodePolicy {
         round_width: SEQUENTIAL,
+        revealed_width: SEQUENTIAL,
         quorum: QuorumPolicy {
             window: 100,
             ..QuorumPolicy::DEFAULT
@@ -55,6 +56,7 @@ pub(crate) fn tuned_policy(agents: usize) -> EpisodePolicy {
     EpisodePolicy {
         turn_budget: turn_budget(agents),
         round_width: SEQUENTIAL,
+        revealed_width: SEQUENTIAL,
         blind_round: true,
         dominance_cap: 40,
         repetition_cap: 2,
@@ -137,6 +139,25 @@ pub(crate) fn widened_policy(tuned: &EpisodePolicy, width: u32) -> EpisodePolicy
     }
     EpisodePolicy {
         round_width: width,
+        revealed_width: width,
+        ..*tuned
+    }
+}
+
+/// The tuned policy widened **only while the room is blind**.
+///
+/// The free half of concurrency, on its own. A blind member cannot read a
+/// peer's row whether or not it runs concurrently with that peer, so this arm
+/// should score exactly what `hive+` scores while waiting fewer times. It is
+/// the control that separates the depth a round buys from the information a
+/// wide *revealed* round spends.
+pub(crate) fn blind_wide_policy(tuned: &EpisodePolicy, width: u32) -> EpisodePolicy {
+    if width == 0 {
+        return *tuned;
+    }
+    EpisodePolicy {
+        round_width: width,
+        revealed_width: SEQUENTIAL,
         ..*tuned
     }
 }

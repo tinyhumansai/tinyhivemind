@@ -12,6 +12,7 @@ fn the_policy_and_state_pin_their_wire_forms() {
         serde_json::json!({
             "turn_budget": 12,
             "round_width": 4,
+            "revealed_width": 1,
             "blind_round": true,
             "dominance_cap": 50,
             "repetition_cap": 3,

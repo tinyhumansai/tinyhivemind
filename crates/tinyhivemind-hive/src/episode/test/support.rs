@@ -132,6 +132,7 @@ pub(super) fn run(
 pub(super) fn sequential() -> EpisodePolicy {
     EpisodePolicy {
         round_width: 1,
+        revealed_width: 1,
         ..EpisodePolicy::DEFAULT
     }
 }
