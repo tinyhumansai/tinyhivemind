@@ -100,7 +100,9 @@ impl SimAgent {
     ///
     /// The read half of [`Self::set_blind_evidence`], for a caller that needs
     /// to confirm the flag actually reached a room a sweep constructor built
-    /// rather than the default room-generation path.
+    /// rather than the default room-generation path. `cfg(test)` because
+    /// nothing in the harness itself reads the flag back once set.
+    #[cfg(test)]
     pub(crate) fn blind_evidence(&self) -> bool {
         self.blind_evidence
     }
