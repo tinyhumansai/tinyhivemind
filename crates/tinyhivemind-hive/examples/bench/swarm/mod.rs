@@ -434,6 +434,44 @@ pub(crate) fn run_swarm(
     })
 }
 
+/// Group a federation's members by the desk they sit on, in seating order.
+///
+/// The scheduler only ever reaches a member through the desk it sits on — a
+/// turn, an answer to a referral, an off-floor ask, and the line every member
+/// of a desk absorbs are all desk-local — so holding the seats grouped is both
+/// the shape the work has and the shape that makes it cheap: a lookup inside
+/// one desk rather than a scan across every member of every desk.
+///
+/// It is also what lets the desks run at the same time. Each desk's seats are
+/// a distinct `Vec`, so a mutable borrow of one desk's seats is disjoint from
+/// every other desk's, and a scoped thread per desk needs no shared state and
+/// no unsafe code.
+///
+/// A member named by a channel that is not in `members` is skipped rather than
+/// faked; the desk simply has one fewer seat, and the scheduler reports the
+/// missing name if it is ever asked for.
+pub(crate) fn group_by_desk<'a>(
+    channels: &[Channel],
+    members: impl Iterator<Item = &'a mut dyn SwarmMember>,
+) -> Vec<Vec<&'a mut dyn SwarmMember>> {
+    let mut loose: Vec<Option<&'a mut dyn SwarmMember>> = members.map(Some).collect();
+    channels
+        .iter()
+        .map(|channel| {
+            channel
+                .members
+                .iter()
+                .filter_map(|wanted| {
+                    let at = loose.iter().position(|held| {
+                        held.as_ref().is_some_and(|member| member.id() == wanted)
+                    })?;
+                    loose[at].take()
+                })
+                .collect()
+        })
+        .collect()
+}
+
 /// The channels a federation's desks describe.
 pub(crate) fn channels(federation: &Federation) -> Vec<Channel> {
     federation
