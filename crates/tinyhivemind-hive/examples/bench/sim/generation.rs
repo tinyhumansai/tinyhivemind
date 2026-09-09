@@ -64,9 +64,7 @@ pub(super) fn draw_expertise(
             // owner index — which is what lets `--facets` say who is
             // responsible for what without asking the weather.
             let owner = owner.min(agent_count.saturating_sub(1));
-            for holder in &mut expert_of {
-                *holder = Some(owner);
-            }
+            expert_of.fill(Some(owner));
         }
         Expertise::HiddenProfile => {
             let candidates: Vec<usize> = (0..topic_count)
