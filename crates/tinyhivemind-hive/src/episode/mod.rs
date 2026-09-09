@@ -427,18 +427,25 @@ fn readable(turn: &HiveTurn, message: &SessionMessage) -> bool {
         return true;
     }
     match turn.visibility {
-        // Concurrent rows only, and only on the floor. A round authorizes
-        // *floor* turns, so it is desk rows it withholds: a private row is
-        // governed by its audience, which `project_as` applies after this, and
-        // is never part of the round. Scoping the clause this way is also what
-        // keeps a private row from moving the episode at all — `round_start`
-        // is folded from desk rows, so appending an aside cannot shift it, and
-        // the addition invariant in `tests/fuzz_invariants.rs` holds.
+        // Concurrent rows, floor or private alike. A round authorizes turns
+        // that must decide exactly as they would arriving one at a time, and
+        // a private row an earlier speaker appends *during* the round is just
+        // as concurrent as a floor row would be — an audience match does not
+        // make it any less written mid-round. So the cutoff applies uniformly
+        // to every peer-authored row rather than exempting private ones; only
+        // audience elision (applied afterward, by `project_as`) tells a
+        // member of the aside from an outsider.
+        //
+        // This does not let a private row move the round boundary itself:
+        // `round_start` is folded from desk rows only (`live_traces`), so
+        // appending an aside cannot shift it, and the addition invariant in
+        // `tests/fuzz_invariants.rs` still holds. It only means a private row
+        // above that boundary is as withheld as a floor row would be.
         //
         // At `round_width: 1` nothing is above `round_start` when the turn
         // composes, so this withholds nothing and a round of one is
         // bit-identical to the sequential episode.
-        Visibility::Full => !message.audience.is_desk() || message.sequence <= turn.round_start,
+        Visibility::Full => message.sequence <= turn.round_start,
         // The whole episode. `round_start` is the last desk row folded and
         // every folded row is above the watermark, so the watermark is always
         // the stricter of the two — a blind turn reads no peer row authored
