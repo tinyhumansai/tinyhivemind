@@ -664,3 +664,183 @@ fn passes_a_history_through_untouched_when_there_is_no_account() {
     assert_eq!(composed.covered_through, None);
     assert_eq!(composed.messages, messages);
 }
+
+#[test]
+fn folds_a_short_channel_that_has_grown_expensive() {
+    // Twenty-four rows is four past the live tail and inside `fold_after`, so
+    // the row trigger declines. On a desk writing derivations that is already
+    // more scrollback than a seat should be handed.
+    let policy = DigestPolicy {
+        fold_after_chars: 50_000,
+        ..DigestPolicy::DEFAULT
+    };
+    let short = ChannelHead {
+        sequence: Sequence(34),
+        unfolded_chars: 50_000,
+    };
+    assert_eq!(
+        plan_digest(None, short, policy),
+        DigestPlan::Current,
+        "at the threshold is not past it",
+    );
+    let grown = ChannelHead {
+        sequence: Sequence(34),
+        unfolded_chars: 50_001,
+    };
+    assert_eq!(
+        plan_digest(None, grown, policy),
+        DigestPlan::Fold {
+            after: None,
+            through: Sequence(4),
+        },
+        "either threshold is enough, and the step is bounded as always",
+    );
+}
+
+#[test]
+fn a_channel_of_short_rows_still_folds_on_the_row_count_alone() {
+    let policy = DigestPolicy {
+        fold_after_chars: 0,
+        ..DigestPolicy::DEFAULT
+    };
+    assert_eq!(
+        plan_digest(
+            None,
+            ChannelHead {
+                sequence: Sequence(400),
+                unfolded_chars: usize::MAX,
+            },
+            policy,
+        ),
+        DigestPlan::Fold {
+            after: None,
+            through: Sequence(60),
+        },
+        "zero disables the size trigger however large the channel is",
+    );
+}
+
+#[test]
+fn a_live_tail_that_is_large_on_its_own_is_never_folded() {
+    // The tail is delivered verbatim, always. A room whose `keep_live` rows
+    // alone exceed the budget has a `keep_live` set too large, and that is the
+    // host's error to make rather than one compaction can fix.
+    assert_eq!(
+        plan_digest(
+            None,
+            ChannelHead {
+                sequence: Sequence(30),
+                unfolded_chars: 10_000_000,
+            },
+            DigestPolicy::from_token_budget(1),
+        ),
+        DigestPlan::Current,
+    );
+}
+
+#[test]
+fn an_account_that_already_covers_the_channel_is_not_refolded_by_size() {
+    let held = held(370, "so far");
+    assert_eq!(
+        plan_digest(
+            Some(&held),
+            ChannelHead {
+                sequence: Sequence(400),
+                unfolded_chars: usize::MAX,
+            },
+            DigestPolicy::DEFAULT,
+        ),
+        DigestPlan::Current,
+        "there is nothing above the tail left to fold, whatever it weighs",
+    );
+}
+
+#[test]
+fn a_token_budget_becomes_a_character_threshold_and_nothing_else() {
+    let policy = DigestPolicy::from_token_budget(50_000);
+    assert_eq!(
+        policy.fold_after_chars,
+        50_000 * DigestPolicy::CHARS_PER_TOKEN,
+    );
+    assert_eq!(policy.keep_live, DigestPolicy::DEFAULT.keep_live);
+    assert_eq!(policy.fold_after, DigestPolicy::DEFAULT.fold_after);
+    assert_eq!(policy.input_limit, DigestPolicy::DEFAULT.input_limit);
+    assert_eq!(policy.budget_chars, DigestPolicy::DEFAULT.budget_chars);
+    assert_eq!(
+        DigestPolicy::from_token_budget(usize::MAX).fold_after_chars,
+        usize::MAX,
+        "a budget nobody could spend saturates rather than wrapping to nothing",
+    );
+    assert_eq!(
+        DigestPolicy::from_token_budget(0).fold_after_chars,
+        0,
+        "no budget is the disabled state, not a fold on every turn",
+    );
+}
+
+#[test]
+fn a_head_with_no_count_plans_exactly_as_it_did_before() {
+    for sequence in [12_u64, 30, 50, 51, 400] {
+        assert_eq!(
+            plan_digest(None, ChannelHead::at(Sequence(sequence)), DigestPolicy::DEFAULT),
+            plan_digest(
+                None,
+                ChannelHead {
+                    sequence: Sequence(sequence),
+                    unfolded_chars: 0,
+                },
+                DigestPolicy::DEFAULT,
+            ),
+        );
+    }
+}
+
+#[tokio::test]
+async fn the_fold_is_told_which_of_its_rows_the_room_pinned() {
+    let log = FakeLog::new(vec![page(1, 40)]);
+    let digester = ScriptedDigester::new(vec!["an account".into()]);
+    let board = [
+        pin(Sequence(3)),
+        pin(Sequence(9)),
+        // Above the live tail's floor: still a row the reader sees in full,
+        // so the fold is not answerable for it.
+        pin(Sequence(38)),
+        // Named twice by two markers, and named once here.
+        pin(Sequence(3)),
+    ];
+    refold(
+        &log,
+        Some(&digester),
+        &conversation(),
+        None,
+        ChannelHead::at(Sequence(40)),
+        &board,
+        DigestPolicy::DEFAULT,
+    )
+    .await
+    .expect("folds");
+    let seen = digester.seen();
+    assert_eq!(
+        seen[0].pinned,
+        vec![Sequence(3), Sequence(9)],
+        "ascending, deduplicated, and nothing above `through`",
+    );
+}
+
+#[tokio::test]
+async fn a_fold_with_no_pins_is_told_so_rather_than_guessing() {
+    let log = FakeLog::new(vec![page(1, 40)]);
+    let digester = ScriptedDigester::new(vec!["an account".into()]);
+    refold(
+        &log,
+        Some(&digester),
+        &conversation(),
+        None,
+        ChannelHead::at(Sequence(40)),
+        &[],
+        DigestPolicy::DEFAULT,
+    )
+    .await
+    .expect("folds");
+    assert!(digester.seen()[0].pinned.is_empty());
+}
