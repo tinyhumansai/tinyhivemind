@@ -351,10 +351,11 @@ fn live_federation(options: &Options, scenario: &Scenario) -> Result<(), String>
 
     // See the matching comment in `live_round`: a plain loop rather than
     // `.collect()` keeps dropck from extending `seated`'s borrow.
-    let mut members: Vec<&mut dyn SwarmMember> = Vec::new();
+    let mut loose: Vec<&mut dyn SwarmMember> = Vec::new();
     for member in &mut seated {
-        members.push(member.as_mut());
+        loose.push(member.as_mut());
     }
+    let mut members = swarm::group_by_desk(&channels, loose.into_iter());
     let wall = Instant::now();
     let report = swarm::drive_swarm(
         &channels,
