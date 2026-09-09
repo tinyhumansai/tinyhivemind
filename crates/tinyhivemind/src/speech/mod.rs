@@ -297,6 +297,47 @@ pub fn check_recipients(
     Ok(())
 }
 
+/// The active peers one utterance addresses, without its author and without
+/// repeats, in the order they were written.
+///
+/// A `dm` addresses the seats its `to` field names. Anything else addresses
+/// whoever its text mentions. A host needs this to answer the bookkeeping
+/// questions [`aside`] asks of it — whether a prior aside among these same
+/// participants is still unsettled — and asking it here means the host does
+/// not re-derive an audience the fold has already decided.
+#[must_use]
+pub fn addressed_peers(
+    utterance: &Utterance,
+    speaker_id: &str,
+    roster: &Roster<'_>,
+    desks: &DeskSet<'_>,
+) -> Vec<String> {
+    let mentions = match utterance {
+        Utterance::Dm { to, .. } => targets(to),
+        other => {
+            let author = MentionAuthor::Agent {
+                id: speaker_id.to_string(),
+            };
+            resolve(other.message(), None, &author, roster, desks)
+        }
+    };
+    let mut ordered: Vec<&Mention> = mentions.iter().collect();
+    ordered.sort_by_key(|mention| mention.offset);
+    let mut peers: Vec<String> = Vec::new();
+    for mention in ordered {
+        if mention.quiet {
+            continue;
+        }
+        if let MentionTarget::Agent { id } = &mention.target
+            && id != speaker_id
+            && !peers.contains(id)
+        {
+            peers.push(id.clone());
+        }
+    }
+    peers
+}
+
 /// Whether a message's own text hands the turn to somebody other than its author.
 fn names_a_peer(mentions: &[Mention], speaker_id: &str) -> bool {
     mentions.iter().any(|mention| {

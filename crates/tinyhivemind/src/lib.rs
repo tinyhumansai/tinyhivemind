@@ -96,7 +96,8 @@ pub use search::{
 };
 pub use speech::{
     CallArguments, CommitRequest, CommittedUtterance, ToolCall, ToolParameter, ToolSpec,
-    Utterance, UtteranceRejection, check_recipients, commit_utterance, interpret, tool_specs,
+    Utterance, UtteranceRejection, addressed_peers, check_recipients, commit_utterance, interpret,
+    tool_specs,
 };
 pub use session::{
     Conversation, Elision, LogMessage, PAGE_SIZE, SCAN_LIMIT, SESSION_WINDOW, Sequence,
