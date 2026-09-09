@@ -101,7 +101,9 @@ impl SimAgent {
     ///
     /// Read only by the tests that assert a sweep's own room constructor did
     /// not silently drop `--blind-evidence`. The field is private and a turn
-    /// reads it directly; this exists so a test does not have to.
+    /// reads it directly, so this is `cfg(test)` rather than dead weight in
+    /// the built benchmark.
+    #[cfg(test)]
     pub(crate) fn opens_with_evidence(&self) -> bool {
         self.blind_evidence
     }
