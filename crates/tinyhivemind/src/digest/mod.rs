@@ -19,7 +19,7 @@
 //!    growing without bound or being asked to forget. It is host state, of
 //!    exactly the kind [`SharingState`](crate::SharingState) already is.
 //! 2. **The account folds only what every member may read.** Rows outside
-//!    [`Audience::Desk`] are skipped, so one account serves every member of
+//!    [`Audience::Desk`](tinyhivemind_core::aside::Audience::Desk) are skipped, so one account serves every member of
 //!    the channel — including one that has never spoken — and no fold can
 //!    launder a private row into a shared summary.
 //! 3. **The rows survive.** Folding changes what a turn is *shown*, never what
