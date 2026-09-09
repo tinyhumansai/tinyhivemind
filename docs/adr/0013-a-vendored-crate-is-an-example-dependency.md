@@ -1,6 +1,6 @@
 # 13. A vendored crate may back an example and never a library crate
 
-- **Status:** Proposed
+- **Status:** Accepted — implemented
 - **Date:** 2026-09-09
 
 ## Context
@@ -41,7 +41,9 @@ example**. It may never be a dependency of `tinyhivemind-core`,
 Concretely:
 
 - `tinytools` and `tinyinference` are declared under `[dev-dependencies]` in
-  `crates/tinyhivemind/Cargo.toml`, as **git dependencies pinned by revision**.
+  `crates/tinyhivemind/Cargo.toml`, as **git dependencies pinned by revision**,
+  alongside `anyhow`, which `tinytools::Tool` returns and which therefore has
+  to be nameable to implement it.
   They are not submodules, so `.gitmodules` is unchanged and a consumer
   initializing recursively gains nothing new.
 - A consumer takes `crates/*` as path dependencies and never builds the
