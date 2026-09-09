@@ -232,12 +232,13 @@ fn run(options: &Options) -> Result<(), String> {
 
     match &options.mode {
         // Handled above, before the single-desk rooms were generated.
-        Mode::Swarm | Mode::StatsCheck => Ok(()),
+        // Handled above, each before the rooms this arm of the match would
+        // have needed were generated.
+        Mode::Swarm | Mode::StatsCheck | Mode::ScaleSweep => Ok(()),
         Mode::Compare => compare(options, &rooms),
         Mode::Trace => trace(&rooms, &options.policy),
         Mode::Sweep => sweep_policies(options, &rooms),
         Mode::ContextSweep => sweep_context(options, &rooms),
-        Mode::ScaleSweep => Ok(()),
         Mode::Live => live_episode(options),
     }
 }

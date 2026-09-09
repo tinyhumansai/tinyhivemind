@@ -71,6 +71,13 @@ pub(crate) const TOPIC_NAMES: [&str; 8] = [
     "stage", "ship", "revert", "shadow", "canary", "freeze", "split", "pilot",
 ];
 
+/// The largest room this harness will build, as a `u32`.
+///
+/// Declared first and widened into [`MAX_MEMBERS`] rather than the other way
+/// round, so the refutation cap below is a plain constant rather than a cast
+/// that has to argue it cannot truncate.
+const MAX_MEMBERS_U32: u32 = 256;
+
 /// The largest room this harness will build.
 ///
 /// Not a property of the library, which has no room-size limit — a bound on
@@ -78,7 +85,7 @@ pub(crate) const TOPIC_NAMES: [&str; 8] = [
 /// swept size costs every arm at once, and a room of a thousand members would
 /// spend minutes per size to answer a question the shape of the curve already
 /// answers by a hundred.
-pub(crate) const MAX_MEMBERS: usize = 256;
+pub(crate) const MAX_MEMBERS: usize = MAX_MEMBERS_U32 as usize;
 
 /// Names and roles drawn on, in order, for a room's first eight members.
 ///
@@ -154,7 +161,7 @@ const SOCIAL_WEIGHT: i32 = 25;
 /// has nothing to do with the room being larger. The recorded numbers at five
 /// members are unaffected either way, because every cap the arms actually pass
 /// is far below both.
-const REACHABLE_REFUTATION_CAP: u32 = MAX_MEMBERS as u32;
+const REACHABLE_REFUTATION_CAP: u32 = MAX_MEMBERS_U32;
 /// How far below its own choice a participant will still close a decision out.
 ///
 /// A room whose members each hold out for a private preference nobody else
