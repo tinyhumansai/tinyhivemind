@@ -50,6 +50,7 @@ use crate::TASK;
 use crate::arms;
 use crate::cli::Options;
 use crate::metrics::Aggregate;
+use crate::parallel;
 use crate::policy::tuned_policy;
 use crate::rng::mix;
 use crate::run::{
@@ -63,6 +64,21 @@ use crate::sim::{Expertise, MAX_MEMBERS, Room};
 /// orders of magnitude, and a linear ladder spends most of its time where
 /// nothing changes.
 pub(crate) const DEFAULT_SIZES: [usize; 6] = [3, 5, 8, 16, 32, 64];
+
+/// What every channel decided about one room.
+///
+/// One room's worth of work, so a worker can produce it without touching any
+/// other room and the parent can fold the lot in room order. Every field is
+/// the report of the arm named after it in the table.
+struct RoomOutcome {
+    ladder: crate::arms::ArmReport,
+    vote: crate::arms::ArmReport,
+    broadcast: crate::run::EpisodeReport,
+    on_floor: crate::run::EpisodeReport,
+    rounds: crate::run::EpisodeReport,
+    off_floor: crate::run::EpisodeReport,
+    pooled: crate::run::EpisodeReport,
+}
 
 /// One arm's score at one room size.
 struct Point {
