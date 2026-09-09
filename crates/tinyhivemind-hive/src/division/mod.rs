@@ -88,6 +88,10 @@ use crate::trace::TopicId;
 /// must not become one: it is the measured rule falling out of the general
 /// one, and [`Division::is_alone`] is how a caller reads it.
 ///
+/// The policy is taken by value rather than by reference, unlike this crate's
+/// larger policies: two small fields are cheaper to copy than to indirect
+/// through, and the lint set says so.
+///
 /// `known` is optional because a room that has not deliberated yet has no
 /// directory to fold. Passing `None`, or a directory with no opinion on a
 /// facet, falls to the rotation — deterministically, and recorded as
@@ -106,7 +110,7 @@ pub fn divide(
     roster: &Roster<'_>,
     desks: &DeskSet<'_>,
     known: Option<&Directory>,
-    policy: &DivisionPolicy,
+    policy: DivisionPolicy,
 ) -> Result<Division> {
     roster.validate()?;
     desks.validate()?;
@@ -165,7 +169,7 @@ fn owner_of(
     index: usize,
     seats: &[&str],
     known: Option<&Directory>,
-    policy: &DivisionPolicy,
+    policy: DivisionPolicy,
 ) -> (String, OwnerReason) {
     if policy.follow_directory
         && let Some(expert) = known.and_then(|known| known.top_among(facet, seats))

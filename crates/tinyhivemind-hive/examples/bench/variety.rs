@@ -402,7 +402,7 @@ fn library_division(seats: usize, facets: usize) -> Option<tinyhivemind_hive::Di
         &host.roster(),
         &host.desks(),
         None,
-        &DivisionPolicy::DEFAULT,
+        DivisionPolicy::DEFAULT,
     )
     .ok()
 }

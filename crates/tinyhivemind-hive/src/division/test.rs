@@ -44,7 +44,7 @@ fn facets(count: usize) -> Vec<TopicId> {
 }
 
 /// Divide `count` facets across the whole desk at `policy`.
-fn divided(count: usize, policy: &DivisionPolicy) -> Division {
+fn divided(count: usize, policy: DivisionPolicy) -> Division {
     let members = roster_members();
     let roster = Roster::new(&members, &[], &[]);
     let held = desks();
@@ -70,7 +70,7 @@ fn said(sequence: u64, author: &str, content: &str) -> tinyhivemind::SessionMess
 /// task of one facet is one seat answering alone, in one round.
 #[test]
 fn one_facet_is_one_seat_answering_alone() {
-    let division = divided(1, &DivisionPolicy::DEFAULT);
+    let division = divided(1, DivisionPolicy::DEFAULT);
     assert!(division.is_alone());
     assert_eq!(division.depth(), 1);
     assert_eq!(division.width(), 1);
@@ -80,7 +80,7 @@ fn one_facet_is_one_seat_answering_alone() {
 /// A task with no facets divides into nothing, and that is not an error.
 #[test]
 fn a_task_with_no_facets_divides_into_nothing() {
-    let division = divided(0, &DivisionPolicy::DEFAULT);
+    let division = divided(0, DivisionPolicy::DEFAULT);
     assert!(division.is_empty());
     assert!(!division.is_alone());
     assert_eq!(division.depth(), 0);
@@ -91,7 +91,7 @@ fn a_task_with_no_facets_divides_into_nothing() {
 /// across five seats at width four are two rounds, not eight.
 #[test]
 fn independent_facets_ride_the_same_round() {
-    let division = divided(8, &DivisionPolicy::DEFAULT);
+    let division = divided(8, DivisionPolicy::DEFAULT);
     assert_eq!(division.assignments().len(), 8);
     assert_eq!(division.depth(), 2);
     assert_eq!(division.width(), 4);
@@ -107,7 +107,7 @@ fn a_seat_never_appears_twice_in_one_round() {
         round_width: 64,
         ..DivisionPolicy::DEFAULT
     };
-    let division = divided(12, &wide);
+    let division = divided(12, wide);
     for round in 0..division.depth() {
         let mut owners: Vec<&str> = division
             .round(round)
@@ -128,7 +128,7 @@ fn a_seat_never_appears_twice_in_one_round() {
 /// than a walk: which seat takes a facet does not depend on what came before.
 #[test]
 fn the_rotation_follows_the_facet_index() {
-    let division = divided(7, &DivisionPolicy::DEFAULT);
+    let division = divided(7, DivisionPolicy::DEFAULT);
     for (index, held) in division.assignments().iter().enumerate() {
         assert_eq!(held.owner, MEMBERS[index % MEMBERS.len()]);
         assert_eq!(held.reason, OwnerReason::Rotation);
@@ -154,7 +154,7 @@ fn a_facet_named_twice_is_one_facet() {
         &roster,
         &desks,
         None,
-        &DivisionPolicy::DEFAULT,
+        DivisionPolicy::DEFAULT,
     )
     .unwrap();
     assert_eq!(division.assignments().len(), 2);
@@ -196,7 +196,7 @@ fn the_directory_names_an_owner_where_it_knows_one() {
         &roster,
         &desks,
         Some(&known),
-        &DivisionPolicy::DEFAULT,
+        DivisionPolicy::DEFAULT,
     )
     .unwrap();
 
@@ -214,7 +214,7 @@ fn the_directory_names_an_owner_where_it_knows_one() {
         &roster,
         &desks,
         Some(&known),
-        &DivisionPolicy {
+        DivisionPolicy {
             follow_directory: false,
             ..DivisionPolicy::DEFAULT
         },
@@ -228,7 +228,7 @@ fn the_directory_names_an_owner_where_it_knows_one() {
 /// of the others, and shared context reaches everybody.
 #[test]
 fn an_owner_reads_its_own_facet_and_not_its_peers() {
-    let division = divided(2, &DivisionPolicy::DEFAULT);
+    let division = divided(2, DivisionPolicy::DEFAULT);
     let transcript = [
         said(1, "planner", "What should we do about the rollout?"),
         said(2, "planner", "!propose #f0 Stage it."),
@@ -278,7 +278,7 @@ fn a_zero_width_is_refused() {
         &roster,
         &desks,
         None,
-        &DivisionPolicy {
+        DivisionPolicy {
             round_width: 0,
             ..DivisionPolicy::DEFAULT
         },
@@ -299,7 +299,7 @@ fn a_desk_with_no_active_member_is_refused() {
         &roster,
         &desks,
         None,
-        &DivisionPolicy::DEFAULT,
+        DivisionPolicy::DEFAULT,
     );
     match outcome {
         Err(Error::NoSeats { desk_id }) => assert_eq!(desk_id, "engineering"),
@@ -320,7 +320,7 @@ fn an_unknown_desk_is_refused() {
         &roster,
         &desks,
         None,
-        &DivisionPolicy::DEFAULT,
+        DivisionPolicy::DEFAULT,
     );
     assert!(matches!(outcome, Err(Error::Core { .. })));
 }
@@ -328,15 +328,15 @@ fn an_unknown_desk_is_refused() {
 /// The same arguments produce the same division, every time.
 #[test]
 fn a_division_is_a_fold() {
-    let first = divided(9, &DivisionPolicy::DEFAULT);
-    let second = divided(9, &DivisionPolicy::DEFAULT);
+    let first = divided(9, DivisionPolicy::DEFAULT);
+    let second = divided(9, DivisionPolicy::DEFAULT);
     assert_eq!(first, second);
 }
 
 /// The facets one seat owns, which is the load it actually carries.
 #[test]
 fn a_seat_owns_the_facets_the_rotation_gave_it() {
-    let division = divided(8, &DivisionPolicy::DEFAULT);
+    let division = divided(8, DivisionPolicy::DEFAULT);
     assert_eq!(
         division.facets_of("planner"),
         [&TopicId::from("f0"), &TopicId::from("f5")]
