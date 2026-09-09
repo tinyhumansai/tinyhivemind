@@ -192,9 +192,9 @@ uninformed ladder. [`DELEGATION.md`](DELEGATION.md) says why.
 
 The tuned deliberation beats the matched-budget control at half the budget, and
 one responder off the ladder reaches 57.6%. The quorum threshold and the turn
-budget are the two settings that decide this, the blind round is worth 24
-points of accuracy on its own, and the state machine costs about 2.3 µs per
-step.
+budget decide this, the blind round is worth 24 points on its own, and the state
+machine costs about 2.3 µs per step. Those turns are *width*: priced in depth,
+`vote` is one round and `hive+` is 6.75 — see [`DEPTH.md`](DEPTH.md).
 
 The two refutation arms lose, which is why both knobs are off in
 `QuorumPolicy::DEFAULT`. `hive+ref` falls below even the vote control, and
