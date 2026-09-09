@@ -477,7 +477,6 @@ fn as_f64(value: u64) -> f64 {
     value as f64
 }
 
-
 #[cfg(test)]
 mod test {
     use tinyhivemind_hive::trace::TopicId;
@@ -529,7 +528,10 @@ mod test {
         let base = Room::generate_with(0xFACE7, 5, 4, 50, Expertise::Uniform, false);
         let staged = names(&base.for_stage(1), 0);
         for name in names(&base.for_facet(1), 0) {
-            assert!(!staged.contains(&name), "facet option {name} collides with a stage's");
+            assert!(
+                !staged.contains(&name),
+                "facet option {name} collides with a stage's"
+            );
         }
     }
 
@@ -611,7 +613,11 @@ mod test {
             as_f64(u64::try_from(first).unwrap_or(0)) > mean,
             "one busy seat is understated by the room's mean"
         );
-        assert_eq!(held.held_by(usize::MAX), 0, "a seat nobody fills holds nothing");
+        assert_eq!(
+            held.held_by(usize::MAX),
+            0,
+            "a seat nobody fills holds nothing"
+        );
     }
 
     /// The depth the concurrency buys: independent facets ride one round, so
@@ -669,7 +675,10 @@ mod test {
             one_seat > two_seats,
             "counting an idle seat would halve the load the arm actually carries"
         );
-        assert!(close(ratio_f64(1.0, 0), 0.0), "no seats is no load, not a divide by zero");
+        assert!(
+            close(ratio_f64(1.0, 0), 0.0),
+            "no seats is no load, not a divide by zero"
+        );
     }
 
     /// `SimAgent` is named here so the import above is not dead weight: the
