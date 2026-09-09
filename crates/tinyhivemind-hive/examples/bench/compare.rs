@@ -480,8 +480,6 @@ fn run_arms(options: &Options, rooms: &[Room]) -> Result<(Totals, std::time::Dur
     let per_room: Vec<Totals> = parallel::map_in_order(&indexed, options.jobs, |(index, room)| {
         let (index, room) = (*index, *room);
         let mut totals = Totals::default();
-        {
-            let totals = &mut totals;
 
         totals
             .hive_default
