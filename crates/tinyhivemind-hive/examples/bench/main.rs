@@ -89,6 +89,7 @@ mod live;
 mod live_single;
 mod live_swarm;
 mod metrics;
+mod parallel;
 mod policy;
 mod rng;
 mod run;
