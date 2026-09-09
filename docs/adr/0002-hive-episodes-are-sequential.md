@@ -1,6 +1,6 @@
 # 2. Hive episodes are sequential, and visibility is the fan-out knob
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR 0014](0014-a-round-authorizes-concurrent-turns.md)
 - **Date:** 2026-08-31
 
 ## Context
