@@ -11,6 +11,26 @@ use crate::{
 };
 use tinyhivemind::{Conversation, Sequence};
 
+/// The width [`EpisodePolicy::DEFAULT`] runs rounds at.
+///
+/// Not `1`. A seat is an async session and the default should say so; the
+/// benchmark's arms measure what it costs rather than assuming it is free.
+/// Four is the width at which a room of five still leaves somebody to answer
+/// in the next round, which is the smallest width that is meaningfully
+/// concurrent without being a broadcast.
+pub const DEFAULT_ROUND_WIDTH: u32 = 4;
+
+/// The width [`EpisodePolicy::DEFAULT`] runs rounds at once the room can see
+/// itself.
+///
+/// One, and the benchmark is why: widening a *revealed* round costs accuracy on
+/// every task measured, because a member's turn there depends on what it reads
+/// and a concurrent peer's row is exactly what it cannot read. Widening a
+/// **blind** round costs nothing, because a blind member could not read that
+/// row anyway. So the default takes all of the free concurrency and none of the
+/// paid kind. See `docs/experiments/2026-09-09-depth-and-width.md`.
+pub const DEFAULT_REVEALED_WIDTH: u32 = 1;
+
 /// Which class of turn the episode is taking.
 ///
 /// The transition from [`Phase::Deliberate`] to [`Phase::Commit`] is one-way.
@@ -47,6 +67,39 @@ pub enum Visibility {
 pub struct EpisodePolicy {
     /// Hard cap on turns. Finite, so an episode always terminates.
     pub turn_budget: u32,
+    /// Turns one round may authorize to run concurrently.
+    ///
+    /// A bound, not a quota: a bid still has to clear its own threshold to be
+    /// in a round at all, so a round is often narrower than this and is never
+    /// wider. `1` is the sequential episode and reproduces every number
+    /// recorded before rounds existed, bit for bit. `0` is
+    /// [`Error::ZeroRoundWidth`] at step time, on the `defer_cap` precedent.
+    ///
+    /// Widening a round does not buy turns — `turn_budget` still bounds the
+    /// total — it spends them in fewer, deeper rounds. What it buys is depth,
+    /// and what it costs is that the members in one round cannot read each
+    /// other. See `docs/specs/concurrent-rounds.md`.
+    ///
+    /// [`Error::ZeroRoundWidth`]: crate::error::Error::ZeroRoundWidth
+    pub round_width: u32,
+    /// The same bound, once the room can see itself.
+    ///
+    /// Width is not one mechanism but two, and they have opposite prices.
+    ///
+    /// While the room is [`Visibility::Blind`] a member cannot read its peers
+    /// *whether or not* it runs concurrently with them, so a wide round there
+    /// is free: the same turns, the same projections, fewer waits. Once the
+    /// room is [`Visibility::Full`] a member's turn depends on what it reads,
+    /// and widening starts trading information for depth — the benchmark
+    /// measures that trade rather than assuming it.
+    ///
+    /// Separate from [`Self::round_width`] for the reason `--exchange-cap` is
+    /// separate from `--aside-cap`: it bounds a different resource, and one
+    /// number could not express a room that wants all of the first and none of
+    /// the second. `0` is [`Error::ZeroRoundWidth`], as above.
+    ///
+    /// [`Error::ZeroRoundWidth`]: crate::error::Error::ZeroRoundWidth
+    pub revealed_width: u32,
     /// Whether the opening round is blind.
     pub blind_round: bool,
     /// Percent of grounded share above which a member is damped.
@@ -114,6 +167,8 @@ impl EpisodePolicy {
     /// pending the benchmark arm that scores them.
     pub const DEFAULT: Self = Self {
         turn_budget: 12,
+        round_width: DEFAULT_ROUND_WIDTH,
+        revealed_width: DEFAULT_REVEALED_WIDTH,
         blind_round: true,
         dominance_cap: 50,
         repetition_cap: 3,
@@ -171,7 +226,11 @@ impl EpisodeState {
     }
 }
 
-/// The single turn an episode step authorizes.
+/// One turn a round authorizes.
+///
+/// A turn is what one member may do. What the *episode* becomes is carried once
+/// by the round, in [`HiveStep::Speak::next_state`], because `spent` advances by
+/// the round's width and every speaker in it is charged.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct HiveTurn {
@@ -183,20 +242,45 @@ pub struct HiveTurn {
     pub visibility: Visibility,
     /// Why this member won the floor.
     pub reason: BidReason,
-    /// State to commit once the turn is durably appended.
-    pub next_state: EpisodeState,
+    /// Exclusive lower bound: the sequence the episode opened at.
+    ///
+    /// Carried on the turn because [`project_for`] needs it and the state it
+    /// used to be read from now belongs to the round rather than the turn.
+    ///
+    /// [`project_for`]: crate::episode::project_for
+    pub watermark: Sequence,
+    /// The sequence this round was folded at.
+    ///
+    /// A peer's row above this was written *concurrently* with this turn, so
+    /// this turn cannot have read it and [`project_for`] withholds it. At
+    /// `round_width: 1` nothing is ever above it and the clause is inert,
+    /// which is what makes a round of one bit-identical rather than merely
+    /// equivalent.
+    ///
+    /// [`project_for`]: crate::episode::project_for
+    pub round_start: Sequence,
 }
 
 /// The outcome of one episode step.
 ///
-/// There is deliberately no variant carrying more than one turn.
+/// [`Self::Speak`] carries a **round**: the turns authorized to run
+/// concurrently, and the one state the episode takes once all of them are
+/// appended. See `docs/specs/concurrent-rounds.md` and ADR 0014.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "step", rename_all = "snake_case")]
 pub enum HiveStep {
-    /// Exactly one member takes the floor.
+    /// A round of members takes the floor together.
     Speak {
-        /// The authorized turn.
-        turn: Box<HiveTurn>,
+        /// The authorized turns: non-empty, in desk order, and never more than
+        /// `policy.round_width` of them.
+        ///
+        /// A host may run fewer than it was handed — a seat can be
+        /// unavailable — but it commits `next_state` only once it has appended
+        /// all of them. Committing after a subset would charge a threshold
+        /// nobody spent.
+        turns: Vec<HiveTurn>,
+        /// State to commit once every turn in the round is durably appended.
+        next_state: Box<EpisodeState>,
     },
     /// One topic carried and the room has recorded it.
     Converged {

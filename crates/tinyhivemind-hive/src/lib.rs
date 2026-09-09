@@ -7,21 +7,28 @@
 //! crate lets a room of agents put proposals side by side, accumulate support,
 //! register a grounded objection, and terminate for a reason it can name.
 //!
-//! # An episode is a sequence of single turns
+//! # An episode is a sequence of bounded rounds
 //!
 //! A hive mind is normally built as fan-out — publish a task, wake N agents,
-//! gather the replies. This crate deliberately does not. [`HiveStep::Speak`]
-//! carries exactly one [`HiveTurn`], so the charter's *one message, one turn*
-//! rule is a type invariant rather than a convention.
+//! gather the replies — and the failure of that shape is that nothing bounds
+//! it. [`HiveStep::Speak`] carries a **round**: the [`HiveTurn`]s authorized to
+//! run concurrently, at most [`EpisodePolicy::round_width`] of them, plus the
+//! one [`EpisodeState`] the episode takes once all of them are appended. The
+//! bound is the invariant; the serialization it replaced never was.
 //!
-//! That is not only a safety constraint. Sparse communication topologies match
-//! or beat fully connected ones in multi-agent debate at much lower cost;
-//! conformity rises with interaction time, so convergence is a warning signal
-//! as much as a success signal; and parallel fan-out wins only on genuinely
-//! decomposable work. The one thing fan-out really buys is *independence*, and
-//! this crate buys that as [`Visibility`] — a filter on what one turn sees —
-//! rather than as concurrency. See
-//! `docs/adr/0002-hive-episodes-are-sequential.md`.
+//! Independence is still bought as [`Visibility`] rather than hoped for, and a
+//! round strengthens it rather than threatening it: members writing at the same
+//! time cannot read each other, so **a concurrent round is a blind round**.
+//! That matters because conformity in a group of models rises with interaction
+//! time and with sight of a peer's position — this repository measures the
+//! blind opening at 24 points — so a wide round is *less* correlated than the
+//! same turns taken in series, not more.
+//!
+//! `round_width: 1` is the sequential episode and reproduces every number
+//! recorded before rounds existed, bit for bit. See
+//! `docs/specs/concurrent-rounds.md` and
+//! `docs/adr/0014-a-round-authorizes-concurrent-turns.md`, which supersedes
+//! `docs/adr/0002-hive-episodes-are-sequential.md` on the terms that ADR set.
 //!
 //! # What this crate deliberately does not hold
 //!
@@ -135,11 +142,12 @@ pub mod trace;
 
 pub use attention::{
     AgentThreshold, Bid, BidReason, BudgetPolicy, BudgetRequest, BudgetShare, BudgetVerdict,
-    allocate_chars, bids, floor_holder,
+    allocate_chars, bids, floor_holder, floor_round,
 };
 pub use directory::{Directory, DirectoryEntry, DirectoryPolicy, WEIGHT_CEILING, directory};
 pub use episode::{
-    EpisodePolicy, EpisodeState, HiveStep, HiveTurn, Phase, Visibility, project_for, step,
+    DEFAULT_REVEALED_WIDTH, DEFAULT_ROUND_WIDTH, EpisodePolicy, EpisodeState, HiveStep, HiveTurn,
+    Phase, Visibility, project_for, step,
 };
 pub use error::{Error, Result};
 pub use exchange::{ExchangePolicy, ExchangeRound, ExchangeState, NoExchangeReason, exchange};

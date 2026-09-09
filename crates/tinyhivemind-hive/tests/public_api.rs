@@ -127,12 +127,13 @@ fn root_exports_the_episode_state_machine() {
     )
     .expect("steps");
 
-    let HiveStep::Speak { turn } = decision else {
-        panic!("expected exactly one turn")
+    let HiveStep::Speak { turns, next_state } = decision else {
+        panic!("expected a round")
     };
-    let turn: HiveTurn = *turn;
+    // A desk of one is a round of one however wide the policy allows.
+    let [turn] = <[HiveTurn; 1]>::try_from(turns).expect("a desk of one speaks alone");
     assert_eq!(turn.agent_id, "planner");
-    assert_eq!(turn.next_state.spent, 1);
+    assert_eq!(next_state.spent, 1);
     assert_eq!(project_for(&turn, &[said(1, "planner", "x")]).len(), 1);
 }
 
@@ -143,14 +144,8 @@ fn a_blind_turn_withholds_a_peer_position_through_the_public_api() {
         phase: Phase::Deliberate,
         visibility: Visibility::Blind,
         reason: BidReason::Salience,
-        next_state: EpisodeState::opened(
-            Conversation {
-                desk_id: "engineering".into(),
-                desk_name: "Engineering".into(),
-                thread_root: None,
-            },
-            Sequence(0),
-        ),
+        watermark: Sequence(0),
+        round_start: Sequence(0),
     };
     let transcript = [
         SessionMessage {

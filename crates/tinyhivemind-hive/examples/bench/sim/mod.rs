@@ -55,16 +55,29 @@ use crate::context::ContextBudget;
 use crate::rng::{Rng, mix};
 
 mod agent;
+mod chain;
+mod facet;
 mod generation;
 mod view;
 
 use agent::Holdings;
 use generation::{
-    MemberDraw, draw_expertise, hidden_profile_agent, selfcheck_uniform, specialist_agent,
+    MemberDraw, draw_expertise, hidden_profile_agent, roles_agent, selfcheck_uniform,
+    specialist_agent,
 };
 
 pub(crate) use agent::{CheckStyle, SimAgent};
 pub(crate) use view::check_selfcheck;
+
+/// How far a stage decided wrongly lifts the next stage's decoy.
+///
+/// Bounded on both sides, like `HIDDEN_LIFT` and `GROUNDS_WEIGHT` before it.
+/// *Below* the 60-point gap between the true option and a decoy, so a poisoned
+/// room can still recover — a chain in which one wrong answer made every later
+/// one unwinnable would measure nothing after the first mistake. *Above* zero
+/// by enough to matter against the noise, or a chain would merely be a repeat
+/// with extra steps. Forty is three quarters of the way to unrecoverable.
+pub(crate) const POISON_LIFT: i32 = 40;
 
 /// Names drawn on, in order, for a room's options.
 pub(crate) const TOPIC_NAMES: [&str; 8] = [
@@ -309,6 +322,22 @@ pub(crate) enum Expertise {
     /// One decoy is planted above every member's own argmax except one, who
     /// alone holds the fact that rules it out.
     HiddenProfile,
+    /// One member owns the whole question: it reads every option far more
+    /// tightly than anybody else, and everybody else's read of every option
+    /// widens to match.
+    ///
+    /// [`Specialists`] scatters expertise across the room at random, one
+    /// topic each. This concentrates it, by construction rather than by
+    /// draw — which is what a *role* is. It exists for `--facets`, where a
+    /// task is several sub-questions at once and each is somebody's job: the
+    /// owner is `facet % members`, known to the harness before any member
+    /// reads anything, so no arm learns who it is from scoring data.
+    ///
+    /// [`Specialists`]: Expertise::Specialists
+    Roles {
+        /// Index of the member whose question this is.
+        owner: usize,
+    },
 }
 
 /// One simulated room: the options, which is best, and who is in it.
@@ -429,6 +458,9 @@ impl Room {
                     }
                     Expertise::HiddenProfile => {
                         hidden_profile_agent(&id, role, index, &draw, decisive_index, planted_index)
+                    }
+                    Expertise::Roles { .. } => {
+                        roles_agent(&id, role, index, &draw, &expert_of, cost_tiers)
                     }
                 }
             })
@@ -645,7 +677,6 @@ impl Room {
         room
     }
 
-    /// What one member's own turn costs, by id.
     ///
     /// A convenience for a caller that only holds an id and not a
     /// [`Participant`](crate::run::Participant) reference -- the vote arm

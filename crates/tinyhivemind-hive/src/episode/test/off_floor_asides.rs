@@ -4,7 +4,9 @@
 //! stub where a member of it sees the content.
 
 use super::super::*;
-use super::support::{MEMBERS, Room, aside, converging, operator, run, said, speaking, state};
+use super::support::{
+    MEMBERS, Room, aside, converging, operator, run, said, sequential, speaking, state,
+};
 use crate::quorum::QuorumPolicy;
 use tinyhivemind::Sequence;
 
@@ -20,7 +22,7 @@ fn a_trace_inside_an_aside_adds_no_supporter() {
             ..QuorumPolicy::DEFAULT
         },
         blind_round: false,
-        ..EpisodePolicy::DEFAULT
+        ..sequential()
     };
 
     let open = vec![
@@ -55,7 +57,7 @@ fn surfacing_the_same_support_in_the_open_does_count() {
             ..QuorumPolicy::DEFAULT
         },
         blind_round: false,
-        ..EpisodePolicy::DEFAULT
+        ..sequential()
     };
     let transcript = vec![
         operator(1, "Decide how to roll this out."),
@@ -116,7 +118,7 @@ fn a_turn_holder_outside_an_aside_sees_a_stub_and_a_member_sees_the_content() {
     let room = Room::new();
     let policy = EpisodePolicy {
         blind_round: false,
-        ..EpisodePolicy::DEFAULT
+        ..sequential()
     };
     let transcript = vec![
         operator(1, "Decide how to roll this out."),
@@ -153,7 +155,7 @@ fn a_transcript_with_no_aside_projects_the_same_for_every_turn_holder() {
     let room = Room::new();
     let policy = EpisodePolicy {
         blind_round: false,
-        ..EpisodePolicy::DEFAULT
+        ..sequential()
     };
     let transcript = converging();
     let turn = speaking(run(&room, &state(), &transcript, &policy));

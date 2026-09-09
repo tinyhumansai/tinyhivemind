@@ -542,6 +542,11 @@ fn knows_surfaces_an_uncited_fact_in_a_hidden_profile_transcript() -> Result<(),
             window: 100,
             ..QuorumPolicy::DEFAULT
         },
+        // This test is about *precedence* -- which member the directory brings
+        // out ahead of the rest -- so it runs the sequential episode. A wide
+        // round would carry the fact-holder either way and assert nothing.
+        round_width: 1,
+        revealed_width: 1,
         ..EpisodePolicy::DEFAULT
     };
     let delegating = EpisodePolicy {
@@ -558,11 +563,12 @@ fn knows_surfaces_an_uncited_fact_in_a_hidden_profile_transcript() -> Result<(),
 
     // Without a directory nothing distinguishes the members, so the floor goes
     // to the first of them in desk order -- a member arguing the decoy.
-    let HiveStep::Speak { turn } = step(&state, harness.journal(), &roster, &desk_set, &quiet)
+    let HiveStep::Speak { turns, .. } = step(&state, harness.journal(), &roster, &desk_set, &quiet)
         .map_err(|error| error.to_string())?
     else {
         return Err("expected a turn".to_owned());
     };
+    let turn = turns.first().ok_or("a round is never empty")?;
     assert_ne!(turn.agent_id, "scout");
     assert_ne!(turn.reason, BidReason::Knows);
     let settled = standings(&read(harness.journal()), harness.watermark(), &quiet.quorum)
@@ -574,11 +580,13 @@ fn knows_surfaces_an_uncited_fact_in_a_hidden_profile_transcript() -> Result<(),
     assert!(retries.supporters.contains(&turn.agent_id));
 
     // With one, the room hears the member who actually holds the fact.
-    let HiveStep::Speak { turn } = step(&state, harness.journal(), &roster, &desk_set, &delegating)
-        .map_err(|error| error.to_string())?
+    let HiveStep::Speak { turns, .. } =
+        step(&state, harness.journal(), &roster, &desk_set, &delegating)
+            .map_err(|error| error.to_string())?
     else {
         return Err("expected a turn".to_owned());
     };
+    let turn = turns.first().ok_or("a round is never empty")?;
     assert_eq!(turn.agent_id, "scout");
     assert_eq!(turn.reason, BidReason::Knows);
     Ok(())

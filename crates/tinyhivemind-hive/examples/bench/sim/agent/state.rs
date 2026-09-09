@@ -153,6 +153,84 @@ impl SimAgent {
         });
     }
 
+    /// Rows this member is still carrying, whatever it can still read of them.
+    ///
+    /// The window's *occupancy*, as against its content: what a long task
+    /// costs a participant is exactly this number growing, and it grows for a
+    /// soloist holding the whole brief `n` times faster than for one member of
+    /// a room of `n`.
+    pub(crate) fn held(&self) -> usize {
+        self.context.len()
+    }
+
+    /// Carry what this member was holding at the end of a previous stage into
+    /// this one, ahead of anything it learns here.
+    ///
+    /// Prepended rather than appended because it *is* older, and the window
+    /// model is positional: history belongs at the head, where a compaction
+    /// keeping both ends will defend it and a U-curve will read it. Making
+    /// history cheap to hold would be assuming away the thing `--stages`
+    /// exists to measure.
+    ///
+    /// The inherited rows name a previous stage's options, which no later
+    /// stage shares, so they can never be scored against this stage's
+    /// question. They can only take up room, which is the point.
+    pub(crate) fn inherit(&mut self, prior: &[ContextEntry]) {
+        let mut carried = prior.to_vec();
+        carried.append(&mut self.context);
+        self.context = carried;
+        self.recompute_favourite();
+    }
+
+    /// Everything this member is carrying, for the next stage to inherit.
+    pub(crate) fn carried(&self) -> &[ContextEntry] {
+        &self.context
+    }
+
+    /// Rename every option this member holds, for one stage of a chain.
+    ///
+    /// Its own evaluations, everything it has imported, every fact it holds
+    /// and every row in its window, so that nothing is left pointing at a name
+    /// the stage no longer uses. The inherited window rows are *not* renamed —
+    /// they belong to the stage that wrote them, and that they no longer match
+    /// anything is exactly what makes them cost a row and pay nothing.
+    pub(crate) fn rename_topics(&mut self, rename: &impl Fn(&TopicId) -> TopicId) {
+        for (topic, _) in &mut self.evals {
+            *topic = rename(topic);
+        }
+        for (topic, _, _) in &mut self.imports {
+            *topic = rename(topic);
+        }
+        for topic in &mut self.ruled_out {
+            *topic = rename(topic);
+        }
+        for entry in &mut self.context {
+            entry.topic = rename(&entry.topic);
+        }
+        self.specialty = self.specialty.as_ref().map(rename);
+        self.refutes = self.refutes.as_ref().map(rename);
+        for topic in &mut self.expert_elsewhere {
+            *topic = rename(topic);
+        }
+        self.favourite = rename(&self.favourite);
+        self.recompute_favourite();
+    }
+
+    /// Raise this member's reading of one option.
+    ///
+    /// Used to poison a stage after the room got the one before it wrong: the
+    /// premise is false, so the option consistent with it reads better than it
+    /// is. Nothing else about the member changes, and the favourite is
+    /// recomputed because a lift can move it.
+    pub(crate) fn lift(&mut self, topic: &TopicId, by: i32) {
+        for (held, reading) in &mut self.evals {
+            if held == topic {
+                *reading = reading.saturating_add(by);
+            }
+        }
+        self.recompute_favourite();
+    }
+
     /// Charge this member one row for an exchange it could see but not read.
     pub(crate) fn note_stub(&mut self, topic: &TopicId) {
         self.context.push(ContextEntry {
@@ -173,16 +251,22 @@ impl SimAgent {
     )]
     fn windowed_score(&self, topic: &TopicId, own: i32) -> i32 {
         let kept = self.budget.retained(self.context.len());
-        let held = kept.len();
         let mut total = f64::from(own);
         let mut divisor = 1.0_f64;
         let mut ruled_out = 0.0_f64;
-        for (position, index) in kept.into_iter().enumerate() {
-            let entry = &self.context[index];
+        // Every row is asked what it is still worth, retained or not: under
+        // `Compaction::Evict` an overflowing row answers zero and the loop is
+        // the one that ran before folding existed, and under
+        // `Compaction::Fold` it answers `fidelity` because a summary keeps no
+        // position and so takes no positional discount.
+        for (index, entry) in self.context.iter().enumerate() {
             if &entry.topic != topic {
                 continue;
             }
-            let weight = self.budget.weight(position, held);
+            let weight = self.budget.worth(index, &kept);
+            if weight <= 0.0 {
+                continue;
+            }
             match entry.kind {
                 EntryKind::Reading(reading) => {
                     total += weight * f64::from(reading);

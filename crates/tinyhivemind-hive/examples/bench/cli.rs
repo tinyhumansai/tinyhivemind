@@ -7,6 +7,7 @@
 //! `--trace`, `--swarm` and friends pick between. See `main.rs`'s crate doc
 //! for the flag table itself.
 
+use crate::context::{Compaction, ContextBudget, FOLD_FIDELITY};
 use crate::http::{Thinking, Wire};
 use crate::policy::tuned_policy;
 use crate::sim::Expertise;
@@ -85,6 +86,20 @@ pub(crate) struct Options {
     pub(crate) expertise: Expertise,
     /// Room sizes the scale sweep walks.
     pub(crate) sizes: Vec<usize>,
+    /// Horizon lengths `--stages` sweeps, in stages. Empty takes the default
+    /// ladder in [`crate::horizon::DEFAULT_HORIZONS`].
+    pub(crate) horizons: Vec<usize>,
+    /// Task widths `--facets` sweeps, in facets. Empty takes the default
+    /// ladder in [`crate::variety::DEFAULT_SPREADS`].
+    pub(crate) facets: Vec<usize>,
+    /// Whether each facet of a `--facets` task has an owner that reads it far
+    /// more tightly than anybody else.
+    ///
+    /// Off by default, so the sweep's own baseline measures the division of
+    /// labour and nothing else: every member is equally competent and the arms
+    /// differ only in how the load is split. `--roles` adds the second
+    /// mechanism on top, which is what lets the two be told apart.
+    pub(crate) roles: bool,
     /// Whether a specialist's own turn costs more than a lay member's.
     pub(crate) cost: bool,
     /// Whether a member's first turn, while the room is still blind, is a
@@ -99,12 +114,23 @@ pub(crate) struct Options {
     /// each other only in who may read the answer. `0` turns both off, and
     /// makes them bit-identical to `hive+`.
     pub(crate) aside_cap: u32,
+    /// Turns one round may authorize concurrently, for the `hive+wide` arm.
+    ///
+    /// Every published arm runs at `policy::SEQUENTIAL`, so this changes only
+    /// the concurrency arm and no recorded number moves. `0` makes `hive+wide`
+    /// bit-identical to `hive+`, the discipline every other cap here follows.
+    pub(crate) round_width: u32,
     /// Rows each member's context window holds. `0` disables the window model
     /// entirely, which is the default and is bit-identical to a build without
     /// it.
     pub(crate) context: usize,
     /// How hard the middle of that window is discounted, `0.0..=1.0`.
     pub(crate) rot: f64,
+    /// What a summarised row is worth under [`Compaction::Fold`], read by the
+    /// `solo+fold` arm of `--stages`. Ignored everywhere else.
+    ///
+    /// [`Compaction::Fold`]: crate::context::Compaction::Fold
+    pub(crate) fidelity: f64,
     /// Private rows one member may write **off the floor**, read by
     /// `hive+rounds`.
     ///
@@ -146,6 +172,26 @@ pub(crate) struct Options {
 }
 
 /// What this run does.
+impl Options {
+    /// The window every member reads through, assembled from the three flags
+    /// that describe it.
+    ///
+    /// `--context 0` is [`ContextBudget::UNBOUNDED`], which every read path
+    /// short-circuits on, so a run that does not ask for a window is
+    /// bit-identical to one built before the model existed.
+    pub(crate) fn budget(&self) -> ContextBudget {
+        if self.context == 0 {
+            return ContextBudget::UNBOUNDED;
+        }
+        ContextBudget {
+            capacity: self.context,
+            compaction: Compaction::Evict,
+            fidelity: self.fidelity,
+            rot: self.rot,
+        }
+    }
+}
+
 pub(crate) enum Mode {
     /// Compare every arm.
     Compare,
@@ -156,6 +202,11 @@ pub(crate) enum Mode {
     /// Sweep the context-window model instead: who is still right when the
     /// window is tight.
     ContextSweep,
+    /// Sweep the horizon: what a task with a history costs, and who pays it.
+    StageSweep,
+    /// Sweep the width: what a task with several facets at once costs, and
+    /// whether splitting them across seats beats holding them all.
+    FacetSweep,
     /// Sweep room size against channel topology: at what size does the way
     /// members reach each other start to matter, and which way.
     ScaleSweep,
@@ -188,10 +239,16 @@ impl Options {
             agent: None,
             expertise: Expertise::Uniform,
             sizes: crate::scale::DEFAULT_SIZES.to_vec(),
+            horizons: Vec::new(),
+            facets: Vec::new(),
+            roles: false,
+            fidelity: FOLD_FIDELITY,
             cost: false,
             blind_evidence: false,
             defer_cap: 1,
             aside_cap: 1,
+            // A round of four is the width `EpisodePolicy::DEFAULT` runs at.
+            round_width: tinyhivemind_hive::DEFAULT_ROUND_WIDTH,
             context: 0,
             rot: 0.0,
             exchange_cap: 4,
@@ -341,6 +398,10 @@ fn apply_expertise_flag(
         "--hidden-profile" => options.expertise = Expertise::HiddenProfile,
         "--defer-cap" => options.defer_cap = next_number(args).unwrap_or(1).max(1),
         "--aside-cap" => options.aside_cap = next_number(args).unwrap_or(1),
+        "--round-width" => {
+            options.round_width =
+                next_number(args).unwrap_or(tinyhivemind_hive::DEFAULT_ROUND_WIDTH);
+        }
         "--context" => options.context = next_number(args).unwrap_or(0) as usize,
         "--rot" => {
             options.rot = args
@@ -351,6 +412,43 @@ fn apply_expertise_flag(
         }
         "--context-sweep" => options.mode = Mode::ContextSweep,
         "--scale-sweep" => options.mode = Mode::ScaleSweep,
+        "--stages" => {
+            options.mode = Mode::StageSweep;
+            // A list sweeps a ladder of horizons; a bare number runs one. Both
+            // spellings are useful: the ladder is where the crossover lives,
+            // and one length is what a follow-up reproduces.
+            if let Some(list) = args.next() {
+                let parsed: Vec<usize> = list
+                    .split(',')
+                    .filter_map(|part| part.trim().parse::<usize>().ok())
+                    .filter(|stages| *stages >= 1)
+                    .collect();
+                if !parsed.is_empty() {
+                    options.horizons = parsed;
+                }
+            }
+        }
+        "--facets" => {
+            options.mode = Mode::FacetSweep;
+            // A list sweeps a ladder of widths; a bare number runs one. Both
+            // spellings are useful, for the reason `--stages` takes both.
+            if let Some(list) = args.next() {
+                let parsed: Vec<usize> = list
+                    .split(',')
+                    .filter_map(|part| part.trim().parse::<usize>().ok())
+                    .filter(|facets| *facets >= 1)
+                    .collect();
+                if !parsed.is_empty() {
+                    options.facets = parsed;
+                }
+            }
+        }
+        "--roles" => options.roles = true,
+        "--fidelity" => {
+            if let Some(value) = args.next().and_then(|raw| raw.parse::<f64>().ok()) {
+                options.fidelity = value.clamp(0.0, 1.0);
+            }
+        }
         "--sizes" => {
             if let Some(list) = args.next() {
                 let parsed: Vec<usize> = list

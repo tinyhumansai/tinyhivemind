@@ -43,6 +43,15 @@ pub(crate) struct ArmReport {
     pub(crate) correct: bool,
     /// Turns spent.
     pub(crate) turns: u32,
+    /// Rounds spent: the arm's **depth**, what a host actually waits for.
+    ///
+    /// Both control arms are depth **one**. `ladder` takes a single turn, and
+    /// every one of `vote`'s answers is formed from a member's own private
+    /// evaluation alone, having seen nothing — so no call in it waits on any
+    /// other and a host with async seats runs the whole poll at once. That is
+    /// the comparison `turns/ep` could not express: `vote` is one round of
+    /// `turns` calls, not `turns` rounds of one.
+    pub(crate) rounds: u32,
     /// What those turns cost, in [`crate::run::Participant::cost_unit`]
     /// units. One unit per turn unless the room was generated with
     /// `--cost-tiers` and a specialist answered.
@@ -256,6 +265,7 @@ fn route(
         decided,
         correct,
         turns: 1,
+        rounds: 1,
         cost_units: u64::from(room.cost_of(&responder)),
         routed_right: room.deciding_expert().map(|held| held == responder),
         library_time,
@@ -275,6 +285,7 @@ pub(crate) fn run_vote(room: &Room, budget: u32) -> ArmReport {
             decided: None,
             correct: false,
             turns: 0,
+            rounds: 0,
             cost_units: 0,
             routed_right: None,
             library_time: Duration::ZERO,
@@ -306,6 +317,7 @@ pub(crate) fn run_vote(room: &Room, budget: u32) -> ArmReport {
         decided,
         correct,
         turns: spent,
+        rounds: 1,
         cost_units,
         routed_right: None,
         library_time: Duration::ZERO,
@@ -334,6 +346,9 @@ pub(crate) fn run_federated_vote(federation: &Federation) -> ArmReport {
         correct: decided.as_ref() == Some(&federation.truth),
         decided,
         turns,
+        // Every member answers from its own reading alone, so the whole
+        // federated poll is one round however many desks it spans.
+        rounds: 1,
         cost_units: u64::from(turns),
         routed_right: None,
         library_time: Duration::ZERO,
@@ -372,6 +387,7 @@ pub(crate) fn run_merged(
         correct: report.decided.as_ref() == Some(&federation.truth),
         decided: report.decided,
         turns: report.turns,
+        rounds: report.rounds,
         cost_units: report.cost_units,
         routed_right: None,
         library_time: report.library_time,

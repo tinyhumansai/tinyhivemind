@@ -22,8 +22,8 @@ use crate::metrics::{
     paired_diff_line,
 };
 use crate::policy::{
-    default_policy, deferring_policy, evidential_policy, knowing_deferring_policy, knowing_policy,
-    refuting_policy,
+    blind_wide_policy, default_policy, deferring_policy, evidential_policy,
+    knowing_deferring_policy, knowing_policy, refuting_policy, widened_policy,
 };
 use crate::rng::mix;
 use crate::run::{
@@ -49,7 +49,7 @@ pub(crate) fn compare(options: &Options, rooms: &[Room]) -> Result<(), String> {
     );
 
     let (totals, wall) = run_arms(options, rooms)?;
-    let arms: [(&str, &Aggregate); 22] = [
+    let arms: [(&str, &Aggregate); 24] = [
         ("ladder", &totals.ladder),
         ("vote", &totals.vote),
         ("hive", &totals.hive_default),
@@ -75,6 +75,8 @@ pub(crate) fn compare(options: &Options, rooms: &[Room]) -> Result<(), String> {
         ("hive+quiet", &totals.hive_exchange_quiet),
         ("hive+fact°", &totals.hive_aside_offfloor),
         ("hive+pooled", &totals.hive_pooled),
+        ("hive+wide", &totals.hive_wide),
+        ("hive+blind", &totals.hive_blind_wide),
     ];
 
     if options.json {
@@ -190,6 +192,15 @@ struct Totals {
     /// hands before the episode opens, at no turn cost. Nothing a protocol
     /// could do beats it.
     hive_pooled: Aggregate,
+    /// The tuned policy run in **concurrent rounds** rather than one turn at a
+    /// time. The arm ADR 0014 has to earn its place against: what should move
+    /// is `rounds/ep`, and `correct %` says what the depth cost.
+    hive_wide: Aggregate,
+    /// The same, widened **only while the room is blind**. The free half of
+    /// concurrency on its own: a blind member cannot read a peer's row whether
+    /// or not it runs concurrently, so this should score what `hive+` scores
+    /// and wait fewer times.
+    hive_blind_wide: Aggregate,
     /// Both delegation mechanisms at once.
     hive_both: Aggregate,
     /// The tuned policy in a room that puts every seat on the expensive
@@ -239,6 +250,8 @@ fn check_arm_diffs(options: &Options, totals: &Totals) {
         ("hive+quiet", &totals.hive_exchange_quiet),
         ("hive+fact°", &totals.hive_aside_offfloor),
         ("hive+pooled", &totals.hive_pooled),
+        ("hive+wide", &totals.hive_wide),
+        ("hive+blind", &totals.hive_blind_wide),
     ]
     .iter()
     .enumerate()
@@ -374,6 +387,21 @@ fn run_check_arms(
     totals
         .hive_pooled
         .add(&run_episode(&ceiling, tuned, TASK, false)?);
+    // The concurrency arm: the tuned policy, run in rounds rather than one
+    // turn at a time. Same rooms, same budget, same everything else -- what
+    // moves is `rounds/ep`, and whether `correct %` pays for it.
+    totals.hive_wide.add(&run_episode(
+        room,
+        &widened_policy(tuned, options.round_width),
+        TASK,
+        false,
+    )?);
+    totals.hive_blind_wide.add(&run_episode(
+        room,
+        &blind_wide_policy(tuned, options.round_width),
+        TASK,
+        false,
+    )?);
     Ok(())
 }
 

@@ -4,7 +4,7 @@
 //! through.
 
 use super::super::*;
-use super::support::{Room, deadlocked, member, run, said, state};
+use super::support::{Room, deadlocked, member, run, said, sequential, spoke, state};
 use crate::trace::TopicId;
 
 #[test]
@@ -14,7 +14,7 @@ fn a_deadlock_a_dissenter_can_still_break_authorizes_one_more_turn() {
     room.members.push(member("archivist"));
     room.desks[0].members.push("archivist".into());
 
-    let step = run(&room, &state(), &deadlocked(), &EpisodePolicy::DEFAULT);
+    let step = run(&room, &state(), &deadlocked(), &sequential());
     assert!(
         matches!(step, HiveStep::Speak { .. }),
         "while a member who has backed neither side exists, the room is not \
@@ -25,7 +25,7 @@ fn a_deadlock_a_dissenter_can_still_break_authorizes_one_more_turn() {
     // makes the difference rather than anything else in the transcript.
     let committed = Room::new();
     assert_eq!(
-        run(&committed, &state(), &deadlocked(), &EpisodePolicy::DEFAULT),
+        run(&committed, &state(), &deadlocked(), &sequential()),
         HiveStep::Deadlocked {
             topics: vec![TopicId("stage".into()), TopicId("ship".into())],
         },
@@ -47,7 +47,7 @@ fn addressed_precedence_does_not_mask_an_available_dissenter() {
     transcript.push(said(5, "archivist", "!question What about latency?"));
     transcript.push(said(6, "critic", "!object >5 Out of scope."));
 
-    let step = run(&room, &state(), &transcript, &EpisodePolicy::DEFAULT);
+    let step = run(&room, &state(), &transcript, &sequential());
     assert!(
         matches!(step, HiveStep::Speak { .. }),
         "archivist is free to break the tie even though addressed, got {step:?}",
@@ -60,7 +60,7 @@ fn a_deadlock_nobody_can_break_is_terminal() {
     // critic backs `stage`, scout backs `ship`. Nobody is left to break it.
     let room = Room::new();
     assert_eq!(
-        run(&room, &state(), &deadlocked(), &EpisodePolicy::DEFAULT),
+        run(&room, &state(), &deadlocked(), &sequential()),
         HiveStep::Deadlocked {
             topics: vec![TopicId("stage".into()), TopicId("ship".into())],
         },
@@ -74,19 +74,11 @@ fn a_grounded_objection_carries_the_room_through_a_deadlock() {
     let mut transcript = deadlocked();
     transcript.push(said(5, "critic", "!object >4 ^3 That precedent differs."));
 
-    let HiveStep::Speak { turn } = run(&room, &state(), &transcript, &EpisodePolicy::DEFAULT)
-    else {
-        panic!("expected the room to move to commit")
-    };
+    let (turn, next) = spoke(run(&room, &state(), &transcript, &sequential()));
     assert_eq!(turn.phase, Phase::Commit);
 
     transcript.push(said(6, &turn.agent_id, "!commit #stage Locking this in."));
-    let HiveStep::Converged { topic, .. } = run(
-        &room,
-        &turn.next_state,
-        &transcript,
-        &EpisodePolicy::DEFAULT,
-    ) else {
+    let HiveStep::Converged { topic, .. } = run(&room, &next, &transcript, &sequential()) else {
         panic!("expected convergence")
     };
     assert_eq!(topic, TopicId("stage".into()));

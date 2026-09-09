@@ -84,6 +84,7 @@ mod cli;
 mod compare;
 mod context;
 mod federation;
+mod horizon;
 mod http;
 mod live;
 mod live_single;
@@ -97,6 +98,7 @@ mod scenario;
 mod sim;
 mod swarm;
 mod sweep;
+mod variety;
 
 use std::time::Instant;
 
@@ -202,6 +204,16 @@ fn run(options: &Options) -> Result<(), String> {
         // at the single `--agents` size that would then go unused.
         return scale::sweep(options);
     }
+    if matches!(options.mode, Mode::StageSweep) {
+        // Its own rooms, one chain of them per horizon, so nothing here
+        // generates a single-stage room that would then go unused.
+        return horizon::sweep(options);
+    }
+    if matches!(options.mode, Mode::FacetSweep) {
+        // Its own rooms, one per facet of each task, so nothing here
+        // generates a single-facet room that would then go unused.
+        return variety::sweep(options);
+    }
     if matches!(options.mode, Mode::Swarm) {
         return swarm_compare(options);
     }
@@ -231,10 +243,11 @@ fn run(options: &Options) -> Result<(), String> {
         .collect();
 
     match &options.mode {
-        // Handled above, before the single-desk rooms were generated.
         // Handled above, each before the rooms this arm of the match would
         // have needed were generated.
-        Mode::Swarm | Mode::StatsCheck | Mode::ScaleSweep => Ok(()),
+        Mode::Swarm | Mode::StatsCheck | Mode::ScaleSweep | Mode::StageSweep | Mode::FacetSweep => {
+            Ok(())
+        }
         Mode::Compare => compare(options, &rooms),
         Mode::Trace => trace(&rooms, &options.policy),
         Mode::Sweep => sweep_policies(options, &rooms),

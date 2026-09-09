@@ -36,6 +36,13 @@
 //! | `hive+rounds` | broadcast, plus continuous pairwise **off the floor** |
 //! | `hive+fact°` | broadcast, plus one bounded pairwise check off the floor |
 //! | `hive+pooled` | the ceiling: everything every member holds, free |
+//! | `hive+wide` | broadcast, every round widened — concurrency in full |
+//! | `hive+blind` | broadcast, widened only while blind — the free half |
+//!
+//! `rounds/ep` sits beside `turns/ep` because depth and width are different
+//! costs and the ladder is where they diverge most: at sixty-four members
+//! `hive+` is 65.1 rounds deep and `hive+blind` is 31.0, for the same accuracy
+//! to a tenth of a point.
 //!
 //! `rows/ep` is reported beside accuracy because it is the third axis of scale
 //! and the one a host pays for: a channel that buys two points by writing four
@@ -50,7 +57,7 @@ use crate::TASK;
 use crate::arms;
 use crate::cli::Options;
 use crate::metrics::Aggregate;
-use crate::policy::tuned_policy;
+use crate::policy::{blind_wide_policy, tuned_policy, widened_policy};
 use crate::rng::mix;
 use crate::run::{
     AsideMode, CheckStyle, run_episode, run_episode_checking, run_episode_exchanging_with,
@@ -70,6 +77,9 @@ struct Point {
     arm: &'static str,
     correct: f64,
     turns: f64,
+    /// Rounds per episode: the arm's depth, what a host with async seats waits
+    /// for. The whole reason this sweep needed a second cost column.
+    depth: f64,
     rows: f64,
 }
 
@@ -160,6 +170,8 @@ fn one_size(
     let mut rounds = Channel::default();
     let mut off_floor = Channel::default();
     let mut pooled = Channel::default();
+    let mut wide = Channel::default();
+    let mut blind_wide = Channel::default();
 
     for room in rooms {
         ladder.add_arm(&arms::run_ladder(room, options.seed)?);
@@ -199,6 +211,22 @@ fn one_size(
             room.pooled()
         };
         pooled.add(&run_episode(&ceiling, tuned, TASK, false)?);
+        // The same broadcast room, run in concurrent rounds. This is the arm
+        // the scale result asks for: every floor-bound channel dies as the
+        // room grows because turns per member is `budget / n`, and a round is
+        // the only thing that changes that ratio without changing the budget.
+        wide.add(&run_episode(
+            room,
+            &widened_policy(tuned, options.round_width),
+            TASK,
+            false,
+        )?);
+        blind_wide.add(&run_episode(
+            room,
+            &blind_wide_policy(tuned, options.round_width),
+            TASK,
+            false,
+        )?);
     }
 
     let named = [
@@ -209,6 +237,8 @@ fn one_size(
         ("hive+rounds", rounds),
         ("hive+fact°", off_floor),
         ("hive+pooled", pooled),
+        ("hive+wide", wide),
+        ("hive+blind", blind_wide),
     ];
     Ok(named
         .into_iter()
@@ -217,6 +247,7 @@ fn one_size(
             arm,
             correct: channel.totals.accuracy(),
             turns: channel.totals.turns_per_episode(),
+            depth: channel.totals.rounds_per_episode(),
             rows: channel.rows_per_episode(),
         })
         .collect())
@@ -228,6 +259,7 @@ fn render(points: &[Point], sizes: &[usize], options: &Options) -> String {
     let task = match options.expertise {
         Expertise::HiddenProfile => "hidden profile",
         Expertise::Specialists { .. } => "specialists",
+        Expertise::Roles { .. } => "roles",
         Expertise::Uniform => "uniform noise",
     };
     let _ = write!(
@@ -239,6 +271,7 @@ fn render(points: &[Point], sizes: &[usize], options: &Options) -> String {
     for (title, field) in [
         ("correct %", 0_usize),
         ("turns/ep — rows on the floor", 1),
+        ("rounds/ep — depth, what a host waits for", 3),
         ("contacts/ep — members asked privately", 2),
     ] {
         let _ = write!(out, "{title}\n\narm         ");
@@ -254,6 +287,8 @@ fn render(points: &[Point], sizes: &[usize], options: &Options) -> String {
             "hive+rounds",
             "hive+fact°",
             "hive+pooled",
+            "hive+wide",
+            "hive+blind",
         ] {
             let _ = write!(out, "{arm:<12}");
             for size in sizes {
@@ -265,6 +300,7 @@ fn render(points: &[Point], sizes: &[usize], options: &Options) -> String {
                         let value = match field {
                             0 => point.correct,
                             1 => point.turns,
+                            3 => point.depth,
                             _ => point.rows,
                         };
                         let _ = write!(out, "{value:>9.1}");
