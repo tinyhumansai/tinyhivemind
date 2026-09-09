@@ -393,11 +393,11 @@ fn library_division(seats: usize, facets: usize) -> Option<tinyhivemind_hive::Di
     let names = seat_names(seats);
     let ids: Vec<&str> = names.iter().map(String::as_str).collect();
     let host = Host::new(&ids);
-    let named: Vec<TopicId> = (0..facets)
+    let questions: Vec<TopicId> = (0..facets)
         .map(|facet| TopicId::from(format!("facet{facet}").as_str()))
         .collect();
     divide(
-        &named,
+        &questions,
         crate::run::DESK_ID,
         &host.roster(),
         &host.desks(),
