@@ -736,6 +736,35 @@ impl Room {
         room
     }
 
+    /// Charge every member one row per option for the brief it was handed.
+    ///
+    /// Without this a member's own reading is free: it lives in `evals`, which
+    /// no window touches, so a room of five carries *nothing* while a soloist
+    /// handed the same five briefs carries all of it. That asymmetry is an
+    /// artifact of where the harness happens to store a number, not a property
+    /// of either arm, and on a long task it is the whole quantity under test.
+    ///
+    /// The rows are [`EntryKind::Stub`]s: they occupy a position and move no
+    /// score, because the reading they stand for is already counted through
+    /// `evals`. What they buy is that it is counted *as something held*.
+    ///
+    /// Only `--stages` calls this, so every other arm carries exactly what it
+    /// carried before.
+    ///
+    /// [`EntryKind::Stub`]: crate::context::EntryKind::Stub
+    pub(crate) fn charge_brief(&mut self) {
+        let topics: Vec<TopicId> = self
+            .agents
+            .first()
+            .map(|agent| agent.evals.iter().map(|(topic, _)| topic.clone()).collect())
+            .unwrap_or_default();
+        for agent in &mut self.agents {
+            for topic in &topics {
+                agent.note_stub(topic);
+            }
+        }
+    }
+
     /// Give every member of this room the same window.
     pub(crate) fn set_budget(&mut self, budget: ContextBudget) {
         self.budget = budget;

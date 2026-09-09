@@ -209,6 +209,10 @@ fn staged(options: &Options, seed: u64, stage: usize, prior: Option<&Room>, wron
     if wrong {
         room = room.poisoned(POISON_LIFT);
     }
+    // Every member pays for the brief it was handed, before any arm decides
+    // what to do with it. A soloist that is later given every peer's brief
+    // pays for those too, on top.
+    room.charge_brief();
     room.set_budget(options.budget());
     room
 }
