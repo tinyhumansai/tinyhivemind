@@ -10,7 +10,7 @@
 use std::{collections::HashMap, fs, sync::PoisonError, time::Duration};
 
 use tinyhivemind::{
-    BrevityPolicy, BriefedTeammate, ChannelDigest, Conversation, DigestOutcome, DigestPolicy,
+    BrevityPolicy, BriefedTeammate, ChannelDigest, LogMessage, Conversation, DigestOutcome, DigestPolicy,
     Digester, MentionDispatchOutcome, Sequence, SessionAuthor, SessionQuery, TeamBriefing,
     apply_digest,
     aside::{Audience, Viewer},
