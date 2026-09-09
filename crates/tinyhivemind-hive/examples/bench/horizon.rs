@@ -499,4 +499,28 @@ mod test {
         });
         assert!(close(single.end_to_end(), single.per_stage()));
     }
+
+    /// `staged` bypasses the normal room-generation path `main.rs` applies
+    /// `--blind-evidence` on, so it must apply the flag itself rather than
+    /// silently building every member with the default, off, value.
+    #[test]
+    fn a_staged_room_applies_blind_evidence() {
+        let options = Options {
+            blind_evidence: true,
+            ..Options::defaults()
+        };
+        let room = staged(&options, 0xA11CE, 0, None, false);
+        assert!(
+            room.agents.iter().all(SimAgent::blind_evidence),
+            "--blind-evidence must reach every member of a staged room, \
+             the same way it reaches the default room-generation path",
+        );
+
+        let off = staged(&Options::defaults(), 0xA11CE, 0, None, false);
+        assert!(
+            off.agents.iter().all(|agent| !agent.blind_evidence()),
+            "a staged room built without the flag stays off, exactly as \
+             the default room does",
+        );
+    }
 }
