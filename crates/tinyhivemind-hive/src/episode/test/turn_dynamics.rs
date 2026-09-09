@@ -127,32 +127,43 @@ fn a_blind_turn_preserves_pre_episode_agent_context() {
 }
 
 #[test]
-fn a_continuing_blind_round_selects_the_unheard_member_over_a_louder_heard_one() {
-    // `unheard` bounded the blind round's *width*, but `floor_round` still
+fn a_continuing_wide_blind_round_selects_the_unheard_member_over_a_louder_heard_one() {
+    // `unheard` bounded a *wide* blind round's width, but `floor_round` still
     // ranked bids from every member -- heard and unheard alike. A member
     // already heard this episode can out-bid an unheard one (here, `planner`
     // is addressed by `critic`'s citation and picks up `ADDRESSED_BONUS`),
-    // and the round would reselect that heard member instead of the one
-    // still owed a turn: budget spent, the blind phase no closer to closing.
+    // and a round continuing the blind phase would reselect that heard
+    // member instead of the one still owed a turn: budget spent, the blind
+    // phase no closer to closing, potentially all the way to exhaustion.
     //
     // `scout` has not spoken. `planner` and `critic` both have, and
     // `planner`'s citation bonus dwarfs anything `scout` can bid at zero
-    // threshold, so this pins the fix: the round is filtered to unheard
-    // identities, not merely capped at their count.
+    // threshold, so this pins the fix: a concurrent round is filtered to
+    // unheard identities, not merely capped at their count.
+    //
+    // `round_width: 2` matters here, not `sequential`'s `1` -- the fix is
+    // scoped to a genuinely concurrent round precisely so that `round_width:
+    // 1` keeps reproducing the sequential episode bit for bit, floor rotation
+    // left to `charged`'s threshold dynamics exactly as it always was.
     let room = Room::new();
-    let policy = sequential();
+    let policy = EpisodePolicy {
+        round_width: 2,
+        revealed_width: 2,
+        ..EpisodePolicy::DEFAULT
+    };
     let transcript = vec![
         said(1, "planner", "!propose #stage"),
         said(2, "critic", "!support #stage ^1"),
     ];
 
-    let turn = speaking(run(&room, &state(), &transcript, &policy));
+    let (turns, _) = round(run(&room, &state(), &transcript, &policy));
     assert_eq!(
-        turn.agent_id, "scout",
+        turns.iter().map(|turn| turn.agent_id.as_str()).collect::<Vec<_>>(),
+        vec!["scout"],
         "the still-blind round must pick the one member left unheard, \
          not the louder bid from a member already heard",
     );
-    assert_eq!(turn.visibility, Visibility::Blind);
+    assert_eq!(turns[0].visibility, Visibility::Blind);
 }
 
 #[test]
