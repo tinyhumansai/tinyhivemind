@@ -203,6 +203,82 @@ struct Totals {
     ladder_directed: Aggregate,
 }
 
+impl Totals {
+    /// Every arm's totals, in one array, so a fold over all of them does not
+    /// have to name each one twice.
+    fn arms_mut(&mut self) -> [&mut Aggregate; 22] {
+        [
+            &mut self.hive_default,
+            &mut self.hive_tuned,
+            &mut self.hive_refuting,
+            &mut self.hive_evidential,
+            &mut self.hive_knowing,
+            &mut self.hive_deferring,
+            &mut self.hive_aside,
+            &mut self.hive_ask,
+            &mut self.hive_aside_informed,
+            &mut self.hive_aside_fact,
+            &mut self.hive_aside_mute,
+            &mut self.hive_aside_alongside,
+            &mut self.hive_aside_exchange,
+            &mut self.hive_exchange_rounds,
+            &mut self.hive_aside_hush,
+            &mut self.hive_exchange_quiet,
+            &mut self.hive_aside_offfloor,
+            &mut self.hive_pooled,
+            &mut self.hive_both,
+            &mut self.all_reasoning,
+            &mut self.vote,
+            &mut self.ladder,
+        ]
+    }
+
+    /// The same array, borrowed.
+    fn arms(&self) -> [&Aggregate; 22] {
+        [
+            &self.hive_default,
+            &self.hive_tuned,
+            &self.hive_refuting,
+            &self.hive_evidential,
+            &self.hive_knowing,
+            &self.hive_deferring,
+            &self.hive_aside,
+            &self.hive_ask,
+            &self.hive_aside_informed,
+            &self.hive_aside_fact,
+            &self.hive_aside_mute,
+            &self.hive_aside_alongside,
+            &self.hive_aside_exchange,
+            &self.hive_exchange_rounds,
+            &self.hive_aside_hush,
+            &self.hive_exchange_quiet,
+            &self.hive_aside_offfloor,
+            &self.hive_pooled,
+            &self.hive_both,
+            &self.all_reasoning,
+            &self.vote,
+            &self.ladder,
+        ]
+    }
+
+    /// Fold another chunk of rooms' totals in, arm by arm.
+    ///
+    /// Called in **room order**, which is the whole contract: see
+    /// [`Aggregate::merge`] for why folding out of order would leave every
+    /// paired interval in the second table quietly wrong.
+    ///
+    /// `ladder_directed` sits outside the arrays above because it is the one
+    /// arm whose per-room work depends on a directory earned over `--history`
+    /// prior episodes of the *same* room, so it is merged explicitly here
+    /// rather than being reachable through an index.
+    fn merge(&mut self, other: &Self) {
+        for (mine, theirs) in self.arms_mut().into_iter().zip(other.arms()) {
+            mine.merge(theirs);
+        }
+        self.ladder_directed.merge(&other.ladder_directed);
+    }
+}
+
 /// Run every arm over the same rooms, and say how long the whole sample took.
 ///
 /// # Errors
