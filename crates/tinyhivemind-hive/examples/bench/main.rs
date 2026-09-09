@@ -276,7 +276,13 @@ fn trace(rooms: &[Room], policy: &EpisodePolicy) -> Result<(), String> {
 /// Charge every arm for the context it needs, and print who degrades first.
 fn sweep_context(options: &Options, rooms: &[Room]) -> Result<(), String> {
     let wall = Instant::now();
-    let points = budget::sweep(rooms, &options.policy, TASK, options.aside_cap)?;
+    let points = budget::sweep(
+        rooms,
+        &options.policy,
+        TASK,
+        options.aside_cap,
+        options.jobs,
+    )?;
     let wall = wall.elapsed();
     print!("{}", budget::render(&points, rooms.len()));
     println!("\nswept in {:.2} s", wall.as_secs_f64());

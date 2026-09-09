@@ -40,6 +40,7 @@ use tinyhivemind_hive::EpisodePolicy;
 
 use crate::context::ContextBudget;
 use crate::metrics::Aggregate;
+use crate::parallel;
 use crate::run::{AsideMode, CheckStyle, EpisodeReport, run_episode, run_episode_checking};
 use crate::sim::Room;
 
