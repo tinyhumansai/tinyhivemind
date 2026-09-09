@@ -4,7 +4,7 @@
 
 use super::super::*;
 use super::support::{
-    MEMBERS, Room, converging, operator, run, said, sequential, speaking, spoke, state,
+    MEMBERS, Room, converging, operator, round, run, said, sequential, speaking, spoke, state,
 };
 use crate::attention::BidReason;
 use tinyhivemind::Sequence;
