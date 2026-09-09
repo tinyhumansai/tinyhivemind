@@ -202,6 +202,31 @@ fn digest_values_pin_deterministic_wire_shapes() {
 }
 
 #[test]
+fn a_policy_stored_before_the_size_trigger_existed_still_decodes() {
+    // The exact wire shape `DigestPolicy` had before `fold_after_chars` was
+    // added. A host that stored one of these must not get a missing-field
+    // decode error after the upgrade; it must get the documented safety
+    // ceiling instead.
+    let pre_upgrade = serde_json::json!({
+        "keep_live": 30,
+        "fold_after": 20,
+        "input_limit": 60,
+        "budget_chars": 4000
+    });
+    let decoded: DigestPolicy =
+        serde_json::from_value(pre_upgrade).expect("an older payload still decodes");
+    assert_eq!(
+        decoded.fold_after_chars,
+        DigestPolicy::DEFAULT.fold_after_chars,
+        "the missing field defaults to the documented safety ceiling",
+    );
+    assert_eq!(decoded.keep_live, DigestPolicy::DEFAULT.keep_live);
+    assert_eq!(decoded.fold_after, DigestPolicy::DEFAULT.fold_after);
+    assert_eq!(decoded.input_limit, DigestPolicy::DEFAULT.input_limit);
+    assert_eq!(decoded.budget_chars, DigestPolicy::DEFAULT.budget_chars);
+}
+
+#[test]
 fn leaves_a_channel_shorter_than_the_live_tail_alone() {
     assert_eq!(
         plan_digest(None, ChannelHead::at(Sequence(12)), DigestPolicy::DEFAULT),

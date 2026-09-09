@@ -350,7 +350,7 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
         let rows = transcript.rows();
         let head = ChannelHead {
             sequence: Sequence(transcript.len() as u64),
-            unfolded_chars: unfolded_chars(&rows, account.as_ref()),
+            unfolded_chars: unfolded_chars(&rows, account.as_ref(), options.window),
         };
         let board = fold_pins(&rows, &Viewer::Operator, PIN_LIMIT);
         match refold(
@@ -655,15 +655,107 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
     Ok(())
 }
 
-/// Characters of desk-visible content the room's account does not yet cover.
+/// Characters of foldable, desk-visible content the room's account does not
+/// yet cover.
 ///
 /// Private rows are skipped, because an account may not contain one: a long
 /// aside must not be able to spend the room's summarization budget on content
-/// the fold is forbidden to carry.
-fn unfolded_chars(rows: &[LogMessage], account: Option<&ChannelDigest>) -> usize {
+/// the fold is forbidden to carry. The live tail — the newest `keep_live` rows
+/// — is skipped too: `refold` can never fold it, so counting it toward the
+/// size trigger would spend a provider call summarizing older rows while an
+/// oversized recent post, the actual cause, sails through untouched. See
+/// `docs/specs/folding-by-size.md`'s "Both triggers are thresholds on
+/// foldable content, never on the live tail."
+fn unfolded_chars(rows: &[LogMessage], account: Option<&ChannelDigest>, keep_live: usize) -> usize {
     let folded = account.map_or(0, |digest| digest.through.0);
+    let ceiling = (rows.len() as u64).saturating_sub(keep_live as u64);
     rows.iter()
-        .filter(|row| row.sequence.0 > folded && row.audience.is_desk())
+        .filter(|row| {
+            row.sequence.0 > folded && row.sequence.0 <= ceiling && row.audience.is_desk()
+        })
         .map(|row| row.content.chars().count())
         .sum()
+}
+
+#[cfg(test)]
+mod test {
+    //! `unfolded_chars` in isolation: the live tail must never be able to
+    //! trip the size trigger on its own, because `refold` can never fold it.
+
+    #![allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)]
+
+    use super::unfolded_chars;
+    use tinyhivemind::{LogMessage, Sequence, SessionAuthor, aside::Audience};
+
+    fn row(sequence: u64, content: &str) -> LogMessage {
+        LogMessage {
+            sequence: Sequence(sequence),
+            chat_id: None,
+            parent: None,
+            author: SessionAuthor::Agent {
+                id: "solver".into(),
+                label: "SOLVER".into(),
+            },
+            content: content.into(),
+            audience: Audience::Desk,
+        }
+    }
+
+    #[test]
+    fn an_oversized_live_tail_does_not_trip_the_size_trigger_alone() {
+        // Every row here is inside `keep_live`: `refold` cannot fold any of
+        // them, so a huge live post must not count toward the size trigger.
+        let rows = vec![row(1, &"x".repeat(50)), row(2, &"y".repeat(500_000))];
+        assert_eq!(
+            unfolded_chars(&rows, None, 30),
+            0,
+            "nothing is foldable yet, so nothing should be counted",
+        );
+    }
+
+    #[test]
+    fn only_rows_at_or_below_the_ceiling_are_counted() {
+        // keep_live = 1 leaves row 1 foldable and row 2 live.
+        let rows = vec![row(1, &"a".repeat(10)), row(2, &"b".repeat(500_000))];
+        assert_eq!(
+            unfolded_chars(&rows, None, 1),
+            10,
+            "only the foldable row's characters count, not the live tail's",
+        );
+    }
+
+    #[test]
+    fn a_folded_watermark_still_excludes_rows_at_or_before_it() {
+        let rows = vec![row(1, &"a".repeat(10)), row(2, &"b".repeat(20))];
+        let account = super::ChannelDigest {
+            conversation: super::Conversation {
+                desk_id: "pe1006".into(),
+                desk_name: "PE 1006".into(),
+                thread_root: None,
+            },
+            through: Sequence(1),
+            covered: 1,
+            generation: 1,
+            text: "account so far".into(),
+        };
+        assert_eq!(
+            unfolded_chars(&rows, Some(&account), 0),
+            20,
+            "row 1 is already folded; only row 2 is unfolded and foldable",
+        );
+    }
+
+    #[test]
+    fn a_private_row_never_counts_even_when_it_would_be_foldable() {
+        let mut private = row(1, &"z".repeat(500_000));
+        private.audience = Audience::Aside {
+            members: vec!["checker".into()],
+        };
+        let rows = vec![private];
+        assert_eq!(
+            unfolded_chars(&rows, None, 0),
+            0,
+            "an account may not contain a private row, so it must not trigger one either",
+        );
+    }
 }

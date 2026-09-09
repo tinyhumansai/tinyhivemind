@@ -61,12 +61,31 @@ fn a_dm_recipient_the_grammar_would_not_have_matched_still_reaches_them() {
 }
 
 #[test]
-fn a_dm_whose_text_names_a_peer_hands_that_peer_the_turn() {
-    let committed = commit("solver", &dm(&["checker"], "@theory take this next"));
+fn a_dm_whose_text_names_a_peer_already_in_the_audience_hands_them_the_turn() {
+    let committed = commit("solver", &dm(&["checker"], "@checker take this next"));
     assert_eq!(
         agents(&committed),
-        vec!["theory"],
-        "who reads it and who goes next are different questions",
+        vec!["checker"],
+        "who reads it and who goes next are different questions, but nobody \
+         outside the audience is ever one of the answers",
+    );
+    assert_eq!(
+        committed.audience,
+        Audience::Aside {
+            members: vec!["checker".into()]
+        },
+    );
+}
+
+#[test]
+fn a_dm_whose_text_names_a_peer_outside_the_audience_does_not_hand_them_the_content() {
+    // `checker` is the only admitted reader. A body that also names `theory`
+    // must not become a next-turn dispatch that carries this private content
+    // to somebody who was never admitted to it — see the P1 fixed here.
+    let committed = commit("solver", &dm(&["checker"], "@theory take this next"));
+    assert!(
+        agents(&committed).is_empty(),
+        "a peer the `to` field never named does not receive the private body",
     );
     assert_eq!(
         committed.audience,

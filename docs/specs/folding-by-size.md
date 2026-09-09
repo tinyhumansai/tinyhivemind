@@ -119,9 +119,13 @@ whose first turn is on a room of hundreds of rows.
 - A digester that is missing or failing is `DigestOutcome::Unavailable`, not an
   error. Compaction is an optimization over a projection that is already
   correct without it.
-- `fold_after_chars: 0` is the disabled state, and `DigestPolicy::DEFAULT`
-  keeps today's behavior plus a size ceiling generous enough that no existing
-  host changes shape without asking.
+- `fold_after_chars: 0` is the disabled state, and `DigestPolicy::DEFAULT` sets
+  it to `400_000` — a high safety ceiling, not zero, so a host wanting strict
+  compatibility with the row-only trigger must set `fold_after_chars: 0`
+  explicitly. No existing test fixture or caller in this workspace reaches the
+  ceiling on rows alone, so nothing here changes shape without asking; a host
+  whose *own* live scrollback already exceeds 400,000 characters would gain the
+  size trigger for the first time.
 
 ## Acceptance criteria
 

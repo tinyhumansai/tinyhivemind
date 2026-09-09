@@ -255,6 +255,21 @@ pub fn commit_utterance(request: &CommitRequest<'_>) -> Result<CommittedUtteranc
         AsideDecision::One { audience } => (audience, None),
         AsideDecision::None { reason } => (Audience::Desk, Some(reason)),
     };
+    // A private row's content is only ever safe with its audience. A `dm`'s
+    // body may name a peer the `to` field did not — the check-in above hands
+    // that peer the next turn only when it is one of the admitted readers,
+    // never the content itself carried to somebody who was never admitted to
+    // it. A refusal falls back to `Audience::Desk` and needs no filtering:
+    // the row is fully public by the time this runs.
+    let mentions = match &audience {
+        Audience::Aside { members } => mentions
+            .into_iter()
+            .filter(|mention| {
+                matches!(&mention.target, MentionTarget::Agent { id } if members.contains(id))
+            })
+            .collect(),
+        Audience::Desk => mentions,
+    };
     Ok(CommittedUtterance {
         content,
         audience,

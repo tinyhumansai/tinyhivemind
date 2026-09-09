@@ -39,10 +39,13 @@ No new port, no tokenizer, no change to what a fold may cover.
    it as a `const fn` with the ratio named as a constant and documented as a
    proxy, not a measurement.
 
-4. Set `DigestPolicy::DEFAULT.fold_after_chars` to a generous ceiling rather
-   than to `0`, and add a test pinning the value. A host that never touches the
-   policy should gain a safety net, not a behavior change: the default must be
-   high enough that every existing test's fixture still plans what it planned.
+4. Set `DigestPolicy::DEFAULT.fold_after_chars` to a generous ceiling — `400_000`
+   — rather than to `0`, and add a test pinning the value. `0` stays the
+   explicit opt-out for a host that wants the old row-only trigger and nothing
+   else. The default must be high enough that every existing test's fixture
+   still plans what it planned; a host whose own live scrollback already
+   exceeds the ceiling gains the size trigger for the first time, which is the
+   safety net working as intended, not a fixture regression.
 
 5. Add a failing test that a seat with no prior turns is composed a prompt
    containing the account, in `crates/tinyhivemind/tests/`, using a stub
