@@ -71,7 +71,7 @@ use tinyhivemind::{desk::DeskSet, roster::Roster};
 use crate::directory::Directory;
 use crate::error::Error;
 use crate::trace::TopicId;
-use crate::{Result, error};
+use crate::Result;
 
 /// Divide a task's facets across a desk's active members.
 ///
@@ -217,7 +217,3 @@ fn packed(
     }
     assignments
 }
-
-// Re-exported for the doc link above, which names the module rather than the
-// type so a reader lands on the error list rather than on one variant.
-use error as _error_docs;

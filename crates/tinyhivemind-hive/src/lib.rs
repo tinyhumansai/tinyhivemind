@@ -55,6 +55,8 @@
 //!   sources a turn carries.
 //! - [`mod@directory`] — who knows what, folded from grounded deposits and the
 //!   citations they drew.
+//! - [`division`] — a task's facets, split across the seats that own them, and
+//!   what each owner reads. The one mechanism here whose default is *on*.
 //! - [`episode`] — the pure state machine, and the visibility filter.
 //! - [`error`] — typed failures from malformed inputs.
 //! - [`quorum`] — standings, cross-inhibition, and the consensus predicate.
@@ -133,6 +135,7 @@
 
 pub mod attention;
 pub mod directory;
+pub mod division;
 pub mod episode;
 pub mod error;
 pub mod exchange;
@@ -145,6 +148,7 @@ pub use attention::{
     allocate_chars, bids, floor_holder, floor_round,
 };
 pub use directory::{Directory, DirectoryEntry, DirectoryPolicy, WEIGHT_CEILING, directory};
+pub use division::{Assignment, Division, DivisionPolicy, OwnerReason, divide};
 pub use episode::{
     DEFAULT_REVEALED_WIDTH, DEFAULT_ROUND_WIDTH, EpisodePolicy, EpisodeState, HiveStep, HiveTurn,
     Phase, Visibility, project_for, step,

@@ -66,6 +66,14 @@ pub enum Error {
     /// before anyone could be in one, which is a configuration error rather
     /// than a quieter way of saying the same thing. The precedent is
     /// [`Self::ZeroDeferCap`].
+    /// A division was asked for on a desk with no active member to own a
+    /// facet. Distinct from an empty task, which divides into nothing and is
+    /// not an error.
+    #[error("desk `{desk_id}` has no active member to own a facet")]
+    NoSeats {
+        /// The desk that came back empty.
+        desk_id: String,
+    },
     #[error("round width must not be zero")]
     ZeroRoundWidth,
 }
