@@ -334,11 +334,10 @@ sub-decisions at once, each wanting a different kind of attention — it flips:
 
 At one facet they are identical and the room is the wrong tool. From two on, a
 seat's accuracy is flat in width where the soloist's decays — a seat never holds
-the facets it is not deciding — and eight facets cost two rounds rather than
-eight. The advantage is entirely the context window, and it is bought by
-dividing the work along a line where competence differs; divide it anywhere else
-and it vanishes. [Task variety](https://github.com/tinyhumansai/tinyhivemind/wiki/Task-variety)
-has the controls.
+the facets it is not deciding — and eight facets cost two rounds, not eight. The
+advantage is entirely the context window, and it is bought by dividing the work
+along a line where competence differs; divide it anywhere else and it vanishes.
+[Task variety](https://github.com/tinyhumansai/tinyhivemind/wiki/Task-variety) has the controls.
 
 ## Not an agent council
 
