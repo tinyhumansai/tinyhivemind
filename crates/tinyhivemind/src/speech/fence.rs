@@ -37,13 +37,17 @@ pub fn extract_post(text: &str) -> String {
     let after = &text[last + OPEN.len()..];
     // The asymmetric fence: the body runs to the next `POST>>>`.
     if let Some(end) = after.find(CLOSE) {
-        return after[..end].trim_start_matches(">>>").trim().to_string();
+        return after[..end].trim().to_string();
     }
-    // The symmetric one: the last marker is a *closer*, so the body is what
-    // sits between it and the marker before it.
+    // No terminator after the last marker: it is a symmetric fence, so the
+    // marker found is the closer and the one before it opened the block.
     if let Some(&open) = opens.iter().rev().nth(1) {
         let body = &text[open + OPEN.len()..last];
-        return body.trim_start_matches(">>>").trim().to_string();
+        return body.strip_prefix(">>>").unwrap_or(body).trim().to_string();
     }
-    after.trim_start_matches(">>>").trim().to_string()
+    after
+        .strip_prefix(">>>")
+        .unwrap_or(after)
+        .trim()
+        .to_string()
 }
