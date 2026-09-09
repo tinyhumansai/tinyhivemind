@@ -221,6 +221,12 @@ async fn land(
     if let Some(id) = landed.session.clone() {
         sessions.insert(delivery.seat_id.to_string(), id);
     }
+    // The landing's whole purpose is to get the work onto disk, so what it
+    // wrote is exactly what the room most needs told about. Without this the
+    // feedthrough row reports the *working* turn's files and silently omits
+    // the ones the rescue produced — which is every file, on a turn that ran
+    // out of budget before it wrote anything.
+    absorb_written(output, &landed);
     if let Some(said) = settle(delivery.outbox, &mut landed) {
         println!("   landed in the seat's own session, files included");
         output.message = said.utterance.message().to_string();
@@ -262,6 +268,18 @@ async fn land(
     Ok(Some(Said {
         utterance: Utterance::Post { message: salvage },
     }))
+}
+
+/// Fold a rescue turn's written paths into the turn the room is told about.
+///
+/// Order is the order they were written, the working turn's first, and a path
+/// written in both phases is named once.
+fn absorb_written(output: &mut agent::TurnOutput, landed: &agent::TurnOutput) {
+    for path in &landed.files_written {
+        if !output.files_written.contains(path) {
+            output.files_written.push(path.clone());
+        }
+    }
 }
 
 /// What a turn said to the room, or `None` when it said nothing.

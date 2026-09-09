@@ -114,3 +114,38 @@ fn an_empty_turn_says_nothing_rather_than_saying_the_empty_string() {
         assert!(settle(&outbox, &mut output).is_none(), "{text:?}");
     }
 }
+
+#[test]
+fn a_rescue_turns_files_are_the_ones_the_room_is_told_about() {
+    // A turn that spends its whole budget before writing anything has an
+    // empty `files_written`; everything it saved, the landing saved. Reporting
+    // only the working turn's paths announces nothing at all.
+    let mut output = agent::TurnOutput {
+        files_written: vec!["/ws/brute.py".into()],
+        ..agent::TurnOutput::default()
+    };
+    let landed = agent::TurnOutput {
+        files_written: vec![
+            "/ws/brute.py".into(),
+            "/ws/structure.py".into(),
+            "/ws/NOTES.md".into(),
+        ],
+        ..agent::TurnOutput::default()
+    };
+    absorb_written(&mut output, &landed);
+    assert_eq!(
+        output.files_written,
+        ["/ws/brute.py", "/ws/structure.py", "/ws/NOTES.md"],
+        "written order is kept, and a path written twice is named once",
+    );
+}
+
+#[test]
+fn a_rescue_that_wrote_nothing_changes_nothing() {
+    let mut output = agent::TurnOutput {
+        files_written: vec!["/ws/brute.py".into()],
+        ..agent::TurnOutput::default()
+    };
+    absorb_written(&mut output, &agent::TurnOutput::default());
+    assert_eq!(output.files_written, ["/ws/brute.py"]);
+}
