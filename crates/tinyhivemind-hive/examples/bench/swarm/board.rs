@@ -24,6 +24,72 @@ use tinyhivemind_hive::{
 use super::{Channel, SwarmHost, SwarmMember, SwarmReport, format};
 
 /// The scheduler's own state: the journals, what is in flight, and the tally.
+/// One authorized turn, with everything its seat needs to fill it.
+///
+/// Carries its own copy of the projection rather than borrowing the journal,
+/// so the desks can speak at the same time while the board stays untouched
+/// until every one of them has finished.
+pub(super) struct PlannedTurn {
+    /// The desk this turn belongs to.
+    pub(super) desk: usize,
+    /// The seat, within that desk, the episode authorized.
+    pub(super) seat: usize,
+    /// Exactly what this turn may see.
+    pub(super) visible: Vec<SessionMessage>,
+    /// Peer channels this desk has not yet asked.
+    pub(super) peers: Vec<String>,
+    /// Whether this desk may spend the turn asking one of them.
+    pub(super) budget: bool,
+    /// The turn itself.
+    pub(super) turn: HiveTurn,
+}
+
+/// What a seat actually said, once it had said it.
+pub(super) struct SpokenTurn {
+    /// The desk it was said on.
+    pub(super) desk: usize,
+    /// Who said it.
+    pub(super) agent_id: String,
+    /// What they said.
+    pub(super) content: String,
+    /// Whether the seat spent the turn asking another channel.
+    pub(super) offered: bool,
+}
+
+/// Fill one planned turn, with no access to the board at all.
+///
+/// A free function rather than a method precisely because it must not touch
+/// the board: this is the half that runs on every desk at once, and the only
+/// state it may reach is the seats of its own desk.
+///
+/// # Errors
+///
+/// Returns a host-side failure, such as an agent process that did not answer.
+pub(super) fn fill_turn(
+    seats: &mut [&mut dyn SwarmMember],
+    planned: &PlannedTurn,
+) -> Result<SpokenTurn, String> {
+    let peers: Vec<&str> = planned.peers.iter().map(String::as_str).collect();
+    let ask = if planned.budget {
+        seats[planned.seat].ask(&peers)
+    } else {
+        None
+    };
+    let (content, offered) = match ask {
+        Some(body) => (body, true),
+        None => (
+            seats[planned.seat].speak(&planned.turn, &planned.visible)?,
+            false,
+        ),
+    };
+    Ok(SpokenTurn {
+        desk: planned.desk,
+        agent_id: planned.turn.agent_id.clone(),
+        content,
+        offered,
+    })
+}
+
 /// Where a desk pays for a question it puts to another channel.
 ///
 /// The two settings differ in one thing and it is the one that matters at
@@ -205,48 +271,70 @@ impl<'a> Board<'a> {
         Ok(())
     }
 
-    /// Run one turn the episode authorized, which the member may spend asking.
-    pub(super) fn take_turn(
-        &mut self,
-        members: &mut [Vec<&mut dyn SwarmMember>],
+    /// What a desk needs to know before it can fill an authorized turn.
+    ///
+    /// Split out of running the turn because the two happen at different
+    /// times: planning reads the board and is microseconds, while filling the
+    /// turn is a model call and is seconds. Every desk plans first, every desk
+    /// then speaks at once, and the answers land in desk order — see
+    /// [`crate::parallel::map_mut_in_order`] for why that last part is not
+    /// optional.
+    ///
+    /// # Errors
+    ///
+    /// Returns a host-side failure when the authorized speaker is not seated
+    /// on the desk the turn belongs to.
+    pub(super) fn plan_turn(
+        &self,
+        members: &[Vec<&mut dyn SwarmMember>],
         desk: usize,
         turn: &HiveTurn,
-    ) -> Result<(), String> {
+    ) -> Result<PlannedTurn, String> {
         let seat = seat_of(&members[desk], &turn.agent_id)?;
-        let peers: Vec<&str> = self
+        let peers: Vec<String> = self
             .channels
             .iter()
             .enumerate()
             .filter(|(index, _)| *index != desk)
-            .map(|(_, channel)| channel.id.as_str())
+            .map(|(_, channel)| channel.id.clone())
             .skip(self.asks[desk])
             .collect();
         // Off the floor, an authorized turn is never spent asking: the ask
         // has its own channel and its own bound, and this turn is for
         // deliberating.
-        let budget =
-            self.asking.on_floor() && self.referrals.enabled && self.asks[desk] < self.ask_width();
-        let mut offered = false;
-        let content = {
-            let visible = project_for(turn, &self.host.journals[desk]);
-            let ask = if budget {
-                members[desk][seat].ask(&peers)
-            } else {
-                None
-            };
-            match ask {
-                Some(body) => {
-                    offered = true;
-                    body
-                }
-                None => members[desk][seat].speak(turn, &visible)?,
-            }
-        };
-        let sequence = self.commit(members, desk, &turn.agent_id, &content);
-        let routed = budget && self.route(desk, &turn.agent_id, &content, sequence, 0, None)?;
+        let budget = self.asking.on_floor()
+            && self.referrals.enabled
+            && self.asks[desk] < self.ask_width();
+        Ok(PlannedTurn {
+            desk,
+            seat,
+            visible: project_for(turn, &self.host.journals[desk]),
+            peers,
+            budget,
+            turn: *turn,
+        })
+    }
+
+    /// Append what a desk said, offer it to the desk, and route any question.
+    ///
+    /// The sequential half of a turn, run in desk order after every desk has
+    /// spoken.
+    ///
+    /// # Errors
+    ///
+    /// Returns the library's own error text when routing fails.
+    pub(super) fn land_turn(
+        &mut self,
+        members: &mut [Vec<&mut dyn SwarmMember>],
+        spoken: &SpokenTurn,
+        budget: bool,
+    ) -> Result<(), String> {
+        let desk = spoken.desk;
+        let sequence = self.commit(members, desk, &spoken.agent_id, &spoken.content);
+        let routed = budget && self.route(desk, &spoken.agent_id, &spoken.content, sequence, 0, None)?;
         // A turn spent asking is spent whether or not the question found its
         // way out, so the budget is charged either way.
-        if offered || routed {
+        if spoken.offered || routed {
             self.asks[desk] = self.asks[desk].saturating_add(1);
         }
         Ok(())
