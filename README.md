@@ -337,8 +337,7 @@ At one facet they are identical and the room is the wrong tool. From two on, a
 seat's accuracy stays flat in width where the soloist's decays — a seat never
 holds facets it is not deciding — and eight facets cost two rounds, not eight.
 The advantage is the context window, bought by dividing along a line where
-competence differs; divide it anywhere else and it vanishes. [Task
-variety](https://github.com/tinyhumansai/tinyhivemind/wiki/Task-variety) has the controls.
+competence differs; divide it anywhere else and it vanishes. [Task variety](https://github.com/tinyhumansai/tinyhivemind/wiki/Task-variety) has the controls.
 
 ## Not an agent council
 
