@@ -207,9 +207,8 @@ has the tables behind each of those, across desk sizes, plus what the benchmark 
 the library's claim is about — one agent working a long task, compacting as it
 goes. A room beats an *evicting* soloist once the window is tight and never a
 *summarising* one: [`HORIZON.md`](HORIZON.md). `--facets` runs a task that is
-several questions **at once** instead, one owner each, and there the room does
-win — flat accuracy in width where the soloist decays:
-[`VARIETY.md`](VARIETY.md).
+several questions **at once** instead, one owner each, and there the room wins —
+flat accuracy in width where the soloist decays: [`VARIETY.md`](VARIETY.md).
 
 ## Statistics
 
