@@ -176,7 +176,7 @@ fn authorized(
     policy: &EpisodePolicy,
     bids: &[crate::attention::Bid],
     members: &[&str],
-    round: Round,
+    round: Round<'_>,
 ) -> HiveStep {
     // The room records one decision, so a commit round is one turn wide
     // however wide the policy allows. Widening it would let two members record
@@ -199,7 +199,7 @@ fn authorized(
         // projections, fewer waits.
         Visibility::Blind => policy
             .round_width
-            .min(u32::try_from(round.unheard).unwrap_or(u32::MAX))
+            .min(u32::try_from(round.unheard.len()).unwrap_or(u32::MAX))
             .max(1),
         Visibility::Full => policy.revealed_width,
     };
@@ -208,7 +208,25 @@ fn authorized(
     } else {
         cap.min(remaining)
     };
-    let speaking = floor_round(bids, width);
+    // A blind round is bounded above by how many members are still unheard,
+    // but a bound on *count* alone is not a bound on *identity*: `floor_round`
+    // ranks every bid it is handed, so a heard member's bid — sharpened by,
+    // say, `ADDRESSED_BONUS` — can still outrank an unheard member's and take
+    // the seat that member was owed. Restrict the candidates to unheard
+    // identities first, so the blind round can only ever spend its remaining
+    // turns closing the blind phase rather than repeating it.
+    let eligible: Vec<crate::attention::Bid>;
+    let candidates: &[crate::attention::Bid] = if round.visibility == Visibility::Blind {
+        eligible = bids
+            .iter()
+            .filter(|bid| round.unheard.contains(&bid.agent_id.as_str()))
+            .cloned()
+            .collect();
+        &eligible
+    } else {
+        bids
+    };
+    let speaking = floor_round(candidates, width);
     if speaking.is_empty() {
         return HiveStep::Idle;
     }
