@@ -20,17 +20,17 @@ use tinyhivemind::{
         dispatch_mention,
     },
     initialize_session,
-    mention::{MentionAuthor, resolve},
+    mention::MentionAuthor,
     refold,
     responder::{ResponderRequest, SelectionPolicy, choose_responder},
     roster::{Person, Roster, RosterMember},
     sharing::{SharingPlan, SharingQuery, SharingState, initialized_state, prepare_delta},
+    speech::{CommitRequest, addressed_peers, commit_utterance},
 };
 
 use crate::{
     BoxError, agent,
-    aside::{self, Addressed},
-    chat,
+    aside, chat,
     cli::Options,
     deskfile, digest, log, mcp, memory,
     notebook::{files_written, read_notebook},
