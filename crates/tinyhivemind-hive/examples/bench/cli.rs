@@ -156,6 +156,9 @@ pub(crate) enum Mode {
     /// Sweep the context-window model instead: who is still right when the
     /// window is tight.
     ContextSweep,
+    /// Sweep room size against channel topology: at what size does the way
+    /// members reach each other start to matter, and which way.
+    ScaleSweep,
     /// Drive one episode through a real agent CLI or an HTTP backend.
     Live,
     /// Compare several desks solving one problem across channels.
@@ -346,7 +349,7 @@ fn apply_expertise_flag(
                 .unwrap_or(0.0)
                 .clamp(0.0, 1.0);
         }
-        "--context-sweep" => options.mode = Mode::ContextSweep,
+                "--context-sweep" => options.mode = Mode::ContextSweep,
                 "--scale-sweep" => options.mode = Mode::ScaleSweep,
                 "--sizes" => {
                     if let Some(list) = args.next() {

@@ -197,6 +197,11 @@ fn stats_check() -> bool {
 fn run(options: &Options) -> Result<(), String> {
     // Built first because every other mode needs them, and skipped for the
     // swarm, which generates federations of its own.
+    if matches!(options.mode, Mode::ScaleSweep) {
+        // Its own rooms, one set per size, so nothing here generates a room
+        // at the single `--agents` size that would then go unused.
+        return scale::sweep(options);
+    }
     if matches!(options.mode, Mode::Swarm) {
         return swarm_compare(options);
     }
@@ -232,6 +237,7 @@ fn run(options: &Options) -> Result<(), String> {
         Mode::Trace => trace(&rooms, &options.policy),
         Mode::Sweep => sweep_policies(options, &rooms),
         Mode::ContextSweep => sweep_context(options, &rooms),
+        Mode::ScaleSweep => Ok(()),
         Mode::Live => live_episode(options),
     }
 }
