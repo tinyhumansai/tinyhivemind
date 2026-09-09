@@ -1,5 +1,10 @@
 # Fold the room by size, and give a joining seat the account
 
+**Status:** Landed. Task 2's audience filter lives in the host's character
+count rather than in the library, because the count itself is host state; the
+pinned-message obligation the summarizer now carries was added to the spec
+after this plan was written.
+
 Linked specification: [`../specs/folding-by-size.md`](../specs/folding-by-size.md)
 
 ## Goal

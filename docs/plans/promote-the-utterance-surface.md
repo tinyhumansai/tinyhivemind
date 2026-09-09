@@ -1,5 +1,7 @@
 # Promote the utterance surface into the library
 
+**Status:** Landed.
+
 Linked specification: [`../specs/the-utterance-surface.md`](../specs/the-utterance-surface.md)
 
 ## Goal

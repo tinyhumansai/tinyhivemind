@@ -1,5 +1,9 @@
 # Back the desk example with tinyinference and tinytools
 
+**Status:** Landed. `anyhow` came with `tinytools` — implementing its `Tool`
+means naming the error type it returns — and `--tool-surface` was added so the
+`tinytools` rendering has a caller in this host rather than only in its tests.
+
 Linked decision: [`../adr/0013-a-vendored-crate-is-an-example-dependency.md`](../adr/0013-a-vendored-crate-is-an-example-dependency.md)
 Linked specification: [`../specs/the-utterance-surface.md`](../specs/the-utterance-surface.md)
 
