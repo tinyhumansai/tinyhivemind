@@ -120,6 +120,40 @@ pub(crate) fn swarm_compare(options: &Options) -> Result<(), String> {
     }
 
     let wall = Instant::now();
+    let totals = run_federated_arms(options, &federations, &desk_policy, &merged_policy)?;
+    let wall = wall.elapsed();
+
+    tabulate(&totals, wall, federations.len());
+    Ok(())
+}
+
+/// Every federated arm's totals over one sample of federations.
+struct FederatedTotals {
+    /// Desks that cannot reach each other at all.
+    siloed: SwarmTotals,
+    /// Desks that reach each other by spending an authorized turn on it.
+    swarmed: SwarmTotals,
+    /// Desks that reach each other off the floor, bounded by `--ask-cap`.
+    offfloor: SwarmTotals,
+    /// The ceiling: every desk's reading already in every member's hands.
+    free: SwarmTotals,
+    /// One room holding every member of every desk.
+    merged: Aggregate,
+    /// The matched-budget independent poll across the whole federation.
+    vote: Aggregate,
+}
+
+/// Run every federated arm over the same federations.
+///
+/// # Errors
+///
+/// Returns the library's own error text from any arm.
+fn run_federated_arms(
+    options: &Options,
+    federations: &[Federation],
+    desk_policy: &EpisodePolicy,
+    merged_policy: &EpisodePolicy,
+) -> Result<FederatedTotals, String> {
     // One federation per worker, folded here in federation order. Every
     // federation is generated from its own seed and shares nothing with
     // another, so this is the same fold spread across cores — see
@@ -184,19 +218,16 @@ pub(crate) fn swarm_compare(options: &Options) -> Result<(), String> {
         merged.add_arm(&outcome.merged);
         vote.add_arm(&outcome.vote);
     }
-    let wall = wall.elapsed();
 
-    tabulate(
-        &siloed,
-        &swarmed,
-        &offfloor,
-        &free,
-        &merged,
-        &vote,
-        wall,
-        federations.len(),
-    );
-    Ok(())
+
+    Ok(FederatedTotals {
+        siloed,
+        swarmed,
+        offfloor,
+        free,
+        merged,
+        vote,
+    })
 }
 
 /// Running totals over a sample of federated runs.
