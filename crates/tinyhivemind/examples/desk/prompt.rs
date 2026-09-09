@@ -6,7 +6,7 @@
 //! including the standing brief from the desk file and whatever the memory
 //! store recalled for this turn.
 
-use std::fmt::Write as _;
+use std::{collections::BTreeMap, fmt::Write as _};
 
 use tinyhivemind::{SessionAuthor, SessionMessage};
 
@@ -20,15 +20,39 @@ use crate::{
 ///
 /// The order matters: who it is, what the desk knows, what the room has said,
 /// then what it was actually asked. A model reads the last thing best.
-pub(crate) fn compose_prompt(
-    briefing: Option<&str>,
-    account: Option<&str>,
-    history: &[SessionMessage],
-    seat: &deskfile::AgentSpec,
-    job: &PendingTurn,
-    recalled: &str,
-    notebook: Option<&str>,
-) -> String {
+pub(crate) struct TurnPrompt<'a> {
+    /// The library's briefing, or `None` when the seat is only being caught up.
+    pub(crate) briefing: Option<&'a str>,
+    /// The desk's standing account of everything older than the window.
+    pub(crate) account: Option<&'a str>,
+    /// The live window of messages this seat may see.
+    pub(crate) history: &'a [SessionMessage],
+    /// Whose turn it is.
+    pub(crate) seat: &'a deskfile::AgentSpec,
+    /// What triggered the turn.
+    pub(crate) job: &'a PendingTurn,
+    /// Whatever the memory store recalled for this turn.
+    pub(crate) recalled: &'a str,
+    /// The seat's own notebook, carried from its last turn.
+    pub(crate) notebook: Option<&'a str>,
+    /// Every seat on the desk, in desk-file order.
+    pub(crate) seats: &'a [deskfile::AgentSpec],
+    /// Each seat's most recent sequence number, for seats that have spoken.
+    pub(crate) spoken: &'a BTreeMap<String, u64>,
+}
+
+pub(crate) fn compose_prompt(turn: &TurnPrompt<'_>) -> String {
+    let &TurnPrompt {
+        briefing,
+        account,
+        history,
+        seat,
+        job,
+        recalled,
+        notebook,
+        seats,
+        spoken,
+    } = turn;
     let mut prompt = match briefing {
         Some(text) => text.to_string(),
         None => format!(
@@ -37,6 +61,8 @@ pub(crate) fn compose_prompt(
             seat.id
         ),
     };
+    prompt.push_str(&who_is_here(seats, &seat.id, spoken));
+    prompt.push_str(&desk_so_far(account, history));
     prompt.push_str("\n\n## Your standing brief\n");
     prompt.push_str(seat.brief.trim());
     if !recalled.trim().is_empty() {
@@ -53,13 +79,6 @@ pub(crate) fn compose_prompt(
     match notebook {
         Some(text) => prompt.push_str(text),
         None => prompt.push_str("(empty — you have not written one yet; start it this turn)"),
-    }
-    // Everything older than the live window, as one account the room keeps and
-    // rewrites. It is derived and lossy: the messages themselves are still in
-    // the transcript at the numbers it cites, and `desk_read` reaches them.
-    if let Some(account) = account {
-        prompt.push_str("\n\n## The room before that (the desk's standing account)\n");
-        prompt.push_str(account);
     }
     prompt.push_str(match briefing {
         Some(_) => "\n\n## The room so far\n",
@@ -89,6 +108,75 @@ pub(crate) fn compose_prompt(
     prompt
 }
 
+/// The desk in one place, before any of the detail below it.
+///
+/// A seat opens a fresh process every turn and reads the last thing best, so
+/// the first thing it sees should be where the desk *is*, not where it left
+/// its own notes. Everything older than the live window is folded into one
+/// standing account and placed here; the window itself follows further down.
+///
+/// It always says something. When no fold has happened yet the section states
+/// that plainly and says where the room actually starts, because a seat told
+/// nothing about the desk's history cannot tell the difference between "there
+/// is none" and "you were not shown it" — and the second is the one that makes
+/// it re-derive work somebody already did.
+fn desk_so_far(account: Option<&str>, history: &[SessionMessage]) -> String {
+    let mut text = String::from("\n\n## The desk so far (read this first)\n");
+    if let Some(summary) = account {
+        text.push_str(summary.trim());
+        text.push_str(
+            "\n\nThat account is written from the desk's own messages and is lossy. \
+             Every message it stands for is still in the transcript at the number it \
+             cites, and `desk_read(limit)` gets you the messages themselves. Read it \
+             before you start work: it is how you avoid re-deriving something the room \
+             has already settled.",
+        );
+    } else {
+        let from = history.first().map_or_else(
+            || "the opening message".to_string(),
+            |message| format!("[{}]", message.sequence.0),
+        );
+        let _ = write!(
+            text,
+            "No standing account has been written yet — the desk is still short \
+             enough that everything it has said is below, starting at {from}. Read \
+             the room before you start work, and use `desk_read(limit)` if you need \
+             further back than you were handed."
+        );
+    }
+    text
+}
+
+/// Who is on this desk right now, and what each of them has done.
+///
+/// The briefing already lists the seats, but as a static roster: names and
+/// roles, with no indication of who is actually carrying the work. A seat
+/// deciding who to hand the turn to needs the other half — who has spoken,
+/// when, and who has not spoken at all — and deriving that from a bounded
+/// window is exactly the thing a window cannot be relied on for. In run 28 the
+/// desk spent nine of twelve turns inside one seat while three sat idle, and
+/// `desk_dm` went unused across the whole run.
+///
+/// `spoken` maps a seat id to the sequence number of its most recent message.
+fn who_is_here(seats: &[deskfile::AgentSpec], me: &str, spoken: &BTreeMap<String, u64>) -> String {
+    let mut text = String::from("\n\n## Who is on this desk right now\n");
+    for seat in seats {
+        let mine = if seat.id == me { " (you)" } else { "" };
+        let state = match spoken.get(&seat.id) {
+            Some(at) => format!("last spoke at [{at}]"),
+            None => "has not spoken yet".to_string(),
+        };
+        let _ = writeln!(text, "- @{}{mine} — {} — {state}", seat.id, seat.role);
+    }
+    text.push_str(
+        "\nNaming one of them with @id is what runs them next; naming nobody ends \
+         the chain and the chair has to restart the room. Pick the seat whose role \
+         fits the open step, not whoever spoke last, and prefer a seat that has not \
+         spoken when the work is theirs to do.\n",
+    );
+    text
+}
+
 /// How a seat speaks, what survives its turn, and the rules of the room.
 ///
 /// Split out of [`compose_prompt`] because it is a constant block of text
@@ -107,7 +195,11 @@ fn house_rules(seat_id: &str) -> String {
          - `desk_dm(to, message)` — say it to named seats instead, when you need one \
            peer to settle something and the room does not need to watch. It still \
            costs your one message for the turn, and the room is told the exchange \
-           happened.\n\
+           happened. This is the same mechanism the shared-session rules above call \
+           `!aside @peer`; call the tool rather than writing the marker. Use it for \
+           a two-seat disagreement, a correction that would otherwise embarrass the \
+           room's record, or a question only one seat can answer — not for a result, \
+           which belongs to everyone.\n\
          - `desk_read(limit)` — read further back than the window you were handed.\n\
          - `desk_close(message)` — say one last thing AND report the work finished. \
            Use it instead of `desk_post` only when the task is genuinely delivered \
@@ -139,11 +231,16 @@ fn house_rules(seat_id: &str) -> String {
            you must finish by calling `desk_post` or `desk_dm`: a turn that never \
            posts is a turn the room never happened, and the work in it reaches \
            nobody.\n\
-         - Older messages reach you as the desk's standing account rather than in \
-           full. It is written from the messages and can be thin; `desk_read` gets \
-           you the messages themselves.\n\
+         - Start by reading `## The desk so far` at the top. It is the desk's \
+           standing account of everything older than the window, and it is there so \
+           you do not spend your turn re-deriving something the room already \
+           settled. It is written from the messages and can be thin; `desk_read` \
+           gets you the messages themselves, at the numbers it cites.\n\
          - If the desk tools are not attached to this session, fall back to wrapping \
            the message in <<<POST and POST>>> and say so in it.\n",
     );
     prompt
 }
+
+#[cfg(test)]
+mod test;

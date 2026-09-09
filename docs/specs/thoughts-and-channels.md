@@ -168,13 +168,18 @@ what makes it safe to be lossy.
    `cargo test --all-features`, and `.github/scripts/assert-pure.sh` all pass.
    **Met** — 811 tests, 0 failures.
 7. On the same task and desk file as runs 26–27, per-turn `read` calls and
-   messages-per-minute are recorded and compared. **Partly met** — run 28
-   recorded 4 `read` calls in 133 (3%) against run 27's 15 in 19 (79%) and run
-   26's 27 in 53, 4.4 minutes per message against 19.4, and it solved the
-   problem where neither baseline did. But **no fold fired in that run**: at
-   `--window 12` a fold needs more than 32 rows and the desk closed at 23, so
-   the gain is attributable to the notebook, the tool-call room and the landing
-   phase, and the standing account remains untested live. See
+   messages-per-minute are recorded and compared. **Not met** — run 28 solved
+   PE 1006 where runs 26 and 27 did not, but its read counts are not comparable
+   to theirs: both baselines resumed a 29-file workspace (run 27's task file
+   opens "Read NOTES.md, then start here") while run 28 began with an empty
+   directory, which explains the gap at least as well as any mechanism here.
+   Nor does the run test this spec's mechanisms: no fold fired (at `--window 12`
+   a fold needs more than 32 rows and the desk closed at 23), the solving turns
+   carried no notebook, and turns 1–2 posted through the landing phase without
+   calling `desk_post` at all. The tool room's demonstrated gain is narrower —
+   10 clean posts out of 10 on turns 3–12, against run 26's malformed fence.
+   A comparable run means run 28's configuration started from run 27's
+   workspace. See
    [`2026-09-08-pe1006-tool-room.md`](../experiments/2026-09-08-pe1006-tool-room.md).
 
 ## What this does not yet do

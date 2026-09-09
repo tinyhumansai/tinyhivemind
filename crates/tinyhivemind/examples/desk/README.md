@@ -40,7 +40,7 @@ Everything that waits on something is here, and none of it is in the library:
 | `mcp.rs` | the MCP transport: the JSON-RPC loop, the per-turn outbox, and pricing a `desk_dm` before the turn ends |
 | `tools.rs` | the room's surface rendered twice — JSON Schema for MCP, `tinytools::Tool` for a host running its own loop — over one `invoke` |
 | `room.rs` | the roster and desk snapshots both processes fold over |
-| `prompt.rs` | `compose_prompt`, turning a seat's briefing, history, and trigger into one prompt |
+| `prompt.rs` | `compose_prompt`, turning a seat's briefing, roster, history, and trigger into one prompt; `who_is_here` is the live roster |
 | `notebook.rs` | the notebook a seat carries between turns: reading back its tail within budget, and naming what a turn wrote |
 | `agent.rs` | one `opencode run` per turn, and its output |
 | `chat.rs` | the tool-less wrap-up channel, on `tinyinference` |
@@ -90,7 +90,8 @@ information.
 | `--library-scope` `--session-scope` | the durable and per-run memory scopes |
 | `--no-memory` | run with no recall and no capture |
 | `--no-digest` | do not fold older messages into the room's account |
-| `--fold-tokens N` | fold once the unfolded scrollback would cost roughly N tokens, whichever binds first with the row count. `0` leaves only the row trigger |
+| `--fold-after N` | rows past the window before a fold is spent; lower it to exercise the account on a short desk |
+| `--fold-tokens N` | fold once the unfolded scrollback would cost roughly N tokens, whichever binds first with `--fold-after`. `0` leaves only the row trigger |
 | `--mcp-server --outbox PATH` | serve the desk tools over stdio; the binary re-execs itself into this mode and takes no turn. `--desk` and `--turn` let it price a `desk_dm` before the turn ends |
 | `--tool-surface` | print the four tools a seat is given, with their schemas, and exit |
 

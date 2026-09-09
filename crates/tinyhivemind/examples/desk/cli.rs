@@ -8,6 +8,8 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
+use tinyhivemind::DigestPolicy;
+
 use crate::BoxError;
 
 /// What one invocation of this binary is for.
@@ -84,9 +86,15 @@ pub(crate) struct Options {
     /// Whether messages older than the live window are folded into one
     /// standing account of the room.
     pub(crate) fold_account: bool,
+    /// How many rows must accumulate past the window before a fold is worth
+    /// spending a completion on. Lower it to exercise the account on a short
+    /// desk; the default only pays off on a long one.
+    pub(crate) fold_after: usize,
     /// Tokens of desk-visible scrollback that trigger a fold on their own.
     ///
-    /// Converted to a character threshold by
+    /// The other half of the same question. `fold_after` says the room has
+    /// moved; this says its scrollback has grown expensive, and whichever
+    /// binds first wins. Converted to a character threshold by
     /// [`DigestPolicy::from_token_budget`](tinyhivemind::DigestPolicy::from_token_budget),
     /// which states the ratio it assumes. Zero leaves only the row trigger.
     pub(crate) fold_tokens: usize,
@@ -126,8 +134,9 @@ impl Options {
             outbox: None,
             turn: None,
             fold_account: true,
-            // Low enough that a desk of the shape run 28 had folds at least
-            // once, which no run has yet done.
+            fold_after: DigestPolicy::DEFAULT.fold_after,
+            // Low enough that a desk of the shape run 28 had would fold at
+            // least once, which no run has yet done.
             fold_tokens: 50_000,
         };
         let mut args = std::env::args().skip(1);
@@ -155,6 +164,7 @@ impl Options {
                 "--outbox" => options.outbox = Some(PathBuf::from(value()?)),
                 "--turn" => options.turn = Some(PathBuf::from(value()?)),
                 "--no-digest" => options.fold_account = false,
+                "--fold-after" => options.fold_after = value()?.parse()?,
                 "--fold-tokens" => options.fold_tokens = value()?.parse()?,
                 "--tool-surface" => options.mode = Mode::PrintSurface,
                 "--no-memory" => {

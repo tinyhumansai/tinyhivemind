@@ -7,12 +7,17 @@
 //! without chasing five helpers. `crosstalk` makes the same trade with
 //! `too_many_arguments`.
 
-use std::{collections::HashMap, fs, sync::PoisonError, time::Duration};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fs,
+    sync::PoisonError,
+    time::Duration,
+};
 
 use tinyhivemind::{
     BrevityPolicy, BriefedTeammate, ChannelDigest, ChannelHead, Conversation, DigestOutcome,
-    DigestPolicy, Digester, LogMessage, MentionDispatchOutcome, Sequence, SessionAuthor,
-    SessionQuery, TeamBriefing, apply_digest,
+    DigestPolicy, Digester, LogMessage, MentionDispatchContext, MentionDispatchOutcome, Sequence,
+    SessionAuthor, SessionQuery, TeamBriefing, apply_digest,
     aside::{Audience, Viewer},
     dispatch::{
         DispatchConversation, DispatchKey, MentionDispatchInput, MentionDispatchPolicy,
@@ -32,7 +37,7 @@ use crate::{
     cli::Options,
     deskfile, digest, log, mcp, memory,
     notebook::{files_written, read_notebook},
-    prompt::compose_prompt,
+    prompt::{TurnPrompt, compose_prompt},
     queue::{DeskQueue, PendingTurn},
     room, turn,
 };
@@ -148,6 +153,7 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
     // 604k tokens, which is a fold the row count would never have planned.
     let account_policy = DigestPolicy {
         keep_live: options.window,
+        fold_after: options.fold_after,
         budget_chars: ACCOUNT_CHARS,
         ..DigestPolicy::from_token_budget(options.fold_tokens)
     };
@@ -442,7 +448,18 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
                 seat.id.clone(),
                 initialized_state(conversation.clone(), sequence),
             );
-            let text = session.briefing.system_text();
+            // The dispatch-aware form, because this host knows both halves
+            // the plain one has to withhold: the policy in force and the hop
+            // this turn is at. Without it a seat is never told that naming a
+            // teammate is what runs them next, which is the whole hand-off
+            // mechanism — and it is told nothing at all when it is at the cap,
+            // which is also correct.
+            let text = session
+                .briefing
+                .system_text_with_dispatch(MentionDispatchContext {
+                    policy,
+                    hop: job.hop,
+                });
             (session.history, Some(text), false)
         };
         let recalled = store
@@ -457,15 +474,28 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
         let composed = apply_digest(if catching_up { None } else { account.as_ref() }, &window);
         let history = composed.messages;
         let notebook = read_notebook(&options.workspace, &seat.id);
-        let prompt = compose_prompt(
-            briefing_text.as_deref(),
-            composed.digest.as_deref(),
-            &history,
+        // Who has spoken and when, folded from the transcript rather than
+        // read out of the window: the window is bounded and a seat that fell
+        // out of it is exactly the seat nobody thinks to call on.
+        let spoken: BTreeMap<String, u64> = transcript
+            .rows()
+            .into_iter()
+            .filter_map(|row| match row.author {
+                SessionAuthor::Agent { id, .. } => Some((id, row.sequence.0)),
+                _ => None,
+            })
+            .collect();
+        let prompt = compose_prompt(&TurnPrompt {
+            briefing: briefing_text.as_deref(),
+            account: composed.digest.as_deref(),
+            history: &history,
             seat,
-            &job,
-            &recalled,
-            notebook.as_deref(),
-        );
+            job: &job,
+            recalled: &recalled,
+            notebook: notebook.as_deref(),
+            seats: &spec.agents,
+            spoken: &spoken,
+        });
         println!(
             "[turn {turns}] @{} ({} chars of prompt, {} {} message(s){}, notebook {})",
             seat.id,
