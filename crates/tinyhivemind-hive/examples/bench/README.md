@@ -56,6 +56,8 @@ Every arm decides the same rooms from the same private evaluations.
 | `hive+rounds` | The same continuous exchange run **off the floor**, in rounds between turns: nobody takes the floor for it, so its volume is set by `--exchange-cap` rather than by how many turns the room takes. Priced in the `calls/ep` column. See [ADR 0012](../../../../docs/adr/0012-an-exchange-round-spends-model-calls-not-turns.md). |
 | `hive+quiet` | `hive+rounds` with the answers **discarded**: the same rounds, the same rows, the same sequence numbers consumed, and no information transferred. The control that separates what an off-floor exchange *says* from what merely writing its rows does to salience decay. |
 | `hive+fact°` | The same bounded exchange as `hive+fact`, held **off the floor** — before the episode opens, spending no turn the room could have deliberated with. Its peer is chosen from private room state rather than the transcript, so it bounds what the exchange is worth off the floor rather than isolating scheduling alone. |
+| `hive+wide` | The tuned policy with **every** round widened to `--round-width`, blind and revealed alike. What full concurrency costs. |
+| `hive+blind` | The same width applied **only while the room is blind**. A blind member cannot read a peer's row whether or not it ran concurrently with that peer, so this changes no projection anybody sees — and scores what `hive+` scores in under half the rounds. See [ADR 0014](../../../../docs/adr/0014-a-round-authorizes-concurrent-turns.md). |
 | `hive+pooled` | The **ceiling for equal-weight pooling**: every private reading and every fact already in every member's hands, free, averaged with no regard for whose reading it is. No amount of pairwise exchange beats it on the rooms this benchmark measures (uniform and hidden-profile, where every peer's reading is equally reliable) — under `--specialists`, where readings genuinely differ in reliability, a protocol that could tell them apart could in principle beat indiscriminate averaging. |
 | `ladder+dir` | The responder ladder again, with a directory the room *earned* over `--history` prior episodes of `hive+` on the same room. The selector's candidates carry that directory's per-agent lines as their `description`, the request names the topic the call turns on, and a router that reads the descriptions picks the heaviest holder of it. Validated through the real `accept_selection`. |
 | `all-reasoning` | Only under `--cost-tiers`, in the cost table: `hive+dir+defer` (the delegating room) against a policy that puts every seat on the expensive tier. |
@@ -199,6 +201,33 @@ The two refutation arms lose, which is why both knobs are off in
 `QuorumPolicy::DEFAULT`. `hive+ref` falls below even the vote control, and
 `hive+ev` starves the room — it fails to decide two episodes in five. [The benchmark write-up](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks)
 has the tables behind each of those, across desk sizes, plus what the benchmark does not show.
+
+## Depth and width
+
+`turns/ep` is what the turn budget bounds. `rounds/ep`, beside it, is what a
+host with async seats actually waits for: every turn in one round is authorized
+against the same transcript and none of them can read another, so they cost one
+wait between them. Until ADR 0014 the two were one number, and the table charged
+`vote` fifteen turns for what is **one round** of fifteen independent answers —
+so the matched-budget control was never spending more wall clock than the
+deliberation, but about seven times less.
+
+Width turns out to be two mechanisms with opposite prices, which is why the
+policy carries two bounds. Widening a **blind** round is free, because a blind
+member could not read a concurrent peer's row in any case; widening a
+**revealed** round is not, because a revealed member's turn depends on exactly
+that row.
+
+```text
+arm       turns/ep rounds/ep   decided %   correct %
+hive+         6.75      6.75        99.4        82.1
+hive+wide     7.64      3.38        89.5        77.1
+hive+blind    6.75      3.75        99.4        82.1
+```
+
+The numbers across the room sizes, and what this does *not* show — concurrency
+does not rescue the scale collapse — are in
+[`../../../../docs/experiments/2026-09-09-depth-and-width.md`](../../../../docs/experiments/2026-09-09-depth-and-width.md).
 
 ## Statistics
 
@@ -429,6 +458,7 @@ and why the sweep reports an ordering rather than a value are in
 | `--context N` | rows each member's window holds; `0` (default) disables the window model entirely |
 | `--rot F` | how hard the middle of that window is discounted, `0.0..=1.0` (default `0.0`) |
 | `--context-sweep` | run the window ladder instead of comparing arms once |
+| `--round-width N` | turns one round may authorize concurrently, read by `hive+wide` and `hive+blind` (default 4); `0` makes both bit-identical to `hive+`. Every published arm runs at width one, so no recorded number moves with it |
 | `--aside-cap N` | pairwise checks one member may open (default 1); under `hive+share` it caps distinct peers contacted instead; `0` makes every aside arm bit-identical to `hive+` |
 | `--aside-cap N` | pairwise checks one member may open (default 1); under `hive+share` it caps distinct peers contacted instead; `0` makes every on-floor and alongside aside arm bit-identical to `hive+` |
 | `--exchange-cap N` | private rows one member may write **off the floor** across an episode, read by `hive+rounds` (default 4); a separate knob because it bounds model calls rather than the room's turns; `0` makes `hive+rounds` bit-identical to `hive+` |
