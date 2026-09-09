@@ -121,14 +121,10 @@ impl Federation {
         noise: u32,
         bias: i32,
     ) -> Self {
-        let topics = topics.clamp(2, TOPIC_NAMES.len());
+        let topics = topics.clamp(2, MAX_TOPICS);
         let desk_count = desks.clamp(2, MAX_DESKS);
         let per_desk = per_desk.clamp(2, MAX_MEMBERS);
-        let names: Vec<TopicId> = TOPIC_NAMES
-            .iter()
-            .take(topics)
-            .map(|name| TopicId::from(*name))
-            .collect();
+        let names: Vec<TopicId> = (0..topics).map(topic_at).collect();
         // Placed by the seed rather than at a fixed index, so no arm can score
         // by preferring the first option.
         let truth_index = usize::try_from(mix(seed, 0x7275_7468) % (topics as u64)).unwrap_or(0);
