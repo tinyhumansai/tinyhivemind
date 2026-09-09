@@ -460,6 +460,12 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
                 None => "none".to_string(),
             }
         );
+        // Say whose turn is running, so the server serving this seat's tools
+        // can price a `desk_dm` against the aside policy while the seat is
+        // still able to act on the answer.
+        if let Some(path) = &serving.turn {
+            mcp::open_turn(path, &seat.id);
+        }
         let Some((output, said)) = turn::deliver(
             &turn::Delivery {
                 runner: &runner,
