@@ -146,6 +146,7 @@ fn request(through: u64, messages: Vec<SessionMessage>) -> DigestRequest {
         messages,
         through: Sequence(through),
         budget_chars: 40,
+        pinned: Vec::new(),
     }
 }
 
@@ -240,7 +241,7 @@ fn advances_by_at_most_one_input_limit_per_fold() {
     assert_eq!(
         plan_digest(
             Some(&held(60, "so far")),
-            Sequence(400),
+            ChannelHead::at(Sequence(400)),
             DigestPolicy::DEFAULT
         ),
         DigestPlan::Fold {
@@ -255,7 +256,7 @@ fn stops_folding_once_the_account_reaches_the_live_tail() {
     assert_eq!(
         plan_digest(
             Some(&held(370, "so far")),
-            Sequence(400),
+            ChannelHead::at(Sequence(400)),
             DigestPolicy::DEFAULT
         ),
         DigestPlan::Current
@@ -428,7 +429,7 @@ async fn folds_a_long_channel_and_hands_the_digester_the_prior_account() {
         Some(&digester),
         &engineering(),
         Some(&held(1, "the brief")),
-        Sequence(400),
+        ChannelHead::at(Sequence(400)),
         DigestPolicy::DEFAULT,
     )
     .await
@@ -456,7 +457,7 @@ async fn does_not_call_a_digester_for_a_channel_that_is_current() {
             Some(&digester),
             &engineering(),
             None,
-            Sequence(12),
+            ChannelHead::at(Sequence(12)),
             DigestPolicy::DEFAULT
         )
         .await
@@ -480,7 +481,7 @@ async fn treats_a_missing_or_failing_digester_as_a_lost_optimization() {
             None,
             &engineering(),
             None,
-            Sequence(400),
+            ChannelHead::at(Sequence(400)),
             DigestPolicy::DEFAULT
         )
         .await
@@ -494,7 +495,7 @@ async fn treats_a_missing_or_failing_digester_as_a_lost_optimization() {
             Some(&BrokenDigester),
             &engineering(),
             None,
-            Sequence(400),
+            ChannelHead::at(Sequence(400)),
             DigestPolicy::DEFAULT
         )
         .await
@@ -515,7 +516,7 @@ async fn reports_a_rejected_answer_rather_than_committing_it() {
         Some(&FixedDigester::new("   ")),
         &engineering(),
         None,
-        Sequence(400),
+        ChannelHead::at(Sequence(400)),
         DigestPolicy::DEFAULT,
     )
     .await
@@ -551,7 +552,7 @@ async fn advances_an_account_over_a_step_with_nothing_to_say() {
         Some(&digester),
         &engineering(),
         Some(&held(1, "the brief")),
-        Sequence(400),
+        ChannelHead::at(Sequence(400)),
         DigestPolicy::DEFAULT,
     )
     .await
@@ -588,7 +589,7 @@ async fn leaves_an_empty_first_step_unfolded() {
             Some(&FixedDigester::new("unused")),
             &engineering(),
             None,
-            Sequence(400),
+            ChannelHead::at(Sequence(400)),
             DigestPolicy::DEFAULT
         )
         .await
@@ -610,7 +611,7 @@ async fn refuses_to_fold_one_channel_into_another_channel_s_account() {
         Some(&FixedDigester::new("unused")),
         &other,
         Some(&held(60, "engineering's account")),
-        Sequence(400),
+        ChannelHead::at(Sequence(400)),
         DigestPolicy::DEFAULT,
     )
     .await
