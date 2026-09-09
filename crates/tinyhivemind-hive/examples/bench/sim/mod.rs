@@ -62,7 +62,8 @@ mod view;
 
 use agent::Holdings;
 use generation::{
-    MemberDraw, draw_expertise, hidden_profile_agent, selfcheck_uniform, specialist_agent,
+    MemberDraw, draw_expertise, hidden_profile_agent, roles_agent, selfcheck_uniform,
+    specialist_agent,
 };
 
 pub(crate) use agent::{CheckStyle, SimAgent};
@@ -459,7 +460,7 @@ impl Room {
                         hidden_profile_agent(&id, role, index, &draw, decisive_index, planted_index)
                     }
                     Expertise::Roles { .. } => {
-                        specialist_agent(&id, role, index, &draw, &expert_of, cost_tiers)
+                        roles_agent(&id, role, index, &draw, &expert_of, cost_tiers)
                     }
                 }
             })
