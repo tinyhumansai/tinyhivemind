@@ -20,7 +20,7 @@ use tinyhivemind::{
         dispatch_mention,
     },
     initialize_session,
-    mention::MentionAuthor,
+    mention::{MentionAuthor, resolve},
     refold,
     responder::{ResponderRequest, SelectionPolicy, choose_responder},
     roster::{Person, Roster, RosterMember},
