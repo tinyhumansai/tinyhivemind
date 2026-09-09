@@ -128,6 +128,12 @@ pub(crate) struct SwarmReport {
     pub(crate) turns: u32,
     /// Referrals that left the desk that made them.
     pub(crate) crossings: u32,
+    /// Questions put to another channel **off the floor**, taking no turn.
+    ///
+    /// Priced in a column of its own rather than folded into `turns`, on the
+    /// same principle the off-floor exchange's `calls/ep` follows: it is a
+    /// model call the federation paid for and the turn count does not show.
+    pub(crate) off_floor_asks: u32,
     /// Answers that arrived after the desk that asked had already finished.
     pub(crate) stranded: u32,
     /// Turns, across every desk, whose content is a `!defer` line.

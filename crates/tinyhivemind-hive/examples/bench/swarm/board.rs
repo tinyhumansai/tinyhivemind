@@ -261,13 +261,33 @@ impl<'a> Board<'a> {
         agent_id: &str,
         content: &str,
     ) -> Sequence {
+        self.commit_charging(members, desk, agent_id, content, true)
+    }
+
+    /// The same, saying whether the row is charged to the floor.
+    ///
+    /// An off-floor ask is an agent invocation and is *not* a turn, so it is
+    /// priced in its own column rather than folded into `turns`. Charging it
+    /// as a turn would make the off-floor arm look as if it had spent the
+    /// budget it exists to preserve, and the comparison against the on-floor
+    /// arm — which is a comparison of exactly that — would say nothing.
+    fn commit_charging(
+        &mut self,
+        members: &mut [&mut dyn SwarmMember],
+        desk: usize,
+        agent_id: &str,
+        content: &str,
+        charge: bool,
+    ) -> Sequence {
         let sequence = self.host.agent(desk, agent_id, content.to_owned());
         for member in &self.channels[desk].members {
             if let Ok(seat) = seat_of(members, member) {
                 members[seat].absorb(content);
             }
         }
-        self.report.turns = self.report.turns.saturating_add(1);
+        if charge {
+            self.report.turns = self.report.turns.saturating_add(1);
+        }
         if content.trim_start().starts_with("!defer") {
             self.report.defers = self.report.defers.saturating_add(1);
         }
@@ -335,7 +355,7 @@ impl<'a> Board<'a> {
         let Some(content) = members[seat].ask(&peers) else {
             return Ok(false);
         };
-        let sequence = self.commit(members, desk, &asker, &content);
+        let sequence = self.commit_charging(members, desk, &asker, &content, false);
         // Counted whether or not the question found a route, exactly as the
         // on-floor path charges a turn spent asking either way. A question
         // that resolved to nobody still cost a model call.
