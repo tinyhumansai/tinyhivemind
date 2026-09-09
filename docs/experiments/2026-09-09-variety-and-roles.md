@@ -133,8 +133,9 @@ edges to divide it along:
 
 - **One task: keep `solo+fold`.** Identical to the room, cheaper, no protocol.
 - **Two or more facets with different owners: split them.** Flat accuracy in
-  width, and at F=8 a fifth of the rows and a quarter of the depth -- the ratio
-  itself narrows at a lower width (one half at F=2, one quarter at F=4).
+  width, and at F=8 a fifth of the rows and a quarter of the depth. The row
+  ratio itself narrows at a lower width -- one half at F=2, one quarter at
+  F=4 -- so read both figures as the F=8 endpoint, not a constant.
 - **The floor is not the mechanism.** `hive+` — the room deliberating every
   facet together — scores 4.1 against `hive+fold`'s 13.0 and spends **29×** the
   depth. Every member carrying every facet's brief is the soloist's problem
