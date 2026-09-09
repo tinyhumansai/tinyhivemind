@@ -51,7 +51,7 @@
 
 use tinyhivemind_hive::trace::TopicId;
 
-use crate::context::{Compaction, ContextBudget};
+use crate::context::ContextBudget;
 use crate::rng::{Rng, mix};
 
 mod agent;
