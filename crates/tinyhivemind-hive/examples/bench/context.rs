@@ -221,8 +221,9 @@ impl ContextBudget {
 
 impl Default for ContextBudget {
     fn default() -> Self {
-        Self::UNBOUNDED
-    }
+        Self::UNBOUNDED,
+            ..ContextBudget::UNBOUNDED
+        }
 }
 
 #[cfg(test)]
@@ -255,6 +256,7 @@ mod test {
         let budget = ContextBudget {
             capacity: 4,
             rot: 0.0,
+            ..ContextBudget::UNBOUNDED
         };
         assert_eq!(budget.retained(4), vec![0, 1, 2, 3]);
         // Six rows into four: the middle two go.
@@ -273,6 +275,7 @@ mod test {
         let budget = ContextBudget {
             capacity: 16,
             rot: 1.0,
+            ..ContextBudget::UNBOUNDED
         };
         let held = 5;
         assert!(
@@ -297,10 +300,12 @@ mod test {
         let strong = ContextBudget {
             capacity: 16,
             rot: 1.0,
+            ..ContextBudget::UNBOUNDED
         };
         let half = ContextBudget {
             capacity: 16,
             rot: 0.5,
+            ..ContextBudget::UNBOUNDED
         };
         assert!(close(strong.weight(2, 5), 0.0));
         assert!(close(half.weight(2, 5), 0.5));
@@ -312,6 +317,7 @@ mod test {
         let budget = ContextBudget {
             capacity: 8,
             rot: 1.0,
+            ..ContextBudget::UNBOUNDED
         };
         assert!(close(budget.weight(0, 1), 1.0));
     }
@@ -334,6 +340,7 @@ mod test {
         let budget = ContextBudget {
             capacity: 64,
             rot: 1.0,
+            ..ContextBudget::UNBOUNDED
         };
         // Rows worth less than half their face value. Counted rather than
         // divided: the claim is about a share, and comparing two shares as a
@@ -362,6 +369,7 @@ mod test {
         let budget = ContextBudget {
             capacity: 6,
             rot: 0.0,
+            ..ContextBudget::UNBOUNDED
         };
         let kept = budget.retained(17);
         assert_eq!(kept.len(), 6, "the window holds what it holds");
@@ -379,6 +387,7 @@ mod test {
         let budget = ContextBudget {
             capacity: 5,
             rot: 0.0,
+            ..ContextBudget::UNBOUNDED
         };
         let kept = budget.retained(11);
         assert_eq!(kept.len(), 5);
