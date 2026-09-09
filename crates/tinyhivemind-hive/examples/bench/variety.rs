@@ -68,7 +68,7 @@ use crate::context::Compaction;
 use crate::policy::tuned_policy;
 use crate::rng::mix;
 use crate::run::{Host, run_episode};
-use crate::sim::{Expertise, MAX_MEMBERS, Room};
+use crate::sim::{Expertise, MAX_MEMBERS, Room, member_at};
 
 /// One arm's score over a sample of tasks.
 #[derive(Default)]
@@ -329,7 +329,7 @@ fn run_split(options: &Options, seed: u64, facets: usize, pool: bool) -> TaskRun
     };
     let mut priors: Vec<Option<Room>> = vec![None; count];
     for (facet, assigned) in division.assignments().iter().enumerate() {
-        let Some(owner) = seat_of(&assigned.owner) else {
+        let Some(owner) = seat_of(&assigned.owner, count) else {
             break;
         };
         let Some(slot) = priors.get_mut(owner) else {
@@ -390,7 +390,8 @@ fn run_split(options: &Options, seed: u64, facets: usize, pool: bool) -> TaskRun
 /// `--roles` puts the competence on that same rotation from the other side, in
 /// the room's own draw.
 fn library_division(seats: usize, facets: usize) -> Option<tinyhivemind_hive::Division> {
-    let ids: Vec<&str> = SEAT_NAMES.iter().take(seats).copied().collect();
+    let names = seat_names(seats);
+    let ids: Vec<&str> = names.iter().map(String::as_str).collect();
     let host = Host::new(&ids);
     let named: Vec<TopicId> = (0..facets)
         .map(|facet| TopicId::from(format!("facet{facet}").as_str()))
@@ -406,9 +407,15 @@ fn library_division(seats: usize, facets: usize) -> Option<tinyhivemind_hive::Di
     .ok()
 }
 
+/// The room's seat names, in desk order — the same names `Room` gives its
+/// members, so an assignment the library hands back can be resolved to a seat.
+fn seat_names(seats: usize) -> Vec<String> {
+    (0..seats).map(|index| member_at(index).0).collect()
+}
+
 /// The index of one seat in the room, by the name the division named it with.
-fn seat_of(owner: &str) -> Option<usize> {
-    SEAT_NAMES.iter().position(|name| *name == owner)
+fn seat_of(owner: &str, seats: usize) -> Option<usize> {
+    (0..seats).position(|index| member_at(index).0 == owner)
 }
 
 /// One task, every facet deliberated by the whole room.
