@@ -308,6 +308,15 @@ pub(super) fn one_exchange(
 /// blind phase still cannot show a member its peers' desk rows, and ADR 0005's
 /// blind round is worth exactly what it was worth before. An audience the
 /// `aside` fold will not make private is dropped rather than published.
+///
+/// Every member in the round shares one `round_start`, so **a member in an
+/// exchange round cannot read another member's row from that same round**.
+/// `ExchangeRound::Open` names all of them at once and ADR 0012 prices the
+/// round in model calls, so a host that fanned them out could not have the
+/// second read the first; before ADR 0014 this loop leaked that ordering,
+/// because it happens to run them one after another. Closing the leak moved
+/// `hive+rounds` by 0.1 points in a single cell of the scale sweep, which is
+/// recorded rather than reverted.
 fn exchange_round(
     host: &mut Host,
     agents: &mut [&mut dyn Participant],
@@ -325,12 +334,6 @@ fn exchange_round(
         // visibility, same watermark, this reader's audience.
         let as_member = HiveTurn {
             agent_id: member.clone(),
-            round_start: host
-                .journal
-                .iter()
-                .map(|message| message.sequence)
-                .max()
-                .unwrap_or(last.round_start),
             ..last.clone()
         };
         let started = Instant::now();
