@@ -6,6 +6,8 @@
 //! samples is the same thing as folding one, which is what lets the per-room
 //! loops run across cores without moving a number.
 
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
 use std::time::Duration;
 
 use super::Aggregate;

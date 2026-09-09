@@ -4,6 +4,8 @@
 //! back in *input* order whatever order the threads finish in, because every
 //! paired statistic this harness prints is index-aligned across arms.
 
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
 use super::{default_jobs, map_in_order};
 
 #[test]
