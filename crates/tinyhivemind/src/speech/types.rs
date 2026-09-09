@@ -133,3 +133,25 @@ pub struct CommittedUtterance {
     /// so — to its operator, and to the seat while its turn is still running.
     pub refusal: Option<NoAsideReason>,
 }
+
+/// What shape a tool argument's value takes.
+///
+/// Deliberately small. A host renders these into its own schema language, and
+/// a shape this enum cannot express is one the room should not be asking a
+/// model to produce.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ParameterKind {
+    /// One string.
+    Text,
+    /// A list of strings.
+    TextList,
+    /// A bounded whole number, with the value used when it is absent.
+    Count {
+        /// What the room uses when the argument is not supplied.
+        default: u64,
+        /// The smallest accepted value; anything lower is clamped up.
+        min: u64,
+        /// The largest accepted value; anything higher is clamped down.
+        max: u64,
+    },
+}
