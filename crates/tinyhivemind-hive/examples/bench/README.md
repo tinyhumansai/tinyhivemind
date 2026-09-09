@@ -201,12 +201,15 @@ The two refutation arms lose, which is why both knobs are off in
 `hive+ev` starves the room — it fails to decide two episodes in five. [The benchmark write-up](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks)
 has the tables behind each of those, across desk sizes, plus what the benchmark does not show.
 
-## A horizon
+## A horizon, and a spread
 
 `--stages` runs a **chain** of decisions rather than one, and adds the control
 the library's claim is about — one agent working a long task, compacting as it
-goes. A room beats an *evicting* soloist once the window is tight, and never
-beats a *summarising* one: [`HORIZON.md`](HORIZON.md).
+goes. A room beats an *evicting* soloist once the window is tight and never a
+*summarising* one: [`HORIZON.md`](HORIZON.md). `--facets` runs a task that is
+several questions **at once** instead, one owner each, and there the room does
+win — flat accuracy in width where the soloist decays:
+[`VARIETY.md`](VARIETY.md).
 
 ## Statistics
 
@@ -436,8 +439,9 @@ numbers and why the sweep reports an ordering rather than a value.
 | `--context-sweep` | run the window ladder instead of comparing arms once |
 | `--stages N` | run the chain ladder: N sub-decisions in sequence on one accumulating window; a list sweeps a ladder, a bare number runs one length |
 | `--fidelity F` | what a summarised row is worth under `solo+fold`, `0.0..=1.0` (default `0.35`) |
+| `--facets N` | run the variety ladder: N independent sub-decisions belonging to one task, scored only when every one is right; a list sweeps a ladder, a bare number runs one width |
+| `--roles` | give each facet an owner (`facet % members`) that reads it at the room's base noise while everybody else widens; off by default, so the baseline measures the division of labour alone |
 | `--round-width N` | turns one round may authorize concurrently, read by `hive+wide` and `hive+blind` (default 4); `0` makes both bit-identical to `hive+`. Every published arm runs at width one, so no recorded number moves with it |
-| `--aside-cap N` | pairwise checks one member may open (default 1); under `hive+share` it caps distinct peers contacted instead; `0` makes every aside arm bit-identical to `hive+` |
 | `--aside-cap N` | pairwise checks one member may open (default 1); under `hive+share` it caps distinct peers contacted instead; `0` makes every on-floor and alongside aside arm bit-identical to `hive+` |
 | `--exchange-cap N` | private rows one member may write **off the floor** across an episode, read by `hive+rounds` (default 4); a separate knob because it bounds model calls rather than the room's turns; `0` makes `hive+rounds` bit-identical to `hive+` |
 | `--history N` | prior episodes of `hive+` the `ladder+dir` arm earns its directory from (default 3) |
