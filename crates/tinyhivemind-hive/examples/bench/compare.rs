@@ -23,7 +23,7 @@ use crate::metrics::{
 };
 use crate::policy::{
     default_policy, deferring_policy, evidential_policy, knowing_deferring_policy, knowing_policy,
-    refuting_policy,
+    refuting_policy, widened_policy,
 };
 use crate::rng::mix;
 use crate::run::{
@@ -49,7 +49,7 @@ pub(crate) fn compare(options: &Options, rooms: &[Room]) -> Result<(), String> {
     );
 
     let (totals, wall) = run_arms(options, rooms)?;
-    let arms: [(&str, &Aggregate); 22] = [
+    let arms: [(&str, &Aggregate); 23] = [
         ("ladder", &totals.ladder),
         ("vote", &totals.vote),
         ("hive", &totals.hive_default),
@@ -191,6 +191,9 @@ struct Totals {
     /// hands before the episode opens, at no turn cost. Nothing a protocol
     /// could do beats it.
     hive_pooled: Aggregate,
+    /// The tuned policy run in **concurrent rounds** rather than one turn at a
+    /// time. The arm ADR 0014 has to earn its place against: what should move
+    /// is `rounds/ep`, and `correct %` says what the depth cost.
     hive_wide: Aggregate,
     /// Both delegation mechanisms at once.
     hive_both: Aggregate,
