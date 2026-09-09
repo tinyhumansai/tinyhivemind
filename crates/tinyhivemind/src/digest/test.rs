@@ -242,7 +242,6 @@ fn advances_by_at_most_one_input_limit_per_fold() {
         plan_digest(
             Some(&held(60, "so far")),
             ChannelHead::at(Sequence(400)),
-            &[],
             DigestPolicy::DEFAULT
         ),
         DigestPlan::Fold {
@@ -258,7 +257,6 @@ fn stops_folding_once_the_account_reaches_the_live_tail() {
         plan_digest(
             Some(&held(370, "so far")),
             ChannelHead::at(Sequence(400)),
-            &[],
             DigestPolicy::DEFAULT
         ),
         DigestPlan::Current
