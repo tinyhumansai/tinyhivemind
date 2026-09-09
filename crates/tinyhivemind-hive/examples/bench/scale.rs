@@ -50,10 +50,10 @@ use crate::arms;
 use crate::cli::Options;
 use crate::metrics::Aggregate;
 use crate::policy::tuned_policy;
+use crate::rng::mix;
 use crate::run::{
     AsideMode, CheckStyle, run_episode, run_episode_checking, run_episode_exchanging_with,
 };
-use crate::rng::mix;
 use crate::sim::{Expertise, MAX_MEMBERS, Room};
 
 /// The room sizes swept when `--sizes` is not given.
