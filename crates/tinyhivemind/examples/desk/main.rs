@@ -27,6 +27,7 @@
 //! | `aside.rs` | this desk's aside policy and its host-side bookkeeping |
 //! | `prompt.rs` | [`prompt::compose_prompt`], turning a turn into text |
 //! | `mcp.rs` | the MCP transport under the room's tools, and the outbox |
+//! | `tools.rs` | the room's tool surface as JSON Schema and as `tinytools` |
 //! | `digest.rs` | the host side of the `Digester` port: the room's account |
 //! | `notebook.rs` | the notebook a seat carries between turns |
 //! | `agent.rs` | one `opencode run` per turn, and its output |
@@ -50,6 +51,7 @@ mod prompt;
 mod queue;
 mod room;
 mod run;
+mod tools;
 mod turn;
 
 use std::error::Error as StdError;

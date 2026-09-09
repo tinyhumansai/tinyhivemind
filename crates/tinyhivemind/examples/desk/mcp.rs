@@ -2,9 +2,11 @@
 //!
 //! Everything about *what* the tools are and *what* a call means lives in
 //! [`tinyhivemind::speech`]: the four specs, their descriptions, the validation,
-//! and the fold from an accepted call to a row. This module is the transport
-//! under that — a minimal MCP server the agent CLI spawns, a JSON-RPC loop, and
-//! a per-turn outbox file — and it decides nothing.
+//! and the fold from an accepted call to a row. Rendering that surface and
+//! running one call against it lives in [`crate::tools`], shared with the
+//! `tinytools` path. This module is the transport under both — a minimal MCP
+//! server the agent CLI spawns, a JSON-RPC loop, and a per-turn outbox file —
+//! and it decides nothing.
 //!
 //! ## The host still owns storage
 //!
@@ -24,12 +26,11 @@ use tinyhivemind::{
     aside::Audience,
     dispatch::DispatchConversation,
     speech::{
-        CallArguments, CommitRequest, ParameterKind, ToolCall, ToolSpec, Utterance,
-        addressed_peers, check_recipients, commit_utterance, interpret, tool_specs,
+        CommitRequest, Utterance, addressed_peers, check_recipients, commit_utterance, tool_specs,
     },
 };
 
-use crate::{aside, deskfile, log, room};
+use crate::{aside, deskfile, log, room, tools};
 
 /// Where the server looks up what a call means: the desk it is serving, the
 /// transcript behind it, and whose turn is running.
@@ -197,41 +198,22 @@ fn initialize() -> serde_json::Value {
 /// The library's tool surface, rendered as MCP tool descriptors.
 ///
 /// Nothing here names a tool, writes a description, or decides a bound. It
-/// walks [`tool_specs`] and translates each parameter's shape into JSON Schema.
+/// walks [`tool_specs`] and asks [`tools::parameters_schema`] for each shape,
+/// so the descriptors a seat reads over MCP and the ones it reads through
+/// `tinytools` are rendered from the same statement.
 fn tools() -> serde_json::Value {
-    serde_json::Value::Array(tool_specs().iter().map(descriptor).collect())
-}
-
-fn descriptor(spec: &ToolSpec) -> serde_json::Value {
-    let mut properties = serde_json::Map::new();
-    let mut required: Vec<serde_json::Value> = Vec::new();
-    for parameter in spec.parameters {
-        let mut schema = match parameter.kind {
-            ParameterKind::Text => serde_json::json!({ "type": "string" }),
-            ParameterKind::TextList => {
-                serde_json::json!({ "type": "array", "items": { "type": "string" } })
-            }
-            ParameterKind::Count { .. } => serde_json::json!({ "type": "integer" }),
-        };
-        if let Some(description) = parameter.description
-            && let Some(object) = schema.as_object_mut()
-        {
-            object.insert("description".into(), description.into());
-        }
-        properties.insert(parameter.name.to_string(), schema);
-        if parameter.required {
-            required.push(parameter.name.into());
-        }
-    }
-    serde_json::json!({
-        "name": spec.name,
-        "description": spec.description,
-        "inputSchema": {
-            "type": "object",
-            "properties": serde_json::Value::Object(properties),
-            "required": serde_json::Value::Array(required),
-        },
-    })
+    serde_json::Value::Array(
+        tool_specs()
+            .iter()
+            .map(|spec| {
+                serde_json::json!({
+                    "name": spec.name,
+                    "description": spec.description,
+                    "inputSchema": tools::parameters_schema(spec),
+                })
+            })
+            .collect(),
+    )
 }
 
 fn call(request: &serde_json::Value, serving: &Serving) -> Result<String, String> {
@@ -243,37 +225,7 @@ fn call(request: &serde_json::Value, serving: &Serving) -> Result<String, String
         .pointer("/params/arguments")
         .cloned()
         .unwrap_or_else(|| serde_json::json!({}));
-    let to = string_list(&arguments, "to");
-    let interpreted = interpret(
-        name,
-        &CallArguments {
-            message: arguments.get("message").and_then(serde_json::Value::as_str),
-            to: &to,
-            limit: arguments.get("limit").and_then(serde_json::Value::as_u64),
-        },
-    )
-    // The refusal is the seat's to read, so it travels as the sentence the
-    // library wrote for it rather than as a code this server invents.
-    .map_err(|rejection| rejection.to_string())?;
-    match interpreted {
-        ToolCall::Read { limit } => Ok(recent(&serving.transcript, limit)),
-        ToolCall::Speak(utterance) => {
-            let priced = price(&utterance, serving)?;
-            let acknowledgement = match (&utterance, priced) {
-                (Utterance::Post { .. }, _) => "posted to the desk".to_string(),
-                (Utterance::Close { .. }, _) => {
-                    "posted to the desk; the desk will close after this turn".to_string()
-                }
-                (Utterance::Dm { to, .. }, None) => format!("sent to @{}", to.join(", @")),
-                (Utterance::Dm { .. }, Some(reason)) => format!(
-                    "your aside was refused ({reason}) and the message goes to the whole desk \
-                     instead; say it as you would in the open, or post it and move on"
-                ),
-            };
-            append(&serving.outbox, &utterance)?;
-            Ok(acknowledgement)
-        }
-    }
+    tools::invoke(name, &arguments, serving)
 }
 
 /// What the room will do with this utterance, before the turn ends.
@@ -287,7 +239,7 @@ fn call(request: &serde_json::Value, serving: &Serving) -> Result<String, String
 /// `None`. That is the behavior this host had before the check existed: the
 /// host still resolves the audience when it drains the outbox, so the row is
 /// never wrong — only the seat is uninformed.
-fn price(utterance: &Utterance, serving: &Serving) -> Result<Option<String>, String> {
+pub(crate) fn price(utterance: &Utterance, serving: &Serving) -> Result<Option<String>, String> {
     if !matches!(utterance, Utterance::Dm { .. }) {
         return Ok(None);
     }
@@ -340,22 +292,7 @@ fn price(utterance: &Utterance, serving: &Serving) -> Result<Option<String>, Str
     })
 }
 
-/// The `to` argument as owned strings, before the library normalizes it.
-fn string_list(arguments: &serde_json::Value, key: &str) -> Vec<String> {
-    arguments
-        .get(key)
-        .and_then(serde_json::Value::as_array)
-        .map(|entries| {
-            entries
-                .iter()
-                .filter_map(|entry| entry.as_str())
-                .map(ToString::to_string)
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-fn append(outbox: &Path, utterance: &Utterance) -> Result<(), String> {
+pub(crate) fn append(outbox: &Path, utterance: &Utterance) -> Result<(), String> {
     let entry = serde_json::to_string(utterance)
         .map_err(|error| format!("the desk outbox is unavailable: {error}"))?;
     let mut file = OpenOptions::new()
@@ -367,7 +304,7 @@ fn append(outbox: &Path, utterance: &Utterance) -> Result<(), String> {
 }
 
 /// The tail of the transcript, rendered the way a turn's prompt renders it.
-fn recent(transcript: &Path, limit: usize) -> String {
+pub(crate) fn recent(transcript: &Path, limit: usize) -> String {
     let Ok(text) = fs::read_to_string(transcript) else {
         return "(the desk has no messages yet)".into();
     };
