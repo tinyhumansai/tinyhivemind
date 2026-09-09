@@ -120,16 +120,14 @@ recovers much of what a room is for.
 
 ## What the participants do
 
-The simulated participants are mechanical, which is the point — a language
-model would make the numbers unreproducible and would confound protocol quality
-with model quality. On its turn a participant, seeing exactly what
-`project_for` allowed it to see:
+The simulated participants are mechanical, which is the point: a language model
+would make the numbers unreproducible and confound protocol quality with model
+quality. On its turn a participant, seeing exactly what `project_for` allowed:
 
 1. **breaks a deadlock** — if two options both carry, it objects to a message
    advocating the one it rates lower. Adding support cannot resolve that state,
-   because both options stay above the threshold no matter how much weight one
-   gains; silencing an advocate can, which is why the objection names a
-   *message* rather than a topic;
+   because both stay above the threshold however much weight one gains;
+   silencing an advocate can, which is why an objection names a *message*;
 2. **commits** — in `Phase::Commit`, records what the room actually carried;
 3. **supports** — backs the option on the floor it rates highest once each
    independent peer backing it is weighed against its own private signal. This
