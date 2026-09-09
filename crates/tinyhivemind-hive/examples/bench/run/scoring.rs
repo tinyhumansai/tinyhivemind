@@ -28,6 +28,15 @@ pub(crate) struct EpisodeReport {
     pub(crate) correct: bool,
     /// Turns actually taken.
     pub(crate) turns: u32,
+    /// Rounds actually taken: the episode's **depth**.
+    ///
+    /// Every turn in one round is authorized against the same transcript and
+    /// none of them can read another, so a host running async seats pays one
+    /// round of wall clock for all of them. [`Self::turns`] is what the budget
+    /// bounds and what every number recorded before ADR 0014 was priced in;
+    /// this is what a host actually waits for, and at `round_width: 1` the two
+    /// are equal.
+    pub(crate) rounds: u32,
     /// Mean rows a member was holding when the episode ended.
     ///
     /// What the arm cost the *window*, as against `turns`, which is what it
