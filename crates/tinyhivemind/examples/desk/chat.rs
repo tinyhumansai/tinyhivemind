@@ -70,20 +70,33 @@ impl Outcome {
     }
 }
 
-/// One model, reachable over an OpenAI-shaped `/v1/chat/completions`.
+/// One model, behind a wall-clock budget.
+///
+/// The model is boxed rather than named so that a test can drive this against
+/// `tinyinference`'s deterministic mock without a network: the wrap-up rung's
+/// behavior is the part worth testing, and it is the same behavior whichever
+/// provider is underneath.
 pub(crate) struct Chat {
-    model: OpenAiModel,
+    model: Box<dyn ChatModel<()>>,
     timeout: Duration,
 }
 
 impl Chat {
     /// Build a client against a router root, without a trailing slash.
     pub(crate) fn new(base: &str, key: &str, model: &str, timeout: Duration) -> Self {
-        Self {
-            model: OpenAiModel::new(key)
+        Self::with_model(
+            OpenAiModel::new(key)
                 .with_model(model)
                 .with_provider("ladder")
                 .with_base_url(format!("{}/v1", base.trim_end_matches('/'))),
+            timeout,
+        )
+    }
+
+    /// Build one against any provider, which is how the tests reach it.
+    pub(crate) fn with_model(model: impl ChatModel<()> + 'static, timeout: Duration) -> Self {
+        Self {
+            model: Box::new(model),
             timeout,
         }
     }
