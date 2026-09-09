@@ -9,6 +9,7 @@
 
 use super::*;
 use std::fmt::Write as _;
+use tinyhivemind::speech::ParameterKind;
 
 /// A server with an outbox and a transcript and no desk to price against.
 fn serving(outbox: &Path, transcript: &Path) -> Serving {

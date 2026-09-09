@@ -30,6 +30,7 @@ tokio = { workspace = true }
 # `.github/scripts/assert-pure.sh` reads `cargo tree -e normal,build` so this
 # section is outside the boundary it guards. See
 # ../../docs/adr/0013-a-vendored-crate-is-an-example-dependency.md.
+anyhow = { workspace = true }
 async-trait = { workspace = true }
 tinyinference = { workspace = true }
 tinytools = { workspace = true }

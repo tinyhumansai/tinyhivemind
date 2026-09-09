@@ -74,6 +74,11 @@ tinytools = { git = "https://github.com/tinyhumansai/tinytools", rev = "7dbd5407
 # Needed to implement `tinytools::Tool`, which is async. Example-only, for the
 # same reason `tinytools` is.
 async-trait = "0.1"
+# Example-only, and the one exception to the rule above it: `tinytools::Tool`
+# returns `anyhow::Result`, so implementing it means naming the type. It is
+# forbidden in every crate under `crates/*` and reaches nothing there — the
+# `desk` example is a dev-dependency edge, outside what `assert-pure.sh` guards.
+anyhow = "1"
 
 # Lints apply to every member that opts in with `[lints] workspace = true`, and
 # to every target of that member. CI runs clippy with `-D warnings`, so anything
