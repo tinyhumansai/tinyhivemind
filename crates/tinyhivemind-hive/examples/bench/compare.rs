@@ -25,6 +25,7 @@ use crate::policy::{
     default_policy, deferring_policy, evidential_policy, knowing_deferring_policy, knowing_policy,
     refuting_policy,
 };
+use crate::parallel;
 use crate::rng::mix;
 use crate::run::{
     AsideMode, run_episode, run_episode_checking, run_episode_exchanging_with, run_episode_with,
