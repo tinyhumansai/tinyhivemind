@@ -415,18 +415,15 @@ rather than a failure of the harness.
 
 ## The context budget
 
-Every arm above moves information for free, and that is a misleading
-*engineering* ceiling once a participant is a language model with a bounded
-window. `--context-sweep` charges for it: each arm runs across a ladder of
-window capacities that evicts rows from the middle and discounts survivors by
-a U-curve. `hive+pooled` — the arm that looks unbeatable — loses a third of
-its lead once its window matches its own payload; `hive+` and `hive+along`
-barely notice, because they barely use the window. No squeeze makes the
-deliberating room the better choice on this task, so the honest reading is
-narrower than "context economy vindicates deliberation": fix the protocol
-first. The full numbers, the two things this experiment did and did not find,
-and why the sweep reports an ordering rather than a value are in
-[`CONTEXT.md`](CONTEXT.md).
+Every arm above moves information for free, which is a misleading *engineering*
+ceiling once a participant is a model with a bounded window. `--context-sweep`
+charges for it across a ladder of capacities that evicts from the middle and
+discounts survivors by a U-curve. `hive+pooled` loses a third of its lead once
+its window matches its own payload; `hive+` barely notices, because it barely
+uses the window. No squeeze makes the deliberating room the better choice on
+this task, so the honest reading is narrower than "context economy vindicates
+deliberation": fix the protocol first. [`CONTEXT.md`](CONTEXT.md) has the
+numbers and why the sweep reports an ordering rather than a value.
 
 ## Flags
 
