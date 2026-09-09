@@ -106,9 +106,13 @@ const MAX_MEMBERS_U32: u32 = 1024;
 ///
 /// Not a property of the library, which has no room-size limit — a bound on
 /// what a *benchmark* will spend. Every arm decides the same rooms, so one
-/// swept size costs every arm at once, and a room of a thousand members would
-/// spend minutes per size to answer a question the shape of the curve already
-/// answers by a hundred.
+/// swept size costs every arm at once, and a swept size of a thousand costs
+/// minutes rather than seconds even with the per-room loop spread across
+/// every core.
+///
+/// It was 256 while the recorded tables stopped at 64. A thousand is where the
+/// question this harness is now asked stops: what the mechanics do at the
+/// scale a real hive mind would run at.
 pub(crate) const MAX_MEMBERS: usize = MAX_MEMBERS_U32 as usize;
 
 /// Names and roles drawn on, in order, for a room's first eight members.
