@@ -555,3 +555,43 @@ fn flag_number(args: &[String], flag: &str) -> Option<u32> {
     let at = args.iter().position(|argument| argument == flag)?;
     args.get(at + 1)?.parse().ok()
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    /// `f64::parse` accepts `"nan"`, `"inf"` and `"-inf"`, and `f64::clamp`
+    /// leaves a `NaN` unchanged rather than bounding it -- so an unguarded
+    /// `--fidelity nan` would have stored a `NaN` in `options.fidelity`, and
+    /// every downstream read of it (`ContextBudget::worth`, in turn
+    /// `windowed_score`'s fallback to the agent's own score) would have
+    /// silently discarded folded context instead of erroring or defaulting.
+    #[test]
+    fn a_non_finite_fidelity_is_rejected_rather_than_stored() {
+        let mut options = Options::defaults();
+        let before = options.fidelity;
+
+        for raw in ["nan", "inf", "-inf"] {
+            let mut args = [raw.to_owned()].into_iter();
+            apply_expertise_flag(&mut options, "--fidelity", &mut args);
+            assert_eq!(
+                options.fidelity, before,
+                "a non-finite --fidelity value of {raw:?} must be rejected, \
+                 leaving the prior value in place",
+            );
+        }
+    }
+
+    #[test]
+    fn a_finite_fidelity_is_still_parsed_and_clamped() {
+        let mut options = Options::defaults();
+
+        let mut args = ["1.5".to_owned()].into_iter();
+        apply_expertise_flag(&mut options, "--fidelity", &mut args);
+        assert_eq!(options.fidelity, 1.0, "a finite value is still clamped");
+
+        let mut args = ["0.4".to_owned()].into_iter();
+        apply_expertise_flag(&mut options, "--fidelity", &mut args);
+        assert_eq!(options.fidelity, 0.4);
+    }
+}
