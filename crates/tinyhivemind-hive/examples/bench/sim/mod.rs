@@ -90,9 +90,10 @@ pub(crate) const MAX_TOPICS: usize = 256;
 /// by itself, and a benchmark run there measures the law of large numbers
 /// rather than the library.
 pub(crate) fn topic_at(index: usize) -> TopicId {
-    TOPIC_NAMES
-        .get(index)
-        .map_or_else(|| TopicId::from(format!("topic{index}")), |name| TopicId::from(*name))
+    TOPIC_NAMES.get(index).map_or_else(
+        || TopicId::from(format!("topic{index}")),
+        |name| TopicId::from(*name),
+    )
 }
 
 /// The largest room this harness will build, as a `u32`.

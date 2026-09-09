@@ -224,9 +224,8 @@ impl<'a> Board<'a> {
         // Off the floor, an authorized turn is never spent asking: the ask
         // has its own channel and its own bound, and this turn is for
         // deliberating.
-        let budget = self.asking.on_floor()
-            && self.referrals.enabled
-            && self.asks[desk] < self.ask_width();
+        let budget =
+            self.asking.on_floor() && self.referrals.enabled && self.asks[desk] < self.ask_width();
         let mut offered = false;
         let content = {
             let visible = project_for(turn, &self.host.journals[desk]);

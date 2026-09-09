@@ -21,11 +21,11 @@ use crate::metrics::{
     Aggregate, arm_header, arm_row, detail_header, detail_row, json_line, paired_against,
     paired_diff_line,
 };
+use crate::parallel;
 use crate::policy::{
     default_policy, deferring_policy, evidential_policy, knowing_deferring_policy, knowing_policy,
     refuting_policy,
 };
-use crate::parallel;
 use crate::rng::mix;
 use crate::run::{
     AsideMode, run_episode, run_episode_checking, run_episode_exchanging_with, run_episode_with,
@@ -542,7 +542,6 @@ fn run_arms(options: &Options, rooms: &[Room]) -> Result<(Totals, std::time::Dur
         totals.merge(chunk);
     }
     Ok((totals, wall.elapsed()))
-
 }
 
 /// Print how each deliberating arm's episodes ended.

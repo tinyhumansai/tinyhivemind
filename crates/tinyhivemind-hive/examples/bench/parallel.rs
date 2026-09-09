@@ -79,7 +79,9 @@ where
     std::thread::scope(|scope| {
         let handles: Vec<_> = items
             .chunks(chunk)
-            .map(|slice| scope.spawn(|| slice.iter().map(&work).collect::<Result<Vec<R>, String>>()))
+            .map(|slice| {
+                scope.spawn(|| slice.iter().map(&work).collect::<Result<Vec<R>, String>>())
+            })
             .collect();
         for handle in handles {
             // A panicking closure is a bug in an arm rather than a benchmark

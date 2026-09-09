@@ -11,8 +11,8 @@ fn returns_results_in_input_order_at_every_job_count() {
     let items: Vec<usize> = (0..1000).collect();
     let expected: Vec<usize> = items.iter().map(|value| value * 3).collect();
     for jobs in [1, 2, 3, 7, 64, 4096] {
-        let got = map_in_order(&items, jobs, |value| Ok(value * 3))
-            .expect("multiplying cannot fail");
+        let got =
+            map_in_order(&items, jobs, |value| Ok(value * 3)).expect("multiplying cannot fail");
         assert_eq!(got, expected, "order must not depend on --jobs {jobs}");
     }
 }

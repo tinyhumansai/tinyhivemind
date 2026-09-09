@@ -140,7 +140,9 @@ pub(crate) fn sweep(options: &Options) -> Result<(), String> {
     for requested in &options.sizes {
         let size = (*requested).clamp(2, MAX_MEMBERS);
         if size != *requested {
-            println!("note: room size {requested} clamped to {size}, the largest this harness builds");
+            println!(
+                "note: room size {requested} clamped to {size}, the largest this harness builds"
+            );
         }
         if !sizes.contains(&size) {
             sizes.push(size);
