@@ -189,7 +189,16 @@ fn one_size(
             TASK,
             false,
         )?);
-        pooled.add(&run_episode(&room.pooled(), tuned, TASK, false)?);
+        // `--aside-cap 0` is documented and used as the kill switch that
+        // leaves every aside arm bit-identical to `hive+`, `hive+pooled`
+        // included (see `compare.rs`), so honor it here too by skipping the
+        // pool rather than silently pooling regardless of the cap.
+        let ceiling = if options.aside_cap == 0 {
+            room.clone()
+        } else {
+            room.pooled()
+        };
+        pooled.add(&run_episode(&ceiling, tuned, TASK, false)?);
     }
 
     let named = [
