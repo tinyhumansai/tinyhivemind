@@ -347,6 +347,19 @@ fn apply_expertise_flag(
                 .clamp(0.0, 1.0);
         }
         "--context-sweep" => options.mode = Mode::ContextSweep,
+                "--scale-sweep" => options.mode = Mode::ScaleSweep,
+                "--sizes" => {
+                    if let Some(list) = args.next() {
+                        let parsed: Vec<usize> = list
+                            .split(',')
+                            .filter_map(|part| part.trim().parse::<usize>().ok())
+                            .filter(|size| *size >= 2)
+                            .collect();
+                        if !parsed.is_empty() {
+                            options.sizes = parsed;
+                        }
+                    }
+                }
         "--exchange-cap" => options.exchange_cap = next_number(args).unwrap_or(4),
         "--history" => options.history = next_number(args).unwrap_or(3),
         "--cost-tiers" => options.cost = true,
