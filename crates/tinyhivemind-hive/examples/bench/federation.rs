@@ -23,7 +23,7 @@
 use tinyhivemind_hive::trace::TopicId;
 
 use crate::rng::{Rng, mix};
-use crate::sim::{MAX_MEMBERS, MEMBER_ROLES, SimAgent, TOPIC_NAMES, member_at};
+use crate::sim::{MAX_MEMBERS, MAX_TOPICS, MEMBER_ROLES, SimAgent, member_at, topic_at};
 
 /// Names drawn on, in order, for a federation's desks.
 const DESK_NAMES: [(&str, &str); 4] = [
