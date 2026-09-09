@@ -29,6 +29,7 @@ dependency direction is enforced by construction.
 | P14 | Recall: one selection ranking, roster and desk pickers, bounded transcript search with optional regular expressions, pinning as a fold, and a stated per-message budget | **done** |
 | P16 | Approval: a pure gate for a side-effecting action — `approve` as a total fold, standing grants, and epoch-scoped consent, with the waiting behind one `ApprovalGate` port | planned, **not implemented** |
 | P17 | Private asides: an audience on a stored row, a viewer on a query, the collapsed redaction stub and its settlement pointer, and the rule that an aside carries information rather than support | **done**, **off by default** — the benchmark arm says asides do not improve a decision, see below |
+| P18 | The utterance surface: a seat speaks by calling a tool rather than emitting a fence — the tool descriptions, the validation and the utterance-to-row fold move from the `desk` example into `tinyhivemind::speech`, and a refused aside reaches its author inside the turn | planned, **not implemented** — see [`docs/specs/the-utterance-surface.md`](docs/specs/the-utterance-surface.md) |
 
 P15 is also out of order, and for a related reason: it is not a wire-format
 change either, and it answers a pressure none of P11 through P13 address. Every
