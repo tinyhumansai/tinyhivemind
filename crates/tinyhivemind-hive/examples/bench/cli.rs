@@ -221,7 +221,7 @@ pub(crate) enum Mode {
 
 impl Options {
     /// The options every mode starts from before a flag overrides one.
-    fn defaults() -> Self {
+    pub(crate) fn defaults() -> Self {
         Self {
             episodes: 500,
             agents: 5,
