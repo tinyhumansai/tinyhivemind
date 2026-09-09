@@ -219,7 +219,6 @@ fn run_federated_arms(
         vote.add_arm(&outcome.vote);
     }
 
-
     Ok(FederatedTotals {
         siloed,
         swarmed,
