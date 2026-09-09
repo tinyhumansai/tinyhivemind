@@ -37,3 +37,6 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a test-first sample
   deliberation episode.
 - [`off-floor-exchange.md`](off-floor-exchange.md) — private exchange that takes
   no floor, bounded by a host-set budget in model calls.
+- [`promote-the-utterance-surface.md`](promote-the-utterance-surface.md) — move
+  the room's tool surface and the utterance fold from the `desk` example into
+  `tinyhivemind::speech`, and give a refused aside a way back to its author.
