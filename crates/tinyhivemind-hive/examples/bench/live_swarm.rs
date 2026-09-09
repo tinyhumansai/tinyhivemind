@@ -187,6 +187,8 @@ struct SwarmTotals {
     crossings: u64,
     /// Answers that arrived after the desk that asked had finished.
     stranded: u64,
+    /// Questions put to another channel off the floor, taking no turn.
+    off_floor_asks: u64,
     /// Desk episodes that ended in a recorded decision.
     converged: u32,
     /// Desk episodes that tied with nobody left to break it.
@@ -230,12 +232,13 @@ impl SwarmTotals {
     fn row(&self, name: &str) -> String {
         let runs = u64::from(self.runs);
         format!(
-            "{name:<9} {:>7.1}% {:>7} {:>9.1} {:>10.1} {:>9.1}",
+            "{name:<9} {:>7.1}% {:>7} {:>9.1} {:>10.1} {:>9.1} {:>8.1}",
             metrics::ratio(u64::from(self.correct), runs) * 100.0,
             self.decided,
             metrics::ratio(self.turns, runs),
             metrics::ratio(self.crossings, runs),
             metrics::ratio(self.stranded, runs),
+            metrics::ratio(self.off_floor_asks, runs),
         )
     }
 }
@@ -436,6 +439,7 @@ fn trace_swarm(first: &Federation, desk_policy: &EpisodePolicy) -> Result<(), St
 fn tabulate(
     siloed: &SwarmTotals,
     swarmed: &SwarmTotals,
+    offfloor: &SwarmTotals,
     free: &SwarmTotals,
     merged: &Aggregate,
     vote: &Aggregate,
@@ -443,27 +447,30 @@ fn tabulate(
     federations: usize,
 ) {
     println!(
-        "{:<9} {:>8} {:>8} {:>9} {:>10} {:>9}",
-        "arm", "correct", "decided", "turns", "crossings", "stranded",
+        "{:<9} {:>8} {:>8} {:>9} {:>10} {:>9} {:>8}",
+        "arm", "correct", "decided", "turns", "crossings", "stranded", "asks/ep",
     );
     println!("{}", siloed.row("siloed"));
     println!("{}", swarmed.row("swarm"));
+    println!("{}", offfloor.row("swarm°"));
     println!("{}", free.row("pooled"));
     println!(
-        "{:<9} {:>7.1}% {:>7} {:>9.1} {:>10} {:>9}",
+        "{:<9} {:>7.1}% {:>7} {:>9.1} {:>10} {:>9} {:>8}",
         "merged",
         merged.accuracy(),
         merged.converged,
         merged.turns_per_episode(),
         "—",
         "—",
+        "—",
     );
     println!(
-        "{:<9} {:>7.1}% {:>7} {:>9.1} {:>10} {:>9}",
+        "{:<9} {:>7.1}% {:>7} {:>9.1} {:>10} {:>9} {:>8}",
         "vote",
         vote.accuracy(),
         vote.converged,
         vote.turns_per_episode(),
+        "—",
         "—",
         "—",
     );
@@ -475,6 +482,10 @@ fn tabulate(
     println!(
         "swarm  desk endings: converged {} · deadlocked {} · exhausted {} · idle {}",
         swarmed.converged, swarmed.deadlocked, swarmed.exhausted, swarmed.idle,
+    );
+    println!(
+        "swarm° desk endings: converged {} · deadlocked {} · exhausted {} · idle {}",
+        offfloor.converged, offfloor.deadlocked, offfloor.exhausted, offfloor.idle,
     );
     println!(
         "library time {:.1} ms over {} steps ({:.0} ns/step)",
