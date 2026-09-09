@@ -63,6 +63,12 @@ pub(crate) struct Options {
     pub(crate) serve_mcp: bool,
     /// Where a turn's tool calls to the room are collected.
     pub(crate) outbox: Option<PathBuf>,
+    /// Where the host says whose turn is running.
+    ///
+    /// Only the served side reads it, and only to price a `desk_dm` against
+    /// the aside policy before the turn ends. A server without it still
+    /// serves; it just cannot tell a seat its aside will be refused.
+    pub(crate) turn: Option<PathBuf>,
     /// Whether messages older than the live window are folded into one
     /// standing account of the room.
     pub(crate) fold_account: bool,
@@ -100,6 +106,7 @@ impl Options {
             router_model: "deepseek-flash".into(),
             serve_mcp: false,
             outbox: None,
+            turn: None,
             fold_account: true,
         };
         let mut args = std::env::args().skip(1);
@@ -125,6 +132,7 @@ impl Options {
                 "--router-model" => options.router_model = value()?,
                 "--mcp-server" => options.serve_mcp = true,
                 "--outbox" => options.outbox = Some(PathBuf::from(value()?)),
+                "--turn" => options.turn = Some(PathBuf::from(value()?)),
                 "--no-digest" => options.fold_account = false,
                 "--no-memory" => {
                     options.cortex_base = None;
@@ -133,8 +141,9 @@ impl Options {
             }
         }
         if options.serve_mcp {
-            // Serving the room as a tool needs a transcript and an outbox and
-            // nothing else.
+            // Serving the room as a tool needs a transcript and an outbox.
+            // A desk file and a turn file are optional and buy one thing: a
+            // `desk_dm` the policy will refuse can be said so to its author.
             return Ok(options);
         }
         if options.desk.as_os_str().is_empty() {
