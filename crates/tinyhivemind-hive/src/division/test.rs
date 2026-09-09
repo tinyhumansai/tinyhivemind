@@ -166,7 +166,11 @@ fn a_facet_named_twice_is_one_facet() {
 #[test]
 fn the_directory_names_an_owner_where_it_knows_one() {
     let transcript = [
-        said(1, "auditor", "!evidence #stage The second environment was retired."),
+        said(
+            1,
+            "auditor",
+            "!evidence #stage The second environment was retired.",
+        ),
         said(2, "critic", "!support #stage ^1 That settles it."),
         said(3, "scout", "!support #stage ^1 Agreed."),
     ];
@@ -229,8 +233,16 @@ fn an_owner_reads_its_own_facet_and_not_its_peers() {
         said(1, "planner", "What should we do about the rollout?"),
         said(2, "planner", "!propose #f0 Stage it."),
         said(3, "critic", "!propose #f1 Rename the flag."),
-        said(4, "scout", "!support #f0 ^2 Staging bounds the blast radius."),
-        said(5, "auditor", "!propose #elsewhere Something nobody divided."),
+        said(
+            4,
+            "scout",
+            "!support #f0 ^2 Staging bounds the blast radius.",
+        ),
+        said(
+            5,
+            "auditor",
+            "!propose #elsewhere Something nobody divided.",
+        ),
     ];
 
     let mine = division.scoped(&TopicId::from("f0"), &transcript);

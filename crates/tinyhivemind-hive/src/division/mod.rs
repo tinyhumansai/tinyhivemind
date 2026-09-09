@@ -68,10 +68,10 @@ pub use types::{Assignment, Division, DivisionPolicy, OwnerReason};
 
 use tinyhivemind::{desk::DeskSet, roster::Roster};
 
+use crate::Result;
 use crate::directory::Directory;
 use crate::error::Error;
 use crate::trace::TopicId;
-use crate::Result;
 
 /// Divide a task's facets across a desk's active members.
 ///
@@ -188,7 +188,9 @@ fn packed(
     seats: usize,
     round_width: u32,
 ) -> Vec<Assignment> {
-    let lane = usize::try_from(round_width).unwrap_or(usize::MAX).min(seats);
+    let lane = usize::try_from(round_width)
+        .unwrap_or(usize::MAX)
+        .min(seats);
     let mut rounds: Vec<Vec<String>> = Vec::new();
     let mut assignments = Vec::with_capacity(owned.len());
     for (facet, owner, reason) in owned {
