@@ -203,6 +203,7 @@ impl Federation {
             topics: names,
             desks: records,
             agents,
+            decoys_distinct,
         }
     }
 
