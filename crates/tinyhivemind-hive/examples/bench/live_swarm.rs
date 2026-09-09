@@ -352,11 +352,32 @@ fn describe(
         merged_policy.quorum.threshold,
         swarm_referrals().max_hops,
     );
+    // Only the first few desks are named. A federation of two hundred would
+    // otherwise spend a screen on a banner, and the shape of the arrangement
+    // is already carried by the count and the distinctness line below.
+    const NAMED: usize = 6;
     print!("the federation: ");
-    for desk in &first.desks {
+    for desk in first.desks.iter().take(NAMED) {
         print!("{} overrates #{}  ", desk.name, desk.decoy);
     }
-    println!("and #{} is genuinely best\n", first.truth);
+    if first.desks.len() > NAMED {
+        print!("… and {} more  ", first.desks.len() - NAMED);
+    }
+    println!("and #{} is genuinely best", first.truth);
+    if first.decoys_distinct {
+        println!();
+    } else {
+        // Said out loud rather than left to the reader to derive from the desk
+        // and option counts: with more desks than non-truth options some desks
+        // necessarily share a blind spot, and pooling across two desks that are
+        // wrong about the same thing imports the error instead of cancelling
+        // it. Any number read off such a run is measuring a different task.
+        println!(
+            "note: {} desks share {} non-truth options, so some desks are wrong about the same one\n",
+            first.desks.len(),
+            first.topics.len().saturating_sub(1),
+        );
+    }
 }
 
 /// Print one federated episode, channel by channel.
