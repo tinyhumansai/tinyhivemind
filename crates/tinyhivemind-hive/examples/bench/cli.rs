@@ -83,6 +83,8 @@ pub(crate) struct Options {
     pub(crate) agent: Option<String>,
     /// How private evaluations are distributed across a room.
     pub(crate) expertise: Expertise,
+    /// Room sizes the scale sweep walks.
+    pub(crate) sizes: Vec<usize>,
     /// Whether a specialist's own turn costs more than a lay member's.
     pub(crate) cost: bool,
     /// Whether a member's first turn, while the room is still blind, is a
@@ -154,6 +156,9 @@ pub(crate) enum Mode {
     /// Sweep the context-window model instead: who is still right when the
     /// window is tight.
     ContextSweep,
+    /// Sweep room size against channel topology: at what size does the way
+    /// members reach each other start to matter, and which way.
+    ScaleSweep,
     /// Drive one episode through a real agent CLI or an HTTP backend.
     Live,
     /// Compare several desks solving one problem across channels.
@@ -182,6 +187,7 @@ impl Options {
             trace: false,
             agent: None,
             expertise: Expertise::Uniform,
+            sizes: crate::scale::DEFAULT_SIZES.to_vec(),
             cost: false,
             blind_evidence: false,
             defer_cap: 1,
@@ -232,7 +238,11 @@ impl Options {
         if let Some(agents) = flag_number(&args, "--agents") {
             // Clamped to what `Room::generate` will actually build, so the
             // quorum threshold cannot be set for a desk that does not exist.
-            options.agents = usize::try_from(agents).unwrap_or(5).clamp(2, 8);
+            // The ceiling is a spending bound rather than a property of the
+            // library, which has no room-size limit.
+            options.agents = usize::try_from(agents)
+                .unwrap_or(5)
+                .clamp(2, crate::sim::MAX_MEMBERS);
             options.policy = tuned_policy(options.agents);
         }
         let mut args = args.into_iter();
@@ -340,6 +350,19 @@ fn apply_expertise_flag(
                 .clamp(0.0, 1.0);
         }
         "--context-sweep" => options.mode = Mode::ContextSweep,
+        "--scale-sweep" => options.mode = Mode::ScaleSweep,
+        "--sizes" => {
+            if let Some(list) = args.next() {
+                let parsed: Vec<usize> = list
+                    .split(',')
+                    .filter_map(|part| part.trim().parse::<usize>().ok())
+                    .filter(|size| *size >= 2)
+                    .collect();
+                if !parsed.is_empty() {
+                    options.sizes = parsed;
+                }
+            }
+        }
         "--exchange-cap" => options.exchange_cap = next_number(args).unwrap_or(4),
         "--history" => options.history = next_number(args).unwrap_or(3),
         "--cost-tiers" => options.cost = true,

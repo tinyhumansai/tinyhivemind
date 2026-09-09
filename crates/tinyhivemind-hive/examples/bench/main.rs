@@ -92,6 +92,7 @@ mod metrics;
 mod policy;
 mod rng;
 mod run;
+mod scale;
 mod scenario;
 mod sim;
 mod swarm;
@@ -196,6 +197,11 @@ fn stats_check() -> bool {
 fn run(options: &Options) -> Result<(), String> {
     // Built first because every other mode needs them, and skipped for the
     // swarm, which generates federations of its own.
+    if matches!(options.mode, Mode::ScaleSweep) {
+        // Its own rooms, one set per size, so nothing here generates a room
+        // at the single `--agents` size that would then go unused.
+        return scale::sweep(options);
+    }
     if matches!(options.mode, Mode::Swarm) {
         return swarm_compare(options);
     }
@@ -226,7 +232,9 @@ fn run(options: &Options) -> Result<(), String> {
 
     match &options.mode {
         // Handled above, before the single-desk rooms were generated.
-        Mode::Swarm | Mode::StatsCheck => Ok(()),
+        // Handled above, each before the rooms this arm of the match would
+        // have needed were generated.
+        Mode::Swarm | Mode::StatsCheck | Mode::ScaleSweep => Ok(()),
         Mode::Compare => compare(options, &rooms),
         Mode::Trace => trace(&rooms, &options.policy),
         Mode::Sweep => sweep_policies(options, &rooms),

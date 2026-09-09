@@ -23,7 +23,7 @@
 use tinyhivemind_hive::trace::TopicId;
 
 use crate::rng::{Rng, mix};
-use crate::sim::{MEMBER_ROLES, SimAgent, TOPIC_NAMES};
+use crate::sim::{MAX_MEMBERS, MEMBER_ROLES, SimAgent, TOPIC_NAMES, member_at};
 
 /// Names drawn on, in order, for a federation's desks.
 const DESK_NAMES: [(&str, &str); 4] = [
@@ -32,6 +32,24 @@ const DESK_NAMES: [(&str, &str); 4] = [
     ("mobile", "Mobile"),
     ("data", "Data"),
 ];
+
+/// The largest federation this harness will build.
+///
+/// The same kind of bound as [`MAX_MEMBERS`]: a spending limit, not a property
+/// of the library, which places no ceiling on how many channels a referral may
+/// cross. Beyond the four named desks the names are generated.
+const MAX_DESKS: usize = 64;
+
+/// The id and label of desk `index`, for a federation of any size.
+///
+/// The first four keep the names every recorded swarm number was written
+/// against, so those numbers reproduce exactly rather than approximately.
+fn desk_at(index: usize) -> (String, String) {
+    DESK_NAMES.get(index).map_or_else(
+        || (format!("desk{index}"), format!("Desk {index}")),
+        |(id, label)| ((*id).to_string(), (*label).to_string()),
+    )
+}
 
 /// Evaluation of the genuinely best option, before bias and noise.
 const TRUE_QUALITY: i32 = 100;
@@ -85,8 +103,8 @@ impl Federation {
         bias: i32,
     ) -> Self {
         let topics = topics.clamp(2, TOPIC_NAMES.len());
-        let desk_count = desks.clamp(2, DESK_NAMES.len());
-        let per_desk = per_desk.clamp(2, MEMBER_ROLES.len());
+        let desk_count = desks.clamp(2, MAX_DESKS);
+        let per_desk = per_desk.clamp(2, MAX_MEMBERS);
         let names: Vec<TopicId> = TOPIC_NAMES
             .iter()
             .take(topics)
@@ -116,15 +134,23 @@ impl Federation {
 
         let mut agents = Vec::new();
         let mut records = Vec::new();
-        for (desk, (id, name)) in DESK_NAMES.iter().take(desk_count).enumerate() {
+        for desk in 0..desk_count {
+            let (id, name) = desk_at(desk);
             let decoy = decoys.get(desk).cloned().unwrap_or_else(|| truth.clone());
             let mut members = Vec::new();
-            for (seat, (role_name, role)) in MEMBER_ROLES.iter().take(per_desk).enumerate() {
+            for seat in 0..per_desk {
+                let (role_name, role) = member_at(seat);
                 // Ids are desk-qualified because a federation has more seats
                 // than there are role names, and because a transcript that
                 // says `platform-critic` reads as what it is.
                 let agent_id = format!("{id}-{role_name}");
-                let index = desk.saturating_mul(MEMBER_ROLES.len()).saturating_add(seat);
+                // The stride is `per_desk`, floored at the legacy fixed-array
+                // width: below that width it would reindex every desk after
+                // the first, changing the seed a legacy four-seat federation
+                // draws and making its recorded results unreproducible.
+                let index = desk
+                    .saturating_mul(per_desk.max(MEMBER_ROLES.len()))
+                    .saturating_add(seat);
                 let mut draws = Rng::seeded(mix(seed, index as u64));
                 let evals = names
                     .iter()
@@ -142,7 +168,7 @@ impl Federation {
                         )
                     })
                     .collect();
-                agents.push(SimAgent::assembled(&agent_id, *role, seed, index, evals));
+                agents.push(SimAgent::assembled(&agent_id, role, seed, index, evals));
                 members.push(agent_id);
             }
             records.push(FederatedDesk {
