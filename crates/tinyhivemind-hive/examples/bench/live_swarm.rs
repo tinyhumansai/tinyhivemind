@@ -425,6 +425,13 @@ fn live_federation(options: &Options, scenario: &Scenario) -> Result<(), String>
     Ok(())
 }
 
+/// Desks named individually in the banner.
+///
+/// A federation of two hundred would otherwise spend a screen on it, and the
+/// shape of the arrangement is already carried by the count and the
+/// distinctness line beneath.
+const NAMED_DESKS: usize = 6;
+
 /// Print what the federation is, before any arm runs.
 fn describe(
     options: &Options,
@@ -449,16 +456,12 @@ fn describe(
         merged_policy.quorum.threshold,
         swarm_referrals().max_hops,
     );
-    // Only the first few desks are named. A federation of two hundred would
-    // otherwise spend a screen on a banner, and the shape of the arrangement
-    // is already carried by the count and the distinctness line below.
-    const NAMED: usize = 6;
     print!("the federation: ");
-    for desk in first.desks.iter().take(NAMED) {
+    for desk in first.desks.iter().take(NAMED_DESKS) {
         print!("{} overrates #{}  ", desk.name, desk.decoy);
     }
-    if first.desks.len() > NAMED {
-        print!("… and {} more  ", first.desks.len() - NAMED);
+    if first.desks.len() > NAMED_DESKS {
+        print!("… and {} more  ", first.desks.len() - NAMED_DESKS);
     }
     println!("and #{} is genuinely best", first.truth);
     if first.decoys_distinct {

@@ -125,10 +125,14 @@ fn merging_appends_the_paired_sample_rather_than_combining_it() {
     // The ordering guarantee stated as its own case. `paired_bootstrap`
     // resamples two arms index-for-index because they decided the same rooms,
     // so the flags have to arrive in room order and keep their length.
-    let mut first = Aggregate::default();
-    first.correct_flags = vec![true, false];
-    let mut second = Aggregate::default();
-    second.correct_flags = vec![false, true, true];
+    let mut first = Aggregate {
+        correct_flags: vec![true, false],
+        ..Aggregate::default()
+    };
+    let second = Aggregate {
+        correct_flags: vec![false, true, true],
+        ..Aggregate::default()
+    };
 
     first.merge(&second);
 
