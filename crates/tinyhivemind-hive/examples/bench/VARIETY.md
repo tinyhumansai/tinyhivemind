@@ -50,10 +50,11 @@ hive+alone         56.6     32.5     11.2      1.7
 hive+              68.2     46.8     21.1      4.1
 ```
 
-At **one facet** the room and the soloist are identical — keep `solo+fold`. From
-**two** the room pulls ahead, and its per-facet rate is *flat* in width (77.9)
-where the soloist's decays (78.7 → 73.2), because a seat never holds the facets
-it is not deciding: 32 rows against 160, and 2 rounds against 8.
+At **one facet** `hive+fold` and `solo+fold` are identical — keep `solo+fold`.
+From **two** `hive+fold` pulls ahead, and its per-facet rate is *flat* in width
+(77.9) where the soloist's decays (78.7 → 73.2), because a seat never holds the
+facets it is not deciding: 32 rows against 160, and (priced from the seat
+assignment, not observed wall clock) 2 rounds against 8.
 
 Three things bound the claim:
 
