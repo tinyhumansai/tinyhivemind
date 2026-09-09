@@ -402,17 +402,26 @@ pub(crate) fn drive_swarm(
         // exactly one speaker is a hundred model calls that need not wait on
         // each other. One message, one turn is untouched: each desk still runs
         // a single turn, authorized by its own episode.
+        // An index from desk to its planned turn, so the seats and the plans
+        // can be walked together in one pass. Built rather than searched: at a
+        // hundred desks a scan per desk is a hundred scans per pass, for a
+        // lookup that is a subscript.
+        let mut plan_at: Vec<Option<usize>> = vec![None; count];
+        for (index, plan) in planned.iter().enumerate() {
+            plan_at[plan.desk] = Some(index);
+        }
         let spoken = {
-            let mut work: Vec<(&PlannedTurn, &mut Vec<&mut dyn SwarmMember>)> = Vec::new();
-            let mut seats: Vec<&mut Vec<&mut dyn SwarmMember>> = members.iter_mut().collect();
-            for plan in &planned {
-                // Each desk appears at most once in `planned`, so the take
-                // below cannot hand the same desk out twice.
-                let Some(slot) = seats.get_mut(plan.desk) else {
-                    continue;
-                };
-                work.push((plan, slot));
-            }
+            let mut work: Vec<(&PlannedTurn, &mut Vec<&mut dyn SwarmMember>)> = members
+                .iter_mut()
+                .enumerate()
+                .filter_map(|(desk, seats)| {
+                    plan_at
+                        .get(desk)
+                        .copied()
+                        .flatten()
+                        .map(|index| (&planned[index], seats))
+                })
+                .collect();
             parallel::map_mut_in_order(&mut work, jobs, |(plan, seats)| fill_turn(seats, plan))?
         };
 
@@ -421,9 +430,17 @@ pub(crate) fn drive_swarm(
         // number, and the quorum window and salience decay read raw sequence
         // distance, so landing in completion order would let one seed decide
         // two different things.
-        for (turn, said) in planned.iter().zip(&spoken) {
-            board.land_turn(members, said, turn.budget)?;
-            states[turn.desk] = turn.turn.next_state;
+        for said in &spoken {
+            let Some(plan) = plan_at
+                .get(said.desk)
+                .copied()
+                .flatten()
+                .and_then(|index| planned.get(index))
+            else {
+                continue;
+            };
+            board.land_turn(members, said, plan.budget)?;
+            states[said.desk] = plan.turn.next_state.clone();
             progressed = true;
         }
 
