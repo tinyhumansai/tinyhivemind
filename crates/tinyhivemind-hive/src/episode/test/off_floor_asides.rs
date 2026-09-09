@@ -4,7 +4,7 @@
 //! stub where a member of it sees the content.
 
 use super::super::*;
-use super::support::{MEMBERS, Room, aside, converging, operator, run, said, speaking, state};
+use super::support::{MEMBERS, Room, aside, converging, operator, run, said, sequential, speaking, state};
 use crate::quorum::QuorumPolicy;
 use tinyhivemind::Sequence;
 

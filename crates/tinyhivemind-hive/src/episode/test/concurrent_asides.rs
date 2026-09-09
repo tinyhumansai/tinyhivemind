@@ -4,7 +4,7 @@
 //! can still shift a later desk row across a quorum window.
 
 use super::super::*;
-use super::support::{Room, aside, operator, run, said, speaking, state};
+use super::support::{Room, aside, operator, run, said, sequential, speaking, state};
 use crate::quorum::QuorumPolicy;
 
 #[test]

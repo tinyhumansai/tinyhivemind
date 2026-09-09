@@ -4,7 +4,7 @@
 //! quietly dropped from bidding and from the carried thresholds.
 
 use super::super::*;
-use super::support::{Room, converging, desks, member, run, speaking, state};
+use super::support::{Room, converging, desks, member, run, sequential, speaking, state};
 use tinyhivemind::{Conversation, Sequence};
 
 #[test]

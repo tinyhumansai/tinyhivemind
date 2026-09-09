@@ -4,7 +4,7 @@
 //! through.
 
 use super::super::*;
-use super::support::{Room, deadlocked, member, run, said, state};
+use super::support::{Room, deadlocked, member, run, said, sequential, state};
 use crate::trace::TopicId;
 
 #[test]
