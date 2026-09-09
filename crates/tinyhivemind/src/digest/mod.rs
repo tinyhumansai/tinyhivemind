@@ -76,20 +76,20 @@ mod types;
 
 pub use types::{
     ChannelDigest, ChannelHead, DigestOutcome, DigestPlan, DigestPolicy, DigestRejection,
-    DigestRequest,
-    DigestedHistory,
+    DigestRequest, DigestedHistory,
 };
 
 use crate::{
     Conversation, Error, PAGE_SIZE, Result, SCAN_LIMIT, Sequence, SessionLog, SessionMessage,
+    pins::Pin,
     responder::BoxError,
     session::{matches_conversation, validate_page},
 };
-use std::{future::Future, pin::Pin};
+use std::future::Future;
 
 /// The boxed, executor-neutral future returned by [`Digester`].
 pub type DigestFuture<'a> =
-    Pin<Box<dyn Future<Output = std::result::Result<String, BoxError>> + Send + 'a>>;
+    std::pin::Pin<Box<dyn Future<Output = std::result::Result<String, BoxError>> + Send + 'a>>;
 
 /// A model-backed folder with no transcript access, tools, or host handles.
 ///
