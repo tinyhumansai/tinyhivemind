@@ -264,7 +264,15 @@ async fn land(
     }))
 }
 
-/// Take what a turn said through the room's tools, over what it narrated.
+/// What a turn said to the room, or `None` when it said nothing.
+///
+/// Three outcomes, and the third is the one worth naming. A seat that called a
+/// room tool spoke; a seat that wrote a fence spoke, because the fence is the
+/// documented fallback for an agent CLI that cannot reach the tools. A seat
+/// that did neither *narrated*, and narration reaches nobody — that is what
+/// [`agent::TurnOutput::posted`] has always meant, and returning it as a
+/// message is how twenty minutes of real work reached the room as
+/// "Let me verify the small cases and understand the structure better."
 ///
 /// A seat may call `desk_post` more than once — it is told not to, and it will
 /// anyway. The last call stands: a seat that posts a partial result and then a
@@ -300,3 +308,6 @@ fn settle(outbox: &Path, output: &mut agent::TurnOutput) -> Option<Said> {
     // what stops it reaching the transcript instead.
     None
 }
+
+#[cfg(test)]
+mod test;
