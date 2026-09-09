@@ -41,6 +41,7 @@
 //! and the one a host pays for: a channel that buys two points by writing four
 //! times the transcript has not obviously bought anything.
 
+use std::fmt::Write as _;
 use std::time::Instant;
 
 use tinyhivemind_hive::episode::EpisodePolicy;
@@ -220,19 +221,20 @@ fn render(points: &[Point], sizes: &[usize], options: &Options) -> String {
         Expertise::Specialists { .. } => "specialists",
         Expertise::Uniform => "uniform noise",
     };
-    out.push_str(&format!(
+    let _ = write!(
+        out,
         "task {task}  rooms {} per size  options {}  eval noise ±{}\n\n",
         options.episodes, options.topics, options.noise,
-    ));
+    );
 
     for (title, field) in [
         ("correct %", 0_usize),
         ("turns/ep — rows on the floor", 1),
         ("contacts/ep — members asked privately", 2),
     ] {
-        out.push_str(&format!("{title}\n\narm         "));
+        let _ = write!(out, "{title}\n\narm         ");
         for size in sizes {
-            out.push_str(&format!("{size:>9}"));
+            let _ = write!(out, "{size:>9}");
         }
         out.push('\n');
         for arm in [
@@ -244,7 +246,7 @@ fn render(points: &[Point], sizes: &[usize], options: &Options) -> String {
             "hive+fact°",
             "hive+pooled",
         ] {
-            out.push_str(&format!("{arm:<12}"));
+            let _ = write!(out, "{arm:<12}");
             for size in sizes {
                 let cell = points
                     .iter()
@@ -256,9 +258,11 @@ fn render(points: &[Point], sizes: &[usize], options: &Options) -> String {
                             1 => point.turns,
                             _ => point.rows,
                         };
-                        out.push_str(&format!("{value:>9.1}"));
+                        let _ = write!(out, "{value:>9.1}");
                     }
-                    None => out.push_str(&format!("{:>9}", "—")),
+                    None => {
+                        let _ = write!(out, "{:>9}", "—");
+                    }
                 }
             }
             out.push('\n');
