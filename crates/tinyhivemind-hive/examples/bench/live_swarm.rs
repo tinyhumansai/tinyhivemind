@@ -30,6 +30,18 @@ use crate::run;
 use crate::scenario::Scenario;
 use crate::swarm::{self, Channel, SwarmMember, SwarmReport, pooled, run_swarm};
 
+/// What every arm decided about one federation.
+///
+/// One federation's worth of work, so a worker can produce it without touching
+/// any other federation and the parent can fold the lot in federation order.
+struct FederationOutcome {
+    siloed: SwarmReport,
+    swarmed: SwarmReport,
+    free: SwarmReport,
+    merged: crate::arms::ArmReport,
+    vote: crate::arms::ArmReport,
+}
+
 /// The referral policy the swarm arm runs at.
 ///
 /// Two hops is one round trip — the question out, the answer back — and it is
@@ -105,36 +117,45 @@ pub(crate) fn swarm_compare(options: &Options) -> Result<(), String> {
         trace_swarm(first, &desk_policy)?;
     }
 
+    let wall = Instant::now();
+    // One federation per worker, folded here in federation order. Every
+    // federation is generated from its own seed and shares nothing with
+    // another, so this is the same fold spread across cores — see
+    // `crate::parallel`.
+    let decided: Vec<FederationOutcome> =
+        parallel::map_in_order(&federations, options.jobs, |federation| {
+            Ok(FederationOutcome {
+                siloed: run_swarm(
+                    federation,
+                    &desk_policy,
+                    ReferralPolicy::DEFAULT,
+                    TASK,
+                    false,
+                )?,
+                swarmed: run_swarm(federation, &desk_policy, swarm_referrals(), TASK, false)?,
+                free: run_swarm(
+                    &pooled(federation),
+                    &desk_policy,
+                    ReferralPolicy::DEFAULT,
+                    TASK,
+                    false,
+                )?,
+                merged: arms::run_merged(federation, &merged_policy, TASK)?,
+                vote: arms::run_federated_vote(federation),
+            })
+        })?;
+
     let mut siloed = SwarmTotals::default();
     let mut swarmed = SwarmTotals::default();
     let mut free = SwarmTotals::default();
     let mut merged = Aggregate::default();
     let mut vote = Aggregate::default();
-    let wall = Instant::now();
-    for federation in &federations {
-        siloed.add(&run_swarm(
-            federation,
-            &desk_policy,
-            ReferralPolicy::DEFAULT,
-            TASK,
-            false,
-        )?);
-        swarmed.add(&run_swarm(
-            federation,
-            &desk_policy,
-            swarm_referrals(),
-            TASK,
-            false,
-        )?);
-        free.add(&run_swarm(
-            &pooled(federation),
-            &desk_policy,
-            ReferralPolicy::DEFAULT,
-            TASK,
-            false,
-        )?);
-        merged.add_arm(&arms::run_merged(federation, &merged_policy, TASK)?);
-        vote.add_arm(&arms::run_federated_vote(federation));
+    for outcome in &decided {
+        siloed.add(&outcome.siloed);
+        swarmed.add(&outcome.swarmed);
+        free.add(&outcome.free);
+        merged.add_arm(&outcome.merged);
+        vote.add_arm(&outcome.vote);
     }
     let wall = wall.elapsed();
 
