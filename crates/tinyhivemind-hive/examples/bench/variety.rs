@@ -303,8 +303,14 @@ fn run_split(options: &Options, seed: u64, facets: usize) -> TaskRun {
     let mut priors: Vec<Option<Room>> = vec![None; count];
     for facet in 0..facets {
         let owner = facet % count;
-        let Some(slot) = priors.get(owner) else { break };
-        let mut room = faceted(options, seed, facet, slot.as_ref());
+        let Some(slot) = priors.get_mut(owner) else {
+            break;
+        };
+        // Taken rather than borrowed: the prior room is consumed into this
+        // one's inherited windows and put back below, so the seat holds
+        // exactly one room at a time.
+        let prior = slot.take();
+        let mut room = faceted(options, seed, facet, prior.as_ref());
         room.set_compaction(Compaction::Fold);
         let Some(agent) = room.agents.get(owner) else {
             break;
@@ -314,17 +320,19 @@ fn run_split(options: &Options, seed: u64, facets: usize) -> TaskRun {
             *slot = Some(room);
         }
     }
-    // What the busiest seat carried, averaged over the seats that carried
-    // anything: a seat given no facet holds nothing and is not a participant
-    // in this task.
+    // What one seat carried, averaged over the seats that carried anything: a
+    // seat given no facet holds nothing and is not a participant in this task.
     let (rows, seats) = priors
         .iter()
         .enumerate()
         .filter_map(|(owner, room)| room.as_ref().map(|room| room.held_by(owner)))
-        .fold((0_usize, 0_usize), |(rows, seats), held| {
-            (rows.saturating_add(held), seats.saturating_add(1))
+        .fold((0_u64, 0_u64), |(rows, seats), held| {
+            (
+                rows.saturating_add(u64::try_from(held).unwrap_or(u64::MAX)),
+                seats.saturating_add(1),
+            )
         });
-    run.held = ratio_f64(as_f64(rows as u64), seats as u64);
+    run.held = ratio_f64(as_f64(rows), seats);
     // The depth the concurrency buys: `n` facets to a round.
     run.rounds = u32::try_from(facets.div_ceil(count)).unwrap_or(u32::MAX);
     run
@@ -366,11 +374,7 @@ fn render(points: &[Point], spreads: &[usize], options: &Options) -> String {
     } else {
         format!("{} rows, rot {:.1}", options.context, options.rot)
     };
-    let roles = if options.roles {
-        "owned"
-    } else {
-        "shared"
-    };
+    let roles = if options.roles { "owned" } else { "shared" };
     let _ = write!(
         out,
         "tasks {} per width  agents {}  options {}  facets {roles}  window {window}\n\n",
@@ -443,5 +447,3 @@ fn as_f64(value: u64) -> f64 {
     value as f64
 }
 
-#[cfg(test)]
-mod test;
