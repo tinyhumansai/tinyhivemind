@@ -410,13 +410,9 @@ impl Room {
         expertise: Expertise,
         cost_tiers: bool,
     ) -> Self {
-        let topic_count = topics.clamp(2, TOPIC_NAMES.len());
+        let topic_count = topics.clamp(2, MAX_TOPICS);
         let agent_count = agents.clamp(2, MAX_MEMBERS);
-        let names: Vec<TopicId> = TOPIC_NAMES
-            .iter()
-            .take(topic_count)
-            .map(|name| TopicId::from(*name))
-            .collect();
+        let names: Vec<TopicId> = (0..topic_count).map(topic_at).collect();
         // The truth is placed by the seed rather than at a fixed index, so no
         // arm of the benchmark can score by preferring the first option.
         let truth_index =
