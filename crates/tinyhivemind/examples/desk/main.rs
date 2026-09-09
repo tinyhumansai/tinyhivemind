@@ -26,13 +26,15 @@
 //! | `queue.rs` | [`queue::DeskQueue`], the host's `MentionTurnQueue` |
 //! | `aside.rs` | this desk's aside policy and its host-side bookkeeping |
 //! | `prompt.rs` | [`prompt::compose_prompt`], turning a turn into text |
-//! | `mcp.rs` | the room as a tool: `desk_post`, `desk_dm`, `desk_read` |
+//! | `mcp.rs` | the MCP transport under the room's tools, and the outbox |
+//! | `tools.rs` | the room's tool surface as JSON Schema and as `tinytools` |
 //! | `digest.rs` | the host side of the `Digester` port: the room's account |
 //! | `notebook.rs` | the notebook a seat carries between turns |
 //! | `agent.rs` | one `opencode run` per turn, and its output |
 //! | `chat.rs` | the tool-less wrap-up channel |
 //! | `deskfile.rs` | parsing the plain-text desk file |
 //! | `log.rs` | the JSONL-backed `SessionLog` |
+//! | `room.rs` | the roster and desk snapshots both processes fold over |
 //! | `memory.rs` | CortexDB recall and capture |
 
 mod agent;
@@ -47,7 +49,9 @@ mod memory;
 mod notebook;
 mod prompt;
 mod queue;
+mod room;
 mod run;
+mod tools;
 mod turn;
 
 use std::error::Error as StdError;
@@ -58,12 +62,27 @@ type BoxError = Box<dyn StdError + Send + Sync + 'static>;
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), BoxError> {
     let options = cli::Options::parse()?;
-    if options.serve_mcp {
+    if options.mode == cli::Mode::PrintSurface {
+        tools::print_surface(&mcp::Serving {
+            outbox: options.workspace.join(".desk/outbox.jsonl"),
+            transcript: options.transcript,
+            desk: None,
+            turn: None,
+        });
+        return Ok(());
+    }
+    if options.mode == cli::Mode::ServeTools {
         // This same binary is the MCP server the agent CLI spawns: re-execing
         // it keeps one artifact and one version of the tool schema. Serving
-        // takes no turn and reads no desk file.
+        // takes no turn. It reads the desk file only to price a `desk_dm`
+        // against the aside policy while the seat can still act on the answer.
         let outbox = options.outbox.ok_or("--mcp-server needs --outbox")?;
-        return mcp::serve(&outbox, &options.transcript);
+        return mcp::serve(&mcp::Serving {
+            outbox,
+            transcript: options.transcript,
+            desk: options.turn.as_ref().map(|_| options.desk),
+            turn: options.turn,
+        });
     }
     run::run(options).await
 }

@@ -14,5 +14,6 @@ about a live session; see its own `README.md` for the how and why.
 | [`threads`](threads) | What live threads exist in one desk, ranked by recency, for a viewer that has been away? |
 | [`responder`](responder) | Who answers an unaddressed message, when the ladder must ask a model to name a candidate? |
 | [`dispatch`](dispatch) | When an agent mentions a peer, how does exactly one child turn get enqueued on the host, never zero-or-many? |
+| [`speech`](speech) | What may a seat say, what makes a call valid, and what does exactly one accepted utterance become? |
 | [`referral`](referral) | The same one-child-turn edge as `dispatch`, but crossing to a different desk and carrying one answer back. |
 | [`error`](error) | The one `Error`/`Result<T>` every fallible function in this crate returns. |

@@ -34,11 +34,46 @@ Three rules keep it from becoming a second journal.
    log holds. A folded row keeps its sequence and stays reachable through
    `search_messages`, which is the escape hatch a lossy summary needs.
 
+### Two triggers, and why the second is in characters
+
+`fold_after` says the room has *moved*. `fold_after_chars` says its scrollback
+has grown *expensive*, and on a desk writing derivations the second arrives long
+before the first: one run solved Project Euler 1006 in 23 rows and 604k tokens,
+which is a fold the row count would never have planned. Whichever binds first
+wins, and `0` disables the size one.
+
+The unit is characters, not tokens, and `DigestPolicy::from_token_budget` is how
+a host writes its budget in the unit it thinks in. A tokenizer is a per-model
+table, so a trigger that used one would fold the same channel at different
+points on two machines and the plan would stop being a fold over its arguments —
+and this crate may not take the dependency anyway. Four characters to the token
+puts a converted budget within roughly 15% of its intent, which is the right
+precision for deciding *when to spend one summarization call*.
+
+The count itself is the host's to keep, and arrives as `ChannelHead`. Only the
+host sees a row's size as it appends it; reading the log back on every turn to
+decide whether to compact it would cost more than the compaction saves. Private
+rows must not be counted — an account may not contain one, so one must not be
+able to trigger a fold either.
+
+### A pinned message does not scroll away
+
+A pin is the room saying one message must stay reachable. The fold is the only
+thing standing between a pinned row and the moment it leaves the window, so
+`refold` takes the board and passes the pinned sequences at or below `through`
+in `DigestRequest::pinned`. A digester is expected to carry what those rows
+established into the new account in full.
+
+Only sequences cross, never content: a pin to a private row could not leak one
+even if a host offered it, and the rows themselves have already been filtered to
+`Audience::Desk` before the digester sees them.
+
 ## The public surface
 
 | item | kind | what it does |
 | --- | --- | --- |
-| `DigestPolicy` | value | `keep_live`, `fold_after`, `input_limit`, `budget_chars` |
+| `DigestPolicy` | value | `keep_live`, `fold_after`, `fold_after_chars`, `input_limit`, `budget_chars`, and `from_token_budget` |
+| `ChannelHead` | value | where the channel stands: newest `sequence`, and `unfolded_chars` the account does not cover |
 | `ChannelDigest` | value | the account: conversation, `through`, `covered`, `generation`, `text` |
 | `plan_digest` | pure fold | what the next fold should cover, or `Current` |
 | `collect_digest_input` | async | the desk-visible rows of one step, chronological |
@@ -52,7 +87,7 @@ Three rules keep it from becoming a second journal.
 - **A fold advances by at most `input_limit` per call.** A first fold over a
   long history is a run of bounded calls that catch up, not one enormous one,
   and no row is stepped over.
-- **The trigger is measured in sequence distance, not rows of this channel.**
+- **The row trigger is measured in sequence distance, not rows of this channel.**
   On a log carrying several channels that overestimates, so a busy neighbour
   makes a fold happen *earlier* than strictly necessary — one extra call, never
   a missed one.

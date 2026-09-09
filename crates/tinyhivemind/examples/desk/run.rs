@@ -15,33 +15,31 @@ use std::{
 };
 
 use tinyhivemind::{
-    BrevityPolicy, BriefedTeammate, ChannelDigest, Conversation, DigestOutcome, DigestPolicy,
-    Digester, MentionDispatchContext, MentionDispatchOutcome, Sequence, SessionAuthor,
-    SessionQuery, TeamBriefing, apply_digest,
+    BrevityPolicy, BriefedTeammate, ChannelDigest, ChannelHead, Conversation, DigestOutcome,
+    DigestPolicy, Digester, LogMessage, MentionDispatchContext, MentionDispatchOutcome, Sequence,
+    SessionAuthor, SessionQuery, TeamBriefing, apply_digest,
     aside::{Audience, Viewer},
-    desk::{Desk, DeskSet, ResponderMode},
     dispatch::{
         DispatchConversation, DispatchKey, MentionDispatchInput, MentionDispatchPolicy,
         dispatch_mention,
     },
     initialize_session,
     mention::{MentionAuthor, resolve},
+    pins::{PIN_LIMIT, fold_pins},
     refold,
     responder::{ResponderRequest, SelectionPolicy, choose_responder},
-    roster::{Person, Roster, RosterMember},
     sharing::{SharingPlan, SharingQuery, SharingState, initialized_state, prepare_delta},
+    speech::{CommitRequest, addressed_peers, commit_utterance},
 };
 
 use crate::{
-    BoxError, agent,
-    aside::{self, Addressed},
-    chat,
+    BoxError, agent, aside, chat,
     cli::Options,
     deskfile, digest, log, mcp, memory,
     notebook::{files_written, read_notebook},
     prompt::{TurnPrompt, compose_prompt},
     queue::{DeskQueue, PendingTurn},
-    turn,
+    room, turn,
 };
 
 /// How long a seat gets to write the message it never got round to writing.
@@ -53,6 +51,9 @@ const WRAP_UP_TIMEOUT: Duration = Duration::from_secs(600);
 /// It is not a second journal: the transcript is still the only record, and
 /// the host is still what writes it.
 const OUTBOX: &str = ".desk/outbox.jsonl";
+
+/// Where the host says whose turn is running, for the server serving it.
+const TURN: &str = ".desk/turn";
 
 /// How long the room's standing account may be, in characters.
 ///
@@ -71,27 +72,9 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
     let spec = deskfile::parse(&fs::read_to_string(&options.desk)?)?;
     fs::create_dir_all(&options.workspace)?;
 
-    let members: Vec<RosterMember> = spec
-        .agents
-        .iter()
-        .map(|seat| RosterMember {
-            id: seat.id.clone(),
-            name: Some(seat.label.clone()),
-        })
-        .collect();
-    let people = vec![Person {
-        id: spec.person_id.clone(),
-        label: spec.person_label.clone(),
-    }];
-    let roster = Roster::new(&members, &people, &[]);
-    let declared = [Desk {
-        id: spec.id.clone(),
-        name: spec.name.clone(),
-        description: None,
-        members: spec.agents.iter().map(|seat| seat.id.clone()).collect(),
-        responder_mode: ResponderMode::Lead,
-    }];
-    let desks = DeskSet::new(&declared, &[], &[], &[], &[]);
+    let room = room::Room::new(&spec);
+    let roster = room.roster();
+    let desks = room.desks();
     roster.validate()?;
     desks.validate()?;
 
@@ -103,12 +86,17 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
     let transcript = log::JsonlLog::open(&options.transcript)?;
     // The room is a tool the seat calls, not a fence it writes. The server is
     // this binary re-executed; the outbox is one file, truncated per turn.
-    let outbox = options.workspace.join(OUTBOX);
+    let serving = mcp::Serving {
+        outbox: options.workspace.join(OUTBOX),
+        transcript: options.transcript.clone(),
+        desk: Some(options.desk.clone()),
+        turn: Some(options.workspace.join(TURN)),
+    };
+    let outbox = serving.outbox.clone();
     let agent_config = match std::env::current_exe() {
         Ok(exe) => Some(mcp::config_block(
             &exe,
-            &outbox,
-            &options.transcript,
+            &serving,
             options.opencode_config.as_deref(),
         )),
         Err(error) => {
@@ -159,11 +147,15 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
             WRAP_UP_TIMEOUT,
         ))
     });
+    // Two triggers. `fold_after` says the room has *moved*; `--fold-tokens`
+    // says its scrollback has grown expensive, and on this desk the second
+    // arrives long before the first — run 28 solved PE 1006 in 23 rows and
+    // 604k tokens, which is a fold the row count would never have planned.
     let account_policy = DigestPolicy {
         keep_live: options.window,
         fold_after: options.fold_after,
         budget_chars: ACCOUNT_CHARS,
-        ..DigestPolicy::DEFAULT
+        ..DigestPolicy::from_token_budget(options.fold_tokens)
     };
     let mut account: Option<ChannelDigest> = None;
     // One CLI session per seat, and one watermark per seat: a seat that has
@@ -348,12 +340,26 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
         // anything is composed from it. A fold that fails costs the room its
         // compaction and nothing else: the window is already correct without
         // one.
+        // Two things the library cannot derive and this host can. The
+        // character count is what the size trigger reads: only the host sees a
+        // row's size as it appends it, and reading the log back every turn to
+        // decide whether to compact it would cost more than the compaction
+        // saves. The pins are the room's own claim that a message does not
+        // scroll away, and a fold told nothing about them would quietly undo
+        // one.
+        let rows = transcript.rows();
+        let head = ChannelHead {
+            sequence: Sequence(transcript.len() as u64),
+            unfolded_chars: unfolded_chars(&rows, account.as_ref()),
+        };
+        let board = fold_pins(&rows, &Viewer::Operator, PIN_LIMIT);
         match refold(
             &transcript,
             folder.as_ref().map(|folder| folder as &dyn Digester),
             &conversation,
             account.as_ref(),
-            Sequence(transcript.len() as u64),
+            head,
+            &board,
             account_policy,
         )
         .await?
@@ -361,11 +367,12 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
             DigestOutcome::Folded(next) => {
                 println!(
                     "   room account: generation {} now covers {} messages through [{}] \
-                     ({} chars)",
+                     ({} chars, folded at {} unfolded chars)",
                     next.generation,
                     next.covered,
                     next.through.0,
-                    next.text.chars().count()
+                    next.text.chars().count(),
+                    head.unfolded_chars,
                 );
                 account = Some(next);
             }
@@ -501,6 +508,12 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
                 None => "none".to_string(),
             }
         );
+        // Say whose turn is running, so the server serving this seat's tools
+        // can price a `desk_dm` against the aside policy while the seat is
+        // still able to act on the answer.
+        if let Some(path) = &serving.turn {
+            mcp::open_turn(path, &seat.id);
+        }
         let Some((output, said)) = turn::deliver(
             &turn::Delivery {
                 runner: &runner,
@@ -513,7 +526,8 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
             &prompt,
             &mut sessions,
             &mut tokens,
-        )?
+        )
+        .await?
         else {
             continue;
         };
@@ -532,43 +546,35 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
             println!("   | {line}");
         }
 
-        let author = MentionAuthor::Agent {
-            id: seat.id.clone(),
-        };
-        let mut mentions = resolve(&output.message, None, &author, &roster, &desks);
-        // A message sent through `desk_dm` addresses its recipients whether or
-        // not its text also names them, and the grammar rather than this host
-        // is what turns those names into targets.
-        let addressed_to = said
-            .dm_to
-            .iter()
-            .map(|id| format!("@{id}"))
-            .collect::<Vec<_>>()
-            .join(" ");
-        let dm_mentions = resolve(&addressed_to, None, &author, &roster, &desks);
-        if !dm_mentions.is_empty() && aside::addressed(&mentions, &seat.id).is_empty() {
-            mentions = dm_mentions.clone();
-        }
-        // Who the line reaches is the library's decision, not this host's
-        // reading of the marker: `aside` resolves the audience and refuses
-        // with a named reason, and a refusal leaves the row desk-visible.
-        let audience = aside::address(
-            &transcript,
-            &spec.id,
-            &seat.id,
-            &Addressed {
-                line: &output.message,
-                mentions: if dm_mentions.is_empty() {
-                    &mentions
-                } else {
-                    &dm_mentions
-                },
-                private: !dm_mentions.is_empty(),
+        // What the seat said becomes a row through one fold in the library:
+        // the text, who may read it, the mentions dispatch routes on, and
+        // whether the desk was reported finished. The host's part is the two
+        // counts the fold cannot derive — how much of an open aside is spent,
+        // and whether an earlier one is still owed a settlement — both folded
+        // out of the journal, because this host keeps no state the journal
+        // does not already carry.
+        let rows = transcript.rows();
+        let committed = commit_utterance(&CommitRequest {
+            utterance: &said.utterance,
+            speaker_id: &seat.id,
+            conversation: &DispatchConversation {
+                desk_id: spec.id.clone(),
+                thread_root: None,
             },
-            &roster,
-            &desks,
-        )?;
-        if let Audience::Aside { members } = &audience {
+            aside: aside::ASIDES,
+            spent: aside::spent_in_aside(&rows),
+            unsettled: aside::unsettled_aside(
+                &rows,
+                &seat.id,
+                &addressed_peers(&said.utterance, &seat.id, &roster, &desks),
+            ),
+            roster: &roster,
+            desks: &desks,
+        })?;
+        if let Some(reason) = committed.refusal {
+            println!("   aside refused: {reason:?} — the row stays desk-visible");
+        }
+        if let Audience::Aside { members } = &committed.audience {
             println!("   aside to @{}", members.join(", @"));
         }
         sequence = transcript.append(
@@ -577,8 +583,8 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
                 id: seat.id.clone(),
                 label: seat.label.clone(),
             },
-            &output.message,
-            audience,
+            &committed.content,
+            committed.audience.clone(),
         )?;
         if let Some(store) = store.as_ref() {
             store.capture(&seat.id, sequence.0, &output.message);
@@ -608,7 +614,7 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
         // to. Without this the chair nudges a delivered room once per remaining
         // round: in run 28 that was nine turns of `@lead` restating the same
         // answer to a prompt that could not be told the work was done.
-        if said.closing {
+        if committed.closing {
             println!("   -- seat reports the work finished; closing the desk");
             break;
         }
@@ -625,8 +631,8 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
                     thread_root: None,
                 },
                 author_id: seat.id.clone(),
-                content: output.message.clone(),
-                mentions,
+                content: committed.content.clone(),
+                mentions: committed.mentions,
                 hop: job.hop,
             },
             &roster,
@@ -647,4 +653,17 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
         transcript.len()
     );
     Ok(())
+}
+
+/// Characters of desk-visible content the room's account does not yet cover.
+///
+/// Private rows are skipped, because an account may not contain one: a long
+/// aside must not be able to spend the room's summarization budget on content
+/// the fold is forbidden to carry.
+fn unfolded_chars(rows: &[LogMessage], account: Option<&ChannelDigest>) -> usize {
+    let folded = account.map_or(0, |digest| digest.through.0);
+    rows.iter()
+        .filter(|row| row.sequence.0 > folded && row.audience.is_desk())
+        .map(|row| row.content.chars().count())
+        .sum()
 }

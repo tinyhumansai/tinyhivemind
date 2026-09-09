@@ -19,7 +19,7 @@
 //!    growing without bound or being asked to forget. It is host state, of
 //!    exactly the kind [`SharingState`](crate::SharingState) already is.
 //! 2. **The account folds only what every member may read.** Rows outside
-//!    [`Audience::Desk`] are skipped, so one account serves every member of
+//!    [`Audience::Desk`](tinyhivemind_core::aside::Audience::Desk) are skipped, so one account serves every member of
 //!    the channel — including one that has never spoken — and no fold can
 //!    launder a private row into a shared summary.
 //! 3. **The rows survive.** Folding changes what a turn is *shown*, never what
@@ -36,7 +36,8 @@
 //!
 //! ```
 //! use tinyhivemind::{
-//!     ChannelDigest, Conversation, DigestPlan, DigestPolicy, Sequence, plan_digest,
+//!     ChannelDigest, ChannelHead, Conversation, DigestPlan, DigestPolicy, Sequence,
+//!     plan_digest,
 //! };
 //!
 //! let policy = DigestPolicy::DEFAULT;
@@ -47,11 +48,12 @@
 //! };
 //!
 //! // A short room is left alone.
-//! assert_eq!(plan_digest(None, Sequence(12), policy), DigestPlan::Current);
+//! let head = ChannelHead::at;
+//! assert_eq!(plan_digest(None, head(Sequence(12)), policy), DigestPlan::Current);
 //!
 //! // A long one folds everything behind the live tail, in bounded steps.
 //! assert_eq!(
-//!     plan_digest(None, Sequence(400), policy),
+//!     plan_digest(None, head(Sequence(400)), policy),
 //!     DigestPlan::Fold { after: None, through: Sequence(60) },
 //! );
 //!
@@ -64,8 +66,16 @@
 //!     text: "the room chose the sublinear rank".into(),
 //! };
 //! assert_eq!(
-//!     plan_digest(Some(&held), Sequence(400), policy),
+//!     plan_digest(Some(&held), head(Sequence(400)), policy),
 //!     DigestPlan::Fold { after: Some(Sequence(60)), through: Sequence(120) },
+//! );
+//!
+//! // Or it folds because the room grew expensive rather than long: 24 rows
+//! // of derivations is a fold the row count would never have planned.
+//! let big = ChannelHead { sequence: Sequence(34), unfolded_chars: 200_001 };
+//! assert_eq!(
+//!     plan_digest(None, big, DigestPolicy::from_token_budget(50_000)),
+//!     DigestPlan::Fold { after: None, through: Sequence(4) },
 //! );
 //! ```
 
@@ -75,20 +85,21 @@ mod test;
 mod types;
 
 pub use types::{
-    ChannelDigest, DigestOutcome, DigestPlan, DigestPolicy, DigestRejection, DigestRequest,
-    DigestedHistory,
+    ChannelDigest, ChannelHead, DigestOutcome, DigestPlan, DigestPolicy, DigestRejection,
+    DigestRequest, DigestedHistory,
 };
 
 use crate::{
     Conversation, Error, PAGE_SIZE, Result, SCAN_LIMIT, Sequence, SessionLog, SessionMessage,
+    pins::Pin,
     responder::BoxError,
     session::{matches_conversation, validate_page},
 };
-use std::{future::Future, pin::Pin};
+use std::future::Future;
 
 /// The boxed, executor-neutral future returned by [`Digester`].
 pub type DigestFuture<'a> =
-    Pin<Box<dyn Future<Output = std::result::Result<String, BoxError>> + Send + 'a>>;
+    std::pin::Pin<Box<dyn Future<Output = std::result::Result<String, BoxError>> + Send + 'a>>;
 
 /// A model-backed folder with no transcript access, tools, or host handles.
 ///
@@ -113,14 +124,22 @@ pub trait Digester: Send + Sync {
 #[must_use]
 pub fn plan_digest(
     account: Option<&ChannelDigest>,
-    head: Sequence,
+    head: ChannelHead,
     policy: DigestPolicy,
 ) -> DigestPlan {
     let folded = account.map_or(0, |digest| digest.through.0);
-    let Some(ceiling) = head.0.checked_sub(policy.keep_live as u64) else {
+    let Some(ceiling) = head.sequence.0.checked_sub(policy.keep_live as u64) else {
         return DigestPlan::Current;
     };
-    if ceiling <= folded || ceiling - folded <= policy.fold_after as u64 {
+    if ceiling <= folded {
+        return DigestPlan::Current;
+    }
+    // Either threshold is enough. Rows say the room has *moved*; characters
+    // say it has grown expensive, and on a desk writing derivations the second
+    // arrives long before the first.
+    let by_rows = ceiling - folded > policy.fold_after as u64;
+    let by_size = policy.fold_after_chars > 0 && head.unfolded_chars > policy.fold_after_chars;
+    if !by_rows && !by_size {
         return DigestPlan::Current;
     }
     let step = folded.saturating_add(policy.input_limit as u64);
@@ -253,7 +272,8 @@ pub async fn refold(
     digester: Option<&(dyn Digester + '_)>,
     conversation: &Conversation,
     account: Option<&ChannelDigest>,
-    head: Sequence,
+    head: ChannelHead,
+    pins: &[Pin],
     policy: DigestPolicy,
 ) -> Result<DigestOutcome> {
     if let Some(account) = account
@@ -289,6 +309,7 @@ pub async fn refold(
         messages,
         through,
         budget_chars: policy.budget_chars,
+        pinned: pinned_through(pins, through),
     };
     let Ok(text) = digester.digest(&request).await else {
         return Ok(DigestOutcome::Unavailable);
@@ -297,6 +318,22 @@ pub async fn refold(
         Ok(digest) => DigestOutcome::Folded(digest),
         Err(reason) => DigestOutcome::Rejected { reason },
     })
+}
+
+/// The pinned sequences a fold reaching `through` is answerable for.
+///
+/// A pin above `through` is still in the live tail, where the reader sees the
+/// row itself; the fold has no business with it. Ascending, deduplicated, so
+/// two markers pinning one row name it once.
+fn pinned_through(pins: &[Pin], through: Sequence) -> Vec<Sequence> {
+    let mut sequences: Vec<Sequence> = pins
+        .iter()
+        .map(|pin| pin.sequence)
+        .filter(|sequence| sequence.0 <= through.0)
+        .collect();
+    sequences.sort_unstable_by_key(|sequence| sequence.0);
+    sequences.dedup();
+    sequences
 }
 
 /// Compose one turn's history from an account and a projected window.

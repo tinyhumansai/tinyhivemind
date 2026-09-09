@@ -21,12 +21,12 @@ Everything that waits on something is here, and none of it is in the library:
 | `log.rs` — the transcript, as JSONL on disk | `SessionLog`, the paging port it satisfies |
 | `queue.rs` — `DeskQueue`, the turn queue and its idempotency | `MentionTurnQueue`, and `dispatch_mention` deciding *whether* to enqueue |
 | `agent.rs` — one `opencode run` per turn, and `turn.rs` — the ladder of recoveries under it | nothing: the library never starts a process |
-| `mcp.rs` — the room as a tool a seat calls | `aside` and `dispatch_mention`, deciding what a call to speak *means* |
+| `mcp.rs` and `tools.rs` — serving the room's tools over MCP and as `tinytools::Tool` | `speech`: what the tools are, what a call must look like, and what one accepted utterance becomes |
 | `digest.rs` — one completion that rewrites the room's account | `digest`: when to fold, what a fold may cover, and whether to accept it |
 | `memory.rs` — CortexDB recall and capture | nothing: the library holds no memory |
 | the chair's nudge when the room falls quiet, in `run.rs` | `choose_responder`, deciding who answers the chair |
 | `prompt.rs` — `compose_prompt` | `TeamBriefing::system_text` and `project_session`, which say what a seat may see |
-| `aside.rs` — this desk's aside policy and its bookkeeping | `tinyhivemind_core::aside::aside`, deciding who a `!aside` line reaches |
+| `aside.rs` — this desk's aside policy and its bookkeeping | `speech::commit_utterance`, which folds that policy into an audience and a refusal |
 
 ### File layout
 
@@ -36,11 +36,14 @@ Everything that waits on something is here, and none of it is in the library:
 | `cli.rs` | `Options` and its parsing |
 | `run.rs` | the desk loop itself — open the desk, choose who answers, run a turn, post it, route the reply. One function on purpose; see the module doc |
 | `queue.rs` | `DeskQueue`, the host's `MentionTurnQueue` |
-| `aside.rs` | this desk's aside policy, `address`, and the aside bookkeeping folded from the transcript |
+| `aside.rs` | this desk's aside policy and the bookkeeping folded from the transcript: what an open aside has spent, and what is unsettled |
+| `mcp.rs` | the MCP transport: the JSON-RPC loop, the per-turn outbox, and pricing a `desk_dm` before the turn ends |
+| `tools.rs` | the room's surface rendered twice — JSON Schema for MCP, `tinytools::Tool` for a host running its own loop — over one `invoke` |
+| `room.rs` | the roster and desk snapshots both processes fold over |
 | `prompt.rs` | `compose_prompt`, turning a seat's briefing, roster, history, and trigger into one prompt; `who_is_here` is the live roster |
 | `notebook.rs` | the notebook a seat carries between turns: reading back its tail within budget, and naming what a turn wrote |
 | `agent.rs` | one `opencode run` per turn, and its output |
-| `chat.rs` | the tool-less wrap-up channel |
+| `chat.rs` | the tool-less wrap-up channel, on `tinyinference` |
 | `deskfile.rs` | parsing the plain-text desk file |
 | `log.rs` | the JSONL-backed `SessionLog` |
 | `memory.rs` | CortexDB recall and capture |
@@ -88,7 +91,9 @@ information.
 | `--no-memory` | run with no recall and no capture |
 | `--no-digest` | do not fold older messages into the room's account |
 | `--fold-after N` | rows past the window before a fold is spent; lower it to exercise the account on a short desk |
-| `--mcp-server --outbox PATH` | serve the desk tools over stdio; the binary re-execs itself into this mode and takes no turn |
+| `--fold-tokens N` | fold once the unfolded scrollback would cost roughly N tokens, whichever binds first with `--fold-after`. `0` leaves only the row trigger |
+| `--mcp-server --outbox PATH` | serve the desk tools over stdio; the binary re-execs itself into this mode and takes no turn. `--desk` and `--turn` let it price a `desk_dm` before the turn ends |
+| `--tool-surface` | print the four tools a seat is given, with their schemas, and exit |
 
 `OPENCODE_CONFIG_CONTENT` is passed through to the agent process, which is how
 a run pins one model — for instance a ladder rung that only ever serves
@@ -111,12 +116,24 @@ A seat says one thing per turn by **calling a tool**, not by writing a marker:
 | `desk_close(message)` | say one last thing and report the work finished |
 
 Text a seat produces outside a tool call is its own thinking and reaches
-nobody. The reason is a defect: in run 26 a seat closed with `<<<POST>>> …
+nobody — and the host enforces that rather than only asking for it. A turn that
+called no room tool and wrote no fence has **not spoken**, whatever text it
+left behind, so it goes to the landing rung instead of having its narration
+appended as a message. Run 29 is why: a provider failed mid-flight on both
+turns, and twenty minutes of real work each time reached the room as
+"Let me verify the small cases and understand the structure better" — a row
+that addressed nobody, so the desk could not hand the turn on either. The reason is a defect: in run 26 a seat closed with `<<<POST>>> …
 <<<POST>>>` rather than `<<<POST … POST>>>` and a verified result reached the
 room as the three characters `>>>`. A model-authored delimiter is an interface
 with a fallible producer, and it has no schema and no way to tell the producer
 it got it wrong; a tool call has both, and a malformed one is refused to the
 seat while it can still fix it.
+
+**The tools are stated once, in the library.** `speech::tool_specs()` holds
+each name, description and argument as data; `tools.rs` renders that into JSON
+Schema for the MCP server and into `tinytools::Tool` for a host that runs an
+agent loop in its own process, and both go through one `invoke`. A seat sees
+the same four tools whichever way it was reached. `--tool-surface` prints them.
 
 `mcp.rs` is that server, and it is this same binary re-executed
 (`--mcp-server`). It never writes the transcript. It appends to a per-turn
@@ -124,8 +141,18 @@ outbox the host truncates before the turn and drains after it, so sequence
 assignment, audience resolution through `aside`, mention resolution and
 dispatch all stay exactly where they were — a tool call is a *request* to
 speak. `desk_dm` in particular goes through the same aside policy as `!aside`
-and can be refused, leaving the row desk-visible. The fence still works, as a
-documented fallback for an agent CLI that cannot reach the tools.
+and can be refused, leaving the row desk-visible. The fence still works
+(`speech::fence`), as a documented fallback for an agent CLI that cannot reach
+the tools.
+
+**A refusal reaches the seat that caused it.** Given `--desk` and `--turn` —
+which the host passes automatically — the server prices a `desk_dm` against
+the aside policy *while the turn is still running*, so a seat is told its
+message is going to the whole desk instead, and why, in time to say it
+differently. A `desk_dm` naming somebody who is not on the desk is refused
+outright and nothing is written. Without those two paths the server answers as
+it did before: the host still resolves the audience when it drains the outbox,
+so the row is never wrong — only the seat is uninformed.
 
 ## The room's standing account
 
@@ -145,6 +172,23 @@ Three properties are worth knowing while reading a run:
   transcript at the number it cites, and `desk_read` reaches it.
 - **A fold that fails costs the compaction and nothing else.** The window is
   already correct without one.
+- **It folds on size as well as on length.** `--fold-tokens` (default 50,000)
+  triggers a fold once the unfolded scrollback would cost about that many
+  tokens, whichever binds first with `--fold-after`. It measures the
+  *transcript*, not what a turn spent producing it, and on this desk those
+  differ by more than an order of magnitude: run 30 wrote about 470 characters
+  per row while spending 30k-140k tokens per turn. So the size trigger is a
+  safety net for a room whose rows are long, the row trigger is what fires on
+  an ordinary desk, and a run that wants to exercise folding should lower
+  `--fold-after` rather than reach for this. Run 28 closed at 23 rows
+  against a row threshold of 32 and spent 604k tokens getting there, so the
+  account was built, shipped, and never once folded in a live run — the size
+  trigger is what makes that impossible to repeat.
+- **It is told what the room pinned.** The pinned sequences at or below the
+  fold's reach are named in the prompt, with the instruction that whatever each
+  one established survives in full. A fold that dropped a pinned message would
+  have undone a decision the room made on purpose, and nothing would have said
+  so.
 
 `desk_close` exists because run 28 had no way to end. The answer was signed off
 on turn 3; turns 4-12 are the chair nudging `@lead` once per remaining round and

@@ -5,7 +5,7 @@
 use tinyhivemind::aside::Audience;
 use tinyhivemind::aside::Viewer;
 use tinyhivemind::{
-    Conversation, EnqueueOutcome, EnqueueRefusal, MentionDispatchOutcome, PAGE_SIZE,
+    ChannelHead, Conversation, EnqueueOutcome, EnqueueRefusal, MentionDispatchOutcome, PAGE_SIZE,
     PRESENT_SET_LIMIT, SCAN_LIMIT, SESSION_WINDOW, Sequence, SessionAuthor, SessionMessage,
     initialized_state, note_present,
     responder::{ResponderRung, SelectionDisposition},
@@ -407,9 +407,12 @@ fn root_exports_channel_compaction() {
     let policy = DigestPolicy::DEFAULT;
 
     // A short channel is left alone; a long one folds in bounded steps.
-    assert_eq!(plan_digest(None, Sequence(20), policy), DigestPlan::Current);
     assert_eq!(
-        plan_digest(None, Sequence(400), policy),
+        plan_digest(None, ChannelHead::at(Sequence(20)), policy),
+        DigestPlan::Current
+    );
+    assert_eq!(
+        plan_digest(None, ChannelHead::at(Sequence(400)), policy),
         DigestPlan::Fold {
             after: None,
             through: Sequence(60),
@@ -432,6 +435,7 @@ fn root_exports_channel_compaction() {
         messages: vec![folded.clone()],
         through: Sequence(60),
         budget_chars: 64,
+        pinned: Vec::new(),
     };
     let account = accept_digest(None, &request, "the room verified B at 10^18").expect("accepted");
     assert_eq!(account.through, Sequence(60));

@@ -19,6 +19,16 @@ pub struct DigestPolicy {
     pub keep_live: usize,
     /// Rows that must accumulate behind the live tail before a fold is worth a call.
     pub fold_after: usize,
+    /// Characters of foldable content that trigger a fold on their own.
+    ///
+    /// Twenty rows of acknowledgements and twenty rows of derivations are the
+    /// same row count and very different costs, and what a host actually
+    /// budgets is how much of a seat's context window the room's scrollback
+    /// may occupy. Whichever threshold binds first wins; `0` disables this one.
+    ///
+    /// The unit is characters rather than tokens on purpose — see
+    /// [`Self::from_token_budget`].
+    pub fold_after_chars: usize,
     /// Most rows handed to one digester call.
     pub input_limit: usize,
     /// Most characters a digest may occupy.
@@ -36,9 +46,69 @@ impl DigestPolicy {
     pub const DEFAULT: Self = Self {
         keep_live: 30,
         fold_after: 20,
+        // A ceiling rather than a target: at four characters to the token this
+        // is roughly 100k tokens of scrollback, which no existing caller
+        // reaches on rows alone, so a host that never sets it gains a safety
+        // net and not a change of shape.
+        fold_after_chars: 400_000,
         input_limit: 60,
         budget_chars: 4000,
     };
+
+    /// Characters assumed per token when a host states its budget in tokens.
+    ///
+    /// A proxy, and stated as one. English prose and code run roughly 3.5–4.5
+    /// characters to the token, so a budget converted through this is within
+    /// about 15% of its intent — the right precision for deciding *when to
+    /// spend one summarization call*, and the wrong tool for anything that has
+    /// to be exact.
+    ///
+    /// The alternative is a tokenizer, which this crate may not take: it is a
+    /// per-model table, so the same channel would fold at different points on
+    /// two machines and the plan would stop being a fold over its arguments.
+    pub const CHARS_PER_TOKEN: usize = 4;
+
+    /// The default policy, folding once the scrollback would cost `tokens`.
+    ///
+    /// A host writes its budget in the unit it thinks in and the conversion
+    /// happens here, once. Saturates rather than overflowing.
+    #[must_use]
+    pub const fn from_token_budget(tokens: usize) -> Self {
+        Self {
+            fold_after_chars: tokens.saturating_mul(Self::CHARS_PER_TOKEN),
+            ..Self::DEFAULT
+        }
+    }
+}
+
+/// Where a channel currently stands, as the planner needs to see it.
+///
+/// Two numbers, because there are two thresholds. The character count is the
+/// host's to keep: it appends the rows, so it is the only party that sees
+/// their size without reading the log back, and reading the log back on every
+/// turn to decide whether to compact it would cost more than the compaction
+/// saves.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ChannelHead {
+    /// The newest sequence the channel holds.
+    pub sequence: Sequence,
+    /// Characters of desk-visible content the account does not yet cover.
+    ///
+    /// Rows in the live tail count: they are foldable in principle and will be
+    /// folded as the room moves past them. Private rows do not — an account
+    /// may not contain one, so one must not be able to trigger a fold either.
+    pub unfolded_chars: usize,
+}
+
+impl ChannelHead {
+    /// A head with no character count, planning on rows alone.
+    #[must_use]
+    pub const fn at(sequence: Sequence) -> Self {
+        Self {
+            sequence,
+            unfolded_chars: 0,
+        }
+    }
 }
 
 impl Default for DigestPolicy {
@@ -103,6 +173,14 @@ pub struct DigestRequest {
     pub through: Sequence,
     /// Most characters the returned account may occupy.
     pub budget_chars: usize,
+    /// Sequences of pinned messages at or below `through`, ascending.
+    ///
+    /// A pin is the room saying *this one does not scroll away*, and a fold
+    /// that drops it has undone the pin without anybody deciding to. The
+    /// digester is told which of the rows it holds carry that claim so it can
+    /// keep what they say; nothing here carries content, so a pin to a private
+    /// row could not leak one even if a host offered it.
+    pub pinned: Vec<Sequence>,
 }
 
 /// Why a digester's output could not become the new account.

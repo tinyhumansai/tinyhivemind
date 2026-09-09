@@ -6,6 +6,14 @@ sees, never through a private path a module-local test could reach.
 
 ## Files
 
+- `utterance_surface.rs` — a fixed script of tool calls played through
+  `speech::interpret` and `speech::commit_utterance`, asserting the exact rows,
+  audiences, routing and closing decision the room makes of them. It pins the
+  run-28 path so that moving the meaning of an utterance out of a host cannot
+  quietly change it.
+- `joining_a_folded_room.rs` — what a seat taking its first turn on a long
+  room is handed: the account, and only the rows it does not already cover.
+  The guarantee the size trigger exists to make true by construction.
 - `public_api.rs` — one test file, `root_*` and a handful of behavior tests,
   asserting that everything a host needs is re-exported from the crate root (or
   from the small number of documented submodules) and that it behaves the way

@@ -146,6 +146,7 @@ fn request(through: u64, messages: Vec<SessionMessage>) -> DigestRequest {
         messages,
         through: Sequence(through),
         budget_chars: 40,
+        pinned: Vec::new(),
     }
 }
 
@@ -193,7 +194,8 @@ fn digest_values_pin_deterministic_wire_shapes() {
             "keep_live": 30,
             "fold_after": 20,
             "input_limit": 60,
-            "budget_chars": 4000
+            "budget_chars": 4000,
+            "fold_after_chars": 400_000
         })
     );
     assert_eq!(DigestPolicy::default(), DigestPolicy::DEFAULT);
@@ -202,11 +204,11 @@ fn digest_values_pin_deterministic_wire_shapes() {
 #[test]
 fn leaves_a_channel_shorter_than_the_live_tail_alone() {
     assert_eq!(
-        plan_digest(None, Sequence(12), DigestPolicy::DEFAULT),
+        plan_digest(None, ChannelHead::at(Sequence(12)), DigestPolicy::DEFAULT),
         DigestPlan::Current
     );
     assert_eq!(
-        plan_digest(None, Sequence(30), DigestPolicy::DEFAULT),
+        plan_digest(None, ChannelHead::at(Sequence(30)), DigestPolicy::DEFAULT),
         DigestPlan::Current
     );
 }
@@ -216,11 +218,11 @@ fn waits_for_slack_to_accumulate_behind_the_live_tail() {
     // Twenty rows behind the tail is the threshold, and it is not crossed by
     // reaching it: folding on every row would spend a call to move one message.
     assert_eq!(
-        plan_digest(None, Sequence(50), DigestPolicy::DEFAULT),
+        plan_digest(None, ChannelHead::at(Sequence(50)), DigestPolicy::DEFAULT),
         DigestPlan::Current
     );
     assert_eq!(
-        plan_digest(None, Sequence(51), DigestPolicy::DEFAULT),
+        plan_digest(None, ChannelHead::at(Sequence(51)), DigestPolicy::DEFAULT),
         DigestPlan::Fold {
             after: None,
             through: Sequence(21)
@@ -231,7 +233,7 @@ fn waits_for_slack_to_accumulate_behind_the_live_tail() {
 #[test]
 fn advances_by_at_most_one_input_limit_per_fold() {
     assert_eq!(
-        plan_digest(None, Sequence(400), DigestPolicy::DEFAULT),
+        plan_digest(None, ChannelHead::at(Sequence(400)), DigestPolicy::DEFAULT),
         DigestPlan::Fold {
             after: None,
             through: Sequence(60)
@@ -240,7 +242,7 @@ fn advances_by_at_most_one_input_limit_per_fold() {
     assert_eq!(
         plan_digest(
             Some(&held(60, "so far")),
-            Sequence(400),
+            ChannelHead::at(Sequence(400)),
             DigestPolicy::DEFAULT
         ),
         DigestPlan::Fold {
@@ -255,7 +257,7 @@ fn stops_folding_once_the_account_reaches_the_live_tail() {
     assert_eq!(
         plan_digest(
             Some(&held(370, "so far")),
-            Sequence(400),
+            ChannelHead::at(Sequence(400)),
             DigestPolicy::DEFAULT
         ),
         DigestPlan::Current
@@ -428,7 +430,8 @@ async fn folds_a_long_channel_and_hands_the_digester_the_prior_account() {
         Some(&digester),
         &engineering(),
         Some(&held(1, "the brief")),
-        Sequence(400),
+        ChannelHead::at(Sequence(400)),
+        &[],
         DigestPolicy::DEFAULT,
     )
     .await
@@ -456,7 +459,8 @@ async fn does_not_call_a_digester_for_a_channel_that_is_current() {
             Some(&digester),
             &engineering(),
             None,
-            Sequence(12),
+            ChannelHead::at(Sequence(12)),
+            &[],
             DigestPolicy::DEFAULT
         )
         .await
@@ -480,7 +484,8 @@ async fn treats_a_missing_or_failing_digester_as_a_lost_optimization() {
             None,
             &engineering(),
             None,
-            Sequence(400),
+            ChannelHead::at(Sequence(400)),
+            &[],
             DigestPolicy::DEFAULT
         )
         .await
@@ -494,7 +499,8 @@ async fn treats_a_missing_or_failing_digester_as_a_lost_optimization() {
             Some(&BrokenDigester),
             &engineering(),
             None,
-            Sequence(400),
+            ChannelHead::at(Sequence(400)),
+            &[],
             DigestPolicy::DEFAULT
         )
         .await
@@ -515,7 +521,8 @@ async fn reports_a_rejected_answer_rather_than_committing_it() {
         Some(&FixedDigester::new("   ")),
         &engineering(),
         None,
-        Sequence(400),
+        ChannelHead::at(Sequence(400)),
+        &[],
         DigestPolicy::DEFAULT,
     )
     .await
@@ -551,7 +558,8 @@ async fn advances_an_account_over_a_step_with_nothing_to_say() {
         Some(&digester),
         &engineering(),
         Some(&held(1, "the brief")),
-        Sequence(400),
+        ChannelHead::at(Sequence(400)),
+        &[],
         DigestPolicy::DEFAULT,
     )
     .await
@@ -588,7 +596,8 @@ async fn leaves_an_empty_first_step_unfolded() {
             Some(&FixedDigester::new("unused")),
             &engineering(),
             None,
-            Sequence(400),
+            ChannelHead::at(Sequence(400)),
+            &[],
             DigestPolicy::DEFAULT
         )
         .await
@@ -610,7 +619,8 @@ async fn refuses_to_fold_one_channel_into_another_channel_s_account() {
         Some(&FixedDigester::new("unused")),
         &other,
         Some(&held(60, "engineering's account")),
-        Sequence(400),
+        ChannelHead::at(Sequence(400)),
+        &[],
         DigestPolicy::DEFAULT,
     )
     .await
@@ -653,4 +663,214 @@ fn passes_a_history_through_untouched_when_there_is_no_account() {
     assert_eq!(composed.digest, None);
     assert_eq!(composed.covered_through, None);
     assert_eq!(composed.messages, messages);
+}
+
+#[test]
+fn folds_a_short_channel_that_has_grown_expensive() {
+    // Twenty-four rows is four past the live tail and inside `fold_after`, so
+    // the row trigger declines. On a desk writing derivations that is already
+    // more scrollback than a seat should be handed.
+    let policy = DigestPolicy {
+        fold_after_chars: 50_000,
+        ..DigestPolicy::DEFAULT
+    };
+    let short = ChannelHead {
+        sequence: Sequence(34),
+        unfolded_chars: 50_000,
+    };
+    assert_eq!(
+        plan_digest(None, short, policy),
+        DigestPlan::Current,
+        "at the threshold is not past it",
+    );
+    let grown = ChannelHead {
+        sequence: Sequence(34),
+        unfolded_chars: 50_001,
+    };
+    assert_eq!(
+        plan_digest(None, grown, policy),
+        DigestPlan::Fold {
+            after: None,
+            through: Sequence(4),
+        },
+        "either threshold is enough, and the step is bounded as always",
+    );
+}
+
+#[test]
+fn a_channel_of_short_rows_still_folds_on_the_row_count_alone() {
+    let policy = DigestPolicy {
+        fold_after_chars: 0,
+        ..DigestPolicy::DEFAULT
+    };
+    assert_eq!(
+        plan_digest(
+            None,
+            ChannelHead {
+                sequence: Sequence(400),
+                unfolded_chars: usize::MAX,
+            },
+            policy,
+        ),
+        DigestPlan::Fold {
+            after: None,
+            through: Sequence(60),
+        },
+        "zero disables the size trigger however large the channel is",
+    );
+}
+
+#[test]
+fn a_live_tail_that_is_large_on_its_own_is_never_folded() {
+    // The tail is delivered verbatim, always. A room whose `keep_live` rows
+    // alone exceed the budget has a `keep_live` set too large, and that is the
+    // host's error to make rather than one compaction can fix.
+    assert_eq!(
+        plan_digest(
+            None,
+            ChannelHead {
+                sequence: Sequence(30),
+                unfolded_chars: 10_000_000,
+            },
+            DigestPolicy::from_token_budget(1),
+        ),
+        DigestPlan::Current,
+    );
+}
+
+#[test]
+fn an_account_that_already_covers_the_channel_is_not_refolded_by_size() {
+    let held = held(370, "so far");
+    assert_eq!(
+        plan_digest(
+            Some(&held),
+            ChannelHead {
+                sequence: Sequence(400),
+                unfolded_chars: usize::MAX,
+            },
+            DigestPolicy::DEFAULT,
+        ),
+        DigestPlan::Current,
+        "there is nothing above the tail left to fold, whatever it weighs",
+    );
+}
+
+#[test]
+fn a_token_budget_becomes_a_character_threshold_and_nothing_else() {
+    let policy = DigestPolicy::from_token_budget(50_000);
+    assert_eq!(
+        policy.fold_after_chars,
+        50_000 * DigestPolicy::CHARS_PER_TOKEN,
+    );
+    assert_eq!(policy.keep_live, DigestPolicy::DEFAULT.keep_live);
+    assert_eq!(policy.fold_after, DigestPolicy::DEFAULT.fold_after);
+    assert_eq!(policy.input_limit, DigestPolicy::DEFAULT.input_limit);
+    assert_eq!(policy.budget_chars, DigestPolicy::DEFAULT.budget_chars);
+    assert_eq!(
+        DigestPolicy::from_token_budget(usize::MAX).fold_after_chars,
+        usize::MAX,
+        "a budget nobody could spend saturates rather than wrapping to nothing",
+    );
+    assert_eq!(
+        DigestPolicy::from_token_budget(0).fold_after_chars,
+        0,
+        "no budget is the disabled state, not a fold on every turn",
+    );
+}
+
+#[test]
+fn a_head_with_no_count_plans_exactly_as_it_did_before() {
+    for sequence in [12_u64, 30, 50, 51, 400] {
+        assert_eq!(
+            plan_digest(
+                None,
+                ChannelHead::at(Sequence(sequence)),
+                DigestPolicy::DEFAULT
+            ),
+            plan_digest(
+                None,
+                ChannelHead {
+                    sequence: Sequence(sequence),
+                    unfolded_chars: 0,
+                },
+                DigestPolicy::DEFAULT,
+            ),
+        );
+    }
+}
+
+/// One pinned row, as the host's board reports it.
+fn pin(sequence: u64) -> Pin {
+    Pin {
+        sequence: Sequence(sequence),
+        pinned_at: Sequence(sequence + 1),
+        pinned_by: SessionAuthor::Agent {
+            id: "lead".into(),
+            label: "Lead".into(),
+        },
+        label: None,
+        note: None,
+        excerpt: None,
+    }
+}
+
+/// Sixty desk rows, newest first, the way a log pages them back.
+///
+/// Sixty is `input_limit`, so a first fold with no prior account covers all of
+/// them in one step and the page ends exactly where the walk stops.
+fn a_long_channel() -> Vec<LogMessage> {
+    (1..=60)
+        .rev()
+        .map(|sequence| raw(sequence, "said something", Audience::Desk))
+        .collect()
+}
+
+#[tokio::test]
+async fn the_fold_is_told_which_of_its_rows_the_room_pinned() {
+    let log = FakeLog::new(vec![page(a_long_channel(), None)]);
+    let digester = FixedDigester::new("an account");
+    let board = [
+        pin(3),
+        pin(9),
+        // Past what this step reaches: still a row the reader is handed in
+        // full, so the fold is not answerable for it.
+        pin(70),
+        // Named twice by two markers, and named once here.
+        pin(3),
+    ];
+    refold(
+        &log,
+        Some(&digester),
+        &engineering(),
+        None,
+        ChannelHead::at(Sequence(400)),
+        &board,
+        DigestPolicy::DEFAULT,
+    )
+    .await
+    .expect("folds");
+    let seen = digester.seen();
+    assert_eq!(
+        seen[0].pinned,
+        vec![Sequence(3), Sequence(9)],
+        "ascending, deduplicated, and nothing above `through`",
+    );
+}
+
+#[tokio::test]
+async fn a_fold_with_no_pins_is_told_so_rather_than_guessing() {
+    let log = FakeLog::new(vec![page(a_long_channel(), None)]);
+    let digester = FixedDigester::new("an account");
+    refold(
+        &log,
+        Some(&digester),
+        &engineering(),
+        None,
+        ChannelHead::at(Sequence(400)),
+        &[],
+        DigestPolicy::DEFAULT,
+    )
+    .await
+    .expect("folds");
+    assert!(digester.seen()[0].pinned.is_empty());
 }
