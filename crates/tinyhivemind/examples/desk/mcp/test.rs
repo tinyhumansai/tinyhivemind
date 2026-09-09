@@ -19,6 +19,11 @@ fn serving(outbox: &Path, transcript: &Path) -> Serving {
     }
 }
 
+/// A two-seat desk, the smallest one an aside can be priced against.
+const DESK: &str = "desk: pe1006\nname: PE 1006\nperson: steven\nperson_label: Steven\n\n\
+                    [agent solver]\nname: Solver\nrole: solver\nbrief: solve it\n\n\
+                    [agent checker]\nname: Checker\nrole: checker\nbrief: check it\n";
+
 /// A server that can price a `desk_dm` against this desk, for `seat`.
 fn priced(dir: &Path, seat: &str) -> Serving {
     let desk = dir.join("desk.txt");
