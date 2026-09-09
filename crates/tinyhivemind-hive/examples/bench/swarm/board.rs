@@ -221,8 +221,12 @@ impl<'a> Board<'a> {
             .map(|(_, channel)| channel.id.as_str())
             .skip(self.asks[desk])
             .collect();
-        let budget =
-            self.referrals.enabled && self.asks[desk] < self.channels.len().saturating_sub(1);
+        // Off the floor, an authorized turn is never spent asking: the ask
+        // has its own channel and its own bound, and this turn is for
+        // deliberating.
+        let budget = self.asking.on_floor()
+            && self.referrals.enabled
+            && self.asks[desk] < self.ask_width();
         let mut offered = false;
         let content = {
             let visible = project_for(turn, &self.host.journals[desk]);
@@ -277,6 +281,68 @@ impl<'a> Board<'a> {
             ));
         }
         sequence
+    }
+
+    /// Peer channels one desk may ask, under this run's ask channel.
+    fn ask_width(&self) -> usize {
+        self.asking.width(self.channels.len().saturating_sub(1))
+    }
+
+    /// Put one question to another channel **without taking a turn for it**.
+    ///
+    /// Returns whether a question actually went out. Called between turns
+    /// rather than during one, so the episode's turn budget is untouched and
+    /// the desk keeps every turn its own size earned for deliberating.
+    ///
+    /// The row it writes is a plain desk row carrying no trace marker, so the
+    /// episode's own fold reads nothing out of it — the same safety argument
+    /// off-floor exchange rests on, and with the same stated caveat: a row
+    /// consumes a sequence number, and the quorum window and salience decay
+    /// read raw sequence distance. At the windows this harness runs (100
+    /// against episodes of tens of turns) that is far from binding, and the
+    /// siloed control alongside is what would show it if it ever were.
+    ///
+    /// The offer rotates through the desk's members rather than always going
+    /// to the same seat, so one member is not made the desk's switchboard.
+    pub(super) fn ask_off_floor(
+        &mut self,
+        members: &mut [&mut dyn SwarmMember],
+        desk: usize,
+    ) -> Result<bool, String> {
+        if self.asking.on_floor() || !self.referrals.enabled || self.asks[desk] >= self.ask_width()
+        {
+            return Ok(false);
+        }
+        let peers: Vec<&str> = self
+            .channels
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| *index != desk)
+            .map(|(_, channel)| channel.id.as_str())
+            .skip(self.asks[desk])
+            .collect();
+        if peers.is_empty() {
+            return Ok(false);
+        }
+        let seats = &self.channels[desk].members;
+        if seats.is_empty() {
+            return Ok(false);
+        }
+        let asker = seats[self.askers[desk] % seats.len()].clone();
+        self.askers[desk] = self.askers[desk].saturating_add(1);
+
+        let seat = seat_of(members, &asker)?;
+        let Some(content) = members[seat].ask(&peers) else {
+            return Ok(false);
+        };
+        let sequence = self.commit(members, desk, &asker, &content);
+        // Counted whether or not the question found a route, exactly as the
+        // on-floor path charges a turn spent asking either way. A question
+        // that resolved to nobody still cost a model call.
+        self.asks[desk] = self.asks[desk].saturating_add(1);
+        self.report.off_floor_asks = self.report.off_floor_asks.saturating_add(1);
+        self.route(desk, &asker, &content, sequence, 0, None)?;
+        Ok(true)
     }
 
     /// Ask `referral` whether this reply owes one turn to another channel.
