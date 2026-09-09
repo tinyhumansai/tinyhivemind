@@ -295,7 +295,7 @@ impl SwarmHost {
 /// member's own failure.
 pub(crate) fn drive_swarm(
     channels: &[Channel],
-    members: &mut [&mut dyn SwarmMember],
+    members: &mut [Vec<&mut dyn SwarmMember>],
     policy: &EpisodePolicy,
     referrals: ReferralPolicy,
     asking: AskChannel,
@@ -415,10 +415,10 @@ pub(crate) fn run_swarm(
             SwarmSim::new(federation, agent)
         })
         .collect();
-    let mut members: Vec<&mut dyn SwarmMember> = simulated
-        .iter_mut()
-        .map(|member| member as &mut dyn SwarmMember)
-        .collect();
+    // Grouped by desk, in seating order, which is how the scheduler wants
+    // them: every member access a desk makes is to its own seats, so grouping
+    // turns a lookup across the whole federation into one across a desk.
+    let mut members = group_by_desk(&channels, simulated.iter_mut().map(|member| member as _));
     let report = drive_swarm(
         &channels,
         &mut members,

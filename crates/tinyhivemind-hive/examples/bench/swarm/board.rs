@@ -181,14 +181,14 @@ impl<'a> Board<'a> {
     /// Run one turn caused by a message that arrived from another channel.
     pub(super) fn deliver(
         &mut self,
-        members: &mut [&mut dyn SwarmMember],
+        members: &mut [Vec<&mut dyn SwarmMember>],
         desk: usize,
         incoming: &Referral,
     ) -> Result<(), String> {
-        let seat = seat_of(members, &incoming.target_id)?;
+        let seat = seat_of(&members[desk], &incoming.target_id)?;
         let content = {
             let visible = self.host.journals[desk].clone();
-            members[seat].answer(incoming, &visible)?
+            members[desk][seat].answer(incoming, &visible)?
         };
         let sequence = self.commit(members, desk, &incoming.target_id, &content);
         // Consider the back edge. A reply committed under a crossing referral,
@@ -208,11 +208,11 @@ impl<'a> Board<'a> {
     /// Run one turn the episode authorized, which the member may spend asking.
     pub(super) fn take_turn(
         &mut self,
-        members: &mut [&mut dyn SwarmMember],
+        members: &mut [Vec<&mut dyn SwarmMember>],
         desk: usize,
         turn: &HiveTurn,
     ) -> Result<(), String> {
-        let seat = seat_of(members, &turn.agent_id)?;
+        let seat = seat_of(&members[desk], &turn.agent_id)?;
         let peers: Vec<&str> = self
             .channels
             .iter()
@@ -230,7 +230,7 @@ impl<'a> Board<'a> {
         let content = {
             let visible = project_for(turn, &self.host.journals[desk]);
             let ask = if budget {
-                members[seat].ask(&peers)
+                members[desk][seat].ask(&peers)
             } else {
                 None
             };
@@ -239,7 +239,7 @@ impl<'a> Board<'a> {
                     offered = true;
                     body
                 }
-                None => members[seat].speak(turn, &visible)?,
+                None => members[desk][seat].speak(turn, &visible)?,
             }
         };
         let sequence = self.commit(members, desk, &turn.agent_id, &content);
@@ -255,7 +255,7 @@ impl<'a> Board<'a> {
     /// Append one reply, offer it to everybody on the desk, and count the turn.
     fn commit(
         &mut self,
-        members: &mut [&mut dyn SwarmMember],
+        members: &mut [Vec<&mut dyn SwarmMember>],
         desk: usize,
         agent_id: &str,
         content: &str,
@@ -272,17 +272,19 @@ impl<'a> Board<'a> {
     /// arm — which is a comparison of exactly that — would say nothing.
     fn commit_charging(
         &mut self,
-        members: &mut [&mut dyn SwarmMember],
+        members: &mut [Vec<&mut dyn SwarmMember>],
         desk: usize,
         agent_id: &str,
         content: &str,
         charge: bool,
     ) -> Sequence {
         let sequence = self.host.agent(desk, agent_id, content.to_owned());
-        for member in &self.channels[desk].members {
-            if let Ok(seat) = seat_of(members, member) {
-                members[seat].absorb(content);
-            }
+        // Every member of the desk is offered the line, which is what makes
+        // one member's question worth a turn to the whole desk. Members are
+        // grouped by desk, so this is a walk over this desk's seats rather
+        // than a lookup per seat across the whole federation.
+        for member in &mut members[desk] {
+            member.absorb(content);
         }
         if charge {
             self.report.turns = self.report.turns.saturating_add(1);
@@ -325,7 +327,7 @@ impl<'a> Board<'a> {
     /// to the same seat, so one member is not made the desk's switchboard.
     pub(super) fn ask_off_floor(
         &mut self,
-        members: &mut [&mut dyn SwarmMember],
+        members: &mut [Vec<&mut dyn SwarmMember>],
         desk: usize,
     ) -> Result<bool, String> {
         if self.asking.on_floor() || !self.referrals.enabled || self.asks[desk] >= self.ask_width()
@@ -350,8 +352,8 @@ impl<'a> Board<'a> {
         let asker = seats[self.askers[desk] % seats.len()].clone();
         self.askers[desk] = self.askers[desk].saturating_add(1);
 
-        let seat = seat_of(members, &asker)?;
-        let Some(content) = members[seat].ask(&peers) else {
+        let seat = seat_of(&members[desk], &asker)?;
+        let Some(content) = members[desk][seat].ask(&peers) else {
             return Ok(false);
         };
         let sequence = self.commit_charging(members, desk, &asker, &content, false);
