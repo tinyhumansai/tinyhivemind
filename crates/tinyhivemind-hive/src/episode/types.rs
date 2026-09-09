@@ -271,8 +271,14 @@ pub struct HiveTurn {
 pub enum HiveStep {
     /// A round of members takes the floor together.
     Speak {
-        /// The authorized turns: non-empty, in desk order, and never more than
-        /// `policy.round_width` of them.
+        /// The authorized turns: non-empty, in desk order, and bounded by two
+        /// separate widths depending on the round's [`Visibility`] — never
+        /// more than `policy.round_width` of them while the round is
+        /// [`Visibility::Blind`], or `policy.revealed_width` of them once it
+        /// is [`Visibility::Full`]. The two are never clamped against each
+        /// other, so a policy naming a wide `revealed_width` alongside a
+        /// narrow `round_width` authorizes exactly that many turns once the
+        /// room is revealed.
         ///
         /// A host may run fewer than it was handed — a seat can be
         /// unavailable — but it commits `next_state` only once it has appended
