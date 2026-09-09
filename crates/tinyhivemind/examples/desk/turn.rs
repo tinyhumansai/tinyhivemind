@@ -134,8 +134,17 @@ pub(crate) async fn deliver(
     // What the seat said, it said by calling a tool. Free text is its own
     // thinking and reaches nobody; the fence remains only as a fallback for
     // an agent CLI that cannot reach the desk's tools.
-    let said = settle(delivery.outbox, &mut output);
-    if !output.timed_out && !output.message.trim().is_empty() {
+    //
+    // The gate is whether the seat *spoke*, not whether it produced text. A
+    // turn whose provider fails mid-flight still leaves its narration in
+    // `output.message`, and a host that reads that as speech appends
+    // "Let me verify the small cases" to the transcript as though it were a
+    // message — which is what run 29 did on both of its turns, twice
+    // stranding twenty minutes of real work behind a sentence that addressed
+    // nobody.
+    if !output.timed_out
+        && let Some(said) = settle(delivery.outbox, &mut output)
+    {
         return Ok(Some((output, said)));
     }
     let Some(said) = land(delivery, prompt, &mut output, sessions, tokens).await? else {
@@ -212,8 +221,12 @@ async fn land(
     if let Some(id) = landed.session.clone() {
         sessions.insert(delivery.seat_id.to_string(), id);
     }
-    let said = settle(delivery.outbox, &mut landed);
-    let salvage = if !landed.posted || landed.message.trim().is_empty() {
+    if let Some(said) = settle(delivery.outbox, &mut landed) {
+        println!("   landed in the seat's own session, files included");
+        output.message = said.utterance.message().to_string();
+        return Ok(Some(said));
+    }
+    let salvage = {
         let wrap = format!(
             "{prompt}\n\n## What you actually ran this turn\n{}\n\nYou have no \
              tools. Your working turn ended before you posted anything. Write the \
@@ -238,16 +251,17 @@ async fn land(
             other => println!("   !! the wrap-up channel produced nothing: {other:?}"),
         }
         fence::extract_post(answer.text())
-    } else {
-        println!("   landed in the seat's own session, files included");
-        landed.message
     };
     if salvage.trim().is_empty() {
         println!("   !! nothing salvaged; the seat forfeits this turn");
         return Ok(None);
     }
-    output.message = salvage;
-    Ok(Some(said))
+    output.message.clone_from(&salvage);
+    // The tool-less rung has no tool to call, so what it produced is a post
+    // to the whole desk or it is nothing.
+    Ok(Some(Said {
+        utterance: Utterance::Post { message: salvage },
+    }))
 }
 
 /// Take what a turn said through the room's tools, over what it narrated.
@@ -256,24 +270,33 @@ async fn land(
 /// anyway. The last call stands: a seat that posts a partial result and then a
 /// settled one meant the second, and one message per turn is the rule the whole
 /// design rests on.
-fn settle(outbox: &Path, output: &mut agent::TurnOutput) -> Said {
+fn settle(outbox: &Path, output: &mut agent::TurnOutput) -> Option<Said> {
     let spoken = mcp::drain_outbox(outbox);
-    let Some(utterance) = spoken.last() else {
-        return Said {
+    if let Some(utterance) = spoken.last() {
+        if spoken.len() > 1 {
+            println!(
+                "   {} messages this turn; the last one stands",
+                spoken.len()
+            );
+        }
+        output.message = utterance.message().to_string();
+        output.posted = true;
+        return Some(Said {
+            utterance: utterance.clone(),
+        });
+    }
+    // No tool call. The fence is the documented fallback for an agent CLI
+    // that cannot reach the desk's tools, and `posted` is exactly whether one
+    // was written — so a fenced message still counts as speech.
+    if output.posted && !output.message.trim().is_empty() {
+        println!("   spoke through the fence rather than the tools");
+        return Some(Said {
             utterance: Utterance::Post {
                 message: output.message.clone(),
             },
-        };
-    };
-    if spoken.len() > 1 {
-        println!(
-            "   {} messages this turn; the last one stands",
-            spoken.len()
-        );
+        });
     }
-    output.message = utterance.message().to_string();
-    output.posted = true;
-    Said {
-        utterance: utterance.clone(),
-    }
+    // Everything else is thinking. It reaches nobody, and saying so here is
+    // what stops it reaching the transcript instead.
+    None
 }
