@@ -221,9 +221,8 @@ impl ContextBudget {
 
 impl Default for ContextBudget {
     fn default() -> Self {
-        Self::UNBOUNDED,
-            ..ContextBudget::UNBOUNDED
-        }
+        Self::UNBOUNDED
+    }
 }
 
 #[cfg(test)]
