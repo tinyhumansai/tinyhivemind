@@ -23,6 +23,8 @@ resolves it to `sim/mod.rs` transparently.
 | `sim/agent/mod.rs` | `SimAgent`, the participant that holds a private, noisy view of every option: its struct, `Payload`, and `CheckStyle` |
 | `sim/agent/{state,turn}.rs` | construction and state mutation (`new`, `import`, `score`, ...), then deciding what to say (`check`, `absorb`, `compose`, ...) and the `Participant` impl |
 | `sim/view.rs` | `View`, the window a participant reads the transcript through, and the marker parsers |
+| `horizon/mod.rs` | the `--stages` chain and the `staged()` room constructor |
+| `horizon/test.rs` | unit tests for the horizon benchmark |
 | `federation.rs` | several desks, each with a correlated bias of its own |
 | `swarm/mod.rs` | one journal per channel, the scheduler, and the referral edge: `SwarmMember`, `SwarmHost`, and driving a swarm episode |
 | `swarm/{board,member,format}.rs` | `Board`'s pending queue and seat lookup; `SwarmSim`, which can also field a referral; parsing and restating a `Reading` for the wire |
