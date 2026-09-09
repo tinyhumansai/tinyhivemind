@@ -4,7 +4,7 @@
 
 use super::super::*;
 use super::support::{
-    MEMBERS, Room, converging, operator, run, said, sequential, speaking, spoke, state,
+    MEMBERS, Room, converging, operator, round, run, said, sequential, speaking, spoke, state,
 };
 use crate::attention::BidReason;
 use tinyhivemind::Sequence;
@@ -124,6 +124,60 @@ fn a_blind_turn_preserves_pre_episode_agent_context() {
          a peer authored it; only the later peer proposal formed within the \
          episode is hidden",
     );
+}
+
+#[test]
+fn a_continuing_wide_blind_round_selects_the_unheard_member_over_a_louder_heard_one() {
+    // `unheard` bounded a *wide* blind round's width, but `floor_round` still
+    // ranked bids from every member -- heard and unheard alike. A member
+    // already heard this episode can out-bid an unheard one (here, `planner`
+    // is addressed by `critic`'s citation and picks up `ADDRESSED_BONUS`),
+    // and a round continuing the blind phase would reselect that heard
+    // member instead of the one still owed a turn: budget spent, the blind
+    // phase no closer to closing, potentially all the way to exhaustion.
+    //
+    // `scout` has not spoken. `planner` and `critic` both have, and
+    // `planner`'s citation bonus dwarfs anything `scout` can bid at zero
+    // threshold, so this pins the fix: a concurrent round is filtered to
+    // unheard identities, not merely capped at their count.
+    //
+    // `round_width: 2` matters here, not `sequential`'s `1` -- the fix is
+    // scoped to a genuinely concurrent round precisely so that `round_width:
+    // 1` keeps reproducing the sequential episode bit for bit, floor rotation
+    // left to `charged`'s threshold dynamics exactly as it always was.
+    let room = Room::new();
+    let policy = EpisodePolicy {
+        round_width: 2,
+        revealed_width: 2,
+        // A three-member desk with the default two-supporter threshold would
+        // already be at quorum once `planner` and `critic` are both counted,
+        // flipping the phase to `Commit` -- which this fix deliberately
+        // leaves unfiltered (see the comment on `authorized`). Raise the
+        // threshold so the room is still genuinely deliberating, and the
+        // round under test is closing the blind phase rather than
+        // announcing a decision.
+        quorum: crate::quorum::QuorumPolicy {
+            threshold: 3,
+            ..crate::quorum::QuorumPolicy::DEFAULT
+        },
+        ..EpisodePolicy::DEFAULT
+    };
+    let transcript = vec![
+        said(1, "planner", "!propose #stage"),
+        said(2, "critic", "!support #stage ^1"),
+    ];
+
+    let (turns, _) = round(run(&room, &state(), &transcript, &policy));
+    assert_eq!(
+        turns
+            .iter()
+            .map(|turn| turn.agent_id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["scout"],
+        "the still-blind round must pick the one member left unheard, \
+         not the louder bid from a member already heard",
+    );
+    assert_eq!(turns[0].visibility, Visibility::Blind);
 }
 
 #[test]

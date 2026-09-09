@@ -7,6 +7,7 @@ use super::super::*;
 use super::support::{
     MEMBERS, Room, aside, converging, operator, run, said, sequential, speaking, state,
 };
+use crate::attention::BidReason;
 use crate::quorum::QuorumPolicy;
 use tinyhivemind::Sequence;
 
@@ -148,6 +149,60 @@ fn a_turn_holder_outside_an_aside_sees_a_stub_and_a_member_sees_the_content() {
     let seen = project_for(&member, &transcript);
     assert_eq!(seen.len(), 4);
     assert!(seen.iter().all(|message| message.elided.is_none()));
+}
+
+#[test]
+fn a_concurrent_private_row_addressed_to_a_peer_is_hidden_from_that_round() {
+    // The audience exemption in `readable` let a private row through
+    // regardless of when it was authored, because it only asked "is this a
+    // desk row" rather than "is this row above `round_start`". That is a
+    // leak: a round authorizes turns that must all decide as if they arrived
+    // one at a time, and a peer's aside written *during* the round is exactly
+    // as concurrent as a peer's floor row written during it. If `planner`'s
+    // turn in this round can append a private word to `critic`, and
+    // `critic`'s turn in the *same* round can already read it, the two turns
+    // are no longer independent of each other's outcome.
+    //
+    // `round_start` is folded from desk rows only, so a private row never
+    // moves it -- but it must still respect it. Pin that here directly
+    // against `readable`'s public entry point, `project_for`.
+    let transcript = [
+        said(1, "planner", "!propose #stage"),
+        // Authored after `round_start`: concurrent with the round, exactly
+        // like a peer's floor turn would be.
+        aside(2, "planner", &["critic"], "Between us, go with stage."),
+    ];
+    let turn = HiveTurn {
+        agent_id: "critic".into(),
+        phase: Phase::Deliberate,
+        visibility: Visibility::Full,
+        reason: BidReason::Salience,
+        watermark: Sequence(0),
+        round_start: Sequence(1),
+    };
+
+    let seen = project_for(&turn, &transcript);
+    assert_eq!(
+        seen.iter().map(|m| m.sequence.0).collect::<Vec<_>>(),
+        [1],
+        "a private row authored above round_start must be withheld from a \
+         concurrent peer turn even though it is addressed to that peer",
+    );
+
+    // The same row, authored at or before `round_start`, is not concurrent
+    // and must remain visible to the member it addresses.
+    let settled = [aside(
+        1,
+        "planner",
+        &["critic"],
+        "Between us, go with stage.",
+    )];
+    let seen = project_for(&turn, &settled);
+    assert_eq!(
+        seen.iter().map(|m| m.sequence.0).collect::<Vec<_>>(),
+        [1],
+        "a private row settled before the round still reaches the member it addresses",
+    );
 }
 
 #[test]
