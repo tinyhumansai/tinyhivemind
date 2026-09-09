@@ -346,6 +346,9 @@ pub(crate) fn run_federated_vote(federation: &Federation) -> ArmReport {
         correct: decided.as_ref() == Some(&federation.truth),
         decided,
         turns,
+        // Every member answers from its own reading alone, so the whole
+        // federated poll is one round however many desks it spans.
+        rounds: 1,
         cost_units: u64::from(turns),
         routed_right: None,
         library_time: Duration::ZERO,
@@ -384,6 +387,7 @@ pub(crate) fn run_merged(
         correct: report.decided.as_ref() == Some(&federation.truth),
         decided: report.decided,
         turns: report.turns,
+        rounds: report.rounds,
         cost_units: report.cost_units,
         routed_right: None,
         library_time: report.library_time,
