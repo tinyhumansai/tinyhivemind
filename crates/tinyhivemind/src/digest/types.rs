@@ -28,11 +28,24 @@ pub struct DigestPolicy {
     ///
     /// The unit is characters rather than tokens on purpose — see
     /// [`Self::from_token_budget`].
+    ///
+    /// Defaults to [`DigestPolicy::DEFAULT`]'s safety ceiling when absent from
+    /// the wire, so a policy a host stored before this field existed still
+    /// decodes — into the same generous ceiling a host that never sets it
+    /// gets today, not a missing-field error.
+    #[serde(default = "default_fold_after_chars")]
     pub fold_after_chars: usize,
     /// Most rows handed to one digester call.
     pub input_limit: usize,
     /// Most characters a digest may occupy.
     pub budget_chars: usize,
+}
+
+/// [`DigestPolicy::fold_after_chars`]'s serde default: the same ceiling
+/// [`DigestPolicy::DEFAULT`] carries, so an older stored payload decodes into
+/// exactly what a host that never set the field gets today.
+const fn default_fold_after_chars() -> usize {
+    DigestPolicy::DEFAULT.fold_after_chars
 }
 
 impl DigestPolicy {

@@ -80,11 +80,20 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo build --all-targets --all-features
 cargo test --all-features
 .github/scripts/assert-pure.sh
-cargo tree -p tinyhivemind -e normal,build | grep -Ei 'reqwest|anyhow|tokio' || echo clean
+tree="$(cargo tree -p tinyhivemind -e normal,build)" || exit 1
+if printf '%s\n' "$tree" | grep -Eiq 'reqwest|anyhow|tokio'; then
+  echo "unexpected library dependency" >&2
+  exit 1
+fi
+echo clean
 ```
 
 The last command is the one that matters and should print `clean`: the library
-tree must not move.
+tree must not move. `assert-pure.sh` above is the actual enforced CI gate;
+this command is the same spot-check written to fail loudly — a bare
+`grep ... || echo clean` prints `clean` whenever `grep` finds no match, which
+also happens to be what it prints if `cargo tree` itself fails, so a stricter
+form is worth carrying here even though nothing failed when this plan landed.
 
 ## What this plan deliberately leaves out
 
