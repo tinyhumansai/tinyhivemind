@@ -58,6 +58,16 @@ pub(super) fn draw_expertise(
                 expert_of[topic] = Some(member);
             }
         }
+        Expertise::Roles { owner } => {
+            // Every topic, one owner. Nothing is drawn from the stream, so a
+            // room built this way is a pure function of its seed and its
+            // owner index — which is what lets `--facets` say who is
+            // responsible for what without asking the weather.
+            let owner = owner.min(agent_count.saturating_sub(1));
+            for holder in &mut expert_of {
+                *holder = Some(owner);
+            }
+        }
         Expertise::HiddenProfile => {
             let candidates: Vec<usize> = (0..topic_count)
                 .filter(|index| *index != truth_index)
