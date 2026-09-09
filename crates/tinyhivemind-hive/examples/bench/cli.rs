@@ -570,6 +570,12 @@ fn flag_number(args: &[String], flag: &str) -> Option<u32> {
 mod test {
     use super::*;
 
+    /// Compare two fidelity values, which arrive through floating-point
+    /// parsing and clamping rather than as bit-exact literals.
+    fn close(left: f64, right: f64) -> bool {
+        (left - right).abs() < 1e-9
+    }
+
     /// `f64::parse` accepts `"nan"`, `"inf"` and `"-inf"`, and `f64::clamp`
     /// leaves a `NaN` unchanged rather than bounding it -- so an unguarded
     /// `--fidelity nan` would have stored a `NaN` in `options.fidelity`, and
@@ -584,8 +590,8 @@ mod test {
         for raw in ["nan", "inf", "-inf"] {
             let mut args = [raw.to_owned()].into_iter();
             apply_expertise_flag(&mut options, "--fidelity", &mut args);
-            assert_eq!(
-                options.fidelity, before,
+            assert!(
+                close(options.fidelity, before),
                 "a non-finite --fidelity value of {raw:?} must be rejected, \
                  leaving the prior value in place",
             );
@@ -598,10 +604,13 @@ mod test {
 
         let mut args = ["1.5".to_owned()].into_iter();
         apply_expertise_flag(&mut options, "--fidelity", &mut args);
-        assert_eq!(options.fidelity, 1.0, "a finite value is still clamped");
+        assert!(
+            close(options.fidelity, 1.0),
+            "a finite value is still clamped",
+        );
 
         let mut args = ["0.4".to_owned()].into_iter();
         apply_expertise_flag(&mut options, "--fidelity", &mut args);
-        assert_eq!(options.fidelity, 0.4);
+        assert!(close(options.fidelity, 0.4));
     }
 }
