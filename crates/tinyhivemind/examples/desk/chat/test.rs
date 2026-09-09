@@ -3,7 +3,20 @@
 #![allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)]
 
 use super::*;
-use tinyinference::providers::MockModel;
+use tinyinference::{
+    model::{ModelResponse, ModelRequest as Request},
+    providers::MockModel,
+};
+
+/// A model that never answers, so a wall-clock budget is what decides.
+struct NeverAnswers;
+
+#[async_trait::async_trait]
+impl ChatModel<()> for NeverAnswers {
+    async fn invoke(&self, _: &(), _: Request) -> tinyinference::Result<ModelResponse> {
+        std::future::pending().await
+    }
+}
 
 fn chat(model: impl ChatModel<()> + 'static) -> Chat {
     Chat::with_model(model, Duration::from_secs(30))
@@ -34,9 +47,7 @@ async fn an_empty_answer_is_not_a_failure_and_is_not_retried() {
 
 #[tokio::test]
 async fn a_call_that_outruns_its_budget_is_a_timeout_worth_retrying() {
-    // A mock with nothing scripted answers at once, so the budget itself is
-    // what this drives: zero wall clock means every call is already late.
-    let outcome = Chat::with_model(MockModel::echo(), Duration::ZERO)
+    let outcome = Chat::with_model(NeverAnswers, Duration::from_millis(20))
         .complete("anything")
         .await;
     assert_eq!(outcome, Outcome::TimedOut);
