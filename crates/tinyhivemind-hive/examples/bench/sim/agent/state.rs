@@ -209,7 +209,7 @@ impl SimAgent {
         }
         self.specialty = self.specialty.as_ref().map(rename);
         self.refutes = self.refutes.as_ref().map(rename);
-        for (topic, _) in &mut self.expert_elsewhere {
+        for topic in &mut self.expert_elsewhere {
             *topic = rename(topic);
         }
         self.favourite = rename(&self.favourite);
