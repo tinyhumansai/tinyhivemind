@@ -730,6 +730,7 @@ mod test {
         let account = super::ChannelDigest {
             conversation: super::Conversation {
                 desk_id: "pe1006".into(),
+                desk_name: "PE 1006".into(),
                 thread_root: None,
             },
             through: Sequence(1),
