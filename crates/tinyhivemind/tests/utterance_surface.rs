@@ -15,8 +15,7 @@ use tinyhivemind::{
     mention::MentionTarget,
     roster::{Person, Roster, RosterMember},
     speech::{
-        CallArguments, CommitRequest, CommittedUtterance, ToolCall, Utterance, commit_utterance,
-        interpret,
+        CallArguments, CommitRequest, CommittedUtterance, ToolCall, commit_utterance, interpret,
     },
 };
 
