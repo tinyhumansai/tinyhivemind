@@ -502,6 +502,222 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
             println!("   | {line}");
         }
 
+        // What the seat said becomes a row through one fold in the library:
+        // the text, who may read it, the mentions dispatch routes on, and
+        // whether the desk was reported finished. The host's part is the two
+        // counts the fold cannot derive — how much of an open aside is spent,
+        // and whether an earlier one is still owed a settlement — both folded
+        // out of the journal, because this host keeps no state the journal
+        // does not already carry.
+        let rows = transcript.rows();
+        let committed = commit_utterance(&CommitRequest {
+            utterance: &said.utterance,
+            speaker_id: &seat.id,
+            conversation: &DispatchConversation {
+                desk_id: spec.id.clone(),
+                thread_root: None,
+            },
+            aside: aside::ASIDES,
+            spent: aside::spent_in_aside(&rows),
+            unsettled: aside::unsettled_aside(&rows, &seat.id, &said.utterance),
+            roster: &roster,
+            desks: &desks,
+        })?;
+        if let Some(reason) = committed.refusal {
+            println!("   aside refused: {reason:?} — the row stays desk-visible");
+        }
+        if let Audience::Aside { members } = &committed.audience {
+            println!("   aside to @{}", members.join(", @"));
+        }
+        sequence = transcript.append(
+                    Some(spec.id.clone()),
+                    SessionAuthor::Person {
+                        id: spec.person_id.clone(),
+                        label: spec.person_label.clone(),
+                    },
+                    &nudge,
+                    Audience::Desk,
+                )?;
+                println!("[{}] chair nudge -> @{}", sequence.0, seat.id);
+                PendingTurn {
+                    target_id: seat.id.clone(),
+                    trigger: nudge,
+                    hop: 0,
+                }
+            }
+        };
+
+        let Some(seat) = spec.agent(&job.target_id) else {
+            println!("!! no seat named {}", job.target_id);
+            continue;
+        };
+        turns += 1;
+        since_chair += 1;
+
+        // Fold what has scrolled out of reach into the room's account, before
+        // anything is composed from it. A fold that fails costs the room its
+        // compaction and nothing else: the window is already correct without
+        // one.
+        match refold(
+            &transcript,
+            folder.as_ref().map(|folder| folder as &dyn Digester),
+            &conversation,
+            account.as_ref(),
+            Sequence(transcript.len() as u64),
+            account_policy,
+        )
+        .await?
+        {
+            DigestOutcome::Folded(next) => {
+                println!(
+                    "   room account: generation {} now covers {} messages through [{}] \
+                     ({} chars)",
+                    next.generation,
+                    next.covered,
+                    next.through.0,
+                    next.text.chars().count()
+                );
+                account = Some(next);
+            }
+            DigestOutcome::Rejected { reason } => {
+                println!("   !! the room account was refused: {reason:?}");
+            }
+            DigestOutcome::Unavailable => println!("   !! no folder; the room account stands"),
+            DigestOutcome::Current => {}
+        }
+
+        let viewer = Viewer::Agent {
+            id: seat.id.clone(),
+        };
+        let query = SessionQuery {
+            conversation: conversation.clone(),
+            before: None,
+            window: options.window,
+            viewer: viewer.clone(),
+        };
+        let briefing = TeamBriefing {
+            viewer_id: seat.id.clone(),
+            desk_id: spec.id.clone(),
+            desk_name: spec.name.clone(),
+            teammates: spec
+                .agents
+                .iter()
+                .filter(|other| other.id != seat.id)
+                .map(|other| BriefedTeammate {
+                    id: other.id.clone(),
+                    label: other.label.clone(),
+                    role: Some(other.role.clone()),
+                    description: None,
+                })
+                .collect(),
+            brevity: BrevityPolicy::DEFAULT,
+            asides: aside::ASIDES,
+        };
+        // Off by default, and that default is the finding. Resuming a seat's
+        // CLI session looks like free continuity, but the session keeps every
+        // prior turn: the request payload grows without bound until a single
+        // call takes minutes and then never returns at all. The room got
+        // slower turn by turn and finally stalled on every one. A fresh
+        // session answers at once, and the context a seat actually needs is
+        // the bounded projection this host already assembles plus the files
+        // in the shared workspace — which is what the library's own
+        // `prepare_delta` is for.
+        let resumed = options
+            .resume_sessions
+            .then(|| sessions.get(&seat.id).cloned())
+            .flatten();
+        let plan = match (resumed.as_ref(), shared.get(&seat.id)) {
+            (Some(_), Some(state)) => Some(
+                prepare_delta(
+                    &transcript,
+                    &SharingQuery {
+                        desired_conversation: &conversation,
+                        current_conversation: &conversation,
+                        state,
+                        before: sequence,
+                        viewer: &viewer,
+                    },
+                )
+                .await?,
+            ),
+            _ => None,
+        };
+        let (window, briefing_text, catching_up) = if let Some(SharingPlan::Delta(delta)) = plan {
+            shared.insert(seat.id.clone(), delta.next_state);
+            (delta.messages, None, true)
+        } else {
+            let session = initialize_session(&transcript, &query, briefing).await?;
+            shared.insert(
+                seat.id.clone(),
+                initialized_state(conversation.clone(), sequence),
+            );
+            let text = session.briefing.system_text();
+            (session.history, Some(text), false)
+        };
+        let recalled = store
+            .as_ref()
+            .map(|store| store.recall(&job.trigger))
+            .unwrap_or_default();
+
+        // A row the account already stands for is not also shown in full, so
+        // the window is spent on the live conversation. A seat that is only
+        // being caught up already holds the older history in its own session,
+        // so the account is not repeated to it.
+        let composed = apply_digest(if catching_up { None } else { account.as_ref() }, &window);
+        let history = composed.messages;
+        let notebook = read_notebook(&options.workspace, &seat.id);
+        let prompt = compose_prompt(
+            briefing_text.as_deref(),
+            composed.digest.as_deref(),
+            &history,
+            seat,
+            &job,
+            &recalled,
+            notebook.as_deref(),
+        );
+        println!(
+            "[turn {turns}] @{} ({} chars of prompt, {} {} message(s){}, notebook {})",
+            seat.id,
+            prompt.len(),
+            history.len(),
+            if catching_up { "new" } else { "of history" },
+            if resumed.is_some() { ", resumed" } else { "" },
+            match &notebook {
+                Some(text) => format!("{} chars", text.chars().count()),
+                None => "none".to_string(),
+            }
+        );
+        let Some((output, said)) = turn::deliver(
+            &turn::Delivery {
+                runner: &runner,
+                wrapup: &wrapup,
+                outbox: &outbox,
+                label: format!("turn-{turns:03}-{}", seat.id),
+                seat_id: &seat.id,
+                resumed: resumed.as_deref(),
+            },
+            &prompt,
+            &mut sessions,
+            &mut tokens,
+        )?
+        else {
+            continue;
+        };
+        println!(
+            "   {:?}, {} tokens, {} read(s), tools: {}",
+            output.elapsed,
+            output.tokens,
+            output.reads,
+            if output.tools.is_empty() {
+                "none".to_string()
+            } else {
+                output.tools.join(",")
+            }
+        );
+        for line in output.message.lines().take(6) {
+            println!("   | {line}");
+        }
+
         let author = MentionAuthor::Agent {
             id: seat.id.clone(),
         };
@@ -547,8 +763,8 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
                 id: seat.id.clone(),
                 label: seat.label.clone(),
             },
-            &output.message,
-            audience,
+            &committed.content,
+            committed.audience.clone(),
         )?;
         if let Some(store) = store.as_ref() {
             store.capture(&seat.id, sequence.0, &output.message);
@@ -578,7 +794,7 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
         // to. Without this the chair nudges a delivered room once per remaining
         // round: in run 28 that was nine turns of `@lead` restating the same
         // answer to a prompt that could not be told the work was done.
-        if said.closing {
+        if committed.closing {
             println!("   -- seat reports the work finished; closing the desk");
             break;
         }
@@ -595,8 +811,8 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
                     thread_root: None,
                 },
                 author_id: seat.id.clone(),
-                content: output.message.clone(),
-                mentions,
+                content: committed.content.clone(),
+                mentions: committed.mentions,
                 hop: job.hop,
             },
             &roster,
