@@ -52,7 +52,7 @@ use crate::context::Compaction;
 use crate::policy::tuned_policy;
 use crate::rng::mix;
 use crate::run::run_episode;
-use crate::sim::{POISON_LIFT, Room};
+use crate::sim::{POISON_LIFT, Room, SimAgent};
 
 /// One arm's score over a sample of chains.
 #[derive(Default)]
@@ -245,7 +245,7 @@ fn run_alone(options: &Options, seed: u64, stages: usize, compaction: Compaction
             run.right = run.right.saturating_add(1);
         }
         wrong = !correct;
-        run.held = room.agents.first().map_or(0.0, |held| held.held() as f64);
+        run.held = room.held();
         prior = Some(room);
     }
     run
@@ -405,12 +405,12 @@ mod test {
     fn a_later_stage_inherits_the_window_of_an_earlier_one() {
         let mut first = room(0);
         first.charge_brief();
-        let carried = first.agents.first().map_or(0, |agent| agent.held());
+        let carried = first.agents.first().map_or(0, SimAgent::held);
         assert!(carried > 0, "the brief occupies rows");
 
         let mut second = room(1).inheriting(&first);
         second.charge_brief();
-        let held = second.agents.first().map_or(0, |agent| agent.held());
+        let held = second.agents.first().map_or(0, SimAgent::held);
         assert_eq!(
             held,
             carried * 2,
@@ -459,9 +459,9 @@ mod test {
     fn a_soloist_carries_the_whole_room_s_brief() {
         let mut shared = room(0);
         shared.charge_brief();
-        let one = shared.agents.first().map_or(0, |agent| agent.held());
+        let one = shared.agents.first().map_or(0, SimAgent::held);
         let pooled = shared.pooled();
-        let alone = pooled.agents.first().map_or(0, |agent| agent.held());
+        let alone = pooled.agents.first().map_or(0, SimAgent::held);
         assert!(
             alone > one,
             "a soloist holding every peer's readings carries more than one member: {alone} vs {one}"
