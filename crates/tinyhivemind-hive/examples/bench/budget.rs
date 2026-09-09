@@ -126,7 +126,11 @@ pub(crate) fn sweep(
             if capacity == 0 && rot != ROTS[0] {
                 continue;
             }
-            let budget = ContextBudget { capacity, rot };
+            let budget = ContextBudget {
+                capacity,
+                rot,
+                ..ContextBudget::UNBOUNDED
+            };
             let mut totals: Vec<(&'static str, Aggregate, f64, usize)> = Vec::new();
             for room in rooms {
                 let windowed = room.with_budget(budget);

@@ -173,16 +173,22 @@ impl SimAgent {
     )]
     fn windowed_score(&self, topic: &TopicId, own: i32) -> i32 {
         let kept = self.budget.retained(self.context.len());
-        let held = kept.len();
         let mut total = f64::from(own);
         let mut divisor = 1.0_f64;
         let mut ruled_out = 0.0_f64;
-        for (position, index) in kept.into_iter().enumerate() {
-            let entry = &self.context[index];
+        // Every row is asked what it is still worth, retained or not: under
+        // `Compaction::Evict` an overflowing row answers zero and the loop is
+        // the one that ran before folding existed, and under
+        // `Compaction::Fold` it answers `fidelity` because a summary keeps no
+        // position and so takes no positional discount.
+        for (index, entry) in self.context.iter().enumerate() {
             if &entry.topic != topic {
                 continue;
             }
-            let weight = self.budget.weight(position, held);
+            let weight = self.budget.worth(index, &kept);
+            if weight <= 0.0 {
+                continue;
+            }
             match entry.kind {
                 EntryKind::Reading(reading) => {
                     total += weight * f64::from(reading);
