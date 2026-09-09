@@ -655,15 +655,24 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
     Ok(())
 }
 
-/// Characters of desk-visible content the room's account does not yet cover.
+/// Characters of foldable, desk-visible content the room's account does not
+/// yet cover.
 ///
 /// Private rows are skipped, because an account may not contain one: a long
 /// aside must not be able to spend the room's summarization budget on content
-/// the fold is forbidden to carry.
-fn unfolded_chars(rows: &[LogMessage], account: Option<&ChannelDigest>) -> usize {
+/// the fold is forbidden to carry. The live tail — the newest `keep_live` rows
+/// — is skipped too: `refold` can never fold it, so counting it toward the
+/// size trigger would spend a provider call summarizing older rows while an
+/// oversized recent post, the actual cause, sails through untouched. See
+/// `docs/specs/folding-by-size.md`'s "Both triggers are thresholds on
+/// foldable content, never on the live tail."
+fn unfolded_chars(rows: &[LogMessage], account: Option<&ChannelDigest>, keep_live: usize) -> usize {
     let folded = account.map_or(0, |digest| digest.through.0);
+    let ceiling = (rows.len() as u64).saturating_sub(keep_live as u64);
     rows.iter()
-        .filter(|row| row.sequence.0 > folded && row.audience.is_desk())
+        .filter(|row| {
+            row.sequence.0 > folded && row.sequence.0 <= ceiling && row.audience.is_desk()
+        })
         .map(|row| row.content.chars().count())
         .sum()
 }
