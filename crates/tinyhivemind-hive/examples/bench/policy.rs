@@ -119,6 +119,28 @@ pub(crate) fn deferring_policy(tuned: &EpisodePolicy, cap: u32) -> EpisodePolicy
     }
 }
 
+/// The tuned policy widened, so a round authorizes several turns at once.
+///
+/// This is the arm ADR 0014 has to earn its place against, and it can lose.
+/// The prediction it tests is that a wider round buys **depth** — a host with
+/// async seats waits once for the whole round — without buying correlated
+/// error, because members writing at the same time cannot read each other and
+/// so a concurrent round is a blind round. If accuracy falls, the loss is the
+/// price of the depth and the table says so.
+///
+/// A width of `0` returns the tuned policy unchanged, which makes the arm
+/// bit-identical to `hive+` — the discipline `set_aside_cap` and
+/// `--exchange-cap` already follow.
+pub(crate) fn widened_policy(tuned: &EpisodePolicy, width: u32) -> EpisodePolicy {
+    if width == 0 {
+        return *tuned;
+    }
+    EpisodePolicy {
+        round_width: width,
+        ..*tuned
+    }
+}
+
 /// Both mechanisms at once: the directory folded, and `!defer` bounded.
 ///
 /// This is the arrangement `docs/specs/expert-delegation.md` describes end to
