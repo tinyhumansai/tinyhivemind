@@ -37,6 +37,7 @@ link any earlier ADR it amends.
 | [0010](0010-an-aside-carries-information-never-support.md) | An aside carries information rather than support, and a redaction is a row rather than an absence | Proposed |
 | [0011](0011-an-aside-rides-alongside-a-turn.md) | An aside rides alongside the turn that authored it rather than spending one | Proposed — amends 0010 |
 | [0012](0012-an-exchange-round-spends-model-calls-not-turns.md) | An exchange round spends model calls rather than turns | Proposed — follows 0011 |
+| [0013](0013-a-vendored-crate-is-an-example-dependency.md) | A vendored crate may back an example and never a library crate | Proposed |
 
 ## Reading order
 
