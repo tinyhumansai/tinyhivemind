@@ -3,7 +3,7 @@
 //! by making the speaker costlier and everyone else cheaper to reach.
 
 use super::super::*;
-use super::support::{spoke, MEMBERS, Room, converging, conversation, operator, run, said, sequential, speaking, state};
+use super::support::{spoke, MEMBERS, Room, converging, operator, run, said, sequential, speaking, state};
 use crate::attention::BidReason;
 use tinyhivemind::Sequence;
 use tinyhivemind::aside::Audience;
