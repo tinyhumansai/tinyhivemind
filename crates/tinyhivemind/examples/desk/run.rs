@@ -502,43 +502,31 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
             println!("   | {line}");
         }
 
-        let author = MentionAuthor::Agent {
-            id: seat.id.clone(),
-        };
-        let mut mentions = resolve(&output.message, None, &author, &roster, &desks);
-        // A message sent through `desk_dm` addresses its recipients whether or
-        // not its text also names them, and the grammar rather than this host
-        // is what turns those names into targets.
-        let addressed_to = said
-            .dm_to
-            .iter()
-            .map(|id| format!("@{id}"))
-            .collect::<Vec<_>>()
-            .join(" ");
-        let dm_mentions = resolve(&addressed_to, None, &author, &roster, &desks);
-        if !dm_mentions.is_empty() && aside::addressed(&mentions, &seat.id).is_empty() {
-            mentions = dm_mentions.clone();
-        }
-        // Who the line reaches is the library's decision, not this host's
-        // reading of the marker: `aside` resolves the audience and refuses
-        // with a named reason, and a refusal leaves the row desk-visible.
-        let audience = aside::address(
-            &transcript,
-            &spec.id,
-            &seat.id,
-            &Addressed {
-                line: &output.message,
-                mentions: if dm_mentions.is_empty() {
-                    &mentions
-                } else {
-                    &dm_mentions
-                },
-                private: !dm_mentions.is_empty(),
+        // What the seat said becomes a row through one fold in the library:
+        // the text, who may read it, the mentions dispatch routes on, and
+        // whether the desk was reported finished. The host's part is the two
+        // counts the fold cannot derive — how much of an open aside is spent,
+        // and whether an earlier one is still owed a settlement — both folded
+        // out of the journal, because this host keeps no state the journal
+        // does not already carry.
+        let rows = transcript.rows();
+        let committed = commit_utterance(&CommitRequest {
+            utterance: &said.utterance,
+            speaker_id: &seat.id,
+            conversation: &DispatchConversation {
+                desk_id: spec.id.clone(),
+                thread_root: None,
             },
-            &roster,
-            &desks,
-        )?;
-        if let Audience::Aside { members } = &audience {
+            aside: aside::ASIDES,
+            spent: aside::spent_in_aside(&rows),
+            unsettled: aside::unsettled_aside(&rows, &seat.id, &said.utterance),
+            roster: &roster,
+            desks: &desks,
+        })?;
+        if let Some(reason) = committed.refusal {
+            println!("   aside refused: {reason:?} — the row stays desk-visible");
+        }
+        if let Audience::Aside { members } = &committed.audience {
             println!("   aside to @{}", members.join(", @"));
         }
         sequence = transcript.append(
@@ -547,8 +535,8 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
                 id: seat.id.clone(),
                 label: seat.label.clone(),
             },
-            &output.message,
-            audience,
+            &committed.content,
+            committed.audience.clone(),
         )?;
         if let Some(store) = store.as_ref() {
             store.capture(&seat.id, sequence.0, &output.message);
@@ -578,7 +566,7 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
         // to. Without this the chair nudges a delivered room once per remaining
         // round: in run 28 that was nine turns of `@lead` restating the same
         // answer to a prompt that could not be told the work was done.
-        if said.closing {
+        if committed.closing {
             println!("   -- seat reports the work finished; closing the desk");
             break;
         }
@@ -595,8 +583,8 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
                     thread_root: None,
                 },
                 author_id: seat.id.clone(),
-                content: output.message.clone(),
-                mentions,
+                content: committed.content.clone(),
+                mentions: committed.mentions,
                 hop: job.hop,
             },
             &roster,
