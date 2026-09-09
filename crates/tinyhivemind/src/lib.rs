@@ -62,6 +62,7 @@ pub mod referral;
 pub mod responder;
 pub mod search;
 pub mod session;
+pub mod speech;
 pub mod sharing;
 pub mod threads;
 
@@ -92,6 +93,10 @@ pub use responder::{BoxError, Selector, SelectorFuture, choose_responder};
 pub use search::{
     EXCERPT_CHARS, MessageHit, SEARCH_LIMIT, SEARCH_SCAN, SearchPattern, SearchQuery, ThreadHit,
     search_messages, search_threads,
+};
+pub use speech::{
+    CallArguments, CommitRequest, CommittedUtterance, ToolCall, ToolParameter, ToolSpec,
+    Utterance, UtteranceRejection, check_recipients, commit_utterance, interpret, tool_specs,
 };
 pub use session::{
     Conversation, Elision, LogMessage, PAGE_SIZE, SCAN_LIMIT, SESSION_WINDOW, Sequence,
