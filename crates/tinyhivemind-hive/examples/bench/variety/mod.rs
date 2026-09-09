@@ -268,6 +268,12 @@ fn faceted(options: &Options, seed: u64, facet: usize, prior: Option<&Room>) -> 
     if let Some(prior) = prior {
         room = room.inheriting(prior);
     }
+    // Applied here for the same reason `main.rs` and `scale.rs` apply it to
+    // the rooms they build: a sweep that generates its own rooms has to carry
+    // every room-shaping flag itself, and a flag it silently drops reads as a
+    // result rather than as an omission. Off by default, so no published
+    // number moves.
+    room.set_blind_evidence(options.blind_evidence);
     // Every participant pays for the brief it was handed before any arm
     // decides what to do with it — the same charge `--stages` makes, for the
     // same reason.
