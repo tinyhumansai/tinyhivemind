@@ -24,6 +24,7 @@ use crate::http::{HttpAgent, HttpDeskAgent};
 use crate::live::{self, AgentPrompt, LiveAgent};
 use crate::live_single::{plurality, verdict};
 use crate::metrics::{self, Aggregate};
+use crate::parallel;
 use crate::policy::{quorum_threshold, turn_budget};
 use crate::rng::mix;
 use crate::run;
