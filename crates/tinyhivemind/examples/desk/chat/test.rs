@@ -4,7 +4,7 @@
 
 use super::*;
 use tinyinference::{
-    model::{ModelResponse, ModelRequest as Request},
+    model::{ModelRequest as Request, ModelResponse},
     providers::MockModel,
 };
 
@@ -35,7 +35,9 @@ async fn answers_from_the_model_it_was_built_against() {
 
 #[tokio::test]
 async fn an_empty_answer_is_not_a_failure_and_is_not_retried() {
-    let outcome = chat(MockModel::constant("   ")).complete("say something").await;
+    let outcome = chat(MockModel::constant("   "))
+        .complete("say something")
+        .await;
     assert_eq!(
         outcome,
         Outcome::Empty,

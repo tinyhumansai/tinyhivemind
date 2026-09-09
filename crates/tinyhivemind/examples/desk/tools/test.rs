@@ -7,7 +7,8 @@ use std::{fs, path::PathBuf};
 use tinyhivemind::speech::Utterance;
 
 fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("tinyhivemind-tools-{name}-{}", std::process::id()));
+    let dir =
+        std::env::temp_dir().join(format!("tinyhivemind-tools-{name}-{}", std::process::id()));
     let _ = fs::create_dir_all(&dir);
     dir
 }

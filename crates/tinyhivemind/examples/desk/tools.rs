@@ -66,11 +66,7 @@ pub(crate) fn parameters_schema(spec: &ToolSpec) -> Value {
 ///
 /// Returns the refusal to hand back to the seat: a malformed call, or a `dm`
 /// naming somebody who cannot receive one.
-pub(crate) fn invoke(
-    name: &str,
-    arguments: &Value,
-    serving: &Serving,
-) -> Result<String, String> {
+pub(crate) fn invoke(name: &str, arguments: &Value, serving: &Serving) -> Result<String, String> {
     let to = string_list(arguments, "to");
     let interpreted = interpret(
         name,
