@@ -68,6 +68,17 @@ pub enum Error {
     /// [`Self::ZeroDeferCap`].
     #[error("round width must not be zero")]
     ZeroRoundWidth,
+    /// A division was asked for on a desk with no active member to own a
+    /// facet.
+    ///
+    /// Distinct from an empty task, which divides into nothing and is not an
+    /// error: a task with no facets has nobody to disappoint, and a task with
+    /// facets and no seats cannot be answered at all.
+    #[error("desk `{desk_id}` has no active member to own a facet")]
+    NoSeats {
+        /// The desk that came back with no active member.
+        desk_id: String,
+    },
 }
 
 impl From<tinyhivemind_core::error::Error> for Error {

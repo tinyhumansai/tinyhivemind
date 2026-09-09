@@ -30,7 +30,8 @@ resolves it to `sim/mod.rs` transparently.
 | `arms.rs` | the `ladder`, `vote`, `merged` and federated controls |
 | `scale.rs` | `--scale-sweep`: room size against channel topology, one table per axis |
 | `horizon.rs` | the chain ladder: a task with several stages, the arms that decide one, and the soloist controls |
-| `variety.rs` | the variety ladder: a task with several facets at once, one owner each, and whether splitting them across seats beats holding them all |
+| `variety/mod.rs` | the variety ladder: a task with several facets at once, one owner each, and whether splitting them across seats beats holding them all. `hive+fold` asks `tinyhivemind_hive::division` who owns what rather than deciding for itself |
+| `variety/test.rs` | its unit tests, promoted out when the sweep passed the file cap |
 | `sweep.rs` | the policy grid and its ranking |
 | `metrics/mod.rs` | aggregation, formatting, and the confidence-interval, bootstrap and rank-correlation statistics: `Aggregate` and the printed/JSON tables |
 | `metrics/{format,stats}.rs` | formatting helpers for those tables, then the small numeric statistics helpers (percentile, rank correlation) |
