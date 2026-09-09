@@ -103,5 +103,65 @@ where
     Ok(out)
 }
 
+/// Apply `work` to every item **mutably**, in parallel, in input order.
+///
+/// The counterpart to [`map_in_order`] for work that needs exclusive access to
+/// the thing it is working on. What it exists for is a live federation: each
+/// desk holds its own seats, its own journal and its own episode state, and
+/// each authorizes exactly one speaker — so a pass over `N` desks is `N` model
+/// calls that could all be in flight at once, and today are not.
+///
+/// The ordering rule is the same one and matters for the same reason: results
+/// come back indexed as `items` was, so the caller appends rows in desk order
+/// however the calls happen to return. That is not cosmetic. A private or desk
+/// row consumes a sequence number, and `QuorumPolicy::window` and salience
+/// decay read a *raw* sequence distance — so appending in completion order
+/// would let the same federation, on the same seed, decide differently from
+/// one run to the next.
+///
+/// # Errors
+///
+/// Returns the first error in input order, on the same contract as
+/// [`map_in_order`].
+pub(crate) fn map_mut_in_order<T, R, F>(
+    items: &mut [T],
+    jobs: usize,
+    work: F,
+) -> Result<Vec<R>, String>
+where
+    T: Send,
+    R: Send,
+    F: Fn(&mut T) -> Result<R, String> + Sync,
+{
+    let jobs = jobs.max(1).min(items.len().max(1));
+    if jobs == 1 || items.len() < 2 {
+        return items.iter_mut().map(&work).collect();
+    }
+
+    let chunk = items.len().div_ceil(jobs);
+    let mut chunks: Vec<Result<Vec<R>, String>> = Vec::new();
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = items
+            .chunks_mut(chunk)
+            .map(|slice| {
+                scope.spawn(|| slice.iter_mut().map(&work).collect::<Result<Vec<R>, String>>())
+            })
+            .collect();
+        for handle in handles {
+            chunks.push(
+                handle
+                    .join()
+                    .unwrap_or_else(|_| Err("a benchmark thread panicked".to_owned())),
+            );
+        }
+    });
+
+    let mut out = Vec::with_capacity(items.len());
+    for chunk in chunks {
+        out.extend(chunk?);
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod test;

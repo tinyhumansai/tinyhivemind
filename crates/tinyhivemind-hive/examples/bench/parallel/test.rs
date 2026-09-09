@@ -6,7 +6,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use super::{default_jobs, map_in_order};
+use super::{default_jobs, map_in_order, map_mut_in_order};
 
 #[test]
 fn returns_results_in_input_order_at_every_job_count() {
@@ -75,4 +75,30 @@ fn a_panicking_closure_is_reported_rather_than_resumed() {
 #[test]
 fn default_jobs_is_at_least_one() {
     assert!(default_jobs() >= 1);
+}
+
+#[test]
+fn the_mutable_map_also_returns_results_in_input_order() {
+    let mut items: Vec<usize> = (0..500).collect();
+    let got = map_mut_in_order(&mut items, 16, |value| {
+        *value *= 2;
+        Ok(*value)
+    })
+    .expect("doubling cannot fail");
+    let expected: Vec<usize> = (0..500).map(|value| value * 2).collect();
+    assert_eq!(got, expected);
+    assert_eq!(items, expected, "the items themselves are mutated in place");
+}
+
+#[test]
+fn the_mutable_map_reports_the_first_error_in_input_order() {
+    let mut items: Vec<usize> = (0..100).collect();
+    let error = map_mut_in_order(&mut items, 8, |value| {
+        if *value == 9 || *value == 91 {
+            return Err(format!("item {value} failed"));
+        }
+        Ok(*value)
+    })
+    .expect_err("two items fail");
+    assert_eq!(error, "item 9 failed");
 }
