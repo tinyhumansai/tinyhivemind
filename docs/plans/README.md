@@ -40,3 +40,9 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a test-first sample
 - [`promote-the-utterance-surface.md`](promote-the-utterance-surface.md) — move
   the room's tool surface and the utterance fold from the `desk` example into
   `tinyhivemind::speech`, and give a refused aside a way back to its author.
+- [`fold-by-size.md`](fold-by-size.md) — trigger the standing account on the
+  size of the scrollback, not only its row count, and give a joining seat the
+  account by contract.
+- [`a-real-provider-layer.md`](a-real-provider-layer.md) — back the `desk`
+  example with `tinyinference` instead of `curl`, and render the room's tool
+  surface through `tinytools`, both as example-only dev-dependencies.
