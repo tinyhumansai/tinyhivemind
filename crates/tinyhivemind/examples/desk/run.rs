@@ -21,7 +21,9 @@ use tinyhivemind::{
     initialize_session,
     mention::{MentionAuthor, resolve},
     refold,
+    ChannelHead,
     responder::{ResponderRequest, SelectionPolicy, choose_responder},
+    pins::{PIN_LIMIT, fold_pins},
     sharing::{SharingPlan, SharingQuery, SharingState, initialized_state, prepare_delta},
     speech::{CommitRequest, addressed_peers, commit_utterance},
 };
@@ -329,12 +331,26 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
         // anything is composed from it. A fold that fails costs the room its
         // compaction and nothing else: the window is already correct without
         // one.
+        // Two things the library cannot derive and this host can. The
+        // character count is what the size trigger reads: only the host sees a
+        // row's size as it appends it, and reading the log back every turn to
+        // decide whether to compact it would cost more than the compaction
+        // saves. The pins are the room's own claim that a message does not
+        // scroll away, and a fold told nothing about them would quietly undo
+        // one.
+        let rows = transcript.rows();
+        let head = ChannelHead {
+            sequence: Sequence(transcript.len() as u64),
+            unfolded_chars: unfolded_chars(&rows, account.as_ref()),
+        };
+        let board = fold_pins(&rows, &Viewer::Operator, PIN_LIMIT);
         match refold(
             &transcript,
             folder.as_ref().map(|folder| folder as &dyn Digester),
             &conversation,
             account.as_ref(),
-            Sequence(transcript.len() as u64),
+            head,
+            &board,
             account_policy,
         )
         .await?
@@ -603,4 +619,17 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
         transcript.len()
     );
     Ok(())
+}
+
+/// Characters of desk-visible content the room's account does not yet cover.
+///
+/// Private rows are skipped, because an account may not contain one: a long
+/// aside must not be able to spend the room's summarization budget on content
+/// the fold is forbidden to carry.
+fn unfolded_chars(rows: &[LogMessage], account: Option<&ChannelDigest>) -> usize {
+    let folded = account.map_or(0, |digest| digest.through.0);
+    rows.iter()
+        .filter(|row| row.sequence.0 > folded && row.audience.is_desk())
+        .map(|row| row.content.chars().count())
+        .sum()
 }
