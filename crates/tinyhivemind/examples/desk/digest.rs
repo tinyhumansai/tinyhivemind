@@ -28,7 +28,10 @@ impl RoomDigester {
 impl Digester for RoomDigester {
     fn digest<'a>(&'a self, request: &'a DigestRequest) -> DigestFuture<'a> {
         let prompt = compose(request);
-        Box::pin(async move { Ok(self.chat.complete(&prompt)) })
+        // A fold that fails costs the room its compaction and nothing else,
+        // so every outcome that is not an answer becomes the empty string and
+        // the library reads that as `DigestRejection::Empty`.
+        Box::pin(async move { Ok(self.chat.complete(&prompt).await.text().to_string()) })
     }
 }
 

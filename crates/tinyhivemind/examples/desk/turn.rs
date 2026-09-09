@@ -70,7 +70,7 @@ pub(crate) struct Said {
 ///
 /// Returns a spawn or wait failure from the agent CLI. A model that answers
 /// nothing is not an error here; it is the ladder's whole reason for existing.
-pub(crate) fn deliver(
+pub(crate) async fn deliver(
     delivery: &Delivery<'_>,
     prompt: &str,
     sessions: &mut HashMap<String, String>,
@@ -138,7 +138,7 @@ pub(crate) fn deliver(
     if !output.timed_out && !output.message.trim().is_empty() {
         return Ok(Some((output, said)));
     }
-    let Some(said) = land(delivery, prompt, &mut output, sessions, tokens)? else {
+    let Some(said) = land(delivery, prompt, &mut output, sessions, tokens).await? else {
         return Ok(None);
     };
     Ok(Some((output, said)))
@@ -157,7 +157,7 @@ pub(crate) fn deliver(
 /// # Errors
 ///
 /// Returns a spawn or wait failure from the agent CLI.
-fn land(
+async fn land(
     delivery: &Delivery<'_>,
     prompt: &str,
     output: &mut agent::TurnOutput,
@@ -223,11 +223,21 @@ fn land(
              something, say it is not established.",
             agent::truncate_work_log(&output.work_log)
         );
-        let text = delivery.wrapup.complete(&wrap);
-        if !text.trim().is_empty() {
-            println!("   wrap-up posted through the router with no tools attached");
+        // One retry, and only for a failure that says trying again could
+        // work. A refusal answered twice is a refusal; a rate limit answered
+        // once is a turn thrown away for a reason the provider named.
+        let mut answer = delivery.wrapup.complete(&wrap).await;
+        if answer.worth_retrying() {
+            println!("   wrap-up is worth one more attempt; retrying");
+            answer = delivery.wrapup.complete(&wrap).await;
         }
-        fence::extract_post(&text)
+        match &answer {
+            chat::Outcome::Answered(_) => {
+                println!("   wrap-up posted through the router with no tools attached");
+            }
+            other => println!("   !! the wrap-up channel produced nothing: {other:?}"),
+        }
+        fence::extract_post(answer.text())
     } else {
         println!("   landed in the seat's own session, files included");
         landed.message
