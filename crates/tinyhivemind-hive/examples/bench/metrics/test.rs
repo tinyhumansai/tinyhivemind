@@ -6,6 +6,8 @@
 //! samples is the same thing as folding one, which is what lets the per-room
 //! loops run across cores without moving a number.
 
+use std::time::Duration;
+
 use super::Aggregate;
 use crate::TASK;
 use crate::arms;
@@ -17,6 +19,23 @@ use crate::sim::{Expertise, Room};
 /// Rooms folded by both paths. Enough that the halves differ from each other
 /// on every counter worth differing on.
 const ROOMS: u32 = 24;
+
+/// Zero the two measured-time fields so two folds of the same rooms can be
+/// compared for equality.
+///
+/// `library_time` and `step_time` are wall-clock readings taken around real
+/// calls, so two folds of the *same* episodes disagree on them by whatever the
+/// machine was doing at the time. They are the only fields in [`Aggregate`]
+/// that are not a function of the rooms, and that is worth knowing rather than
+/// just working around: it is also why `ns/step` and `episodes/s` are the two
+/// columns that legitimately move under `--jobs`, while every other number in
+/// the table must not.
+fn without_measured_time(aggregate: &Aggregate) -> Aggregate {
+    let mut copy = aggregate.clone();
+    copy.library_time = Duration::ZERO;
+    copy.step_time = Duration::ZERO;
+    copy
+}
 
 /// Generate the sample both paths fold.
 ///
@@ -64,7 +83,8 @@ fn merging_matches_folding_in_one_pass() {
     // `Aggregate` later and folded by `add` but forgotten by `merge` fails
     // here without anybody remembering to extend this test.
     assert_eq!(
-        first, whole,
+        without_measured_time(&first),
+        without_measured_time(&whole),
         "merging two halves must equal folding the sample in one pass"
     );
 }
@@ -95,7 +115,7 @@ fn merging_arm_reports_matches_folding_in_one_pass() {
     }
     first.merge(&second);
 
-    assert_eq!(first, whole);
+    assert_eq!(without_measured_time(&first), without_measured_time(&whole));
 }
 
 #[test]
@@ -126,4 +146,8 @@ fn merging_an_empty_sample_changes_nothing() {
     folded.merge(&Aggregate::default());
 
     assert_eq!(folded, before);
+    assert_eq!(
+        folded.library_time, before.library_time,
+        "an empty sample adds no time either"
+    );
 }
