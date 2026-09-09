@@ -371,8 +371,11 @@ fn readable(turn: &HiveTurn, message: &SessionMessage) -> bool {
         // `round_start` when the turn composes, so this withholds nothing and
         // a round of one is bit-identical to the sequential episode.
         Visibility::Full => turn.round_start,
-        // The whole episode, which is never below the round boundary.
-        Visibility::Blind => turn.watermark.max(turn.round_start),
+        // The whole episode. `round_start` is the sequence of the last row
+        // folded and every folded row is above the watermark, so the watermark
+        // is never above the round boundary and is always the stricter of the
+        // two — a blind turn reads no peer row this episode, concurrent or not.
+        Visibility::Blind => turn.watermark,
     };
     message.sequence <= horizon
 }

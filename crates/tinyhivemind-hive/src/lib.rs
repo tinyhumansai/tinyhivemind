@@ -135,7 +135,7 @@ pub mod trace;
 
 pub use attention::{
     AgentThreshold, Bid, BidReason, BudgetPolicy, BudgetRequest, BudgetShare, BudgetVerdict,
-    allocate_chars, bids, floor_holder,
+    allocate_chars, bids, floor_holder, floor_round,
 };
 pub use directory::{Directory, DirectoryEntry, DirectoryPolicy, WEIGHT_CEILING, directory};
 pub use episode::{
