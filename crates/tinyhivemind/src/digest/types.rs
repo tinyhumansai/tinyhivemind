@@ -41,6 +41,13 @@ pub struct DigestPolicy {
     pub budget_chars: usize,
 }
 
+/// [`DigestPolicy::fold_after_chars`]'s serde default: the same ceiling
+/// [`DigestPolicy::DEFAULT`] carries, so an older stored payload decodes into
+/// exactly what a host that never set the field gets today.
+const fn default_fold_after_chars() -> usize {
+    DigestPolicy::DEFAULT.fold_after_chars
+}
+
 impl DigestPolicy {
     /// A tail of thirty rows, folded in steps of sixty, into four thousand
     /// characters.
