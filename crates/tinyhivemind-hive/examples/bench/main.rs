@@ -92,6 +92,7 @@ mod metrics;
 mod policy;
 mod rng;
 mod run;
+mod scale;
 mod scenario;
 mod sim;
 mod swarm;

@@ -54,7 +54,7 @@ use crate::run::{
     AsideMode, CheckStyle, run_episode, run_episode_checking, run_episode_exchanging_with,
 };
 use crate::rng::mix;
-use crate::sim::{MAX_MEMBERS, Room};
+use crate::sim::{Expertise, MAX_MEMBERS, Room};
 
 /// The room sizes swept when `--sizes` is not given.
 ///
@@ -70,6 +70,40 @@ struct Point {
     correct: f64,
     turns: f64,
     rows: f64,
+}
+
+/// One channel's running totals over one size's rooms.
+///
+/// `Aggregate` carries everything except the transcript length, which lives on
+/// the episode report and is the third axis this sweep exists to show, so it is
+/// accumulated here rather than pushed into the shared metric.
+#[derive(Default)]
+struct Channel {
+    totals: Aggregate,
+    rows: f64,
+    episodes: u32,
+}
+
+impl Channel {
+    fn add(&mut self, report: &crate::run::EpisodeReport) {
+        self.rows += report.context_rows;
+        self.episodes = self.episodes.saturating_add(1);
+        self.totals.add(report);
+    }
+
+    /// A control arm writes one row per turn and holds no private ones.
+    fn add_arm(&mut self, report: &crate::arms::ArmReport) {
+        self.rows += f64::from(report.turns);
+        self.episodes = self.episodes.saturating_add(1);
+        self.totals.add_arm(report);
+    }
+
+    fn rows_per_episode(&self) -> f64 {
+        if self.episodes == 0 {
+            return 0.0;
+        }
+        self.rows / f64::from(self.episodes)
+    }
 }
 
 /// Sweep every size, and every channel at every size.
@@ -117,13 +151,13 @@ fn one_size(
     size: usize,
     tuned: &EpisodePolicy,
 ) -> Result<Vec<Point>, String> {
-    let mut ladder = Aggregate::default();
-    let mut vote = Aggregate::default();
-    let mut broadcast = Aggregate::default();
-    let mut on_floor = Aggregate::default();
-    let mut rounds = Aggregate::default();
-    let mut off_floor = Aggregate::default();
-    let mut pooled = Aggregate::default();
+    let mut ladder = Channel::default();
+    let mut vote = Channel::default();
+    let mut broadcast = Channel::default();
+    let mut on_floor = Channel::default();
+    let mut rounds = Channel::default();
+    let mut off_floor = Channel::default();
+    let mut pooled = Channel::default();
 
     for room in rooms {
         ladder.add_arm(&arms::run_ladder(room, options.seed)?);
@@ -167,12 +201,12 @@ fn one_size(
     ];
     Ok(named
         .into_iter()
-        .map(|(arm, totals)| Point {
+        .map(|(arm, channel)| Point {
             size,
             arm,
-            correct: totals.accuracy(),
-            turns: totals.turns_per_episode(),
-            rows: totals.rows_per_episode(),
+            correct: channel.totals.accuracy(),
+            turns: channel.totals.turns_per_episode(),
+            rows: channel.rows_per_episode(),
         })
         .collect())
 }
@@ -180,10 +214,10 @@ fn one_size(
 /// One table per column of interest, sizes across the top.
 fn render(points: &[Point], sizes: &[usize], options: &Options) -> String {
     let mut out = String::new();
-    let task = if options.expertise_is_hidden_profile() {
-        "hidden profile"
-    } else {
-        "uniform noise"
+    let task = match options.expertise {
+        Expertise::HiddenProfile => "hidden profile",
+        Expertise::Specialists { .. } => "specialists",
+        Expertise::Uniform => "uniform noise",
     };
     out.push_str(&format!(
         "task {task}  rooms {} per size  options {}  eval noise ±{}\n\n",

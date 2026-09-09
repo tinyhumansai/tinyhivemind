@@ -83,6 +83,8 @@ pub(crate) struct Options {
     pub(crate) agent: Option<String>,
     /// How private evaluations are distributed across a room.
     pub(crate) expertise: Expertise,
+    /// Room sizes the scale sweep walks.
+    pub(crate) sizes: Vec<usize>,
     /// Whether a specialist's own turn costs more than a lay member's.
     pub(crate) cost: bool,
     /// Whether a member's first turn, while the room is still blind, is a
@@ -182,6 +184,7 @@ impl Options {
             trace: false,
             agent: None,
             expertise: Expertise::Uniform,
+            sizes: crate::scale::DEFAULT_SIZES.to_vec(),
             cost: false,
             blind_evidence: false,
             defer_cap: 1,
