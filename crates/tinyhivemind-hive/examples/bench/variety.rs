@@ -58,14 +58,16 @@
 use std::fmt::Write as _;
 use std::time::Instant;
 
+use tinyhivemind_hive::division::{DivisionPolicy, divide};
 use tinyhivemind_hive::episode::EpisodePolicy;
+use tinyhivemind_hive::trace::TopicId;
 
 use crate::TASK;
 use crate::cli::Options;
 use crate::context::Compaction;
 use crate::policy::tuned_policy;
 use crate::rng::mix;
-use crate::run::run_episode;
+use crate::run::{Host, run_episode};
 use crate::sim::{Expertise, MAX_MEMBERS, Room};
 
 /// One arm's score over a sample of tasks.
@@ -322,9 +324,14 @@ fn run_alone(options: &Options, seed: u64, facets: usize, compaction: Compaction
 fn run_split(options: &Options, seed: u64, facets: usize, pool: bool) -> TaskRun {
     let mut run = TaskRun::default();
     let count = members(options);
+    let Some(division) = library_division(count, facets) else {
+        return run;
+    };
     let mut priors: Vec<Option<Room>> = vec![None; count];
-    for facet in 0..facets {
-        let owner = facet % count;
+    for (facet, assigned) in division.assignments().iter().enumerate() {
+        let Some(owner) = seat_of(&assigned.owner) else {
+            break;
+        };
         let Some(slot) = priors.get_mut(owner) else {
             break;
         };
@@ -363,9 +370,45 @@ fn run_split(options: &Options, seed: u64, facets: usize, pool: bool) -> TaskRun
             )
         });
     run.held = ratio_f64(as_f64(rows), seats);
-    // The depth the concurrency buys: `n` facets to a round.
-    run.rounds = u32::try_from(facets.div_ceil(count)).unwrap_or(u32::MAX);
+    // The depth the concurrency buys, read off the library rather than
+    // recomputed here: independent facets ride one round, bounded by the
+    // seats available and by `DivisionPolicy::round_width`.
+    run.rounds = division.depth();
     run
+}
+
+/// Ask the library who owns each facet and which of them ride the same round.
+///
+/// **The arm is the library's own division, not the harness's idea of one.**
+/// `hive+fold` was assembled here before `tinyhivemind_hive::division` existed,
+/// and rewiring it is what makes the published numbers a measurement of the
+/// shipped mechanism rather than of a private reimplementation of it.
+///
+/// The directory is `None`: these rooms have deliberated nothing yet, so there
+/// is no transactive memory to fold and every facet falls to the rotation,
+/// which assigns facet `f` to seat `f % n` — exactly what this arm did before.
+/// `--roles` puts the competence on that same rotation from the other side, in
+/// the room's own draw.
+fn library_division(seats: usize, facets: usize) -> Option<tinyhivemind_hive::Division> {
+    let ids: Vec<&str> = SEAT_NAMES.iter().take(seats).copied().collect();
+    let host = Host::new(&ids);
+    let named: Vec<TopicId> = (0..facets)
+        .map(|facet| TopicId::from(format!("facet{facet}").as_str()))
+        .collect();
+    divide(
+        &named,
+        crate::run::DESK_ID,
+        &host.roster(),
+        &host.desks(),
+        None,
+        &DivisionPolicy::DEFAULT,
+    )
+    .ok()
+}
+
+/// The index of one seat in the room, by the name the division named it with.
+fn seat_of(owner: &str) -> Option<usize> {
+    SEAT_NAMES.iter().position(|name| *name == owner)
 }
 
 /// One task, every facet deliberated by the whole room.
