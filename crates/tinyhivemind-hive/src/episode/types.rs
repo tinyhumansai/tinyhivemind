@@ -277,8 +277,10 @@ pub enum HiveStep {
         /// [`Visibility::Blind`], or `policy.revealed_width` of them once it
         /// is [`Visibility::Full`]. The two are never clamped against each
         /// other, so a policy naming a wide `revealed_width` alongside a
-        /// narrow `round_width` authorizes exactly that many turns once the
-        /// room is revealed.
+        /// narrow `round_width` permits up to that many turns once the room
+        /// is revealed — not additionally clamped by `round_width`, though
+        /// fewer bids clearing their threshold or a shrunk remaining budget
+        /// can still authorize less than the full width.
         ///
         /// A host may run fewer than it was handed — a seat can be
         /// unavailable — but it commits `next_state` only once it has appended
