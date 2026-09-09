@@ -138,9 +138,15 @@ pub(super) fn sequential() -> EpisodePolicy {
 
 /// Unwrap a `HiveStep::Speak` of exactly one turn, panicking otherwise.
 pub(super) fn speaking(step: HiveStep) -> HiveTurn {
-    let (mut turns, _) = round(step);
+    spoke(step).0
+}
+
+/// The same, with the state the round commits — which belongs to the round
+/// rather than to the turn, so a fixture that needs both asks for both.
+pub(super) fn spoke(step: HiveStep) -> (HiveTurn, EpisodeState) {
+    let (mut turns, next_state) = round(step);
     assert_eq!(turns.len(), 1, "expected a round of one, got {turns:?}");
-    turns.remove(0)
+    (turns.remove(0), next_state)
 }
 
 /// Unwrap a `HiveStep::Speak` into its round and the state it commits.

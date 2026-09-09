@@ -4,14 +4,14 @@
 //! past its budget.
 
 use super::super::*;
-use super::support::{MEMBERS, Room, converging, operator, run, said, sequential, speaking, state};
+use super::support::{spoke, MEMBERS, Room, converging, operator, run, said, sequential, speaking, state};
 
 #[test]
 fn a_speaking_step_authorizes_exactly_one_turn() {
     let room = Room::new();
-    let turn = speaking(run(&room, &state(), &converging(), &sequential()));
+    let (turn, next) = spoke(run(&room, &state(), &converging(), &sequential()));
     assert!(MEMBERS.contains(&turn.agent_id.as_str()));
-    assert_eq!(turn.next_state.spent, 1);
+    assert_eq!(next.spent, 1);
 }
 
 #[test]
@@ -61,9 +61,9 @@ fn an_episode_terminates_within_its_budget() {
     // Every step either terminates or strictly advances the spend, so the loop
     // cannot run past the budget.
     for expected in 1..=policy.turn_budget {
-        let turn = speaking(run(&room, &state, &transcript, &policy));
-        assert_eq!(turn.next_state.spent, expected);
-        state = turn.next_state;
+        let (_turn, next) = spoke(run(&room, &state, &transcript, &policy));
+        assert_eq!(next.spent, expected);
+        state = next;
     }
     assert_eq!(
         run(&room, &state, &transcript, &policy),
@@ -99,13 +99,13 @@ fn the_budget_check_bounds_the_spend_before_it_can_overflow() {
         spent: u32::MAX - 1,
         ..state()
     };
-    let turn = speaking(run(&room, &brimming, &converging(), &policy));
-    assert_eq!(turn.next_state.spent, u32::MAX);
+    let (_turn, next) = spoke(run(&room, &brimming, &converging(), &policy));
+    assert_eq!(next.spent, u32::MAX);
 
     // ...and at the ceiling the budget check fires first, so the addition is
     // never reached. That is why there is no overflow error to return.
     assert_eq!(
-        run(&room, &turn.next_state, &converging(), &policy),
+        run(&room, &next, &converging(), &policy),
         HiveStep::Exhausted { spent: u32::MAX },
     );
 }

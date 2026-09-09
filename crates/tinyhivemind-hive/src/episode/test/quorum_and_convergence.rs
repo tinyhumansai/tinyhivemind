@@ -5,7 +5,7 @@
 //! can carry a topic there at all.
 
 use super::super::*;
-use super::support::{Room, converging, conversation, operator, run, said, sequential, speaking, state};
+use super::support::{spoke, Room, converging, conversation, operator, run, said, sequential, speaking, state};
 use crate::trace::TopicId;
 use tinyhivemind::Sequence;
 
@@ -15,16 +15,16 @@ fn quorum_flips_the_phase_once_and_then_converges() {
     let policy = sequential();
 
     // Deliberating with quorum reached: one commit turn is authorized.
-    let turn = speaking(run(&room, &state(), &converging(), &policy));
+    let (turn, next) = spoke(run(&room, &state(), &converging(), &policy));
     assert_eq!(turn.phase, Phase::Commit);
-    assert_eq!(turn.next_state.phase, Phase::Commit);
+    assert_eq!(next.phase, Phase::Commit);
 
     // The commit-phase turn speaks, but records nothing: phase alone must
     // not be read as proof that the room recorded its decision.
     let mut transcript = converging();
     assert!(
         matches!(
-            run(&room, &turn.next_state, &transcript, &policy),
+            run(&room, &next, &transcript, &policy),
             HiveStep::Speak { .. },
         ),
         "a commit-phase turn that recorded no `!commit` must not converge",
@@ -34,7 +34,7 @@ fn quorum_flips_the_phase_once_and_then_converges() {
     // episode reports its decision.
     transcript.push(said(4, &turn.agent_id, "!commit #stage Locking this in."));
     let HiveStep::Converged { topic, standing } =
-        run(&room, &turn.next_state, &transcript, &policy)
+        run(&room, &next, &transcript, &policy)
     else {
         panic!("expected convergence")
     };
@@ -84,7 +84,7 @@ fn a_commit_trace_before_the_commit_boundary_does_not_converge() {
     transcript.push(said(5, &turn.agent_id, "!question Anything else?"));
     assert!(
         matches!(
-            run(&room, &turn.next_state, &transcript, &policy),
+            run(&room, &next, &transcript, &policy),
             HiveStep::Speak { .. },
         ),
         "a `!commit` trace that predates the commit boundary must not converge the room",
