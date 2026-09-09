@@ -75,7 +75,10 @@ fn a_blind_turn_hides_peers_but_keeps_the_task_and_its_own_work() {
         visibility: Visibility::Blind,
         reason: BidReason::Salience,
         watermark: state().watermark,
-        round_start: state().watermark,
+        // The round was folded at the newest row, which is what `step` always
+        // sets: nothing is concurrent with this turn, so the round boundary
+        // withholds nothing and only `Visibility` is under test here.
+        round_start: Sequence(4),
     };
 
     let blind = project_for(&turn, &transcript);
@@ -108,7 +111,7 @@ fn a_blind_turn_preserves_pre_episode_agent_context() {
         visibility: Visibility::Blind,
         reason: BidReason::Salience,
         watermark: Sequence(1),
-        round_start: Sequence(1),
+        round_start: Sequence(3),
     };
 
     let blind = project_for(&turn, &transcript);
