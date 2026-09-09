@@ -362,7 +362,7 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
             DigestOutcome::Folded(next) => {
                 println!(
                     "   room account: generation {} now covers {} messages through [{}] \
-                     ({} chars)",
+                     ({} chars, folded at {} unfolded chars)",
                     next.generation,
                     next.covered,
                     next.through.0,
