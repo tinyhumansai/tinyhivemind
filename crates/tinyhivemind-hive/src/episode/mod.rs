@@ -12,7 +12,9 @@ mod test;
 
 mod types;
 
-pub use types::{EpisodePolicy, EpisodeState, HiveStep, HiveTurn, Phase, Visibility};
+pub use types::{
+    DEFAULT_ROUND_WIDTH, EpisodePolicy, EpisodeState, HiveStep, HiveTurn, Phase, Visibility,
+};
 
 use crate::{
     attention::{AgentThreshold, BidContext, bids, floor_round},

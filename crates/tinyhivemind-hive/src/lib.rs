@@ -146,7 +146,8 @@ pub use attention::{
 };
 pub use directory::{Directory, DirectoryEntry, DirectoryPolicy, WEIGHT_CEILING, directory};
 pub use episode::{
-    EpisodePolicy, EpisodeState, HiveStep, HiveTurn, Phase, Visibility, project_for, step,
+    DEFAULT_ROUND_WIDTH, EpisodePolicy, EpisodeState, HiveStep, HiveTurn, Phase, Visibility,
+    project_for, step,
 };
 pub use error::{Error, Result};
 pub use exchange::{ExchangePolicy, ExchangeRound, ExchangeState, NoExchangeReason, exchange};
