@@ -26,7 +26,7 @@
 //! | `queue.rs` | [`queue::DeskQueue`], the host's `MentionTurnQueue` |
 //! | `aside.rs` | this desk's aside policy and its host-side bookkeeping |
 //! | `prompt.rs` | [`prompt::compose_prompt`], turning a turn into text |
-//! | `mcp.rs` | the room as a tool: `desk_post`, `desk_dm`, `desk_read` |
+//! | `mcp.rs` | the MCP transport under the room's tools, and the outbox |
 //! | `digest.rs` | the host side of the `Digester` port: the room's account |
 //! | `notebook.rs` | the notebook a seat carries between turns |
 //! | `agent.rs` | one `opencode run` per turn, and its output |
