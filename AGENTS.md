@@ -28,9 +28,12 @@ Three rules decide what belongs here:
    application. A snapshot or a borrowed view crosses the boundary, never a
    callback into the host — a callback seam is how the layering violation this
    crate exists to fix grew in the first place.
-3. **One message, one turn.** `@everyone` is a list, not a broadcast. A mention
-   that could start N turns without an approval in sight is the failure mode the
-   whole design avoids.
+3. **One message, one round, of bounded width.** A step may authorize several
+   turns to run concurrently — seats are async sessions and the algebra says so
+   — but never more than `round_width`, and never without an approval in sight.
+   The bound is the invariant; the serialization never was. See
+   [ADR 0014](docs/adr/0014-a-round-authorizes-concurrent-turns.md), which
+   supersedes ADR 0002 on the terms ADR 0002 itself set.
 
 `crates/tinyhivemind-core` additionally may not depend on an async runtime, a
 transport, an HTTP client, a web framework, a SQL database client, a git
