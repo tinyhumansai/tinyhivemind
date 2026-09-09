@@ -338,10 +338,16 @@ pub(crate) fn drive_swarm(
             board.add_library_time(started.elapsed());
 
             match decision.map_err(|error| error.to_string())? {
-                HiveStep::Speak { turn } => {
-                    let turn = *turn;
-                    board.take_turn(members, desk, &turn)?;
-                    states[desk] = turn.next_state;
+                HiveStep::Speak { turns, next_state } => {
+                    // A desk takes its whole round before the scheduler moves
+                    // on, so one desk's round interleaves with another desk's
+                    // round rather than with its turns. Every member in the
+                    // round composes against the same journal; `project_for`
+                    // withholds the rows the round is writing.
+                    for turn in &turns {
+                        board.take_turn(members, desk, turn)?;
+                    }
+                    states[desk] = *next_state;
                 }
                 HiveStep::Converged { topic, .. } => {
                     finished[desk] = Some(member::outcome(
