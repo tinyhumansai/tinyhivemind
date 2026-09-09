@@ -62,11 +62,10 @@ The shape of it is a loop, and your application holds both ends:
       Converged · Deadlocked · Exhausted · Idle ◀────┘
 ```
 
-`Speak { turns }` above is shorthand for `Speak { turns, next_state }` — the
-diagram omits `next_state` to keep the loop narrow, not because it stopped
-being part of what a round returns. Nothing in the box on the right opens a
-file, a socket or a database. It reads what you hand it and returns what
-should happen next.
+`Speak { turns }` above is shorthand for `Speak { turns, next_state }`, kept
+off the diagram to stay narrow, not because it stopped mattering. Nothing in
+the box on the right opens a file, a socket or a database — it reads what you
+hand it and returns what should happen next.
 
 ## The mechanics
 
