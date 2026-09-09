@@ -8,7 +8,30 @@
 #![allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)]
 
 use super::*;
-use std::path::PathBuf;
+
+/// A server with an outbox and a transcript and no desk to price against.
+fn serving(outbox: &Path, transcript: &Path) -> Serving {
+    Serving {
+        outbox: outbox.to_path_buf(),
+        transcript: transcript.to_path_buf(),
+        desk: None,
+        turn: None,
+    }
+}
+
+/// A server that can price a `desk_dm` against this desk, for `seat`.
+fn priced(dir: &Path, seat: &str) -> Serving {
+    let desk = dir.join("desk.txt");
+    fs::write(&desk, DESK).expect("writes the desk file");
+    let turn = dir.join("turn");
+    open_turn(&turn, seat);
+    Serving {
+        outbox: dir.join("said.jsonl"),
+        transcript: dir.join("transcript.jsonl"),
+        desk: Some(desk),
+        turn: Some(turn),
+    }
+}
 
 fn scratch(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("tinyhivemind-desk-{name}-{}", std::process::id()));
@@ -27,8 +50,7 @@ fn drains_a_post_and_a_dm_in_the_order_they_were_said() {
     clear_outbox(&outbox);
     call(
         &request("post", serde_json::json!({ "message": "B holds at 10^18" })),
-        &outbox,
-        Path::new("/nope"),
+        &serving(&outbox, Path::new("/nope")),
     )
     .expect("a post is served");
     call(
@@ -36,8 +58,7 @@ fn drains_a_post_and_a_dm_in_the_order_they_were_said() {
             "dm",
             serde_json::json!({ "to": ["@checker"], "message": "recheck the depth" }),
         ),
-        &outbox,
-        Path::new("/nope"),
+        &serving(&outbox, Path::new("/nope")),
     )
     .expect("a dm is served");
     assert_eq!(
@@ -60,8 +81,7 @@ fn a_cleared_outbox_holds_nothing_from_the_turn_before() {
     let outbox = scratch("cleared").join("said.jsonl");
     call(
         &request("post", serde_json::json!({ "message": "last turn" })),
-        &outbox,
-        Path::new("/nope"),
+        &serving(&outbox, Path::new("/nope")),
     )
     .expect("a post is served");
     clear_outbox(&outbox);
@@ -96,8 +116,10 @@ fn drains_nothing_from_an_outbox_that_was_never_written() {
 fn merges_the_server_into_an_existing_agent_configuration() {
     let config = config_block(
         Path::new("/bin/desk"),
-        Path::new("/ws/.desk/outbox.jsonl"),
-        Path::new("/ws/transcript.jsonl"),
+        &serving(
+            Path::new("/ws/.desk/outbox.jsonl"),
+            Path::new("/ws/transcript.jsonl"),
+        ),
         Some(r#"{"model":"ladder/reasoning"}"#),
     );
     let value: serde_json::Value = serde_json::from_str(&config).expect("valid json");
@@ -122,8 +144,7 @@ fn builds_a_configuration_from_nothing_or_from_nonsense() {
     for existing in [None, Some("not json at all"), Some("[1,2,3]")] {
         let config = config_block(
             Path::new("/bin/desk"),
-            Path::new("/out"),
-            Path::new("/t"),
+            &serving(Path::new("/out"), Path::new("/t")),
             existing,
         );
         let value: serde_json::Value = serde_json::from_str(&config).expect("valid json");
@@ -194,8 +215,7 @@ fn an_accepted_call_reaches_the_outbox_and_says_so() {
     assert_eq!(
         call(
             &request("post", serde_json::json!({ "message": "  ready  " })),
-            &outbox,
-            Path::new("/nope")
+            &serving(&outbox, Path::new("/nope"))
         ),
         Ok("posted to the desk".into()),
     );
@@ -205,16 +225,14 @@ fn an_accepted_call_reaches_the_outbox_and_says_so() {
                 "dm",
                 serde_json::json!({ "to": ["@checker", "theory"], "message": "recheck" })
             ),
-            &outbox,
-            Path::new("/nope")
+            &serving(&outbox, Path::new("/nope"))
         ),
         Ok("sent to @checker, @theory".into()),
     );
     assert_eq!(
         call(
             &request("close", serde_json::json!({ "message": "delivered" })),
-            &outbox,
-            Path::new("/nope")
+            &serving(&outbox, Path::new("/nope"))
         ),
         Ok("posted to the desk; the desk will close after this turn".into()),
     );
@@ -242,7 +260,7 @@ fn a_refused_call_reaches_the_seat_and_not_the_room() {
     ];
     for (bad, reason) in cases {
         assert_eq!(
-            call(&bad, &outbox, Path::new("/nope")),
+            call(&bad, &serving(&outbox, Path::new("/nope"))),
             Err(reason.to_string()),
             "the seat is handed the library's sentence, while it can still act on it",
         );
@@ -268,8 +286,7 @@ fn reading_the_desk_shows_only_what_every_member_may_read() {
     .expect("writes");
     let shown = call(
         &request("read", serde_json::json!({ "limit": 50 })),
-        Path::new("/nope"),
-        &transcript,
+        &serving(Path::new("/nope"), &transcript),
     )
     .expect("reads");
     assert!(shown.contains("[1] steven: the brief"), "{shown}");
@@ -286,8 +303,7 @@ fn reading_a_desk_that_has_not_spoken_says_so() {
     assert_eq!(
         call(
             &request("read", serde_json::json!({})),
-            Path::new("/nope"),
-            Path::new("/nonexistent.jsonl")
+            &serving(Path::new("/nope"), Path::new("/nonexistent.jsonl"))
         ),
         Ok("(the desk has no messages yet)".into()),
     );
