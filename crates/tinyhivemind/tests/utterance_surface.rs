@@ -152,9 +152,12 @@ fn a_desk_that_works_a_problem_and_closes_it_commits_exactly_these_rows() {
             "ran factors.py: Psi(3)=20302. @checker please verify",
             &[],
         ),
-        ("checker", "dm", "your depth measures 1.23n, not log n", &[
-            "solver",
-        ]),
+        (
+            "checker",
+            "dm",
+            "your depth measures 1.23n, not log n",
+            &["solver"],
+        ),
         (
             "solver",
             "post",

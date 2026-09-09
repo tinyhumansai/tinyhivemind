@@ -1,7 +1,8 @@
 # The utterance surface: speaking is a request, not a string
 
-**Status:** Draft — proposes promoting a mechanism already implemented in the
-`desk` example into `crates/tinyhivemind`
+**Status:** Implemented — `tinyhivemind::speech`, with the `desk` example
+reduced to transport. The live run that exercises the in-turn refusal is
+pending
 **Owner:** tinyhivemind maintainers
 **Reading:** [`thoughts-and-channels.md`](thoughts-and-channels.md),
 [`private-asides.md`](private-asides.md)
@@ -148,20 +149,28 @@ does so. It does not require any other host to.
 
 1. `crates/tinyhivemind/examples/desk/mcp.rs` holds transport only — the
    JSON-RPC loop, the outbox file, and the CLI config block — and names no tool
-   description, no schema and no validation rule of its own.
+   description, no schema and no validation rule of its own. **Met.**
 2. Every tool description a seat reads comes from `speech::tool_specs`, asserted
-   by a test that the example's served list equals it.
+   by a test that the example's served list equals it. **Met** —
+   `serves_the_librarys_tool_surface_and_never_a_second_statement_of_it`.
 3. A `desk_dm` naming a seat the aside policy declines produces a desk-visible
    row **and** a refusal the example prints and returns to the seat, exercised
-   by a test at the library level and one in the example.
-4. No code path converts a recipient id to text and re-parses it.
+   by a test at the library level and one in the example. **Met** — the MCP
+   server is handed `--desk` and `--turn` so it can price the call while the
+   seat can still act on the answer; without them it serves as before and only
+   the seat is uninformed.
+4. No code path converts a recipient id to text and re-parses it. **Met** —
+   `speech::targets` builds `MentionTarget`s from the `to` field directly.
 5. `extract_post` exists once, accepts both fences, and its wrong-but-plausible
-   spelling is a named regression test.
+   spelling is a named regression test. **Met** — `speech::fence`,
+   `accepts_the_symmetric_closing_fence`.
 6. Behavior on the run-28 path is unchanged: an offline desk run produces the
-   same rows, audiences and dispatch decisions as before the refactor.
+   same rows, audiences and dispatch decisions as before the refactor. **Met**
+   — `crates/tinyhivemind/tests/utterance_surface.rs`.
 7. `cargo fmt --all -- --check`, `cargo clippy --all-targets --all-features --
    -D warnings`, `cargo build --all-targets --all-features`,
    `cargo test --all-features` and `.github/scripts/assert-pure.sh` pass.
+   **Met.**
 
 ## What this does not do
 
