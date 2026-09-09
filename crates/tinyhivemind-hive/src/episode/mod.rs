@@ -126,13 +126,51 @@ pub fn step(
         known.as_ref(),
     );
     let bids = bids(&context)?;
-
     let phase = if matches!(consensus, ConsensusState::Quorum { .. }) {
         Phase::Commit
     } else {
         state.phase
     };
+    Ok(authorized(
+        state,
+        policy,
+        &bids,
+        &members,
+        Round {
+            phase,
+            at,
+            visibility: visibility(policy, &live, &members),
+        },
+    ))
+}
 
+/// What the round being authorized already knows about itself, before its
+/// members are picked.
+///
+/// Three values [`step`] has computed and [`authorized`] needs, grouped so the
+/// hand-off is one argument rather than three positional ones of the same
+/// shape.
+struct Round {
+    /// Which class of turn the round is taking.
+    phase: Phase,
+    /// The sequence the round was folded at, and so its boundary.
+    at: tinyhivemind::Sequence,
+    /// How much of the transcript every turn in the round may see.
+    visibility: Visibility,
+}
+
+/// Pick the round's members and build the state the episode takes after it.
+///
+/// Split out of [`step`] at the seam between *deciding whether the episode
+/// continues* and *authorizing who speaks*: everything above is a termination
+/// check, everything here is a round.
+fn authorized(
+    state: &EpisodeState,
+    policy: &EpisodePolicy,
+    bids: &[crate::attention::Bid],
+    members: &[&str],
+    round: Round,
+) -> HiveStep {
     // The room records one decision, so a commit round is one turn wide
     // however wide the policy allows. Widening it would let two members record
     // different decisions for the same episode.
@@ -142,49 +180,47 @@ pub fn step(
     // their threshold, and how much of `turn_budget` is left. The last is what
     // keeps the budget a bound on *turns* rather than on rounds.
     let remaining = policy.turn_budget.saturating_sub(state.spent);
-    let width = if phase == Phase::Commit {
+    let width = if round.phase == Phase::Commit {
         1
     } else {
         policy.round_width.min(remaining)
     };
-    let round = floor_round(&bids, width);
-    if round.is_empty() {
-        return Ok(HiveStep::Idle);
+    let speaking = floor_round(bids, width);
+    if speaking.is_empty() {
+        return HiveStep::Idle;
     }
 
-    let commit_boundary = next_commit_boundary(state, phase, at);
-    let visibility = visibility(policy, &live, &members);
-    let speakers: Vec<&str> = round.iter().map(|bid| bid.agent_id.as_str()).collect();
-    // `round.len() <= remaining` by the clamp above, so this cannot exceed
+    let speakers: Vec<&str> = speaking.iter().map(|bid| bid.agent_id.as_str()).collect();
+    // `speaking.len() <= remaining` by the clamp above, so this cannot exceed
     // `turn_budget` and cannot saturate; the saturating form keeps the
     // arithmetic total without an unreachable error branch.
     let spent = state
         .spent
-        .saturating_add(u32::try_from(round.len()).unwrap_or(u32::MAX));
+        .saturating_add(u32::try_from(speaking.len()).unwrap_or(u32::MAX));
 
-    let turns = round
+    let turns = speaking
         .iter()
         .map(|bid| HiveTurn {
             agent_id: bid.agent_id.clone(),
-            phase,
-            visibility,
+            phase: round.phase,
+            visibility: round.visibility,
             reason: bid.reason,
             watermark: state.watermark,
-            round_start: at,
+            round_start: round.at,
         })
         .collect();
 
-    Ok(HiveStep::Speak {
+    HiveStep::Speak {
         turns,
         next_state: Box::new(EpisodeState {
             conversation: state.conversation.clone(),
             spent,
-            phase,
-            thresholds: charged(&state.thresholds, &members, &speakers),
+            phase: round.phase,
+            thresholds: charged(&state.thresholds, members, &speakers),
             watermark: state.watermark,
-            commit_boundary,
+            commit_boundary: next_commit_boundary(state, round.phase, round.at),
         }),
-    })
+    }
 }
 
 /// Resolve the episode's desk to its current, active member ids.
