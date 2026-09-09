@@ -517,6 +517,12 @@ pub(crate) fn drive_with(
     let mut step_time = Duration::ZERO;
     let mut step_calls = 0_u32;
     let mut turns = 0_u32;
+    // Rounds, not turns, are the episode's *depth*: every turn in one round is
+    // authorized against the same transcript and none of them can read another,
+    // so a host running async seats pays one round of wall clock for all of
+    // them. `turns` stays beside it because it is what the budget bounds and
+    // what every recorded number before ADR 0014 was priced in.
+    let mut rounds = 0_u32;
     // Calls made in exchange rounds, and the round count carried across them.
     // The count is the host's because a round nobody wrote in leaves no row to
     // fold it back out of, and that round still cost its calls.
@@ -538,33 +544,45 @@ pub(crate) fn drive_with(
         step_calls = step_calls.saturating_add(1);
 
         let (ending, decided) = match decision.map_err(|error| error.to_string())? {
-            HiveStep::Speak { turn } => {
-                let turn = *turn;
-                let visible = project_for(&turn, &host.journal);
-                let Some(agent) = agents.iter_mut().find(|agent| agent.id() == turn.agent_id)
-                else {
-                    return Err(format!("no agent named {}", turn.agent_id));
-                };
-                let content = agent.speak(&turn, &visible)?;
-                // An alongside aside is asked for over the same projection the
-                // floor move was composed from, before either row is appended,
-                // so the private line sees exactly what the public one saw.
-                let private = if aside_mode == AsideMode::Alongside {
-                    agent.aside(&turn, &visible)
-                } else {
-                    None
-                };
-                if keep_trace {
-                    trace.push(trace_line(&turn, &content, visible.len()));
+            HiveStep::Speak { turns: round, next_state } => {
+                // One round: every member in it composes against the journal
+                // as the library folded it, and none of them can read another's
+                // row from this same round -- `project_for` withholds anything
+                // above `round_start`, so appending as we go is safe and the
+                // concurrency is real rather than simulated.
+                let mut last = None;
+                for turn in &round {
+                    let visible = project_for(turn, &host.journal);
+                    let Some(agent) = agents.iter_mut().find(|agent| agent.id() == turn.agent_id)
+                    else {
+                        return Err(format!("no agent named {}", turn.agent_id));
+                    };
+                    let content = agent.speak(turn, &visible)?;
+                    // An alongside aside is asked for over the same projection
+                    // the floor move was composed from, before either row is
+                    // appended, so the private line sees exactly what the
+                    // public one saw.
+                    let private = if aside_mode == AsideMode::Alongside {
+                        agent.aside(turn, &visible)
+                    } else {
+                        None
+                    };
+                    if keep_trace {
+                        trace.push(trace_line(turn, &content, visible.len()));
+                    }
+                    tally.record(turn, &content, agent.cost_unit(), turns);
+                    let members = member_ids.len();
+                    append_turn(&mut host, turn, content, private, aside_mode, members);
+                    // Kept for the exchange round below, which projects the
+                    // journal for each named member at this turn's visibility.
+                    last = Some(turn.clone());
+                    turns = turns.saturating_add(1);
                 }
-                tally.record(&turn, &content, agent.cost_unit(), turns);
-                let members = member_ids.len();
-                append_turn(&mut host, &turn, content, private, aside_mode, members);
-                // Kept for the exchange round below, which projects the
-                // journal for each named member at this turn's visibility.
-                let last = turn.clone();
-                state = turn.next_state;
-                turns = turns.saturating_add(1);
+                state = *next_state;
+                rounds = rounds.saturating_add(1);
+                let Some(last) = last else {
+                    return Err("a speaking round is never empty".to_owned());
+                };
 
                 // An exchange round, between turns and never during one. The
                 // library says whether one is open and who it names; the
