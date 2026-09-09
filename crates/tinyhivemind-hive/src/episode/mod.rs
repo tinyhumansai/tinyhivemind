@@ -224,22 +224,27 @@ fn authorized(
     // the single highest bid, heard or not, with the floor's rotation left
     // entirely to `charged`'s threshold dynamics -- or a round of one would
     // stop reproducing the sequential episode bit for bit. The identity
-    // filter is what a *round* newly needs, not what a *turn* ever did; a
-    // commit turn is likewise exempted, because it announces a decision the
-    // room already reached and is owed to whoever bids for it, not to
-    // whichever member happens to be least heard.
+    // filter is what a *round* newly needs, not what a *turn* ever did.
+    //
+    // A commit turn is exempted the same way width already exempts it above:
+    // it announces a decision the room has already reached and is owed to
+    // whoever bids for it, not to whichever member happens to be least
+    // heard, so restricting its candidates to the unheard set would only
+    // misdirect the announcement.
     let eligible: Vec<crate::attention::Bid>;
-    let candidates: &[crate::attention::Bid] =
-        if round.visibility == Visibility::Blind && policy.round_width > 1 && width > 1 {
-            eligible = bids
-                .iter()
-                .filter(|bid| round.unheard.contains(&bid.agent_id.as_str()))
-                .cloned()
-                .collect();
-            &eligible
-        } else {
-            bids
-        };
+    let candidates: &[crate::attention::Bid] = if round.visibility == Visibility::Blind
+        && policy.round_width > 1
+        && round.phase != Phase::Commit
+    {
+        eligible = bids
+            .iter()
+            .filter(|bid| round.unheard.contains(&bid.agent_id.as_str()))
+            .cloned()
+            .collect();
+        &eligible
+    } else {
+        bids
+    };
     let speaking = floor_round(candidates, width);
     if speaking.is_empty() {
         return HiveStep::Idle;
