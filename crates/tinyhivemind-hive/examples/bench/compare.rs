@@ -75,6 +75,7 @@ pub(crate) fn compare(options: &Options, rooms: &[Room]) -> Result<(), String> {
         ("hive+quiet", &totals.hive_exchange_quiet),
         ("hive+fact°", &totals.hive_aside_offfloor),
         ("hive+pooled", &totals.hive_pooled),
+        ("hive+wide", &totals.hive_wide),
     ];
 
     if options.json {
@@ -190,6 +191,7 @@ struct Totals {
     /// hands before the episode opens, at no turn cost. Nothing a protocol
     /// could do beats it.
     hive_pooled: Aggregate,
+    hive_wide: Aggregate,
     /// Both delegation mechanisms at once.
     hive_both: Aggregate,
     /// The tuned policy in a room that puts every seat on the expensive
@@ -239,6 +241,7 @@ fn check_arm_diffs(options: &Options, totals: &Totals) {
         ("hive+quiet", &totals.hive_exchange_quiet),
         ("hive+fact°", &totals.hive_aside_offfloor),
         ("hive+pooled", &totals.hive_pooled),
+        ("hive+wide", &totals.hive_wide),
     ]
     .iter()
     .enumerate()
@@ -374,6 +377,15 @@ fn run_check_arms(
     totals
         .hive_pooled
         .add(&run_episode(&ceiling, tuned, TASK, false)?);
+    // The concurrency arm: the tuned policy, run in rounds rather than one
+    // turn at a time. Same rooms, same budget, same everything else -- what
+    // moves is `rounds/ep`, and whether `correct %` pays for it.
+    totals.hive_wide.add(&run_episode(
+        room,
+        &widened_policy(tuned, options.round_width),
+        TASK,
+        false,
+    )?);
     Ok(())
 }
 
