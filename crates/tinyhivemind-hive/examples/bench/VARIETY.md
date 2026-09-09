@@ -32,7 +32,7 @@ every width, which measures the constant and not the room.
 | --- | --- |
 | `solo` | one agent handed every member's readings on every facet, deciding all of them alone in one window, compacting by **eviction** |
 | `solo+fold` | the same agent compacting by a **superseding account** — the arm that won the horizon |
-| `hive+fold` | facet `f` decided by member `f % n`, which reads its peers' readings **of its own facet only**, folds what overflows, and carries only the facets it owns. Depth is `⌈F / n⌉` rounds, not `F` |
+| `hive+fold` | facet `f` decided by member `f % n`, which reads its peers' readings **of its own facet only**, folds what overflows, and carries only the facets it owns. Depth is `⌈F / n⌉` rounds, not `F` -- priced from the library's own seat assignment (`tinyhivemind_hive::division`), the rounds a host running the seats concurrently would pay, not a wall-clock observation: the harness itself still evaluates each facet in a sequential loop |
 | `hive+alone` | the matched control: that same seat with the pooling removed and nothing else changed |
 | `hive+` | the room deliberating every facet on the floor — every member carries every facet's brief |
 | `hive+pooled` | the ceiling |
