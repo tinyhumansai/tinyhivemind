@@ -1,4 +1,9 @@
-//! Unit tests for the room-as-a-tool surface.
+//! Unit tests for the MCP transport under the room's tools.
+//!
+//! What a tool *means* is tested in `tinyhivemind::speech`. These cover the
+//! wiring: that the served descriptors are the library's specs and not a second
+//! statement of them, that an accepted call reaches the outbox and a refused one
+//! does not, and that a drain survives what another process wrote.
 
 #![allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)]
 
@@ -11,20 +16,30 @@ fn scratch(name: &str) -> PathBuf {
     dir
 }
 
+/// Make a `tools/call` request the way an agent CLI does.
+fn request(name: &str, arguments: serde_json::Value) -> serde_json::Value {
+    serde_json::json!({ "params": { "name": name, "arguments": arguments } })
+}
+
 #[test]
 fn drains_a_post_and_a_dm_in_the_order_they_were_said() {
     let outbox = scratch("outbox").join("said.jsonl");
     clear_outbox(&outbox);
-    append(
+    call(
+        &request("post", serde_json::json!({ "message": "B holds at 10^18" })),
         &outbox,
-        &serde_json::json!({"kind":"post","message":"B holds at 10^18"}),
+        Path::new("/nope"),
     )
-    .expect("appends");
-    append(
+    .expect("a post is served");
+    call(
+        &request(
+            "dm",
+            serde_json::json!({ "to": ["@checker"], "message": "recheck the depth" }),
+        ),
         &outbox,
-        &serde_json::json!({"kind":"dm","to":["@checker"],"message":"recheck the depth"}),
+        Path::new("/nope"),
     )
-    .expect("appends");
+    .expect("a dm is served");
     assert_eq!(
         drain_outbox(&outbox),
         vec![
@@ -36,19 +51,19 @@ fn drains_a_post_and_a_dm_in_the_order_they_were_said() {
                 message: "recheck the depth".into()
             },
         ],
-        "the @ is stripped, and order is kept"
+        "the @ is stripped by the library, and the order is the outbox's",
     );
-    assert_eq!(drain_outbox(&outbox)[0].message(), "B holds at 10^18");
 }
 
 #[test]
 fn a_cleared_outbox_holds_nothing_from_the_turn_before() {
     let outbox = scratch("cleared").join("said.jsonl");
-    append(
+    call(
+        &request("post", serde_json::json!({ "message": "last turn" })),
         &outbox,
-        &serde_json::json!({"kind":"post","message":"last turn"}),
+        Path::new("/nope"),
     )
-    .expect("appends");
+    .expect("a post is served");
     clear_outbox(&outbox);
     assert!(drain_outbox(&outbox).is_empty());
 }
@@ -61,7 +76,6 @@ fn skips_a_garbled_line_rather_than_losing_the_turn() {
         &outbox,
         "not json\n{\"kind\":\"post\"}\n{\"kind\":\"post\",\"message\":\"   \"}\n\
          {\"kind\":\"shout\",\"message\":\"hey\"}\n\
-         {\"kind\":\"dm\",\"to\":[],\"message\":\"nobody\"}\n\
          {\"kind\":\"post\",\"message\":\"the one real line\"}\n",
     )
     .expect("writes");
@@ -69,7 +83,7 @@ fn skips_a_garbled_line_rather_than_losing_the_turn() {
         drain_outbox(&outbox),
         vec![Utterance::Post {
             message: "the one real line".into()
-        }]
+        }],
     );
 }
 
@@ -118,84 +132,124 @@ fn builds_a_configuration_from_nothing_or_from_nonsense() {
 }
 
 #[test]
-fn lists_exactly_the_four_tools_a_seat_may_call() {
+fn serves_the_librarys_tool_surface_and_never_a_second_statement_of_it() {
     let listed = tools();
-    let names: Vec<&str> = listed
-        .as_array()
-        .expect("an array")
-        .iter()
-        .filter_map(|tool| tool["name"].as_str())
-        .collect();
-    assert_eq!(names, vec!["post", "dm", "close", "read"]);
-    for tool in listed.as_array().expect("an array") {
-        assert!(
-            tool["inputSchema"]["type"] == "object",
-            "every tool needs a schema: {tool}"
+    let served = listed.as_array().expect("an array");
+    assert_eq!(
+        served.len(),
+        tool_specs().len(),
+        "every spec is served, and nothing else is",
+    );
+    for (descriptor, spec) in served.iter().zip(tool_specs()) {
+        assert_eq!(descriptor["name"], spec.name);
+        assert_eq!(
+            descriptor["description"], spec.description,
+            "the description a seat reads is the library's, verbatim",
         );
+        assert_eq!(descriptor["inputSchema"]["type"], "object");
+        for parameter in spec.parameters {
+            let property = &descriptor["inputSchema"]["properties"][parameter.name];
+            assert!(
+                !property.is_null(),
+                "{}.{} is declared and not served",
+                spec.name,
+                parameter.name,
+            );
+            let expected = match parameter.kind {
+                ParameterKind::Text => "string",
+                ParameterKind::TextList => "array",
+                ParameterKind::Count { .. } => "integer",
+            };
+            assert_eq!(property["type"], expected, "{}", parameter.name);
+        }
     }
 }
 
 #[test]
-fn a_post_call_records_one_utterance_and_says_so() {
+fn a_required_argument_is_served_as_required() {
+    let listed = tools();
+    let dm = listed
+        .as_array()
+        .expect("an array")
+        .iter()
+        .find(|tool| tool["name"] == "dm")
+        .expect("dm is served");
+    assert_eq!(
+        dm["inputSchema"]["required"],
+        serde_json::json!(["to", "message"]),
+    );
+    let read = listed
+        .as_array()
+        .expect("an array")
+        .iter()
+        .find(|tool| tool["name"] == "read")
+        .expect("read is served");
+    assert_eq!(read["inputSchema"]["required"], serde_json::json!([]));
+}
+
+#[test]
+fn an_accepted_call_reaches_the_outbox_and_says_so() {
     let outbox = scratch("call-post").join("said.jsonl");
     clear_outbox(&outbox);
-    let request = serde_json::json!({
-        "params": { "name": "post", "arguments": { "message": "  ready  " } }
-    });
     assert_eq!(
-        call(&request, &outbox, Path::new("/nope")),
-        Ok("posted to the desk".into())
+        call(
+            &request("post", serde_json::json!({ "message": "  ready  " })),
+            &outbox,
+            Path::new("/nope")
+        ),
+        Ok("posted to the desk".into()),
     );
     assert_eq!(
-        drain_outbox(&outbox),
-        vec![Utterance::Post {
-            message: "ready".into()
-        }]
+        call(
+            &request(
+                "dm",
+                serde_json::json!({ "to": ["@checker", "theory"], "message": "recheck" })
+            ),
+            &outbox,
+            Path::new("/nope")
+        ),
+        Ok("sent to @checker, @theory".into()),
     );
+    assert_eq!(
+        call(
+            &request("close", serde_json::json!({ "message": "delivered" })),
+            &outbox,
+            Path::new("/nope")
+        ),
+        Ok("posted to the desk; the desk will close after this turn".into()),
+    );
+    assert_eq!(drain_outbox(&outbox).len(), 3);
 }
 
 #[test]
-fn refuses_a_call_that_names_nobody_or_says_nothing() {
+fn a_refused_call_reaches_the_seat_and_not_the_room() {
     let outbox = scratch("call-bad").join("said.jsonl");
     clear_outbox(&outbox);
-    let empty = serde_json::json!({
-        "params": { "name": "post", "arguments": { "message": "  " } }
-    });
-    assert_eq!(
-        call(&empty, &outbox, Path::new("/nope")),
-        Err("`message` must be a non-empty string".into())
-    );
-    let nobody = serde_json::json!({
-        "params": { "name": "dm", "arguments": { "to": [], "message": "hi" } }
-    });
-    assert_eq!(
-        call(&nobody, &outbox, Path::new("/nope")),
-        Err("`to` must name at least one seat".into())
-    );
-    let unknown = serde_json::json!({ "params": { "name": "shout", "arguments": {} } });
-    assert_eq!(
-        call(&unknown, &outbox, Path::new("/nope")),
-        Err("unknown tool shout".into())
-    );
+    let cases = [
+        (
+            request("post", serde_json::json!({ "message": "  " })),
+            "`message` must be a non-empty string",
+        ),
+        (
+            request("dm", serde_json::json!({ "to": [], "message": "hi" })),
+            "`to` must name at least one seat",
+        ),
+        (request("shout", serde_json::json!({})), "unknown tool shout"),
+        (
+            request("close", serde_json::json!({ "message": "   " })),
+            "`message` must be a non-empty string",
+        ),
+    ];
+    for (bad, reason) in cases {
+        assert_eq!(
+            call(&bad, &outbox, Path::new("/nope")),
+            Err(reason.to_string()),
+            "the seat is handed the library's sentence, while it can still act on it",
+        );
+    }
     assert!(
         drain_outbox(&outbox).is_empty(),
-        "a refused call is not a message"
-    );
-}
-
-#[test]
-fn a_dm_call_names_its_recipients_back_to_the_seat() {
-    let outbox = scratch("call-dm").join("said.jsonl");
-    clear_outbox(&outbox);
-    let request = serde_json::json!({
-        "params": {
-            "name": "dm",
-            "arguments": { "to": ["@checker", "theory"], "message": "recheck" }
-        }
-    });
-    assert_eq!(
-        call(&request, &outbox, Path::new("/nope")),
-        Ok("sent to @checker, @theory".into())
+        "a refused call is not a message",
     );
 }
 
@@ -212,10 +266,12 @@ fn reading_the_desk_shows_only_what_every_member_may_read() {
           \"content\":\"B holds\",\"audience\":{\"kind\":\"desk\"}}\n",
     )
     .expect("writes");
-    let request = serde_json::json!({
-        "params": { "name": "read", "arguments": { "limit": 50 } }
-    });
-    let shown = call(&request, Path::new("/nope"), &transcript).expect("reads");
+    let shown = call(
+        &request("read", serde_json::json!({ "limit": 50 })),
+        Path::new("/nope"),
+        &transcript,
+    )
+    .expect("reads");
     assert!(shown.contains("[1] steven: the brief"), "{shown}");
     assert!(shown.contains("[3] solver: B holds"), "{shown}");
     assert!(!shown.contains("a private word"), "{shown}");
@@ -227,69 +283,12 @@ fn reading_the_desk_shows_only_what_every_member_may_read() {
 
 #[test]
 fn reading_a_desk_that_has_not_spoken_says_so() {
-    let request = serde_json::json!({ "params": { "name": "read", "arguments": {} } });
     assert_eq!(
         call(
-            &request,
+            &request("read", serde_json::json!({})),
             Path::new("/nope"),
             Path::new("/nonexistent.jsonl")
         ),
-        Ok("(the desk has no messages yet)".into())
+        Ok("(the desk has no messages yet)".into()),
     );
-}
-
-#[test]
-fn a_close_carries_its_message_like_any_other_utterance() {
-    let outbox = scratch("close").join("said.jsonl");
-    clear_outbox(&outbox);
-    append(
-        &outbox,
-        &serde_json::json!({"kind":"close","message":"Psi(10^18) = 62418970; checker signed off"}),
-    )
-    .expect("appends");
-    let said = drain_outbox(&outbox);
-    assert_eq!(
-        said,
-        vec![Utterance::Close {
-            message: "Psi(10^18) = 62418970; checker signed off".into()
-        }],
-        "a close is drained like a post"
-    );
-    assert_eq!(
-        said[0].message(),
-        "Psi(10^18) = 62418970; checker signed off",
-        "and the room still gets the text"
-    );
-}
-
-#[test]
-fn the_close_tool_writes_a_close_row() {
-    let outbox = scratch("close-call").join("said.jsonl");
-    clear_outbox(&outbox);
-    let transcript = scratch("close-call").join("absent.jsonl");
-    let request = serde_json::json!({
-        "params": { "name": "close", "arguments": { "message": "delivered" } }
-    });
-    call(&request, &outbox, &transcript).expect("close is served");
-    assert_eq!(
-        drain_outbox(&outbox),
-        vec![Utterance::Close {
-            message: "delivered".into()
-        }]
-    );
-}
-
-#[test]
-fn a_close_with_no_message_is_refused_while_the_seat_can_still_fix_it() {
-    let outbox = scratch("close-empty").join("said.jsonl");
-    clear_outbox(&outbox);
-    let transcript = scratch("close-empty").join("absent.jsonl");
-    let request = serde_json::json!({
-        "params": { "name": "close", "arguments": { "message": "   " } }
-    });
-    assert!(
-        call(&request, &outbox, &transcript).is_err(),
-        "an empty close is refused, not silently closed"
-    );
-    assert!(drain_outbox(&outbox).is_empty());
 }
