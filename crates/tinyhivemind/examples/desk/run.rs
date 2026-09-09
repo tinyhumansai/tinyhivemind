@@ -350,7 +350,7 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
         let rows = transcript.rows();
         let head = ChannelHead {
             sequence: Sequence(transcript.len() as u64),
-            unfolded_chars: unfolded_chars(&rows, account.as_ref()),
+            unfolded_chars: unfolded_chars(&rows, account.as_ref(), options.window),
         };
         let board = fold_pins(&rows, &Viewer::Operator, PIN_LIMIT);
         match refold(
