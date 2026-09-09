@@ -115,11 +115,21 @@ impl Channel {
 /// Returns whatever an episode returns when the host contract is violated.
 pub(crate) fn sweep(options: &Options) -> Result<(), String> {
     let wall = Instant::now();
-    let sizes: Vec<usize> = options
-        .sizes
-        .iter()
-        .map(|size| (*size).clamp(2, MAX_MEMBERS))
-        .collect();
+    // Clamped, then deduped, and in that order. Two requested sizes above the
+    // cap clamp to the same number, and a `sizes` list carrying it twice would
+    // run every arm twice and push two `Point`s per arm into the table, where
+    // `render`'s `find` silently returns the first — a column labelled with a
+    // size the harness never ran. Saying so beats swallowing it.
+    let mut sizes: Vec<usize> = Vec::new();
+    for requested in &options.sizes {
+        let size = (*requested).clamp(2, MAX_MEMBERS);
+        if size != *requested {
+            println!("note: room size {requested} clamped to {size}, the largest this harness builds");
+        }
+        if !sizes.contains(&size) {
+            sizes.push(size);
+        }
+    }
     let mut points: Vec<Point> = Vec::new();
 
     for size in &sizes {
