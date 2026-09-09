@@ -170,7 +170,26 @@ impl Usage {
 /// [`Participant`] once it is boxed. This handle is the way around that: the
 /// caller clones it out at seat-building time, before boxing, and reads it
 /// back after the episode finishes driving.
-pub(crate) type UsageHandle = std::rc::Rc<std::cell::RefCell<Usage>>;
+///
+/// `Arc<Mutex<_>>` rather than `Rc<RefCell<_>>`, because a live federation
+/// runs its desks at the same time: each desk authorizes exactly one speaker,
+/// so N desks in flight is N model calls in flight, and a seat that is not
+/// `Send` cannot be handed to a worker. The lock is uncontended in practice —
+/// one seat's usage is touched by one thread, right after that seat's own
+/// request returns.
+pub(crate) type UsageHandle = std::sync::Arc<std::sync::Mutex<Usage>>;
+
+/// Fold one request's tokens into a seat's usage.
+///
+/// A poisoned lock means a worker panicked mid-update, which is a bug rather
+/// than a benchmark outcome. The usage table is diagnostic, so the honest
+/// response is to keep the run going and let the totals be short rather than
+/// to take the whole federation down over a spent-token count.
+fn with_usage(handle: &UsageHandle, update: impl FnOnce(&mut Usage)) {
+    if let Ok(mut usage) = handle.lock() {
+        update(&mut usage);
+    }
+}
 
 /// A participant driven directly over HTTP rather than through a CLI.
 pub(crate) struct HttpAgent {
@@ -194,7 +213,7 @@ impl HttpAgent {
     /// A shared handle onto this seat's usage, to read back after it has been
     /// boxed as a `Box<dyn Participant>`.
     pub(crate) fn usage_handle(&self) -> UsageHandle {
-        std::rc::Rc::clone(&self.usage)
+        std::sync::Arc::clone(&self.usage)
     }
 
     /// What only this member knows, as a block for a prompt.
@@ -337,22 +356,22 @@ pub(crate) fn ask(
 ) -> Result<String, String> {
     let first = match attempt(config, model, prompt) {
         Ok(reply) => {
-            usage.borrow_mut().add(reply.input, reply.output);
+            with_usage(usage, |totals| totals.add(reply.input, reply.output));
             return Ok(reply.answer);
         }
         Err(failed) => failed,
     };
-    usage.borrow_mut().spent(first.spent.0, first.spent.1);
+    with_usage(usage, |totals| totals.spent(first.spent.0, first.spent.1));
     if !first.retryable {
         return Err(first.message);
     }
     match attempt(config, model, prompt) {
         Ok(reply) => {
-            usage.borrow_mut().add(reply.input, reply.output);
+            with_usage(usage, |totals| totals.add(reply.input, reply.output));
             Ok(reply.answer)
         }
         Err(second) => {
-            usage.borrow_mut().spent(second.spent.0, second.spent.1);
+            with_usage(usage, |totals| totals.spent(second.spent.0, second.spent.1));
             Err(format!(
                 "{} (first attempt: {})",
                 second.message, first.message

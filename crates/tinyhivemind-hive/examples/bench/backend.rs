@@ -157,7 +157,10 @@ pub(crate) fn print_usage(options: &Options, seats: &[SeatUsage]) {
     let mut total_tokens = 0_u64;
     let mut total_cost = 0_u64;
     for seat in seats {
-        let usage = *seat.handle.borrow();
+        let Ok(usage) = seat.handle.lock() else {
+            continue;
+        };
+        let usage = *usage;
         let cost = usage.cost(model_cost(options, &seat.model));
         println!(
             "usage  {:>10} model {:<10} {:>6} in  {:>6} out  {:>3} calls  cost {cost}",
@@ -168,7 +171,10 @@ pub(crate) fn print_usage(options: &Options, seats: &[SeatUsage]) {
     }
     let mut tiers: Vec<(&str, u64, u64)> = Vec::new();
     for seat in seats {
-        let usage = *seat.handle.borrow();
+        let Ok(usage) = seat.handle.lock() else {
+            continue;
+        };
+        let usage = *usage;
         let cost = usage.cost(model_cost(options, &seat.model));
         let tier = seat.tier.as_deref().unwrap_or("untiered");
         match tiers.iter_mut().find(|(name, _, _)| *name == tier) {
