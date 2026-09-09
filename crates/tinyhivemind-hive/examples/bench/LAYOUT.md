@@ -16,6 +16,7 @@ resolves it to `sim/mod.rs` transparently.
 | `live_single.rs` | driving one live desk or episode through a real agent |
 | `live_swarm.rs` | driving a live federation of desks through real agents |
 | `sim/mod.rs` | the rooms, the private evaluations, the `Expertise` shapes (`--specialists`, `--hidden-profile`) that redistribute those evaluations, the evidence-first opening (`--blind-evidence`), the tuning constants, `Role`, `Expertise`, and the `Room` type and its generation |
+| `sim/chain.rs` | a room as one link of a `--stages` chain: renaming its options, inheriting the last stage's window, and being poisoned by a wrong answer |
 | `sim/generation.rs` | drawing a room's members and their expertise |
 | `sim/agent/mod.rs` | `SimAgent`, the participant that holds a private, noisy view of every option: its struct, `Payload`, and `CheckStyle` |
 | `sim/agent/{state,turn}.rs` | construction and state mutation (`new`, `import`, `score`, ...), then deciding what to say (`check`, `absorb`, `compose`, ...) and the `Participant` impl |
