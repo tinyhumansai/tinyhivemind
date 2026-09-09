@@ -88,6 +88,17 @@ pub(crate) struct Federation {
     pub(crate) desks: Vec<FederatedDesk>,
     /// Every member, flattened in desk order.
     pub(crate) agents: Vec<SimAgent>,
+    /// Whether every desk is wrong about a *different* option.
+    ///
+    /// There are only `topics - 1` options that are not the truth, so a
+    /// federation with more desks than that cannot give each one a decoy of
+    /// its own and some desks necessarily share. That is a materially
+    /// different experiment — desks sharing a decoy agree with each other for
+    /// the wrong reason, and pooling across them imports the shared error
+    /// instead of cancelling it — so it is recorded and reported rather than
+    /// left as an invariant the module doc claims and the arithmetic quietly
+    /// breaks.
+    pub(crate) decoys_distinct: bool,
 }
 
 impl Federation {
