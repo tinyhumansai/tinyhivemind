@@ -208,24 +208,38 @@ fn authorized(
     } else {
         cap.min(remaining)
     };
-    // A blind round is bounded above by how many members are still unheard,
-    // but a bound on *count* alone is not a bound on *identity*: `floor_round`
-    // ranks every bid it is handed, so a heard member's bid — sharpened by,
-    // say, `ADDRESSED_BONUS` — can still outrank an unheard member's and take
-    // the seat that member was owed. Restrict the candidates to unheard
-    // identities first, so the blind round can only ever spend its remaining
-    // turns closing the blind phase rather than repeating it.
+    // A *concurrent* blind round is bounded above by how many members are
+    // still unheard, but a bound on *count* alone is not a bound on
+    // *identity*: `floor_round` ranks every bid it is handed, so a heard
+    // member's bid -- sharpened by, say, `ADDRESSED_BONUS` -- can still
+    // outrank an unheard member's and take a seat that round meant for
+    // closing the blind phase, leaving the unheard member to wait for
+    // another round while budget is spent that never advances it. Restrict
+    // the candidates to unheard identities first, so a wide blind round can
+    // only ever spend its seats on the phase it is trying to close.
+    //
+    // This is scoped to `policy.round_width > 1` rather than applied
+    // whenever the room is blind: at `round_width: 1`, `floor_round` must
+    // keep degenerating to exactly what `floor_holder` has always picked --
+    // the single highest bid, heard or not, with the floor's rotation left
+    // entirely to `charged`'s threshold dynamics -- or a round of one would
+    // stop reproducing the sequential episode bit for bit. The identity
+    // filter is what a *round* newly needs, not what a *turn* ever did; a
+    // commit turn is likewise exempted, because it announces a decision the
+    // room already reached and is owed to whoever bids for it, not to
+    // whichever member happens to be least heard.
     let eligible: Vec<crate::attention::Bid>;
-    let candidates: &[crate::attention::Bid] = if round.visibility == Visibility::Blind {
-        eligible = bids
-            .iter()
-            .filter(|bid| round.unheard.contains(&bid.agent_id.as_str()))
-            .cloned()
-            .collect();
-        &eligible
-    } else {
-        bids
-    };
+    let candidates: &[crate::attention::Bid] =
+        if round.visibility == Visibility::Blind && policy.round_width > 1 && width > 1 {
+            eligible = bids
+                .iter()
+                .filter(|bid| round.unheard.contains(&bid.agent_id.as_str()))
+                .cloned()
+                .collect();
+            &eligible
+        } else {
+            bids
+        };
     let speaking = floor_round(candidates, width);
     if speaking.is_empty() {
         return HiveStep::Idle;
