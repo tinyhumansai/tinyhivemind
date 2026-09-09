@@ -57,7 +57,7 @@ The shape of it is a loop, and your application holds both ends:
   │  ▲                            │     │ a pure fold. no IO.     │
   └──┼────────────────────────────┘     └────────────┬────────────┘
      │                                               │
-     └───── one message, one turn ◀── Speak { turn } ┤
+     └──── one message, one round ◀── Speak { turns } ┤
                                                      │
       Converged · Deadlocked · Exhausted · Idle ◀────┘
 ```
@@ -318,6 +318,28 @@ to scale with the desk, what happens to accuracy without a blind opening round,
 what five live models did to the grammar when nobody was watching, and an
 honest section on what none of it shows.
 
+## One task, one agent. Two or more, one seat each
+
+A room is not a longer agent — it is a **wider** one, and the benchmark is
+specific about where that line falls. On a task that merely gets *longer*, a
+single agent compacting by a superseding account wins at every horizon and pays
+a seventh of the depth to do it. On a task that gets *wider* — several
+sub-decisions at once, each wanting a different kind of attention — it flips:
+
+| facets in one task | 1 | 2 | 4 | 8 |
+| --- | --- | --- | --- | --- |
+| one agent, compacting | 78.7% | 56.9% | 28.1% | 7.8% |
+| one seat per facet | **78.7%** | **61.1%** | **35.9%** | **13.0%** |
+| rows one participant holds | 20 | 40 → 20 | 80 → 20 | 160 → 32 |
+
+At one facet they are identical and the room is the wrong tool. From two on, a
+seat's accuracy is flat in width where the soloist's decays — a seat never holds
+the facets it is not deciding — and eight facets cost two rounds rather than
+eight. The advantage is entirely the context window, and it is bought by
+dividing the work along a line where competence differs; divide it anywhere else
+and it vanishes. [Task variety](https://github.com/tinyhumansai/tinyhivemind/wiki/Task-variety)
+has the controls.
+
 ## Not an agent council
 
 A council is a conversation with roles: a manager or a round-robin picks the
@@ -329,7 +351,7 @@ next speaker, and it stops on a round cap or when the manager says so.
 | what agreement is | inferred from the replies | an explicit supporter set |
 | what disagreement is | a message saying "I disagree" | an objection that removes an advocate |
 | how it ends | round cap, or the manager stops | quorum, deadlock, exhaustion or idle |
-| cost per round | one turn per member | one turn, total |
+| cost per round | one turn per member | one bounded round of turns |
 | replay | re-run and hope | byte-identical from the same transcript |
 
 Councils are better at open-ended writing, at work that genuinely decomposes,
