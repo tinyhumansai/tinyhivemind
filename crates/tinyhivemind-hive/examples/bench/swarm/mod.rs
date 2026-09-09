@@ -50,7 +50,7 @@ use crate::federation::Federation;
 use crate::run::Ending;
 use tinyhivemind_hive::aside::Audience;
 
-use board::Board;
+use board::{AskChannel, Board};
 use member::SwarmSim;
 
 mod board;
@@ -296,11 +296,12 @@ pub(crate) fn drive_swarm(
     members: &mut [&mut dyn SwarmMember],
     policy: &EpisodePolicy,
     referrals: ReferralPolicy,
+    asking: AskChannel,
     task: &str,
     keep_trace: bool,
 ) -> Result<SwarmReport, String> {
     let count = channels.len();
-    let mut board = Board::new(channels, referrals, keep_trace);
+    let mut board = Board::new(channels, referrals, keep_trace, asking);
     for desk in 0..count {
         board.host_mut().operator(desk, task);
     }
@@ -324,6 +325,14 @@ pub(crate) fn drive_swarm(
             }
             if let Some(incoming) = board.pop_pending(desk) {
                 board.deliver(members, desk, &incoming)?;
+                progressed = true;
+                continue;
+            }
+            // Off the floor, and so before the turn rather than instead of it:
+            // the desk puts its bounded question to another channel and still
+            // has every turn its own size earned. Bounded by the ask cap, so
+            // this cannot keep the loop alive on its own.
+            if board.ask_off_floor(members, desk)? {
                 progressed = true;
                 continue;
             }
@@ -390,6 +399,7 @@ pub(crate) fn run_swarm(
     federation: &Federation,
     policy: &EpisodePolicy,
     referrals: ReferralPolicy,
+    asking: AskChannel,
     task: &str,
     keep_trace: bool,
 ) -> Result<SwarmReport, String> {
@@ -407,7 +417,15 @@ pub(crate) fn run_swarm(
         .iter_mut()
         .map(|member| member as &mut dyn SwarmMember)
         .collect();
-    let report = drive_swarm(&channels, &mut members, policy, referrals, task, keep_trace)?;
+    let report = drive_swarm(
+        &channels,
+        &mut members,
+        policy,
+        referrals,
+        asking,
+        task,
+        keep_trace,
+    )?;
     Ok(SwarmReport {
         correct: report.decided.as_ref() == Some(&federation.truth),
         ..report
