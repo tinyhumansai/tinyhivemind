@@ -45,13 +45,21 @@ pub(crate) struct Delivery<'a> {
     pub(crate) resumed: Option<&'a str>,
 }
 
+/// What a turn asked the room to do, once its tool calls are drained.
+pub(crate) struct Said {
+    /// The seats a `desk_dm` addressed; empty for a message to the whole desk.
+    pub(crate) dm_to: Vec<String>,
+    /// Whether the seat reported the desk's work finished.
+    pub(crate) closing: bool,
+}
+
 /// Run one turn and get something out of it, or nothing at all.
 ///
 /// `Ok(None)` means the seat forfeits: every rung of the ladder was tried and
 /// the room heard nothing. The caller moves on rather than appending silence.
 ///
-/// The returned vector names the seats a `desk_dm` addressed, and is empty for
-/// a message to the whole desk.
+/// The returned [`Said`] names the seats a `desk_dm` addressed and whether the
+/// seat reported the work finished.
 ///
 /// # Errors
 ///
@@ -62,7 +70,7 @@ pub(crate) fn deliver(
     prompt: &str,
     sessions: &mut HashMap<String, String>,
     tokens: &mut u64,
-) -> Result<Option<(agent::TurnOutput, Vec<String>)>, BoxError> {
+) -> Result<Option<(agent::TurnOutput, Said)>, BoxError> {
     mcp::clear_outbox(delivery.outbox);
     let mut output = delivery.runner.run(
         prompt,
@@ -121,14 +129,14 @@ pub(crate) fn deliver(
     // What the seat said, it said by calling a tool. Free text is its own
     // thinking and reaches nobody; the fence remains only as a fallback for
     // an agent CLI that cannot reach the desk's tools.
-    let dm_to = settle(delivery.outbox, &mut output);
+    let said = settle(delivery.outbox, &mut output);
     if !output.timed_out && !output.message.trim().is_empty() {
-        return Ok(Some((output, dm_to)));
+        return Ok(Some((output, said)));
     }
-    let Some(dm_to) = land(delivery, prompt, &mut output, sessions, tokens)? else {
+    let Some(said) = land(delivery, prompt, &mut output, sessions, tokens)? else {
         return Ok(None);
     };
-    Ok(Some((output, dm_to)))
+    Ok(Some((output, said)))
 }
 
 /// Ask a turn that said nothing to land what it has, and then to speak.
@@ -150,7 +158,7 @@ fn land(
     output: &mut agent::TurnOutput,
     sessions: &mut HashMap<String, String>,
     tokens: &mut u64,
-) -> Result<Option<Vec<String>>, BoxError> {
+) -> Result<Option<Said>, BoxError> {
     // Two phases, because the failure has two halves. First ask the
     // seat to land what it has: same session, tools still attached, so
     // the working code and the notes reach the shared workspace where
@@ -199,7 +207,7 @@ fn land(
     if let Some(id) = landed.session.clone() {
         sessions.insert(delivery.seat_id.to_string(), id);
     }
-    let dm_to = settle(delivery.outbox, &mut landed);
+    let said = settle(delivery.outbox, &mut landed);
     let salvage = if !landed.posted || landed.message.trim().is_empty() {
         let wrap = format!(
             "{prompt}\n\n## What you actually ran this turn\n{}\n\nYou have no \
@@ -224,29 +232,43 @@ fn land(
         return Ok(None);
     }
     output.message = salvage;
-    Ok(Some(dm_to))
+    Ok(Some(said))
 }
 
 /// Take what a turn said through the room's tools, over what it narrated.
-///
-/// Returns the seats a private message named, empty for a message to the desk.
 ///
 /// A seat may call `desk_post` more than once — it is told not to, and it will
 /// anyway. The last call stands: a seat that posts a partial result and then a
 /// settled one meant the second, and one message per turn is the rule the whole
 /// design rests on.
-fn settle(outbox: &Path, output: &mut agent::TurnOutput) -> Vec<String> {
-    let said = mcp::drain_outbox(outbox);
-    let Some(utterance) = said.last() else {
-        return Vec::new();
+fn settle(outbox: &Path, output: &mut agent::TurnOutput) -> Said {
+    let spoken = mcp::drain_outbox(outbox);
+    let Some(utterance) = spoken.last() else {
+        return Said {
+            dm_to: Vec::new(),
+            closing: false,
+        };
     };
-    if said.len() > 1 {
-        println!("   {} messages this turn; the last one stands", said.len());
+    if spoken.len() > 1 {
+        println!(
+            "   {} messages this turn; the last one stands",
+            spoken.len()
+        );
     }
     output.message = utterance.message().to_string();
     output.posted = true;
     match utterance {
-        mcp::Utterance::Post { .. } => Vec::new(),
-        mcp::Utterance::Dm { to, .. } => to.clone(),
+        mcp::Utterance::Post { .. } => Said {
+            dm_to: Vec::new(),
+            closing: false,
+        },
+        mcp::Utterance::Dm { to, .. } => Said {
+            dm_to: to.clone(),
+            closing: false,
+        },
+        mcp::Utterance::Close { .. } => Said {
+            dm_to: Vec::new(),
+            closing: true,
+        },
     }
 }

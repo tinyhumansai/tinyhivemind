@@ -118,7 +118,7 @@ fn builds_a_configuration_from_nothing_or_from_nonsense() {
 }
 
 #[test]
-fn lists_exactly_the_three_tools_a_seat_may_call() {
+fn lists_exactly_the_four_tools_a_seat_may_call() {
     let listed = tools();
     let names: Vec<&str> = listed
         .as_array()
@@ -126,7 +126,7 @@ fn lists_exactly_the_three_tools_a_seat_may_call() {
         .iter()
         .filter_map(|tool| tool["name"].as_str())
         .collect();
-    assert_eq!(names, vec!["post", "dm", "read"]);
+    assert_eq!(names, vec!["post", "dm", "close", "read"]);
     for tool in listed.as_array().expect("an array") {
         assert!(
             tool["inputSchema"]["type"] == "object",
@@ -236,4 +236,60 @@ fn reading_a_desk_that_has_not_spoken_says_so() {
         ),
         Ok("(the desk has no messages yet)".into())
     );
+}
+
+#[test]
+fn a_close_carries_its_message_like_any_other_utterance() {
+    let outbox = scratch("close").join("said.jsonl");
+    clear_outbox(&outbox);
+    append(
+        &outbox,
+        &serde_json::json!({"kind":"close","message":"Psi(10^18) = 62418970; checker signed off"}),
+    )
+    .expect("appends");
+    let said = drain_outbox(&outbox);
+    assert_eq!(
+        said,
+        vec![Utterance::Close {
+            message: "Psi(10^18) = 62418970; checker signed off".into()
+        }],
+        "a close is drained like a post"
+    );
+    assert_eq!(
+        said[0].message(),
+        "Psi(10^18) = 62418970; checker signed off",
+        "and the room still gets the text"
+    );
+}
+
+#[test]
+fn the_close_tool_writes_a_close_row() {
+    let outbox = scratch("close-call").join("said.jsonl");
+    clear_outbox(&outbox);
+    let transcript = scratch("close-call").join("absent.jsonl");
+    let request = serde_json::json!({
+        "params": { "name": "close", "arguments": { "message": "delivered" } }
+    });
+    call(&request, &outbox, &transcript).expect("close is served");
+    assert_eq!(
+        drain_outbox(&outbox),
+        vec![Utterance::Close {
+            message: "delivered".into()
+        }]
+    );
+}
+
+#[test]
+fn a_close_with_no_message_is_refused_while_the_seat_can_still_fix_it() {
+    let outbox = scratch("close-empty").join("said.jsonl");
+    clear_outbox(&outbox);
+    let transcript = scratch("close-empty").join("absent.jsonl");
+    let request = serde_json::json!({
+        "params": { "name": "close", "arguments": { "message": "   " } }
+    });
+    assert!(
+        call(&request, &outbox, &transcript).is_err(),
+        "an empty close is refused, not silently closed"
+    );
+    assert!(drain_outbox(&outbox).is_empty());
 }

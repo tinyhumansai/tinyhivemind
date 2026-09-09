@@ -85,6 +85,17 @@ pub(crate) fn compose_prompt(
     prompt.push_str("You were addressed by this message:\n\n");
     prompt.push_str(job.trigger.trim());
     prompt.push_str("\n\n");
+    prompt.push_str(&house_rules(&seat.id));
+    prompt
+}
+
+/// How a seat speaks, what survives its turn, and the rules of the room.
+///
+/// Split out of [`compose_prompt`] because it is a constant block of text
+/// with one seat-dependent path in it, and inlining it pushed the composer
+/// past the line limit.
+fn house_rules(seat_id: &str) -> String {
+    let mut prompt = String::new();
     let _ = write!(
         prompt,
         "Do the work first — use your tools, write and run code in this workspace, check \
@@ -97,18 +108,26 @@ pub(crate) fn compose_prompt(
            peer to settle something and the room does not need to watch. It still \
            costs your one message for the turn, and the room is told the exchange \
            happened.\n\
-         - `desk_read(limit)` — read further back than the window you were handed.\n\n\
+         - `desk_read(limit)` — read further back than the window you were handed.\n\
+         - `desk_close(message)` — say one last thing AND report the work finished. \
+           Use it instead of `desk_post` only when the task is genuinely delivered \
+           and no seat has an open step; a result somebody still has to verify is \
+           not finished. If you are being asked again about work you already \
+           delivered, this is the call that says so.\n\n\
          You are stateless between turns. This process ends when you post, and the \
          next turn starts a fresh one. Four things survive: your notebook, files in \
          this workspace (shared with every seat), what you post to the room, and the \
          desk memory. Before you post:\n\
-         - REWRITE `{dir}/{id}.md` — do not append to it. Write it as the message you \
+         - REWRITE `{NOTEBOOK_DIR}/{seat_id}.md` — do not append to it. Write it as the message you \
            want to receive from yourself next turn: what you established, what you \
            are mid-way through, what you would do next, and which files hold what. \
-           You will be handed its last {budget} characters verbatim. Nobody else reads it.\n\
+           You will be handed its last {NOTEBOOK_CHARS} characters verbatim. Nobody else reads it.\n\
          - Write working code to named .py files another seat can run, and what the \
            room established to NOTES.md. The room is told which files you wrote; you \
-           do not have to list them.\n\n\
+           do not have to list them.\n\
+         - Put those files UNDER THIS WORKSPACE, as relative paths. A file you write \
+           to /tmp or to any absolute path outside it is not shared and is gone when \
+           this process ends, however good the code in it was.\n\n\
          Rules of the room:\n\
          - Exactly one seat speaks per message. Mentioning a teammate with @id runs \
            their turn next, and only the FIRST @mention in your message does that. \
@@ -125,9 +144,6 @@ pub(crate) fn compose_prompt(
            you the messages themselves.\n\
          - If the desk tools are not attached to this session, fall back to wrapping \
            the message in <<<POST and POST>>> and say so in it.\n",
-        dir = NOTEBOOK_DIR,
-        id = seat.id,
-        budget = NOTEBOOK_CHARS,
     );
     prompt
 }

@@ -107,6 +107,7 @@ A seat says one thing per turn by **calling a tool**, not by writing a marker:
 | `desk_post(message)` | say one thing to the whole desk |
 | `desk_dm(to[], message)` | say it to named seats instead |
 | `desk_read(limit)` | read further back than the window it was handed |
+| `desk_close(message)` | say one last thing and report the work finished |
 
 Text a seat produces outside a tool call is its own thinking and reaches
 nobody. The reason is a defect: in run 26 a seat closed with `<<<POST>>> …
@@ -143,6 +144,13 @@ Three properties are worth knowing while reading a run:
   transcript at the number it cites, and `desk_read` reaches it.
 - **A fold that fails costs the compaction and nothing else.** The window is
   already correct without one.
+
+`desk_close` exists because run 28 had no way to end. The answer was signed off
+on turn 3; turns 4-12 are the chair nudging `@lead` once per remaining round and
+`@lead` replying "the desk is finished, not stalled" nine times — nine of twelve
+turns spent restating a delivered result, because the nudge fires on `rounds`
+alone and nothing could contradict it. It is still a request, not an act: the
+host appends the row and then closes, so one-message-one-turn is untouched.
 
 ## Private asides
 

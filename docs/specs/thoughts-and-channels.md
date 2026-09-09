@@ -166,10 +166,16 @@ what makes it safe to be lossy.
 6. `cargo fmt --all -- --check`, `cargo clippy --all-targets --all-features --
    -D warnings`, `cargo build --all-targets --all-features`,
    `cargo test --all-features`, and `.github/scripts/assert-pure.sh` all pass.
-   **Met** — 808 tests, 0 failures.
+   **Met** — 811 tests, 0 failures.
 7. On the same task and desk file as runs 26–27, per-turn `read` calls and
-   messages-per-minute are recorded and compared. **Pending** — needs a live
-   run.
+   messages-per-minute are recorded and compared. **Partly met** — run 28
+   recorded 4 `read` calls in 133 (3%) against run 27's 15 in 19 (79%) and run
+   26's 27 in 53, 4.4 minutes per message against 19.4, and it solved the
+   problem where neither baseline did. But **no fold fired in that run**: at
+   `--window 12` a fold needs more than 32 rows and the desk closed at 23, so
+   the gain is attributable to the notebook, the tool-call room and the landing
+   phase, and the standing account remains untested live. See
+   [`2026-09-08-pe1006-tool-room.md`](../experiments/2026-09-08-pe1006-tool-room.md).
 
 ## What this does not yet do
 

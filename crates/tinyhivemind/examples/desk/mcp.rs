@@ -45,13 +45,23 @@ pub(crate) enum Utterance {
         /// The text to append.
         message: String,
     },
+    /// A message that also asks the desk to close.
+    ///
+    /// The seat is reporting that the work is finished, not ending the desk
+    /// itself: the host still appends the message and still decides. A room
+    /// with no way to say this spends every remaining round being nudged to
+    /// restate an answer it already gave.
+    Close {
+        /// The text to append.
+        message: String,
+    },
 }
 
 impl Utterance {
     /// The text of the message, whoever it is for.
     pub(crate) fn message(&self) -> &str {
         match self {
-            Self::Post { message } | Self::Dm { message, .. } => message,
+            Self::Post { message } | Self::Dm { message, .. } | Self::Close { message } => message,
         }
     }
 }
@@ -84,6 +94,7 @@ fn parse_utterance(line: &str) -> Option<Utterance> {
     }
     match value.get("kind")?.as_str()? {
         "post" => Some(Utterance::Post { message }),
+        "close" => Some(Utterance::Close { message }),
         "dm" => {
             let to: Vec<String> = value
                 .get("to")?
@@ -248,6 +259,26 @@ fn tools() -> serde_json::Value {
             },
         },
         {
+            "name": "close",
+            "description":
+                "Say one last thing and report that the desk's work is finished. Call this \
+                 instead of `post` only when the task is genuinely done and no seat has an \
+                 open step — a result someone still has to verify is not done. If you are \
+                 being asked again about work you have already delivered, this is the call \
+                 that says so.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string",
+                        "description":
+                            "The result, and why nothing is left open.",
+                    },
+                },
+                "required": ["message"],
+            },
+        },
+        {
             "name": "read",
             "description":
                 "Read the desk's recent messages. You are handed a bounded window at the top \
@@ -282,6 +313,14 @@ fn call(request: &serde_json::Value, outbox: &Path, transcript: &Path) -> Result
                 &serde_json::json!({ "kind": "post", "message": message }),
             )?;
             Ok("posted to the desk".into())
+        }
+        "close" => {
+            let message = text_argument(&arguments, "message")?;
+            append(
+                outbox,
+                &serde_json::json!({ "kind": "close", "message": message }),
+            )?;
+            Ok("posted to the desk; the desk will close after this turn".into())
         }
         "dm" => {
             let message = text_argument(&arguments, "message")?;

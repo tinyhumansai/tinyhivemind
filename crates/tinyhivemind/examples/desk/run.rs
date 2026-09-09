@@ -471,7 +471,7 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
                 None => "none".to_string(),
             }
         );
-        let Some((output, dm_to)) = turn::deliver(
+        let Some((output, said)) = turn::deliver(
             &turn::Delivery {
                 runner: &runner,
                 wrapup: &wrapup,
@@ -509,7 +509,8 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
         // A message sent through `desk_dm` addresses its recipients whether or
         // not its text also names them, and the grammar rather than this host
         // is what turns those names into targets.
-        let addressed_to = dm_to
+        let addressed_to = said
+            .dm_to
             .iter()
             .map(|id| format!("@{id}"))
             .collect::<Vec<_>>()
@@ -569,6 +570,17 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
                 &note,
                 Audience::Desk,
             )?;
+        }
+
+        // A seat asked to close. The row is already in the transcript, so the
+        // desk ends holding the message rather than losing it — and the chain
+        // is not dispatched, because a finished desk has nobody to hand a turn
+        // to. Without this the chair nudges a delivered room once per remaining
+        // round: in run 28 that was nine turns of `@lead` restating the same
+        // answer to a prompt that could not be told the work was done.
+        if said.closing {
+            println!("   -- seat reports the work finished; closing the desk");
+            break;
         }
 
         let outcome = dispatch_mention(
