@@ -95,6 +95,15 @@ sweep could not tell a win bought by the split from a win bought by the pooling.
    called by nothing else.
 7. The result is recorded whether or not the room wins.
 
+## What follows
+
+The measured shape is `hive+fold`, and it is the shape this repository builds
+on from here: **one task, one agent; two or more facets, one seat each.** The
+library does not offer it yet — a host gets the floor from
+`tinyhivemind-hive` and would have to assemble the split itself. Making it a
+first-class, bounded, pure fold is P24 in [`ROADMAP.md`](../../ROADMAP.md), and
+the on-floor room stays as the arm it beat rather than being removed.
+
 ## Known weaknesses
 
 - **The soloist aggregates by an unweighted mean.** `SimAgent::import` averages
