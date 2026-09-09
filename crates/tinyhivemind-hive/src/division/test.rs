@@ -48,7 +48,7 @@ fn divided(count: usize, policy: &DivisionPolicy) -> Division {
     let members = roster_members();
     let roster = Roster::new(&members, &[], &[]);
     let held = desks();
-    let desks = DeskSet::new(&held);
+    let desks = DeskSet::new(&held, &[], &[], &[], &[]);
     divide(&facets(count), "engineering", &roster, &desks, None, policy).unwrap()
 }
 
@@ -142,7 +142,7 @@ fn a_facet_named_twice_is_one_facet() {
     let members = roster_members();
     let roster = Roster::new(&members, &[], &[]);
     let held = desks();
-    let desks = DeskSet::new(&held);
+    let desks = DeskSet::new(&held, &[], &[], &[], &[]);
     let repeated = [
         TopicId::from("stage"),
         TopicId::from("ship"),
@@ -184,7 +184,7 @@ fn the_directory_names_an_owner_where_it_knows_one() {
     let members = roster_members();
     let roster = Roster::new(&members, &[], &[]);
     let held = desks();
-    let desks = DeskSet::new(&held);
+    let desks = DeskSet::new(&held, &[], &[], &[], &[]);
     let asked = [TopicId::from("stage"), TopicId::from("ship")];
     let division = divide(
         &asked,
@@ -259,7 +259,7 @@ fn a_zero_width_is_refused() {
     let members = roster_members();
     let roster = Roster::new(&members, &[], &[]);
     let held = desks();
-    let desks = DeskSet::new(&held);
+    let desks = DeskSet::new(&held, &[], &[], &[], &[]);
     let outcome = divide(
         &facets(2),
         "engineering",
@@ -280,7 +280,7 @@ fn a_zero_width_is_refused() {
 fn a_desk_with_no_active_member_is_refused() {
     let roster = Roster::new(&[], &[], &[]);
     let held = desks();
-    let desks = DeskSet::new(&held);
+    let desks = DeskSet::new(&held, &[], &[], &[], &[]);
     let outcome = divide(
         &facets(2),
         "engineering",
@@ -301,7 +301,7 @@ fn an_unknown_desk_is_refused() {
     let members = roster_members();
     let roster = Roster::new(&members, &[], &[]);
     let held = desks();
-    let desks = DeskSet::new(&held);
+    let desks = DeskSet::new(&held, &[], &[], &[], &[]);
     let outcome = divide(
         &facets(1),
         "nowhere",
