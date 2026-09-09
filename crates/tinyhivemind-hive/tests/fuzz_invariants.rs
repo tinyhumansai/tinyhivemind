@@ -10,6 +10,7 @@ use tinyhivemind_hive::{
     attention::{BidContext, bids},
     desk::{Desk, DeskSet, ResponderMode},
     directory, exchange, read,
+    episode::{HiveStep, Phase, Visibility, project_for},
     roster::{Roster, RosterMember},
     standings, step,
 };
@@ -401,4 +402,147 @@ fn opened() -> EpisodeState {
         },
         Sequence(0),
     )
+}
+
+/// A round authorizes at most `round_width` distinct members, and the state it
+/// commits accounts for exactly the turns it authorized.
+///
+/// The four structural properties [`docs/specs/concurrent-rounds.md`][spec]
+/// sells the mechanism on, asserted over an arbitrary transcript at every width
+/// from one to the size of the desk. Width is a *bound*, not a quota — a round
+/// is often narrower, because a bid still has to clear its own threshold to be
+/// in one at all — so the assertion is `<=` on width and `==` on the accounting.
+///
+/// [spec]: ../../../docs/specs/concurrent-rounds.md
+#[test]
+fn a_round_is_bounded_distinct_and_accounted_for() {
+    let mut state = 0x5eed_c0de_9a11_u64;
+    let people = roster_members();
+    let rooms = desks();
+    let retired: Vec<String> = Vec::new();
+    let roster = Roster::new(&people, &[], &retired);
+    let desk_set = DeskSet::new(&rooms, &[], &[], &[], &retired);
+
+    for case in 0..64_u64 {
+        let messages: Vec<SessionMessage> = (0..6_u64)
+            .map(|index| SessionMessage {
+                sequence: Sequence(case * 16 + index),
+                author: author(next(&mut state)),
+                content: content(&mut state),
+                audience: Audience::Desk,
+                elided: None,
+            })
+            .collect();
+
+        for width in 1..=MEMBERS.len() as u32 {
+            let policy = EpisodePolicy {
+                round_width: width,
+                ..EpisodePolicy::DEFAULT
+            };
+            let Ok(HiveStep::Speak { turns, next_state }) =
+                step(&opened(), &messages, &roster, &desk_set, &policy)
+            else {
+                continue;
+            };
+
+            assert!(!turns.is_empty(), "a Speak round is never empty");
+            assert!(
+                turns.len() <= width as usize,
+                "a round of {} exceeds its width {width}",
+                turns.len()
+            );
+
+            let mut speakers: Vec<&str> = turns.iter().map(|turn| turn.agent_id.as_str()).collect();
+            speakers.sort_unstable();
+            let distinct = speakers.len();
+            speakers.dedup();
+            assert_eq!(distinct, speakers.len(), "a member speaks once in a round");
+
+            assert_eq!(
+                next_state.spent,
+                opened().spent + turns.len() as u32,
+                "the round's state accounts for exactly the turns it authorized"
+            );
+
+            // The commit is where the room records one decision, so it is
+            // never widened however wide the policy allows.
+            if turns.iter().any(|turn| turn.phase == Phase::Commit) {
+                assert_eq!(turns.len(), 1, "a commit round is one turn wide");
+            }
+        }
+    }
+}
+
+/// `round_width: 1` is the sequential episode, exactly.
+///
+/// The identity the whole change rests on: at width one the selection is the
+/// same argmax it always was and no peer row exists above `round_start`, so the
+/// concurrency clause is inert rather than merely equivalent. Asserted against
+/// an arbitrary transcript rather than a chosen one.
+#[test]
+fn a_round_of_one_is_the_sequential_episode() {
+    let mut state = 0xfeed_face_2026_u64;
+    let people = roster_members();
+    let rooms = desks();
+    let retired: Vec<String> = Vec::new();
+    let roster = Roster::new(&people, &[], &retired);
+    let desk_set = DeskSet::new(&rooms, &[], &[], &[], &retired);
+    let narrow = EpisodePolicy {
+        round_width: 1,
+        ..EpisodePolicy::DEFAULT
+    };
+
+    for case in 0..64_u64 {
+        let messages: Vec<SessionMessage> = (0..6_u64)
+            .map(|index| SessionMessage {
+                sequence: Sequence(case * 16 + index),
+                author: author(next(&mut state)),
+                content: content(&mut state),
+                audience: Audience::Desk,
+                elided: None,
+            })
+            .collect();
+
+        let step_at_one = step(&opened(), &messages, &roster, &desk_set, &narrow);
+        if let Ok(HiveStep::Speak { turns, .. }) = &step_at_one {
+            assert_eq!(turns.len(), 1, "width one authorizes one turn");
+            // Nothing was written since standings were folded, so the round
+            // boundary withholds nothing.
+            let turn = &turns[0];
+            assert_eq!(
+                project_for(turn, &messages).len(),
+                messages
+                    .iter()
+                    .filter(|message| match turn.visibility {
+                        Visibility::Full => true,
+                        Visibility::Blind => match &message.author {
+                            SessionAuthor::Agent { id, .. } =>
+                                id == &turn.agent_id || message.sequence <= turn.watermark,
+                            _ => true,
+                        },
+                    })
+                    .count(),
+                "the round boundary withholds nothing at width one"
+            );
+        }
+    }
+}
+
+/// `round_width: 0` is a configuration error, not a quiet way to switch the
+/// mechanism off — the precedent `defer_cap: Some(0)` set.
+#[test]
+fn a_zero_round_width_is_rejected() {
+    let people = roster_members();
+    let rooms = desks();
+    let retired: Vec<String> = Vec::new();
+    let roster = Roster::new(&people, &[], &retired);
+    let desk_set = DeskSet::new(&rooms, &[], &[], &[], &retired);
+    let policy = EpisodePolicy {
+        round_width: 0,
+        ..EpisodePolicy::DEFAULT
+    };
+    assert!(matches!(
+        step(&opened(), &[], &roster, &desk_set, &policy),
+        Err(tinyhivemind_hive::Error::ZeroRoundWidth)
+    ));
 }
