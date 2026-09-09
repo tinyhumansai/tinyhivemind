@@ -160,9 +160,11 @@ struct Round {
     at: tinyhivemind::Sequence,
     /// How much of the transcript every turn in the round may see.
     visibility: Visibility,
-    /// Members that have not yet authored a turn this episode, which is how
-    /// many turns the blind round still has left to run.
-    unheard: usize,
+    /// Members that have not yet authored a turn this episode. Its length is
+    /// how many turns the blind round still has left to run, and the round
+    /// picks from these identities rather than merely capping at their
+    /// count — a heard member's bid must not crowd out one still owed a turn.
+    unheard: Vec<&'a str>,
 }
 
 /// Pick the round's members and build the state the episode takes after it.
