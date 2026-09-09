@@ -37,5 +37,6 @@ resolves it to `sim/mod.rs` transparently.
 | `scenarios/` | the scenario files themselves |
 | `DELEGATION.md` | the delegation arms, the three questions they answer, and what they scored |
 | `LIVE.md` | live rooms: the prompt, the scenario format, and the CLI and HTTP backends |
+| `DEPTH.md` | the two cost columns — depth beside width — and what the concurrency arms scored |
 | `CONTEXT.md` | the context-budget window model, and what a bounded prompt does and does not change about the arms above |
 | `rng.rs` | a seeded `SplitMix64`, so every run reproduces |
