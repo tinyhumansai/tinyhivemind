@@ -194,7 +194,8 @@ fn digest_values_pin_deterministic_wire_shapes() {
             "keep_live": 30,
             "fold_after": 20,
             "input_limit": 60,
-            "budget_chars": 4000
+            "budget_chars": 4000,
+            "fold_after_chars": 400_000
         })
     );
     assert_eq!(DigestPolicy::default(), DigestPolicy::DEFAULT);
