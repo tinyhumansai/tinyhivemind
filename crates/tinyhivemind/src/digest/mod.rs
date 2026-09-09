@@ -75,7 +75,8 @@ mod test;
 mod types;
 
 pub use types::{
-    ChannelDigest, DigestOutcome, DigestPlan, DigestPolicy, DigestRejection, DigestRequest,
+    ChannelDigest, ChannelHead, DigestOutcome, DigestPlan, DigestPolicy, DigestRejection,
+    DigestRequest,
     DigestedHistory,
 };
 
@@ -113,14 +114,22 @@ pub trait Digester: Send + Sync {
 #[must_use]
 pub fn plan_digest(
     account: Option<&ChannelDigest>,
-    head: Sequence,
+    head: ChannelHead,
     policy: DigestPolicy,
 ) -> DigestPlan {
     let folded = account.map_or(0, |digest| digest.through.0);
-    let Some(ceiling) = head.0.checked_sub(policy.keep_live as u64) else {
+    let Some(ceiling) = head.sequence.0.checked_sub(policy.keep_live as u64) else {
         return DigestPlan::Current;
     };
-    if ceiling <= folded || ceiling - folded <= policy.fold_after as u64 {
+    if ceiling <= folded {
+        return DigestPlan::Current;
+    }
+    // Either threshold is enough. Rows say the room has *moved*; characters
+    // say it has grown expensive, and on a desk writing derivations the second
+    // arrives long before the first.
+    let by_rows = ceiling - folded > policy.fold_after as u64;
+    let by_size = policy.fold_after_chars > 0 && head.unfolded_chars > policy.fold_after_chars;
+    if !by_rows && !by_size {
         return DigestPlan::Current;
     }
     let step = folded.saturating_add(policy.input_limit as u64);
@@ -253,7 +262,8 @@ pub async fn refold(
     digester: Option<&(dyn Digester + '_)>,
     conversation: &Conversation,
     account: Option<&ChannelDigest>,
-    head: Sequence,
+    head: ChannelHead,
+    pins: &[Pin],
     policy: DigestPolicy,
 ) -> Result<DigestOutcome> {
     if let Some(account) = account
@@ -289,6 +299,7 @@ pub async fn refold(
         messages,
         through,
         budget_chars: policy.budget_chars,
+        pinned: pinned_through(pins, through),
     };
     let Ok(text) = digester.digest(&request).await else {
         return Ok(DigestOutcome::Unavailable);
@@ -297,6 +308,22 @@ pub async fn refold(
         Ok(digest) => DigestOutcome::Folded(digest),
         Err(reason) => DigestOutcome::Rejected { reason },
     })
+}
+
+/// The pinned sequences a fold reaching `through` is answerable for.
+///
+/// A pin above `through` is still in the live tail, where the reader sees the
+/// row itself; the fold has no business with it. Ascending, deduplicated, so
+/// two markers pinning one row name it once.
+fn pinned_through(pins: &[Pin], through: Sequence) -> Vec<Sequence> {
+    let mut sequences: Vec<Sequence> = pins
+        .iter()
+        .map(|pin| pin.sequence)
+        .filter(|sequence| sequence.0 <= through.0)
+        .collect();
+    sequences.sort_unstable_by_key(|sequence| sequence.0);
+    sequences.dedup();
+    sequences
 }
 
 /// Compose one turn's history from an account and a projected window.
