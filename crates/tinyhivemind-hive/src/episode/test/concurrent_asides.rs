@@ -20,7 +20,7 @@ fn an_aside_riding_along_with_a_turn_costs_the_room_nothing() {
     // This is why a private exchange need not be charged a floor turn. See
     // ADR 0011.
     let room = Room::new();
-    let policy = EpisodePolicy::DEFAULT;
+    let policy = sequential();
     let plain = vec![
         operator(1, "Pick one."),
         said(2, "planner", "!propose #stage"),
@@ -56,7 +56,7 @@ fn a_room_that_has_only_said_things_privately_has_not_started() {
     // many asides ride along, the room still decides at the pace of its
     // floor.
     let room = Room::new();
-    let policy = EpisodePolicy::DEFAULT;
+    let policy = sequential();
     let private = vec![
         operator(1, "Pick one."),
         aside(2, "planner", &["critic"], "!propose #stage Quietly."),
@@ -96,10 +96,10 @@ fn shifting_desk_sequences_past_a_private_row_can_change_the_step() {
         quorum: QuorumPolicy {
             threshold: 2,
             window: 1,
-            ..EpisodePolicy::DEFAULT.quorum
+            ..sequential().quorum
         },
         blind_round: false,
-        ..EpisodePolicy::DEFAULT
+        ..sequential()
     };
     let unshifted = vec![
         said(1, "planner", "!propose #stage"),

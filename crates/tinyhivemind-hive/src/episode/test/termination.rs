@@ -9,7 +9,7 @@ use super::support::{MEMBERS, Room, converging, operator, run, said, speaking, s
 #[test]
 fn a_speaking_step_authorizes_exactly_one_turn() {
     let room = Room::new();
-    let turn = speaking(run(&room, &state(), &converging(), &EpisodePolicy::DEFAULT));
+    let turn = speaking(run(&room, &state(), &converging(), &sequential()));
     assert!(MEMBERS.contains(&turn.agent_id.as_str()));
     assert_eq!(turn.next_state.spent, 1);
 }
@@ -19,7 +19,7 @@ fn a_spent_budget_is_exhausted_and_authorizes_no_turn() {
     let room = Room::new();
     let policy = EpisodePolicy {
         turn_budget: 4,
-        ..EpisodePolicy::DEFAULT
+        ..sequential()
     };
     let spent = EpisodeState {
         spent: 4,
@@ -36,7 +36,7 @@ fn a_zero_budget_never_authorizes_a_first_turn() {
     let room = Room::new();
     let policy = EpisodePolicy {
         turn_budget: 0,
-        ..EpisodePolicy::DEFAULT
+        ..sequential()
     };
     assert_eq!(
         run(&room, &state(), &converging(), &policy),
@@ -49,7 +49,7 @@ fn an_episode_terminates_within_its_budget() {
     let room = Room::new();
     let policy = EpisodePolicy {
         turn_budget: 5,
-        ..EpisodePolicy::DEFAULT
+        ..sequential()
     };
     let mut state = state();
     // One proposal only: below quorum, so the room keeps deliberating and the
@@ -82,7 +82,7 @@ fn nobody_speaks_when_every_threshold_is_unreachable() {
         ..state()
     };
     assert_eq!(
-        run(&room, &state, &converging(), &EpisodePolicy::DEFAULT),
+        run(&room, &state, &converging(), &sequential()),
         HiveStep::Idle,
     );
 }
@@ -92,7 +92,7 @@ fn the_budget_check_bounds_the_spend_before_it_can_overflow() {
     let room = Room::new();
     let policy = EpisodePolicy {
         turn_budget: u32::MAX,
-        ..EpisodePolicy::DEFAULT
+        ..sequential()
     };
     // One below the ceiling still advances, landing exactly on it...
     let brimming = EpisodeState {

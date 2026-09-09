@@ -12,7 +12,7 @@ use tinyhivemind::Sequence;
 #[test]
 fn quorum_flips_the_phase_once_and_then_converges() {
     let room = Room::new();
-    let policy = EpisodePolicy::DEFAULT;
+    let policy = sequential();
 
     // Deliberating with quorum reached: one commit turn is authorized.
     let turn = speaking(run(&room, &state(), &converging(), &policy));
@@ -53,7 +53,7 @@ fn traces_from_non_members_do_not_manufacture_quorum() {
         said(1, "ghost", "!propose #stage Rogue proposal."),
         said(2, "intruder", "!support #stage ^1 Rogue support."),
     ];
-    let turn = speaking(run(&room, &state(), &transcript, &EpisodePolicy::DEFAULT));
+    let turn = speaking(run(&room, &state(), &transcript, &sequential()));
     assert_eq!(
         turn.phase,
         Phase::Deliberate,
@@ -64,7 +64,7 @@ fn traces_from_non_members_do_not_manufacture_quorum() {
 #[test]
 fn a_commit_trace_before_the_commit_boundary_does_not_converge() {
     let room = Room::new();
-    let policy = EpisodePolicy::DEFAULT;
+    let policy = sequential();
 
     // A `!commit` for `#stage` already sits in the transcript before quorum
     // ever forms -- planted speculatively, or left over from an earlier
@@ -99,7 +99,7 @@ fn the_commit_phase_is_one_way_when_support_later_decays_out() {
             window: 2,
             ..crate::quorum::QuorumPolicy::DEFAULT
         },
-        ..EpisodePolicy::DEFAULT
+        ..sequential()
     };
     let committing = EpisodeState {
         phase: Phase::Commit,
@@ -123,7 +123,7 @@ fn traces_at_or_below_the_watermark_are_context_not_votes() {
     let room = Room::new();
     let opened_late = EpisodeState::opened(conversation(), Sequence(3));
     // The whole converging exchange sits at or below the watermark.
-    let step = run(&room, &opened_late, &converging(), &EpisodePolicy::DEFAULT);
+    let step = run(&room, &opened_late, &converging(), &sequential());
     let turn = speaking(step);
     assert_eq!(
         turn.phase,

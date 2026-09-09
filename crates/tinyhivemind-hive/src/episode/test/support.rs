@@ -122,12 +122,33 @@ pub(super) fn run(
     step(state, transcript, &room.roster(), &room.desk_set(), policy).expect("steps")
 }
 
-/// Unwrap a `HiveStep::Speak`, panicking with the actual step otherwise.
+/// The sequential episode: a round of one, which is what most of these
+/// fixtures assert the dynamics of.
+///
+/// `EpisodePolicy::DEFAULT` runs wider rounds, because a seat is an async
+/// session. Width one is still a supported configuration rather than a
+/// deprecated one, and the tests that pin single-turn behaviour say so by
+/// asking for it rather than by inheriting it.
+pub(super) fn sequential() -> EpisodePolicy {
+    EpisodePolicy {
+        round_width: 1,
+        ..EpisodePolicy::DEFAULT
+    }
+}
+
+/// Unwrap a `HiveStep::Speak` of exactly one turn, panicking otherwise.
 pub(super) fn speaking(step: HiveStep) -> HiveTurn {
-    let HiveStep::Speak { turn } = step else {
-        panic!("expected a turn, got {step:?}")
+    let (mut turns, _) = round(step);
+    assert_eq!(turns.len(), 1, "expected a round of one, got {turns:?}");
+    turns.remove(0)
+}
+
+/// Unwrap a `HiveStep::Speak` into its round and the state it commits.
+pub(super) fn round(step: HiveStep) -> (Vec<HiveTurn>, EpisodeState) {
+    let HiveStep::Speak { turns, next_state } = step else {
+        panic!("expected a round, got {step:?}")
     };
-    *turn
+    (turns, *next_state)
 }
 
 /// A room with two grounded supporters behind one proposal.

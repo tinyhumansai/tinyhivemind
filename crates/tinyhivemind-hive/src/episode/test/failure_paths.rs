@@ -16,7 +16,7 @@ fn a_malformed_roster_or_desk_snapshot_is_rejected() {
         &converging(),
         &room.roster(),
         &room.desk_set(),
-        &EpisodePolicy::DEFAULT,
+        &sequential(),
     )
     .expect_err("duplicate roster member");
     assert_eq!(error.to_string(), "duplicate roster member id `planner`");
@@ -28,7 +28,7 @@ fn a_malformed_roster_or_desk_snapshot_is_rejected() {
         &converging(),
         &room.roster(),
         &room.desk_set(),
-        &EpisodePolicy::DEFAULT,
+        &sequential(),
     )
     .expect_err("duplicate desk");
     assert_eq!(error.to_string(), "duplicate desk id `engineering`");
@@ -50,7 +50,7 @@ fn an_unknown_desk_is_rejected() {
         &converging(),
         &room.roster(),
         &room.desk_set(),
-        &EpisodePolicy::DEFAULT,
+        &sequential(),
     )
     .expect_err("unknown desk");
     assert_eq!(error.to_string(), "unknown desk `design`");
@@ -68,7 +68,7 @@ fn a_threshold_naming_a_non_member_is_rejected() {
         &converging(),
         &room.roster(),
         &room.desk_set(),
-        &EpisodePolicy::DEFAULT,
+        &sequential(),
     )
     .expect_err("unknown threshold member");
     assert_eq!(
@@ -81,7 +81,7 @@ fn a_threshold_naming_a_non_member_is_rejected() {
 fn a_retired_member_neither_bids_nor_holds_a_threshold() {
     let mut room = Room::new();
     room.retired = vec!["scout".into()];
-    let turn = speaking(run(&room, &state(), &converging(), &EpisodePolicy::DEFAULT));
+    let turn = speaking(run(&room, &state(), &converging(), &sequential()));
     assert_ne!(turn.agent_id, "scout");
     assert!(
         turn.next_state
@@ -99,7 +99,7 @@ fn a_malformed_policy_surfaces_from_the_quorum_fold() {
             threshold: 0,
             ..crate::quorum::QuorumPolicy::DEFAULT
         },
-        ..EpisodePolicy::DEFAULT
+        ..sequential()
     };
     let error = step(
         &state(),

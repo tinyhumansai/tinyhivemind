@@ -13,7 +13,7 @@ use tinyhivemind::aside::Audience;
 #[test]
 fn the_opening_round_is_blind_until_every_member_has_been_heard() {
     let room = Room::new();
-    let policy = EpisodePolicy::DEFAULT;
+    let policy = sequential();
 
     let early = speaking(run(&room, &state(), &converging(), &policy));
     assert_eq!(early.visibility, Visibility::Blind);
@@ -31,7 +31,7 @@ fn a_marker_less_turn_still_counts_toward_ending_the_blind_round() {
     // must still count as heard -- otherwise a member who never has anything
     // to formally propose keeps the whole room blind forever.
     let room = Room::new();
-    let policy = EpisodePolicy::DEFAULT;
+    let policy = sequential();
 
     let mut heard = converging();
     heard.push(said(4, "scout", "Just thinking out loud, no vote yet."));
@@ -48,7 +48,7 @@ fn a_disabled_blind_round_is_always_full() {
     let room = Room::new();
     let policy = EpisodePolicy {
         blind_round: false,
-        ..EpisodePolicy::DEFAULT
+        ..sequential()
     };
     let turn = speaking(run(&room, &state(), &converging(), &policy));
     assert_eq!(turn.visibility, Visibility::Full);
@@ -124,7 +124,7 @@ fn a_blind_turn_preserves_pre_episode_agent_context() {
 #[test]
 fn speaking_costs_the_speaker_and_silence_accrues_standing() {
     let room = Room::new();
-    let turn = speaking(run(&room, &state(), &converging(), &EpisodePolicy::DEFAULT));
+    let turn = speaking(run(&room, &state(), &converging(), &sequential()));
     let speaker = turn.agent_id.clone();
 
     let charged = turn.next_state.thresholds;
