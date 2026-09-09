@@ -472,17 +472,15 @@ fn run_arms(options: &Options, rooms: &[Room]) -> Result<(Totals, std::time::Dur
     // merged here in room order. The body below is exactly the sequential
     // fold it replaced — what changed is who owns the `Totals` it folds into.
     // See `crate::parallel` for why the merge order is not a detail.
-    let per_room: Vec<Totals> = parallel::map_in_order(rooms, options.jobs, |room| {
-        let index = rooms
-            .as_ptr_range()
-            .start
-            .addr()
-            .abs_diff(std::ptr::from_ref(room).addr())
-            / size_of::<Room>();
+    // Indexed rather than bare, because two arms seed themselves off the
+    // room's position in the sample and a worker cannot recover it from a
+    // reference.
+    let indexed: Vec<(usize, &Room)> = rooms.iter().enumerate().collect();
+    let per_room: Vec<Totals> = parallel::map_in_order(&indexed, options.jobs, |(index, room)| {
+        let (index, room) = (*index, *room);
         let mut totals = Totals::default();
-        let totals_ref = &mut totals;
         {
-            let totals = totals_ref;
+            let totals = &mut totals;
 
         totals
             .hive_default
