@@ -133,9 +133,13 @@ impl Federation {
             .cloned()
             .unwrap_or_else(|| TopicId::from("stage"));
 
-        // Every desk is wrong about a *different* option. Two desks sharing a
-        // decoy would agree with each other for the wrong reason, which is a
-        // failure mode worth studying but not the one being measured here.
+        // Every desk is wrong about a *different* option, for as long as the
+        // slate is wide enough to allow it. Two desks sharing a decoy agree
+        // with each other for the wrong reason, which is a failure mode worth
+        // studying but not the one being measured here — so above
+        // `topics - 1` desks the wrap below is unavoidable and
+        // `decoys_distinct` records that it happened.
+        let decoys_distinct = desk_count <= topics.saturating_sub(1);
         let decoys: Vec<TopicId> = (0..desk_count)
             .map(|desk| {
                 let others: Vec<&TopicId> = names.iter().filter(|topic| **topic != truth).collect();
