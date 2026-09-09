@@ -204,13 +204,11 @@ has the tables behind each of those, across desk sizes, plus what the benchmark 
 
 ## Depth and width
 
-`turns/ep` is what the turn budget bounds. `rounds/ep`, beside it, is what a
-host with async seats actually waits for. Until ADR 0014 the two were one
-number, and the table charged `vote` fifteen turns for what is **one round** of
-fifteen independent answers. Width turns out to be two mechanisms with opposite
-prices — widening a blind round is free, widening a revealed one is not — which
-is why the policy carries two bounds and why `hive+wide` and `hive+blind` are
-separate arms. [`DEPTH.md`](DEPTH.md) has the tables.
+`turns/ep` is what the budget bounds; `rounds/ep` beside it is what a host with
+async seats waits for. The two were one number until ADR 0014, which charged
+`vote` fifteen turns for what is **one round** of fifteen independent answers.
+Widening a blind round is free and widening a revealed one is not, which is why
+the policy carries two bounds. [`DEPTH.md`](DEPTH.md) has the tables.
 
 ## Statistics
 
