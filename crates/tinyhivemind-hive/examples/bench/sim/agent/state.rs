@@ -96,6 +96,16 @@ impl SimAgent {
         self.blind_evidence = on;
     }
 
+    /// Whether this member's first turn, while the room is still blind, is a
+    /// deposit rather than a position.
+    ///
+    /// Read only by the tests that assert a sweep's own room constructor did
+    /// not silently drop `--blind-evidence`. The field is private and a turn
+    /// reads it directly; this exists so a test does not have to.
+    pub(crate) fn opens_with_evidence(&self) -> bool {
+        self.blind_evidence
+    }
+
     /// Fold one outside reading of a topic into this member's own view.
     ///
     /// Returns whether the reading was taken: a topic this member holds no

@@ -234,7 +234,10 @@ fn a_faceted_room_applies_blind_evidence() {
 
     let plain = faceted(&Options::defaults(), 0xFACE7, 0, None);
     assert!(
-        plain.agents.iter().all(|agent| !agent.opens_with_evidence()),
+        plain
+            .agents
+            .iter()
+            .all(|agent| !agent.opens_with_evidence()),
         "and none of them does when nobody asked, so no published number moves"
     );
 }
