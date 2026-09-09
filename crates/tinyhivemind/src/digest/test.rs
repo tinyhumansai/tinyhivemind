@@ -810,9 +810,12 @@ fn pin(sequence: u64) -> Pin {
     }
 }
 
-/// Sixty-one desk rows, newest first, the way a log pages them back.
+/// Sixty desk rows, newest first, the way a log pages them back.
+///
+/// Sixty is `input_limit`, so a first fold with no prior account covers all of
+/// them in one step and the page ends exactly where the walk stops.
 fn a_long_channel() -> Vec<LogMessage> {
-    (1..=61)
+    (1..=60)
         .rev()
         .map(|sequence| raw(sequence, "said something", Audience::Desk))
         .collect()
