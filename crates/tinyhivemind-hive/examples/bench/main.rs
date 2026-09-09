@@ -5,6 +5,8 @@
 //! cargo run --release -p tinyhivemind-hive --example bench -- --trace # one episode
 //! cargo run --release -p tinyhivemind-hive --example bench -- --sweep # tune the policy
 //! cargo run --release -p tinyhivemind-hive --example bench -- --swarm # several desks
+//! cargo run --release -p tinyhivemind-hive --example bench -- \
+//!   --swarm --desks 100 --per-desk 10   # a thousand agents across a hundred channels
 //! cargo run -p tinyhivemind-hive --example bench -- --agent-cmd "opencode run"
 //! ```
 //!
@@ -73,6 +75,8 @@
 //! | `--exchange-cap N` | private rows one member may write off the floor (default 4); `0` disables `hive+rounds` |
 //! | `--blind-evidence` | members open the blind round with a deposit, not a position |
 //! | `--directory` | fold the directory into the traced episode's own policy |
+//! | `--jobs N` | threads the per-room loops spread over (default: one per core) |
+//! | `--ask-cap N` | cross-channel questions one desk may ask off the floor (default 2); `0` puts asking back on the floor |
 //! | `--thinking on\|off` | whether the HTTP backend reasons before answering |
 //!
 //! See `live.rs` and `http.rs` for what the two live backends drive.

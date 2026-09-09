@@ -22,12 +22,15 @@ resolves it to `sim/mod.rs` transparently.
 | `sim/view.rs` | `View`, the window a participant reads the transcript through, and the marker parsers |
 | `federation.rs` | several desks, each with a correlated bias of its own |
 | `swarm/mod.rs` | one journal per channel, the scheduler, and the referral edge: `SwarmMember`, `SwarmHost`, and driving a swarm episode |
-| `swarm/{board,member,format}.rs` | `Board`'s pending queue and seat lookup; `SwarmSim`, which can also field a referral; parsing and restating a `Reading` for the wire |
+| `swarm/{board,member,format}.rs` | `Board`'s pending queue, seat lookup and `AskChannel` — whether a desk pays for a cross-channel question with an authorized turn or off the floor; `SwarmSim`, which can also field a referral; parsing and restating a `Reading` for the wire |
 | `run/mod.rs` | the host: a journal, a roster, and the step loop — `Host`, `Ending`, and the episode entry points |
 | `run/{turns,scoring}.rs` | per-turn machinery (audience, appending a turn, one exchange), then `EpisodeReport`, `Tally`, and an episode's accounting |
 | `arms.rs` | the `ladder`, `vote`, `merged` and federated controls |
 | `scale.rs` | `--scale-sweep`: room size against channel topology, one table per axis |
 | `sweep.rs` | the policy grid and its ranking |
+| `parallel.rs` | spreading the per-room loops across cores: `map_in_order`, which returns results in *input* order whatever order the threads finish in, and `default_jobs` |
+| `parallel/test.rs` | that ordering guarantee, at every `--jobs` value and under deliberately reversed completion order |
+| `metrics/test.rs` | that merging two samples equals folding one, which is what lets the loops above run in parallel without moving a number |
 | `metrics/mod.rs` | aggregation, formatting, and the confidence-interval, bootstrap and rank-correlation statistics: `Aggregate` and the printed/JSON tables |
 | `metrics/{format,stats}.rs` | formatting helpers for those tables, then the small numeric statistics helpers (percentile, rank correlation) |
 | `live/mod.rs` | the shared prompt state both live backends assemble: `AgentPrompt`, plus the external agent CLI backend and the solo poll |
