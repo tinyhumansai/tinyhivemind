@@ -15,7 +15,7 @@
 
 use std::{collections::HashMap, path::Path, time::Duration};
 
-use tinyhivemind::speech::Utterance;
+use tinyhivemind::speech::{Utterance, fence};
 
 use crate::{BoxError, agent, chat, mcp};
 
@@ -227,7 +227,7 @@ fn land(
         if !text.trim().is_empty() {
             println!("   wrap-up posted through the router with no tools attached");
         }
-        agent::extract_post(&text)
+        fence::extract_post(&text)
     } else {
         println!("   landed in the seat's own session, files included");
         landed.message

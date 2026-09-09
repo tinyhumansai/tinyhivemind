@@ -47,3 +47,27 @@ fn an_opener_with_nothing_after_it_yields_nothing_rather_than_a_marker() {
     assert_eq!(extract_post("<<<POST"), "");
     assert_eq!(extract_post("<<<POST>>>"), "");
 }
+
+#[test]
+fn takes_the_last_block_when_a_seat_posts_twice() {
+    assert_eq!(
+        extract_post("<<<POST\nfirst draft\nPOST>>>\n<<<POST\nsecond and final\nPOST>>>"),
+        "second and final",
+    );
+}
+
+#[test]
+fn keeps_an_unterminated_block_rather_than_dropping_it() {
+    assert_eq!(
+        extract_post("narration\n<<<POST\n@lead ran out of room"),
+        "@lead ran out of room",
+    );
+}
+
+#[test]
+fn takes_the_marked_block_over_surrounding_narration() {
+    assert_eq!(
+        extract_post("thinking out loud\n<<<POST\n@checker ready\nPOST>>>\ndone"),
+        "@checker ready",
+    );
+}
