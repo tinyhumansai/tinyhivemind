@@ -9,7 +9,8 @@ resolves it to `sim/mod.rs` transparently.
 | file | what it holds |
 | --- | --- |
 | `main.rs` | the crate doc, the `mod` declarations, and top-level dispatch: `main`, `stats_check`, `run`, `trace`, and the `sweep_*` entry points |
-| `cli.rs` | `Options`, `Mode`, and command-line parsing |
+| `cli/mod.rs` | `Options`, `Mode`, and command-line parsing |
+| `cli/test.rs` | unit tests for CLI flag parsing |
 | `policy.rs` | `default_policy`, `tuned_policy`, and the delegation-arm policy variants built from it |
 | `compare.rs` | the simulated multi-arm comparison engine: `compare`, `Totals`, `run_arms`, `endings`, and the cost table |
 | `backend.rs` | seat/backend configuration shared by both live drivers: API keys, HTTP config, seat model and command resolution, usage accounting |
