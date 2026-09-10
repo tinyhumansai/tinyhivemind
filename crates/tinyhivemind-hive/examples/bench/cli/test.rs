@@ -99,5 +99,5 @@ fn a_valid_fact_noise_value_is_parsed_and_enables_evidence() {
     let result = apply_scale_flag(&mut options, "--fact-noise", &mut args);
     assert_eq!(result, Ok(true));
     assert_eq!(options.fact_noise, 250);
-    assert!(options.evidence, "--fact-noise implies --evidence",);
+    assert!(options.evidence, "--fact-noise implies --evidence");
 }
