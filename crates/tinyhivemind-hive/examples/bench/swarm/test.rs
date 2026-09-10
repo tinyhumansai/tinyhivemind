@@ -3,6 +3,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+use super::board::AskChannel;
 use super::member::SwarmSim;
 use super::*;
 use crate::federation::Federation;
@@ -205,4 +206,35 @@ fn the_concurrent_pass_is_deterministic_in_its_width() {
             .collect::<Vec<_>>()
     };
     assert_eq!(endings(&narrow), endings(&wide));
+}
+
+#[test]
+fn an_ask_cap_of_zero_means_on_the_floor_in_every_arm() {
+    // `--ask-cap 0` is documented as putting asking back on the floor. Read
+    // literally as `OffFloor { cap: 0 }` it means *no asking at all*, which is
+    // the siloed control wearing the off-floor arm's label — and the live
+    // driver mapped it while the simulated arms did not.
+    assert_eq!(Exchange::from_caps(0, 0), Exchange::ON_FLOOR);
+    assert_eq!(
+        Exchange::from_caps(2, 1),
+        Exchange {
+            asking: AskChannel::OffFloor { cap: 2 },
+            digest: 1,
+        },
+    );
+
+    // On the floor, a desk may ask every peer once; the collapse that fixes
+    // is what `--ask-cap` above zero exists for.
+    let federation = federation();
+    let policy = desk_policy(&federation);
+    let on_floor = run_swarm(
+        &federation,
+        &policy,
+        referrals(),
+        Exchange::from_caps(0, 0),
+        "Decide.",
+        false,
+    )
+    .expect("runs");
+    assert_eq!(on_floor.off_floor_asks, 0, "nothing is asked off the floor");
 }

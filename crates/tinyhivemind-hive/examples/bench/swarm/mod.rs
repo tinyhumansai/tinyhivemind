@@ -48,7 +48,7 @@ use crate::federation::Federation;
 use crate::run::Ending;
 use tinyhivemind_hive::aside::Audience;
 
-pub(crate) use board::{AskChannel, Exchange};
+pub(crate) use board::Exchange;
 
 use board::Board;
 use member::SwarmSim;
