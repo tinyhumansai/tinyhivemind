@@ -36,7 +36,7 @@
 
 mod axes;
 
-pub(crate) use axes::{Axes, Cell, Complexity, Topic};
+pub(crate) use axes::{Axes, Cell};
 
 use crate::arms;
 use crate::cli::Options;

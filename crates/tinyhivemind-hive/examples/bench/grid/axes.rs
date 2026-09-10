@@ -266,6 +266,24 @@ impl Axes {
         if parts.is_empty() {
             return Err(format!("{flag} takes a comma-separated list, not {list:?}"));
         }
+        // `all` on any axis takes every point that axis defines, which is
+        // what the enumerated `ALL` constants are for. Spelling out
+        // `uniform,expert,hidden` does the same thing; this exists so that
+        // widening an axis does not require knowing what is on it, and so
+        // that a new point added to an axis is picked up by a run that asked
+        // for all of them rather than silently left out.
+        if parts == ["all"] {
+            match flag {
+                "--topic" => self.topics = Topic::ALL.to_vec(),
+                "--complexity" => self.complexities = Complexity::ALL.to_vec(),
+                other => {
+                    return Err(format!(
+                        "{other} has no fixed set of points, so it takes numbers rather than `all`"
+                    ));
+                }
+            }
+            return Ok(true);
+        }
         match flag {
             "--topic" => {
                 self.topics = parts
