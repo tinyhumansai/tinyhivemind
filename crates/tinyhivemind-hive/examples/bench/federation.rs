@@ -241,10 +241,12 @@ impl Federation {
     /// about two times in ninety-nine, while a digest reaches every desk at
     /// once and should find it every time.
     ///
-    /// One member per desk holds it, chosen by seat rather than at random so
-    /// the same seed plants the same facts: the decisive seat is the desk's
-    /// *last* one, which is the seat the role rotation is least likely to have
-    /// made a proposer.
+    /// Every member of the holding desk knows it — the hidden profile is
+    /// across desks, not inside one — and the desk's *last* seat holds it as
+    /// `refutes`, so its own floor sees a member with grounds to refute rather
+    /// than only a room quietly scoring the option lower. The seat is chosen
+    /// by position rather than at random so the same seed plants the same
+    /// facts.
     pub(crate) fn planted(&self) -> Self {
         let mut federation = self.clone();
         federation.evidence = true;
@@ -264,16 +266,37 @@ impl Federation {
             else {
                 continue;
             };
-            // A desk whose own decoy is the cure it holds would be healing
-            // itself, which is the arrangement this deliberately avoids. It
-            // can only happen when two desks share a decoy, and then the fact
-            // is simply redundant rather than wrong.
+            // The *holding desk* knows what it holds. The hidden profile here
+            // is across desks, not inside one: desk `d` cannot cure its own
+            // blind spot, but the desk that owns the fact is not keeping it
+            // from its own members. Noting it on every seat is also what puts
+            // it where it can leave — an ask or a digest is written by
+            // whichever seat the rotation reached, and a fact parked on a seat
+            // that never writes to the wire is a fact no channel can carry.
+            // (The first version of this planted it on one seat and measured
+            // nothing at all, for exactly that reason.)
+            let Some(desks) = federation
+                .desks
+                .get(holder)
+                .map(|held| held.members.clone())
+            else {
+                continue;
+            };
+            for member in &desks {
+                if let Some(index) = federation.seat_of(member)
+                    && let Some(agent) = federation.agents.get_mut(index)
+                {
+                    agent.note_fact(&cure);
+                    agent.recompute_favourite();
+                }
+            }
+            // The decisive seat also *holds* it, so the desk's own floor sees
+            // a member with grounds to refute rather than only a room that
+            // quietly scores the option lower.
             if let Some(index) = federation.seat_of(&seat)
                 && let Some(agent) = federation.agents.get_mut(index)
             {
                 agent.refutes = Some(cure.clone());
-                agent.note_fact(&cure);
-                agent.recompute_favourite();
             }
         }
         federation

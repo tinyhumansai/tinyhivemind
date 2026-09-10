@@ -79,12 +79,20 @@ impl SwarmSim {
 
     /// What this member can disqualify outright, if the run planted facts.
     ///
+    /// Read from `ruled_out` rather than from `refutes`, and the difference
+    /// matters: `refutes` is the one fact this member was *given*, while
+    /// `ruled_out` is everything it can currently disqualify — what it was
+    /// given, and what another desk has since told it. So a fact does not stop
+    /// at the first desk it reaches; a desk that learned one relays it, which
+    /// is how a disqualification crosses a federation wider than any one
+    /// desk's ask.
+    ///
     /// Empty unless `--evidence` planted them, which is what keeps every
     /// recorded number taken without it byte-identical: a member with nothing
     /// to disqualify writes exactly the line it always wrote.
     fn held_facts(&self) -> Vec<Fact> {
         self.agent
-            .refutes
+            .ruled_out
             .iter()
             .map(|topic| Fact {
                 desk: self.here.clone(),
@@ -204,9 +212,11 @@ impl SwarmMember for SwarmSim {
         // be diluted by peers who disagree and a shared bias cannot reinforce
         // it. That asymmetry is the whole experiment.
         for fact in facts(content) {
-            if fact.desk == self.here {
-                continue;
-            }
+            // No same-desk guard, unlike a reading. A reading is averaged, so
+            // counting one's own desk twice would weight it twice; a fact is
+            // idempotent — `note_fact` will not record one it already holds —
+            // and a desk-mate stating a disqualification is exactly how a desk
+            // pools what one of its members knows.
             if !self.directory.iter().any(|(_, name)| *name == fact.desk) {
                 continue;
             }
