@@ -51,20 +51,41 @@ fn a_digest_costs_one_call_per_desk_however_many_peers_hear_it() {
 
 #[test]
 fn a_digest_is_off_unless_the_caller_asks_for_it() {
+    // "Off" has to be shown by contrast with "on", or the assertion is a run
+    // compared against itself. So the same federation is run both ways and the
+    // two are required to differ in exactly the places a digest touches.
     let federation = federation();
     let policy = desk_policy(&federation);
-    let quiet = Exchange::from_caps(2, 0);
-    let report =
-        run_swarm(&federation, &policy, referrals(), quiet, "Decide.", false).expect("runs");
-    assert_eq!(report.digests, 0);
+    let run = |exchange| {
+        run_swarm(
+            &federation,
+            &policy,
+            referrals(),
+            exchange,
+            "Decide.",
+            false,
+        )
+        .expect("runs")
+    };
+    let quiet = run(Exchange::from_caps(2, 0));
+    let publishing = run(Exchange::from_caps(2, 1));
 
-    // ...and the arm it leaves behind is the one every recorded number was
-    // taken against: same decision, same turns, same crossings.
-    let recorded =
-        run_swarm(&federation, &policy, referrals(), quiet, "Decide.", false).expect("runs");
-    assert_eq!(report.decided, recorded.decided);
-    assert_eq!(report.turns, recorded.turns);
-    assert_eq!(report.crossings, recorded.crossings);
+    assert_eq!(quiet.digests, 0, "nothing is published unless asked for");
+    assert_eq!(
+        publishing.digests,
+        u32::try_from(federation.desks.len()).unwrap(),
+        "and asking for it publishes once per desk",
+    );
+
+    // The rows a digest writes cross channels, so the quiet arm must show
+    // strictly fewer crossings — which is what makes `digests: 0` mean the
+    // code path was not taken rather than merely not counted.
+    assert!(
+        publishing.crossings > quiet.crossings,
+        "publishing writes rows on every peer: {} against {}",
+        publishing.crossings,
+        quiet.crossings,
+    );
 }
 
 #[test]
