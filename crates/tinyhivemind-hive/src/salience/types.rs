@@ -34,6 +34,32 @@ impl SalienceWeights {
         relevance: 20,
         half_life: 20,
     };
+
+    /// The weights a desk of `members` should carry.
+    ///
+    /// Only `half_life` moves, and it moves because it is the one term
+    /// measured in rows rather than in ratios. One full round of a desk is
+    /// `members` rows, so a fixed half-life of twenty means that in a room of
+    /// two hundred and fifty-six a trace from the opening round is twelve
+    /// half-lives old before the round has even finished — worth about one
+    /// seven-thousandth of a fresh one. The opening round is the round that
+    /// carries the independent readings, so decaying it to nothing is
+    /// precisely the wrong thing to decay.
+    ///
+    /// One round is therefore the floor, and the default is kept for any room
+    /// small enough that it already exceeds a round.
+    #[must_use]
+    pub const fn for_room(members: u32) -> Self {
+        let half_life = if members > Self::DEFAULT.half_life {
+            members
+        } else {
+            Self::DEFAULT.half_life
+        };
+        Self {
+            half_life,
+            ..Self::DEFAULT
+        }
+    }
 }
 
 impl Default for SalienceWeights {

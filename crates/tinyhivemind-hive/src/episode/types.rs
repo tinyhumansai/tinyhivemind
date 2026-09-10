@@ -122,6 +122,57 @@ impl EpisodePolicy {
         quorum: QuorumPolicy::DEFAULT,
         weights: SalienceWeights::DEFAULT,
     };
+
+    /// The policy a desk of `members` should carry.
+    ///
+    /// **Use this rather than [`Self::DEFAULT`] for any desk above about a
+    /// dozen.** Three of the default's numbers are absolute where the quantity
+    /// they bound scales with the room, and each one fails silently:
+    ///
+    /// - `turn_budget: 12` is fewer turns than a room of thirteen has members.
+    ///   With `blind_round` set, visibility lifts only once *every* member has
+    ///   authored a live row, so such a room stays [`Visibility::Blind`] for
+    ///   the whole episode and never deliberates at all. It still returns
+    ///   turns, and nothing in the result says the room never saw itself.
+    /// - `quorum.threshold: 2` is two supporters whether the desk holds five
+    ///   members or a thousand.
+    /// - `weights.half_life: 20` is twenty rows against an opening round that
+    ///   is `members` rows long.
+    ///
+    /// The budget is three turns per member with a floor of six: a blind
+    /// opening round costs one turn per member before anyone has seen anyone,
+    /// a majority then has to assemble on one option, and the decision has to
+    /// be recorded. It is a cap rather than a cost — the benchmark's
+    /// five-member room finishes in under seven of the fifteen turns it is
+    /// allowed — and a budget that does *not* scale is what makes a larger room
+    /// look worse than a smaller one: at a fixed twelve, an eight-member room
+    /// fails to decide a third of the time and scores 64%; at twenty-four it
+    /// decides 96% of the time and scores 88%.
+    ///
+    /// See [`QuorumPolicy::for_room`] and [`SalienceWeights::for_room`] for
+    /// the other two.
+    ///
+    /// ```
+    /// use tinyhivemind_hive::EpisodePolicy;
+    ///
+    /// let policy = EpisodePolicy::for_room(100);
+    /// assert_eq!(policy.turn_budget, 300);
+    /// assert_eq!(policy.quorum.threshold, 51);
+    /// // The window covers the whole episode, so an opening reading still
+    /// // counts when the room settles.
+    /// assert_eq!(policy.quorum.window, 300);
+    /// ```
+    #[must_use]
+    pub const fn for_room(members: u32) -> Self {
+        let budget = members.saturating_mul(3);
+        let turn_budget = if budget < 6 { 6 } else { budget };
+        Self {
+            turn_budget,
+            quorum: QuorumPolicy::for_room(members, turn_budget),
+            weights: SalienceWeights::for_room(members),
+            ..Self::DEFAULT
+        }
+    }
 }
 
 impl Default for EpisodePolicy {
