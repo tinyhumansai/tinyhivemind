@@ -159,13 +159,16 @@ fn refuses_an_axis_the_selected_mode_would_discard() {
     // `--swarm --topic hidden` would run a federation and silently throw the
     // named topic away, reporting it under the heading the operator typed.
     // That is the failure an unrecognised flag is already refused for.
-    match Options::checked(Mode::Swarm, true) {
-        Ok(()) => panic!("an ignored axis must stop the run"),
-        Err(message) => assert!(
-            message.contains("--swarm"),
-            "the refusal must name the mode that would discard the axis: {message}"
-        ),
-    }
+    let refused = Options::checked(Mode::Swarm, true);
+    assert!(refused.is_err(), "an ignored axis must stop the run");
+    // The refusal has to name the offending mode, or an operator cannot tell
+    // which of the two flags they typed is the one to drop.
+    assert!(
+        refused
+            .err()
+            .is_some_and(|message| message.contains("--swarm")),
+        "the refusal must name the mode that would discard the axis"
+    );
 
     // Naming an axis with no competing mode flag is the ordinary grid, and
     // a mode flag with no axis named is untouched by this check.
