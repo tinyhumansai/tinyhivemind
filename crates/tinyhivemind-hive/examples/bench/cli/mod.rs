@@ -7,10 +7,13 @@
 //! `--trace`, `--swarm` and friends pick between. See `main.rs`'s crate doc
 //! for the flag table itself.
 
+mod flags;
+
 use crate::context::{Compaction, ContextBudget, FOLD_FIDELITY};
 use crate::http::{Thinking, Wire};
 use crate::policy::tuned_policy;
 use crate::sim::Expertise;
+use flags::{apply_expertise_flag, apply_live_flag, apply_scale_flag, flag_number, next_number};
 use tinyhivemind_hive::Basis;
 use tinyhivemind_hive::{DirectoryPolicy, EpisodePolicy};
 
