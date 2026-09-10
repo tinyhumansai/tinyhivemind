@@ -23,7 +23,7 @@ use crate::federation::Federation;
 use crate::metrics::{self, Aggregate};
 use crate::parallel;
 use crate::run;
-use crate::swarm::{AskChannel, Exchange, SwarmReport, pooled, run_swarm};
+use crate::swarm::{Exchange, SwarmReport, pooled, run_swarm};
 
 /// What every arm decided about one federation.
 ///
