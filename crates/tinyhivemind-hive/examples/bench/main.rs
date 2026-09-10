@@ -5,6 +5,8 @@
 //! cargo run --release -p tinyhivemind-hive --example bench -- --trace # one episode
 //! cargo run --release -p tinyhivemind-hive --example bench -- --sweep # tune the policy
 //! cargo run --release -p tinyhivemind-hive --example bench -- --swarm # several desks
+//! cargo run --release -p tinyhivemind-hive --example bench -- \
+//!   --swarm --desks 100 --per-desk 10   # a thousand agents across a hundred channels
 //! cargo run -p tinyhivemind-hive --example bench -- --agent-cmd "opencode run"
 //! ```
 //!
@@ -58,6 +60,7 @@
 //! | `--desks N`, `--per-desk N`, `--bias N` | the federation `--swarm` builds |
 //! | `--agent-cmd CMD` | drive one episode through a real agent CLI |
 //! | `--scenario PATH` | give the live room a real problem with private facts |
+//! | `--scenario-dir PATH` | run every `.txt` scenario in a directory, in name order |
 //! | `--repeat N` | run a live scenario N times and count both arms |
 //! | `--timeout SECS` | per-turn deadline for a live agent or HTTP request (default 180) |
 //! | `--api-base URL` | drive seats directly over HTTP instead of a CLI |
@@ -73,6 +76,8 @@
 //! | `--exchange-cap N` | private rows one member may write off the floor (default 4); `0` disables `hive+rounds` |
 //! | `--blind-evidence` | members open the blind round with a deposit, not a position |
 //! | `--directory` | fold the directory into the traced episode's own policy |
+//! | `--jobs N` | threads the per-room loops spread over (default: one per core) |
+//! | `--ask-cap N` | cross-channel questions one desk may ask off the floor (default 2); `0` puts asking back on the floor |
 //! | `--thinking on\|off` | whether the HTTP backend reasons before answering |
 //!
 //! See `live.rs` and `http.rs` for what the two live backends drive.
@@ -90,6 +95,7 @@ mod live;
 mod live_single;
 mod live_swarm;
 mod metrics;
+mod parallel;
 mod policy;
 mod rng;
 mod run;
@@ -118,7 +124,13 @@ pub(crate) const TASK: &str =
     "We must choose one rollout strategy for a risky migration. Decide together.";
 
 fn main() {
-    let options = Options::parse();
+    let options = match Options::parse() {
+        Ok(options) => options,
+        Err(error) => {
+            eprintln!("bench: {error}");
+            std::process::exit(2);
+        }
+    };
     if matches!(options.mode, Mode::StatsCheck) {
         if stats_check() {
             println!("stats-check: ok");
@@ -282,7 +294,13 @@ fn trace(rooms: &[Room], policy: &EpisodePolicy) -> Result<(), String> {
 /// Charge every arm for the context it needs, and print who degrades first.
 fn sweep_context(options: &Options, rooms: &[Room]) -> Result<(), String> {
     let wall = Instant::now();
-    let points = budget::sweep(rooms, &options.policy, TASK, options.aside_cap)?;
+    let points = budget::sweep(
+        rooms,
+        &options.policy,
+        TASK,
+        options.aside_cap,
+        options.jobs,
+    )?;
     let wall = wall.elapsed();
     print!("{}", budget::render(&points, rooms.len()));
     println!("\nswept in {:.2} s", wall.as_secs_f64());

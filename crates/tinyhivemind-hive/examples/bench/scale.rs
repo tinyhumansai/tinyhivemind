@@ -57,6 +57,7 @@ use crate::TASK;
 use crate::arms;
 use crate::cli::Options;
 use crate::metrics::Aggregate;
+use crate::parallel;
 use crate::policy::{blind_wide_policy, tuned_policy, widened_policy};
 use crate::rng::mix;
 use crate::run::{
@@ -70,6 +71,27 @@ use crate::sim::{Expertise, MAX_MEMBERS, Room};
 /// orders of magnitude, and a linear ladder spends most of its time where
 /// nothing changes.
 pub(crate) const DEFAULT_SIZES: [usize; 6] = [3, 5, 8, 16, 32, 64];
+
+/// What every channel decided about one room, already folded.
+///
+/// One room's worth of work, so a worker can produce it without touching any
+/// other room and the parent can fold the lot in room order. Each field is the
+/// arm named after it in the table, aggregated **inside the worker** rather
+/// than carried out of it: an `EpisodeReport` owns several vectors, and
+/// retaining nine of them per room across a sample that reaches thousands of
+/// rooms of up to a thousand members is a live set that grows without bound
+/// for no reason. A folded `Channel` is a handful of counters and one flag.
+struct RoomOutcome {
+    ladder: Channel,
+    vote: Channel,
+    broadcast: Channel,
+    on_floor: Channel,
+    rounds: Channel,
+    off_floor: Channel,
+    pooled: Channel,
+    wide: Channel,
+    blind_wide: Channel,
+}
 
 /// One arm's score at one room size.
 struct Point {
@@ -110,6 +132,17 @@ impl Channel {
         self.totals.add_arm(report);
     }
 
+    /// Fold another chunk of rooms' totals in.
+    ///
+    /// Called in **room order**, which is the whole contract: see
+    /// [`Aggregate::merge`] for why folding out of order would leave the
+    /// accuracy column right and every confidence interval wrong.
+    fn merge(&mut self, other: &Self) {
+        self.rows += other.rows;
+        self.episodes = self.episodes.saturating_add(other.episodes);
+        self.totals.merge(&other.totals);
+    }
+
     fn rows_per_episode(&self) -> f64 {
         if self.episodes == 0 {
             return 0.0;
@@ -125,15 +158,32 @@ impl Channel {
 /// Returns whatever an episode returns when the host contract is violated.
 pub(crate) fn sweep(options: &Options) -> Result<(), String> {
     let wall = Instant::now();
-    let sizes: Vec<usize> = options
-        .sizes
-        .iter()
-        .map(|size| (*size).clamp(2, MAX_MEMBERS))
-        .collect();
+    // Clamped, then deduped, and in that order. Two requested sizes above the
+    // cap clamp to the same number, and a `sizes` list carrying it twice would
+    // run every arm twice and push two `Point`s per arm into the table, where
+    // `render`'s `find` silently returns the first — a column labelled with a
+    // size the harness never ran. Saying so beats swallowing it.
+    let mut sizes: Vec<usize> = Vec::new();
+    for requested in &options.sizes {
+        let size = (*requested).clamp(2, MAX_MEMBERS);
+        if size != *requested {
+            println!(
+                "note: room size {requested} clamped to {size}, the largest this harness builds"
+            );
+        }
+        if !sizes.contains(&size) {
+            sizes.push(size);
+        }
+    }
     let mut points: Vec<Point> = Vec::new();
 
     for size in &sizes {
-        let tuned = tuned_policy(*size);
+        // The size-scaled policy, carrying whatever `--distance` asked for:
+        // `tuned_policy` knows the room size and nothing about the ruler.
+        let tuned = EpisodePolicy {
+            distance: options.policy.distance,
+            ..tuned_policy(*size)
+        };
         let rooms: Vec<Room> = (0..options.episodes)
             .map(|index| {
                 let mut room = Room::generate_with(
@@ -156,6 +206,88 @@ pub(crate) fn sweep(options: &Options) -> Result<(), String> {
     Ok(())
 }
 
+/// Every channel, over one room, folded before it leaves the worker.
+///
+/// Split from [`one_size`] because it is the whole body of the parallel map
+/// and reads as one thing: nine arms decide the same room, and each is reduced
+/// to a `Channel` here rather than carried out as a report.
+///
+/// # Errors
+///
+/// Returns whatever an episode returns when the host contract is violated.
+fn one_room(options: &Options, room: &Room, tuned: &EpisodePolicy) -> Result<RoomOutcome, String> {
+    let arm = |report: &crate::arms::ArmReport| {
+        let mut channel = Channel::default();
+        channel.add_arm(report);
+        channel
+    };
+    let episode = |report: &crate::run::EpisodeReport| {
+        let mut channel = Channel::default();
+        channel.add(report);
+        channel
+    };
+    Ok(RoomOutcome {
+        ladder: arm(&arms::run_ladder(room, options.seed)?),
+        vote: arm(&arms::run_vote(room, tuned.turn_budget)),
+        broadcast: episode(&run_episode(room, tuned, TASK, false)?),
+        on_floor: episode(&run_episode_checking(
+            room,
+            tuned,
+            TASK,
+            false,
+            0,
+            AsideMode::Private,
+            options.aside_cap,
+            CheckStyle::FACT,
+        )?),
+        rounds: episode(&run_episode_exchanging_with(
+            room,
+            tuned,
+            TASK,
+            false,
+            options.exchange_cap,
+            CheckStyle::EXCHANGE,
+        )?),
+        off_floor: episode(&run_episode(
+            &room.pre_checked(options.aside_cap, true),
+            tuned,
+            TASK,
+            false,
+        )?),
+        // `--aside-cap 0` is documented and used as the kill switch that
+        // leaves every aside arm bit-identical to `hive+`, `hive+pooled`
+        // included (see `compare.rs`), so honor it here too by skipping the
+        // pool rather than silently pooling regardless of the cap.
+        pooled: episode(&run_episode(
+            &if options.aside_cap == 0 {
+                room.clone()
+            } else {
+                room.pooled()
+            },
+            tuned,
+            TASK,
+            false,
+        )?),
+        // The same broadcast room, run in concurrent rounds. This is the
+        // arm the scale result asks for: every floor-bound channel dies as
+        // the room grows because turns per member is `budget / n`, and a
+        // round is the only thing that changes that ratio without changing
+        // the budget.
+        wide: episode(&run_episode(
+            room,
+            &widened_policy(tuned, options.round_width),
+            TASK,
+            false,
+        )?),
+        blind_wide: episode(&run_episode(
+            room,
+            &blind_wide_policy(tuned, options.round_width),
+            TASK,
+            false,
+        )?),
+    })
+}
+
 /// Every channel, over one size's rooms.
 fn one_size(
     options: &Options,
@@ -163,6 +295,14 @@ fn one_size(
     size: usize,
     tuned: &EpisodePolicy,
 ) -> Result<Vec<Point>, String> {
+    // Every room's seven arms are computed in a worker and the reports are
+    // folded here, in room order. The fold has to stay ordered even though the
+    // work does not: `Aggregate::correct_flags` is positional and the paired
+    // bootstrap under the table resamples arms index-for-index because they
+    // decided the *same* rooms. See `crate::parallel`.
+    let decided: Vec<RoomOutcome> =
+        parallel::map_in_order(rooms, options.jobs, |room| one_room(options, room, tuned))?;
+
     let mut ladder = Channel::default();
     let mut vote = Channel::default();
     let mut broadcast = Channel::default();
@@ -172,61 +312,16 @@ fn one_size(
     let mut pooled = Channel::default();
     let mut wide = Channel::default();
     let mut blind_wide = Channel::default();
-
-    for room in rooms {
-        ladder.add_arm(&arms::run_ladder(room, options.seed)?);
-        vote.add_arm(&arms::run_vote(room, tuned.turn_budget));
-        broadcast.add(&run_episode(room, tuned, TASK, false)?);
-        on_floor.add(&run_episode_checking(
-            room,
-            tuned,
-            TASK,
-            false,
-            0,
-            AsideMode::Private,
-            options.aside_cap,
-            CheckStyle::FACT,
-        )?);
-        rounds.add(&run_episode_exchanging_with(
-            room,
-            tuned,
-            TASK,
-            false,
-            options.exchange_cap,
-            CheckStyle::EXCHANGE,
-        )?);
-        off_floor.add(&run_episode(
-            &room.pre_checked(options.aside_cap, true),
-            tuned,
-            TASK,
-            false,
-        )?);
-        // `--aside-cap 0` is documented and used as the kill switch that
-        // leaves every aside arm bit-identical to `hive+`, `hive+pooled`
-        // included (see `compare.rs`), so honor it here too by skipping the
-        // pool rather than silently pooling regardless of the cap.
-        let ceiling = if options.aside_cap == 0 {
-            room.clone()
-        } else {
-            room.pooled()
-        };
-        pooled.add(&run_episode(&ceiling, tuned, TASK, false)?);
-        // The same broadcast room, run in concurrent rounds. This is the arm
-        // the scale result asks for: every floor-bound channel dies as the
-        // room grows because turns per member is `budget / n`, and a round is
-        // the only thing that changes that ratio without changing the budget.
-        wide.add(&run_episode(
-            room,
-            &widened_policy(tuned, options.round_width),
-            TASK,
-            false,
-        )?);
-        blind_wide.add(&run_episode(
-            room,
-            &blind_wide_policy(tuned, options.round_width),
-            TASK,
-            false,
-        )?);
+    for outcome in &decided {
+        ladder.merge(&outcome.ladder);
+        vote.merge(&outcome.vote);
+        broadcast.merge(&outcome.broadcast);
+        on_floor.merge(&outcome.on_floor);
+        rounds.merge(&outcome.rounds);
+        off_floor.merge(&outcome.off_floor);
+        pooled.merge(&outcome.pooled);
+        wide.merge(&outcome.wide);
+        blind_wide.merge(&outcome.blind_wide);
     }
 
     let named = [

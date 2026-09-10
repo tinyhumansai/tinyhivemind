@@ -7,6 +7,13 @@
 //! and usage-printing surface in `backend.rs`, but differ in everything about
 //! how a report is tallied and printed, since a federation's report covers
 //! several desks rather than one room.
+//!
+//! This file holds the drivers — what runs. What is counted and how it prints
+//! lives in [`totals`].
+
+mod totals;
+
+use totals::{run_federated_arms, tabulate};
 
 use std::time::Instant;
 
@@ -14,7 +21,6 @@ use tinyhivemind_hive::referral::ReferralPolicy;
 use tinyhivemind_hive::{EpisodePolicy, QuorumPolicy};
 
 use crate::TASK;
-use crate::arms;
 use crate::backend::{
     SeatUsage, backend_label, http_config, poll_backend, print_usage, seat_command, seat_model,
 };
@@ -23,12 +29,10 @@ use crate::federation::Federation;
 use crate::http::{HttpAgent, HttpDeskAgent};
 use crate::live::{self, AgentPrompt, LiveAgent};
 use crate::live_single::{plurality, verdict};
-use crate::metrics::{self, Aggregate};
 use crate::policy::{quorum_threshold, turn_budget};
 use crate::rng::mix;
-use crate::run;
 use crate::scenario::Scenario;
-use crate::swarm::{self, Channel, SwarmMember, SwarmReport, pooled, run_swarm};
+use crate::swarm::{self, Channel, Exchange, SwarmMember, run_swarm};
 
 /// The referral policy the swarm arm runs at.
 ///
@@ -105,117 +109,12 @@ pub(crate) fn swarm_compare(options: &Options) -> Result<(), String> {
         trace_swarm(first, &desk_policy)?;
     }
 
-    let mut siloed = SwarmTotals::default();
-    let mut swarmed = SwarmTotals::default();
-    let mut free = SwarmTotals::default();
-    let mut merged = Aggregate::default();
-    let mut vote = Aggregate::default();
     let wall = Instant::now();
-    for federation in &federations {
-        siloed.add(&run_swarm(
-            federation,
-            &desk_policy,
-            ReferralPolicy::DEFAULT,
-            TASK,
-            false,
-        )?);
-        swarmed.add(&run_swarm(
-            federation,
-            &desk_policy,
-            swarm_referrals(),
-            TASK,
-            false,
-        )?);
-        free.add(&run_swarm(
-            &pooled(federation),
-            &desk_policy,
-            ReferralPolicy::DEFAULT,
-            TASK,
-            false,
-        )?);
-        merged.add_arm(&arms::run_merged(federation, &merged_policy, TASK)?);
-        vote.add_arm(&arms::run_federated_vote(federation));
-    }
+    let totals = run_federated_arms(options, &federations, &desk_policy, &merged_policy)?;
     let wall = wall.elapsed();
 
-    tabulate(
-        &siloed,
-        &swarmed,
-        &free,
-        &merged,
-        &vote,
-        wall,
-        federations.len(),
-    );
+    tabulate(&totals, wall, federations.len());
     Ok(())
-}
-
-/// Running totals over a sample of federated runs.
-#[derive(Clone, Debug, Default)]
-struct SwarmTotals {
-    /// Federations in the sample.
-    runs: u32,
-    /// Federations whose desks agreed on one option.
-    decided: u32,
-    /// Federations that landed on the genuinely best option.
-    correct: u32,
-    /// Agent invocations across every desk.
-    turns: u64,
-    /// Referrals that left the desk that made them.
-    crossings: u64,
-    /// Answers that arrived after the desk that asked had finished.
-    stranded: u64,
-    /// Desk episodes that ended in a recorded decision.
-    converged: u32,
-    /// Desk episodes that tied with nobody left to break it.
-    deadlocked: u32,
-    /// Desk episodes that spent their budget.
-    exhausted: u32,
-    /// Desk episodes where nobody cleared their threshold.
-    idle: u32,
-    /// Calls into the library.
-    step_calls: u64,
-    /// Time spent inside the library.
-    library_time: std::time::Duration,
-}
-
-impl SwarmTotals {
-    /// Fold one federated run in.
-    fn add(&mut self, report: &SwarmReport) {
-        self.runs = self.runs.saturating_add(1);
-        if report.decided.is_some() {
-            self.decided = self.decided.saturating_add(1);
-        }
-        if report.correct {
-            self.correct = self.correct.saturating_add(1);
-        }
-        self.turns = self.turns.saturating_add(u64::from(report.turns));
-        self.crossings = self.crossings.saturating_add(u64::from(report.crossings));
-        self.stranded = self.stranded.saturating_add(u64::from(report.stranded));
-        self.step_calls = self.step_calls.saturating_add(u64::from(report.step_calls));
-        self.library_time += report.library_time;
-        for desk in &report.desks {
-            match desk.ending {
-                run::Ending::Converged => self.converged = self.converged.saturating_add(1),
-                run::Ending::Deadlocked => self.deadlocked = self.deadlocked.saturating_add(1),
-                run::Ending::Exhausted => self.exhausted = self.exhausted.saturating_add(1),
-                run::Ending::Idle => self.idle = self.idle.saturating_add(1),
-            }
-        }
-    }
-
-    /// One row of the comparison table.
-    fn row(&self, name: &str) -> String {
-        let runs = u64::from(self.runs);
-        format!(
-            "{name:<9} {:>7.1}% {:>7} {:>9.1} {:>10.1} {:>9.1}",
-            metrics::ratio(u64::from(self.correct), runs) * 100.0,
-            self.decided,
-            metrics::ratio(self.turns, runs),
-            metrics::ratio(self.crossings, runs),
-            metrics::ratio(self.stranded, runs),
-        )
-    }
 }
 
 /// Drive a federated scenario through a real agent CLI.
@@ -266,16 +165,29 @@ fn live_federation(options: &Options, scenario: &Scenario) -> Result<(), String>
 
     // See the matching comment in `live_round`: a plain loop rather than
     // `.collect()` keeps dropck from extending `seated`'s borrow.
-    let mut members: Vec<&mut dyn SwarmMember> = Vec::new();
+    let mut loose: Vec<&mut dyn SwarmMember> = Vec::new();
     for member in &mut seated {
-        members.push(member.as_mut());
+        loose.push(member.as_mut());
     }
+    let mut members = swarm::group_by_desk(&channels, loose.into_iter());
     let wall = Instant::now();
+    // A live federation asks off the floor too, and for the same reason a
+    // simulated one does: a desk that spends its authorized turns asking has
+    // none left to decide with. `--ask-cap 0` puts it back on the floor, which
+    // is what every recorded live run used.
+    let exchange = Exchange::from_caps(options.ask_cap, options.digest);
     let report = swarm::drive_swarm(
         &channels,
         &mut members,
-        &policy,
-        swarm_referrals(),
+        &swarm::SwarmRun {
+            policy: &policy,
+            referrals: swarm_referrals(),
+            exchange,
+            // Live desks, so this is where the concurrency is worth having:
+            // each desk authorizes exactly one speaker, and `--jobs` decides
+            // how many of those model calls are in flight at once.
+            jobs: options.jobs,
+        },
         &scenario.brief(),
         true,
     )?;
@@ -312,6 +224,21 @@ fn live_federation(options: &Options, scenario: &Scenario) -> Result<(), String>
     );
     print_usage(options, &usage_seats);
 
+    live_federated_poll(options, scenario)
+}
+
+/// Run the matched-budget control for a live federation and print it.
+///
+/// Split out of [`live_federation`] because it is a whole second experiment
+/// rather than a tail of the first: every member answers the same brief alone,
+/// through the same backend the deliberating arm ran on, and a plurality
+/// decides. The control has to match the arm it is scored against or the
+/// comparison means nothing.
+///
+/// # Errors
+///
+/// Returns a backend failure from any seat's own turn.
+fn live_federated_poll(options: &Options, scenario: &Scenario) -> Result<(), String> {
     let backend = poll_backend(options)?;
     let picks = live::poll(options, scenario, &backend)?;
     for (id, pick) in &picks {
@@ -327,6 +254,13 @@ fn live_federation(options: &Options, scenario: &Scenario) -> Result<(), String>
     }
     Ok(())
 }
+
+/// Desks named individually in the banner.
+///
+/// A federation of two hundred would otherwise spend a screen on it, and the
+/// shape of the arrangement is already carried by the count and the
+/// distinctness line beneath.
+const NAMED_DESKS: usize = 6;
 
 /// Print what the federation is, before any arm runs.
 fn describe(
@@ -353,15 +287,39 @@ fn describe(
         swarm_referrals().max_hops,
     );
     print!("the federation: ");
-    for desk in &first.desks {
+    for desk in first.desks.iter().take(NAMED_DESKS) {
         print!("{} overrates #{}  ", desk.name, desk.decoy);
     }
-    println!("and #{} is genuinely best\n", first.truth);
+    if first.desks.len() > NAMED_DESKS {
+        print!("… and {} more  ", first.desks.len() - NAMED_DESKS);
+    }
+    println!("and #{} is genuinely best", first.truth);
+    if first.decoys_distinct {
+        println!();
+    } else {
+        // Said out loud rather than left to the reader to derive from the desk
+        // and option counts: with more desks than non-truth options some desks
+        // necessarily share a blind spot, and pooling across two desks that are
+        // wrong about the same thing imports the error instead of cancelling
+        // it. Any number read off such a run is measuring a different task.
+        println!(
+            "note: {} desks share {} non-truth options, so some desks are wrong about the same one\n",
+            first.desks.len(),
+            first.topics.len().saturating_sub(1),
+        );
+    }
 }
 
 /// Print one federated episode, channel by channel.
 fn trace_swarm(first: &Federation, desk_policy: &EpisodePolicy) -> Result<(), String> {
-    let report = run_swarm(first, desk_policy, swarm_referrals(), TASK, true)?;
+    let report = run_swarm(
+        first,
+        desk_policy,
+        swarm_referrals(),
+        Exchange::ON_FLOOR,
+        TASK,
+        true,
+    )?;
     for line in &report.trace {
         println!("{line}");
     }
@@ -387,66 +345,6 @@ fn trace_swarm(first: &Federation, desk_policy: &EpisodePolicy) -> Result<(), St
         report.crossings,
     );
     Ok(())
-}
-
-/// Print the federated comparison table and the totals under it.
-fn tabulate(
-    siloed: &SwarmTotals,
-    swarmed: &SwarmTotals,
-    free: &SwarmTotals,
-    merged: &Aggregate,
-    vote: &Aggregate,
-    wall: std::time::Duration,
-    federations: usize,
-) {
-    println!(
-        "{:<9} {:>8} {:>8} {:>9} {:>10} {:>9}",
-        "arm", "correct", "decided", "turns", "crossings", "stranded",
-    );
-    println!("{}", siloed.row("siloed"));
-    println!("{}", swarmed.row("swarm"));
-    println!("{}", free.row("pooled"));
-    println!(
-        "{:<9} {:>7.1}% {:>7} {:>9.1} {:>10} {:>9}",
-        "merged",
-        merged.accuracy(),
-        merged.converged,
-        merged.turns_per_episode(),
-        "—",
-        "—",
-    );
-    println!(
-        "{:<9} {:>7.1}% {:>7} {:>9.1} {:>10} {:>9}",
-        "vote",
-        vote.accuracy(),
-        vote.converged,
-        vote.turns_per_episode(),
-        "—",
-        "—",
-    );
-
-    println!(
-        "\nsiloed desk endings: converged {} · deadlocked {} · exhausted {} · idle {}",
-        siloed.converged, siloed.deadlocked, siloed.exhausted, siloed.idle,
-    );
-    println!(
-        "swarm  desk endings: converged {} · deadlocked {} · exhausted {} · idle {}",
-        swarmed.converged, swarmed.deadlocked, swarmed.exhausted, swarmed.idle,
-    );
-    println!(
-        "library time {:.1} ms over {} steps ({:.0} ns/step)",
-        swarmed.library_time.as_secs_f64() * 1_000.0,
-        swarmed.step_calls,
-        metrics::ratio(
-            u64::try_from(swarmed.library_time.as_nanos()).unwrap_or(u64::MAX),
-            swarmed.step_calls,
-        ),
-    );
-    println!(
-        "wall clock {:.1} ms for {} federations across every arm",
-        wall.as_secs_f64() * 1_000.0,
-        federations,
-    );
 }
 
 /// One federation's seats, each knowing which channel it sits on, and the

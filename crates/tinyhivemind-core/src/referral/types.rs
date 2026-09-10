@@ -54,6 +54,44 @@ impl ReferralReach {
 /// Note what is deliberately absent: a bound on how *many* channels one desk
 /// may ask. `max_hops` bounds the depth of a chain, and bounding its width is
 /// the host's job, because only the host knows what a question costs it.
+///
+/// # What a bad width bound costs, measured
+///
+/// That is the right division of labour and it is also a trap, so the number
+/// belongs here rather than only in the host that found it. The obvious host
+/// bound — *every peer, once* — is not a bound at all: it grows with the
+/// federation while the asking desk's turn budget stays whatever its own size
+/// earned. A desk of ten members has thirty turns; at fifty desks it may spend
+/// forty-nine of them asking.
+///
+/// The benchmark's federation does exactly that, and the collapse is total.
+/// Correct on 100% of federations at twelve desks, **0.0% at twenty-five and
+/// above**, with every desk episode ending exhausted — two thousand of two
+/// thousand at a hundred desks. Not deadlocked and not idle: spent. The
+/// federation talks itself to death.
+///
+/// Bounding width at a small constant instead — two questions per desk,
+/// whatever the federation's size — restores 100% and costs *less*: 1343 turns
+/// against 6624 at a hundred desks, because the turns the unbounded arm spent
+/// asking are the turns it needed for deciding. See
+/// `docs/experiments/2026-09-10-hive-at-scale.md`.
+///
+/// Two rules follow, and they are what a host should take from this:
+///
+/// 1. **Bound width by a constant the host states, never by the number of
+///    peers.** A bound that scales with the federation prices nothing.
+/// 2. **Do not spend an authorized turn on the question.** A question is a
+///    model call, not a turn, and charging it to the floor takes the budget
+///    out of the room that has to decide. This is
+///    [ADR 0012](https://github.com/tinyhumansai/tinyhivemind/blob/main/docs/adr/0012-an-exchange-round-spends-model-calls-not-turns.md)
+///    one level up.
+///
+/// A bounded question also has a ceiling worth knowing about: it cannot
+/// recover an error the whole federation shares, because the peer it asks
+/// holds the same error. At a hundred desks sharing seven blind spots every
+/// bounded pairwise arm scores zero. What lifts that is a desk publishing its
+/// reading to *every* channel — one model call, not one per peer — which is a
+/// different mechanism and not more of this one.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct ReferralPolicy {

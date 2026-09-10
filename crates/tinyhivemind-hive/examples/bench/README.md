@@ -15,8 +15,9 @@ cargo run --release -p tinyhivemind-hive --example bench -- \
   --agent-cmd "opencode run --pure -m openrouter/~openai/gpt-mini-latest"
 ```
 
-This file documents the harness. The findings it produces, and what they do and
-do not claim, are in [the benchmark write-up](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks).
+This file documents the harness and [`SCALE.md`](SCALE.md) documents running it
+at scale; the findings, and what they do and do not claim, are in
+[the benchmark write-up](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks).
 
 ## The task
 
@@ -346,7 +347,7 @@ heard every other. Outside that window the experiment measures nothing, which
 | arm | what it is |
 | --- | --- |
 | `siloed` | The same desks, members and budgets, with referrals off. A desk can only talk to itself. |
-| `swarm` | The same, with referrals on: two hops, desk mentions and returns. |
+| `swarm` / `swarm°` / `swarm◦` | The same, with referrals on: two hops, desk mentions and returns. `swarm°` asks **off the floor** under `--ask-cap` rather than spending the authorized turn — what keeps a federation above eight desks deciding at all — and `swarm◦` also publishes each desk's reading to every channel under `--digest`, the only bounded arm left standing once desks share blind spots. See [`SCALE.md`](SCALE.md#correlated-desks-and---digest). |
 | `pooled` | The ceiling control. Every desk is handed every other desk's readings *for free* — no turn, no referral, no channel crossed — and then deliberates siloed. |
 | `merged` | Every member of every desk on one desk, given the whole federation's budget. The control that removes the boundary rather than crossing it. |
 | `vote` | One independent answer per member, decided by plurality. |
@@ -493,8 +494,7 @@ keep the profile solvable but not trivial.
 ## Layout
 
 Every module that outgrew a single file is a directory: `mod.rs` holds its
-module doc, its core types, and whatever re-exports the rest of the crate
-actually needs; its siblings hold one cohesive slice of the rest. The `mod
-sim;`-style declaration in `main.rs` is unchanged either way, since Rust
-resolves it to `sim/mod.rs` transparently. [`LAYOUT.md`](LAYOUT.md) has the
-full file-by-file table.
+module doc, its core types and the re-exports the rest of the crate needs, and
+its siblings hold one cohesive slice each. A `mod sim;` in `main.rs` resolves to
+`sim/mod.rs` transparently, so the split is invisible from outside.
+[`LAYOUT.md`](LAYOUT.md) has the full file-by-file table.

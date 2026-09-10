@@ -23,7 +23,7 @@
 use tinyhivemind_hive::trace::TopicId;
 
 use crate::rng::{Rng, mix};
-use crate::sim::{MAX_MEMBERS, MEMBER_ROLES, SimAgent, TOPIC_NAMES, member_at};
+use crate::sim::{MAX_MEMBERS, MAX_TOPICS, MEMBER_ROLES, SimAgent, member_at, topic_at};
 
 /// Names drawn on, in order, for a federation's desks.
 const DESK_NAMES: [(&str, &str); 4] = [
@@ -38,15 +38,23 @@ const DESK_NAMES: [(&str, &str); 4] = [
 /// The same kind of bound as [`MAX_MEMBERS`]: a spending limit, not a property
 /// of the library, which places no ceiling on how many channels a referral may
 /// cross. Beyond the four named desks the names are generated.
-const MAX_DESKS: usize = 64;
+const MAX_DESKS: usize = 256;
 
 /// The id and label of desk `index`, for a federation of any size.
 ///
 /// The first four keep the names every recorded swarm number was written
 /// against, so those numbers reproduce exactly rather than approximately.
+///
+/// A generated label carries **no whitespace**, and that is load-bearing
+/// rather than cosmetic. [`crate::swarm::format::readings`] identifies a desk
+/// on the wire by the single word preceding `reads`, so a label of `Desk 12`
+/// puts `12` on the wire while [`crate::swarm::member::SwarmSim::absorb`]
+/// matches against the display name `Desk 12` — the two never agree and every
+/// reading crossing a generated desk is silently dropped. That made the swarm
+/// wire protocol quietly broken above four desks.
 fn desk_at(index: usize) -> (String, String) {
     DESK_NAMES.get(index).map_or_else(
-        || (format!("desk{index}"), format!("Desk {index}")),
+        || (format!("desk{index}"), format!("Desk-{index}")),
         |(id, label)| ((*id).to_string(), (*label).to_string()),
     )
 }
@@ -80,6 +88,17 @@ pub(crate) struct Federation {
     pub(crate) desks: Vec<FederatedDesk>,
     /// Every member, flattened in desk order.
     pub(crate) agents: Vec<SimAgent>,
+    /// Whether every desk is wrong about a *different* option.
+    ///
+    /// There are only `topics - 1` options that are not the truth, so a
+    /// federation with more desks than that cannot give each one a decoy of
+    /// its own and some desks necessarily share. That is a materially
+    /// different experiment — desks sharing a decoy agree with each other for
+    /// the wrong reason, and pooling across them imports the shared error
+    /// instead of cancelling it — so it is recorded and reported rather than
+    /// left as an invariant the module doc claims and the arithmetic quietly
+    /// breaks.
+    pub(crate) decoys_distinct: bool,
 }
 
 impl Federation {
@@ -102,14 +121,10 @@ impl Federation {
         noise: u32,
         bias: i32,
     ) -> Self {
-        let topics = topics.clamp(2, TOPIC_NAMES.len());
+        let topics = topics.clamp(2, MAX_TOPICS);
         let desk_count = desks.clamp(2, MAX_DESKS);
         let per_desk = per_desk.clamp(2, MAX_MEMBERS);
-        let names: Vec<TopicId> = TOPIC_NAMES
-            .iter()
-            .take(topics)
-            .map(|name| TopicId::from(*name))
-            .collect();
+        let names: Vec<TopicId> = (0..topics).map(topic_at).collect();
         // Placed by the seed rather than at a fixed index, so no arm can score
         // by preferring the first option.
         let truth_index = usize::try_from(mix(seed, 0x7275_7468) % (topics as u64)).unwrap_or(0);
@@ -118,9 +133,13 @@ impl Federation {
             .cloned()
             .unwrap_or_else(|| TopicId::from("stage"));
 
-        // Every desk is wrong about a *different* option. Two desks sharing a
-        // decoy would agree with each other for the wrong reason, which is a
-        // failure mode worth studying but not the one being measured here.
+        // Every desk is wrong about a *different* option, for as long as the
+        // slate is wide enough to allow it. Two desks sharing a decoy agree
+        // with each other for the wrong reason, which is a failure mode worth
+        // studying but not the one being measured here — so above
+        // `topics - 1` desks the wrap below is unavoidable and
+        // `decoys_distinct` records that it happened.
+        let decoys_distinct = desk_count <= topics.saturating_sub(1);
         let decoys: Vec<TopicId> = (0..desk_count)
             .map(|desk| {
                 let others: Vec<&TopicId> = names.iter().filter(|topic| **topic != truth).collect();
@@ -184,6 +203,7 @@ impl Federation {
             topics: names,
             desks: records,
             agents,
+            decoys_distinct,
         }
     }
 

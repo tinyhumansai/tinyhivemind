@@ -11,6 +11,7 @@ use crate::context::{Compaction, ContextBudget, FOLD_FIDELITY};
 use crate::http::{Thinking, Wire};
 use crate::policy::tuned_policy;
 use crate::sim::Expertise;
+use tinyhivemind_hive::Basis;
 use tinyhivemind_hive::{DirectoryPolicy, EpisodePolicy};
 
 /// How much a desk overrates its own decoy, by default.
@@ -70,6 +71,12 @@ pub(crate) struct Options {
     pub(crate) mode: Mode,
     /// A real problem for the live room, if one was given.
     pub(crate) scenario: Option<String>,
+    /// A directory of them, run in name order, if one was given.
+    ///
+    /// Takes precedence over `scenario`: a caller that names both meant the
+    /// corpus, and running one file out of it instead would be the quieter and
+    /// worse reading.
+    pub(crate) scenario_dir: Option<String>,
     /// How many times to run a live scenario.
     pub(crate) repeat: u32,
     /// Desks in a federation.
@@ -146,6 +153,32 @@ pub(crate) struct Options {
     pub(crate) history: u32,
     /// Print one flat JSON object per arm, ahead of the tables.
     pub(crate) json: bool,
+    /// Questions one desk may put to other channels, off the floor.
+    ///
+    /// `0` puts asking back on the floor, where a member spends the turn the
+    /// episode authorized on it and every peer may be asked once — the
+    /// behaviour every recorded swarm number was taken against, and the one
+    /// that collapses above roughly eight desks. Above `0` a desk asks without
+    /// taking a turn, at most this many times, however many peers it has.
+    pub(crate) ask_cap: usize,
+    /// Readings one desk publishes to **every** other channel, off the floor.
+    ///
+    /// A different mechanism from `ask_cap`, not more of it. An ask is a
+    /// question to one peer and costs a question and an answer; a digest is
+    /// this desk's reading of the whole slate written once and appended to
+    /// every peer's transcript, so it costs one model call however large the
+    /// federation is. It exists because a bounded ask cannot recover an error
+    /// every desk shares — the peer you would have asked has it too.
+    ///
+    /// `0` is off, and off is what every recorded number was taken against.
+    pub(crate) digest: usize,
+    /// Threads the per-room loops are spread across.
+    ///
+    /// A wall-clock knob and nothing else: rooms are independent and results
+    /// are folded in room order whatever order the threads finish in, so the
+    /// same `--seed` prints the same bytes at every value. See
+    /// [`crate::parallel`].
+    pub(crate) jobs: usize,
     /// Per-turn timeout for a live agent process or HTTP request, in seconds.
     pub(crate) timeout: u64,
     /// The HTTP backend's base URL, when seats are driven directly over HTTP
@@ -235,6 +268,7 @@ impl Options {
             policy: tuned_policy(5),
             mode: Mode::Compare,
             scenario: None,
+            scenario_dir: None,
             repeat: 1,
             desks: 3,
             per_desk: 4,
@@ -258,6 +292,17 @@ impl Options {
             exchange_cap: 4,
             history: 3,
             json: false,
+            // Two, because one outside reading is already enough to overturn
+            // a desk's decoy at the default bias — see `SWARM_BIAS` above —
+            // and a second covers the case where the first peer asked shares
+            // the blind spot. It is a default, not a finding: `--ask-cap`
+            // exists because the right width depends on what a question costs
+            // the host.
+            ask_cap: 2,
+            // Off. It is a new mechanism and the convention here is that a
+            // new mechanism ships off until an arm has scored it.
+            digest: 0,
+            jobs: crate::parallel::default_jobs(),
             timeout: 180,
             api_base: None,
             api_key_env: "LADDER_API_KEY".to_owned(),
@@ -272,8 +317,14 @@ impl Options {
     }
 
     /// Read the command line, falling back to defaults.
-    pub(crate) fn parse() -> Self {
+    ///
+    /// # Errors
+    ///
+    /// Returns the flags this harness does not recognise, rather than running
+    /// something other than what was asked for.
+    pub(crate) fn parse() -> Result<Self, String> {
         let mut options = Self::defaults();
+        let mut unknown: Vec<String> = Vec::new();
         // The policy is rebuilt once the room size is known, then any explicit
         // policy flag is applied over it, so `--agents` moves the quorum
         // threshold with the desk while `--quorum` still overrides it.
@@ -377,23 +428,99 @@ impl Options {
                 // `parse` itself stays under the line budget clippy holds
                 // every function to.
                 _ => {
-                    apply_expertise_flag(&mut options, &flag, &mut args);
-                    apply_live_flag(&mut options, &flag, &mut args);
+                    let known = apply_scale_flag(&mut options, &flag, &mut args)?
+                        || apply_expertise_flag(&mut options, &flag, &mut args)
+                        || apply_live_flag(&mut options, &flag, &mut args);
+                    // An unrecognised flag used to be discarded in silence, so
+                    // `--scale-sweeps` ran the default comparison and reported
+                    // it under the heading the operator thought they had asked
+                    // for. A benchmark that quietly measures something other
+                    // than what was requested is worse than one that refuses.
+                    if !known && flag.starts_with("--") {
+                        unknown.push(flag);
+                    }
                 }
             }
         }
-        options
+        if !unknown.is_empty() {
+            return Err(format!("unrecognised flag(s): {}", unknown.join(", ")));
+        }
+        Ok(options)
     }
 }
 
+/// Apply one of the scale flags (`--jobs`, `--ask-cap`, `--digest`) to
+/// `options`.
+///
+/// Returns whether the flag was one of them, on the same contract as
+/// [`apply_expertise_flag`]. These two are together because they are the two
+/// knobs that decide what a large run costs: how many cores it spreads over,
+/// and how many questions a desk puts to other channels.
+///
+/// # Errors
+///
+/// Returns a message when `--distance` is given a value that is neither
+/// `sequence` nor `live`.
+fn apply_scale_flag(
+    options: &mut Options,
+    flag: &str,
+    args: &mut impl Iterator<Item = String>,
+) -> Result<bool, String> {
+    match flag {
+        "--jobs" => {
+            options.jobs = usize::try_from(next_number(args).unwrap_or(1))
+                .unwrap_or(1)
+                .max(1);
+        }
+        "--scenario-dir" => {
+            options.scenario_dir = args.next();
+            if !matches!(options.mode, Mode::Swarm) {
+                options.mode = Mode::Live;
+            }
+        }
+        "--ask-cap" => {
+            options.ask_cap = usize::try_from(next_number(args).unwrap_or(2)).unwrap_or(2);
+        }
+        "--distance" => {
+            // The one knob that changes what a *sequence* means to the
+            // library's own folds: `live` counts the rows the episode reads
+            // rather than every row the host wrote. Identical on a journal the
+            // episode owns end to end, which is why every recorded number is
+            // unchanged by leaving it alone.
+            // Named exhaustively rather than defaulted. A typo would
+            // otherwise select `sequence` in silence and run a different
+            // benchmark under the heading the operator asked for — the same
+            // failure an unrecognised *flag* is refused for, one level down,
+            // and a missing value would swallow the next flag as its argument.
+            options.policy.distance = match args.next().as_deref() {
+                Some("sequence") => Basis::Sequence,
+                Some("live") => Basis::Live,
+                Some(other) => {
+                    return Err(format!(
+                        "--distance takes `sequence` or `live`, not `{other}`"
+                    ));
+                }
+                None => return Err("--distance takes `sequence` or `live`".to_owned()),
+            };
+        }
+        "--digest" => {
+            options.digest = usize::try_from(next_number(args).unwrap_or(1)).unwrap_or(1);
+        }
+        _ => return Ok(false),
+    }
+    Ok(true)
+}
+
 /// Apply one of `--specialists`, `--hidden-profile`, `--defer-cap`,
-/// `--cost-tiers`, `--blind-evidence` or `--directory` to `options`, or do
-/// nothing for a flag it does not recognise.
+/// `--cost-tiers`, `--blind-evidence` or `--directory` to `options`.
+///
+/// Returns whether the flag was one of them, so [`Options::parse`] can tell a
+/// flag this harness handles somewhere from one it handles nowhere.
 fn apply_expertise_flag(
     options: &mut Options,
     flag: &str,
     args: &mut impl Iterator<Item = String>,
-) {
+) -> bool {
     match flag {
         "--specialists" => {
             let count = usize::try_from(next_number(args).unwrap_or(0)).unwrap_or(0);
@@ -484,14 +611,21 @@ fn apply_expertise_flag(
         // is unreachable unless a directory is folded, and only an arm sets
         // that. It moves the same single field `knowing_policy` moves.
         "--directory" => options.policy.directory = Some(DirectoryPolicy::DEFAULT),
-        _ => {}
+        _ => return false,
     }
+    true
 }
 
 /// Apply one of the live-backend flags (`--timeout` through
-/// `--specialist-model`) to `options`, or do nothing for a flag it does not
-/// recognise.
-fn apply_live_flag(options: &mut Options, flag: &str, args: &mut impl Iterator<Item = String>) {
+/// `--specialist-model`) to `options`.
+///
+/// Returns whether the flag was one of them, on the same contract as
+/// [`apply_expertise_flag`].
+fn apply_live_flag(
+    options: &mut Options,
+    flag: &str,
+    args: &mut impl Iterator<Item = String>,
+) -> bool {
     match flag {
         "--timeout" => options.timeout = u64::from(next_number(args).unwrap_or(180)),
         "--api-base" => {
@@ -555,8 +689,9 @@ fn apply_live_flag(options: &mut Options, flag: &str, args: &mut impl Iterator<I
                 options.thinking = thinking;
             }
         }
-        _ => {}
+        _ => return false,
     }
+    true
 }
 
 /// Read the next argument as a number.

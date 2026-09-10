@@ -143,6 +143,17 @@ impl SwarmMember for SwarmSim {
         })
     }
 
+    /// Publish this desk's reading of the whole slate.
+    ///
+    /// The same line an answer carries, with nobody having asked for it. It is
+    /// `!evidence` because that is what it is — a reading, not a position —
+    /// and because the receiving desk folds it as neither: the author is not a
+    /// member there, so the trace is filtered out of that episode's standings
+    /// and reaches only [`SwarmMember::absorb`].
+    fn publish(&mut self) -> Option<String> {
+        Some(format!("!evidence {}", self.slate()))
+    }
+
     /// Fold every outside reading a line carries into this member's own view.
     ///
     /// This is the step a channel boundary otherwise prevents, and it is

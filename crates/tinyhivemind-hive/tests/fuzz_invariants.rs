@@ -150,7 +150,7 @@ fn arbitrary_transcripts_have_stable_well_formed_and_idempotent_folds() {
                 standings: &standings,
                 members: &members,
                 thresholds: &[],
-                at,
+                at: at.into(),
                 weights: &weights,
                 dominance_cap: 50,
                 repetition_cap: 3,

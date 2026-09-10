@@ -427,3 +427,6 @@ enum Section {
     /// Inside an `[agent ...]`.
     Agent,
 }
+
+#[cfg(test)]
+mod test;

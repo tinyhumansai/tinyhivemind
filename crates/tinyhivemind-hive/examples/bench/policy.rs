@@ -38,11 +38,17 @@ pub(crate) const SEQUENTIAL: u32 = 1;
 /// The load-bearing knob is the quorum threshold, and it has two bounds rather
 /// than one.
 ///
-/// A threshold *above half the desk* is what removes deadlock. Five members can
-/// put two grounded supporters behind each of two options, and an episode in
-/// which two options both carry is deadlocked by definition: no amount of
+/// A threshold *above half the desk* is what suppresses deadlock. Five members
+/// can put two grounded supporters behind each of two options, and an episode
+/// in which two options both carry is deadlocked by definition: no amount of
 /// further support resolves it, because both stay above the line. Requiring a
-/// majority makes that state unreachable, and the deadlock rate falls to zero.
+/// majority makes two *disjoint* supporter sets impossible, and the measured
+/// deadlock rate falls to zero.
+///
+/// It does not make deadlock unreachable in general — one member may back two
+/// topics, and a member in both supporter sets is not two members. It is
+/// unreachable for the simulated participants here, which each back one
+/// option. See `QuorumPolicy::for_room`.
 ///
 /// A threshold *below the whole desk* is what keeps a decision reachable.
 /// Cross-inhibition removes a silenced advocate from a topic's supporter set

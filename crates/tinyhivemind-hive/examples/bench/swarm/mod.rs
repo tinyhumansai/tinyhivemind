@@ -34,15 +34,13 @@
 //! in `member`; the wire text those participants read and write lives in
 //! `format`.
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use tinyhivemind_hive::{
-    Conversation, EpisodePolicy, EpisodeState, HiveStep, HiveTurn, Sequence, SessionAuthor,
-    SessionMessage,
+    Conversation, EpisodePolicy, EpisodeState, HiveTurn, Sequence, SessionAuthor, SessionMessage,
     desk::{Desk, DeskSet, ResponderMode},
     referral::{Referral, ReferralPolicy},
     roster::{Roster, RosterMember},
-    step,
     trace::TopicId,
 };
 
@@ -50,12 +48,19 @@ use crate::federation::Federation;
 use crate::run::Ending;
 use tinyhivemind_hive::aside::Audience;
 
+pub(crate) use board::Exchange;
+
 use board::Board;
 use member::SwarmSim;
+
+#[cfg(test)]
+mod test;
 
 mod board;
 mod format;
 mod member;
+mod schedule;
+mod work;
 
 /// One channel: a desk id, its display name, and who sits on it.
 #[derive(Clone, Debug)]
@@ -75,7 +80,7 @@ pub(crate) struct Channel {
 /// channel is a line of text either way, and it is routed by the same mention
 /// grammar and the same `referral` fold whether arithmetic or a language model
 /// wrote it.
-pub(crate) trait SwarmMember {
+pub(crate) trait SwarmMember: Send {
     /// Canonical agent id, matching a desk member.
     fn id(&self) -> &str;
 
@@ -106,6 +111,17 @@ pub(crate) trait SwarmMember {
     fn answer(&mut self, incoming: &Referral, visible: &[SessionMessage])
     -> Result<String, String>;
 
+    /// State this desk's reading of the whole slate, for every other channel.
+    ///
+    /// Returns `None` from a member with nothing to publish, which is the
+    /// default and is what every live participant does today: publishing is a
+    /// prompt of its own and no live arm has been written for it. A member
+    /// that declines simply contributes no digest, and the arm reports the
+    /// calls it actually made.
+    fn publish(&mut self) -> Option<String> {
+        None
+    }
+
     /// Take in whatever a message just appended to this desk carries.
     ///
     /// Every member of a desk is offered every line written on it, which is
@@ -128,6 +144,18 @@ pub(crate) struct SwarmReport {
     pub(crate) turns: u32,
     /// Referrals that left the desk that made them.
     pub(crate) crossings: u32,
+    /// Questions put to another channel **off the floor**, taking no turn.
+    ///
+    /// Priced in a column of its own rather than folded into `turns`, on the
+    /// same principle the off-floor exchange's `calls/ep` follows: it is a
+    /// model call the federation paid for and the turn count does not show.
+    pub(crate) off_floor_asks: u32,
+    /// Readings published to the whole federation, taking no turn.
+    ///
+    /// One model call each, however many desks received the row, which is the
+    /// whole reason the mechanism is worth a column of its own beside
+    /// `off_floor_asks`.
+    pub(crate) digests: u32,
     /// Answers that arrived after the desk that asked had already finished.
     pub(crate) stranded: u32,
     /// Turns, across every desk, whose content is a `!defer` line.
@@ -287,14 +315,19 @@ impl SwarmHost {
 /// member's own failure.
 pub(crate) fn drive_swarm(
     channels: &[Channel],
-    members: &mut [&mut dyn SwarmMember],
-    policy: &EpisodePolicy,
-    referrals: ReferralPolicy,
+    members: &mut [Vec<&mut dyn SwarmMember>],
+    run: &SwarmRun<'_>,
     task: &str,
     keep_trace: bool,
 ) -> Result<SwarmReport, String> {
+    let SwarmRun {
+        policy,
+        referrals,
+        exchange,
+        jobs,
+    } = *run;
     let count = channels.len();
-    let mut board = Board::new(channels, referrals, keep_trace);
+    let mut board = Board::new(channels, referrals, keep_trace, exchange);
     for desk in 0..count {
         board.host_mut().operator(desk, task);
     }
@@ -310,66 +343,30 @@ pub(crate) fn drive_swarm(
     let mut finished: Vec<Option<DeskOutcome>> = vec![None; count];
 
     loop {
-        let mut progressed = false;
-        for desk in 0..count {
-            if finished[desk].is_some() {
-                board.strand(desk);
-                continue;
-            }
-            if let Some(incoming) = board.pop_pending(desk) {
-                board.deliver(members, desk, &incoming)?;
-                progressed = true;
-                continue;
-            }
-
-            let started = Instant::now();
-            let decision = {
-                let host = board.host();
-                let roster = host.roster();
-                let desk_set = host.desks();
-                step(
-                    &states[desk],
-                    &host.journals[desk],
-                    &roster,
-                    &desk_set,
-                    policy,
-                )
-            };
-            board.add_library_time(started.elapsed());
-
-            match decision.map_err(|error| error.to_string())? {
-                HiveStep::Speak { turns, next_state } => {
-                    // A desk takes its whole round before the scheduler moves
-                    // on, so one desk's round interleaves with another desk's
-                    // round rather than with its turns. Every member in the
-                    // round composes against the same journal; `project_for`
-                    // withholds the rows the round is writing.
-                    for turn in &turns {
-                        board.take_turn(members, desk, turn)?;
-                    }
-                    states[desk] = *next_state;
-                }
-                HiveStep::Converged { topic, .. } => {
-                    finished[desk] = Some(member::outcome(
-                        channels,
-                        desk,
-                        Ending::Converged,
-                        Some(topic),
-                    ));
-                }
-                HiveStep::Deadlocked { .. } => {
-                    finished[desk] =
-                        Some(member::outcome(channels, desk, Ending::Deadlocked, None));
-                }
-                HiveStep::Exhausted { .. } => {
-                    finished[desk] = Some(member::outcome(channels, desk, Ending::Exhausted, None));
-                }
-                HiveStep::Idle => {
-                    finished[desk] = Some(member::outcome(channels, desk, Ending::Idle, None));
-                }
-            }
-            progressed = true;
-        }
+        // Two schedulers, and the choice between them is not a performance
+        // detail. See `schedule.rs`: they interleave a routed referral
+        // differently, so they can decide differently, and the sequential one
+        // is the reference every recorded swarm number was taken against.
+        let progressed = if jobs > 1 {
+            schedule::concurrent_pass(
+                &mut board,
+                members,
+                channels,
+                &mut states,
+                &mut finished,
+                policy,
+                jobs,
+            )?
+        } else {
+            schedule::sequential_pass(
+                &mut board,
+                members,
+                channels,
+                &mut states,
+                &mut finished,
+                policy,
+            )?
+        };
         if !progressed {
             break;
         }
@@ -390,6 +387,7 @@ pub(crate) fn run_swarm(
     federation: &Federation,
     policy: &EpisodePolicy,
     referrals: ReferralPolicy,
+    exchange: Exchange,
     task: &str,
     keep_trace: bool,
 ) -> Result<SwarmReport, String> {
@@ -403,15 +401,87 @@ pub(crate) fn run_swarm(
             SwarmSim::new(federation, agent)
         })
         .collect();
-    let mut members: Vec<&mut dyn SwarmMember> = simulated
-        .iter_mut()
-        .map(|member| member as &mut dyn SwarmMember)
-        .collect();
-    let report = drive_swarm(&channels, &mut members, policy, referrals, task, keep_trace)?;
+    // Grouped by desk, in seating order, which is how the scheduler wants
+    // them: every member access a desk makes is to its own seats, so grouping
+    // turns a lookup across the whole federation into one across a desk.
+    let mut members = group_by_desk(&channels, simulated.iter_mut().map(|member| member as _));
+    // One job, deliberately. A simulated turn is arithmetic, so there is
+    // nothing here worth a thread — and the caller is already running whole
+    // federations in parallel, so spawning again inside each one would
+    // oversubscribe the machine rather than speed anything up. The concurrent
+    // path exists for live desks, where a turn is a model call.
+    let report = drive_swarm(
+        &channels,
+        &mut members,
+        &SwarmRun {
+            policy,
+            referrals,
+            exchange,
+            jobs: 1,
+        },
+        task,
+        keep_trace,
+    )?;
     Ok(SwarmReport {
         correct: report.decided.as_ref() == Some(&federation.truth),
         ..report
     })
+}
+
+/// How one federation-wide run is configured.
+///
+/// Four settings that travel together because they are one decision — what the
+/// desks are allowed to do and what it costs them — and because passing them
+/// separately made every entry point a wall of arguments.
+#[derive(Clone, Copy)]
+pub(crate) struct SwarmRun<'a> {
+    /// The policy each desk's own episode runs at.
+    pub(crate) policy: &'a EpisodePolicy,
+    /// Whether a question may cross a channel, and how deep a chain may run.
+    pub(crate) referrals: ReferralPolicy,
+    /// Where a desk pays for a question, and how many it may ask.
+    pub(crate) exchange: Exchange,
+    /// How many desks may be waiting on a model at once. `1` selects the
+    /// sequential scheduler, which is the reference — see `schedule.rs`.
+    pub(crate) jobs: usize,
+}
+
+/// Group a federation's members by the desk they sit on, in seating order.
+///
+/// The scheduler only ever reaches a member through the desk it sits on — a
+/// turn, an answer to a referral, an off-floor ask, and the line every member
+/// of a desk absorbs are all desk-local — so holding the seats grouped is both
+/// the shape the work has and the shape that makes it cheap: a lookup inside
+/// one desk rather than a scan across every member of every desk.
+///
+/// It is also what lets the desks run at the same time. Each desk's seats are
+/// a distinct `Vec`, so a mutable borrow of one desk's seats is disjoint from
+/// every other desk's, and a scoped thread per desk needs no shared state and
+/// no unsafe code.
+///
+/// A member named by a channel that is not in `members` is skipped rather than
+/// faked; the desk simply has one fewer seat, and the scheduler reports the
+/// missing name if it is ever asked for.
+pub(crate) fn group_by_desk<'a>(
+    channels: &[Channel],
+    members: impl Iterator<Item = &'a mut dyn SwarmMember>,
+) -> Vec<Vec<&'a mut dyn SwarmMember>> {
+    let mut loose: Vec<Option<&'a mut dyn SwarmMember>> = members.map(Some).collect();
+    channels
+        .iter()
+        .map(|channel| {
+            channel
+                .members
+                .iter()
+                .filter_map(|wanted| {
+                    let at = loose.iter().position(|held| {
+                        held.as_ref().is_some_and(|member| member.id() == wanted)
+                    })?;
+                    loose[at].take()
+                })
+                .collect()
+        })
+        .collect()
 }
 
 /// The channels a federation's desks describe.

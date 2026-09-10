@@ -34,8 +34,11 @@ large relative to the private rows written between two desk turns —
 desk turns — and the benchmark measures the residual at zero (below). A host
 running tight windows, or writing many more private rows per turn than this,
 should measure rather than assume. Measuring decay and window in desk-visible
-rows instead of raw sequences would remove the caveat, and is a change to the
-quorum and salience folds with its own ADR.
+rows instead of raw sequences removes the caveat, and that is now
+`EpisodePolicy::distance`: set it to `Basis::Live` and the window counts the
+rows the episode folds rather than every row the host wrote. It is off by
+default, on the convention every opt-in mechanism here follows. See
+[ADR 0016](../../../../docs/adr/0016-distance-is-measured-in-the-rows-a-fold-reads.md).
 
 That is asserted rather than argued, and in two places, because it is the whole
 safety case:

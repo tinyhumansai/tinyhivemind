@@ -39,6 +39,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::{
     attention::AgentThreshold,
     error::{Error, Result},
+    horizon::Horizon,
     salience::{SCALE, decay},
     trace::{TopicId, Trace, TraceKind},
 };
@@ -138,13 +139,14 @@ pub(crate) fn validate_policy(policy: &DirectoryPolicy) -> Result<()> {
 /// assert!(folded.knows("archivist", &"pool".into(), &DirectoryPolicy::DEFAULT));
 /// # Ok::<(), tinyhivemind_hive::error::Error>(())
 /// ```
-pub fn directory(
+pub fn directory<'a>(
     traces: &[Trace],
-    at: Sequence,
+    at: impl Into<Horizon<'a>>,
     policy: &DirectoryPolicy,
     priors: &[AgentThreshold],
 ) -> Result<Directory> {
     validate_policy(policy)?;
+    let at = at.into();
     let indexed = index_priors(priors)?;
 
     let live = live_traces(traces, at, policy.window);
@@ -223,11 +225,10 @@ fn index_priors(priors: &[AgentThreshold]) -> Result<BTreeMap<&str, &AgentThresh
 /// makes the result commutative and idempotent.
 ///
 /// [`standings`]: crate::quorum::standings
-fn live_traces(traces: &[Trace], at: Sequence, window: u32) -> Vec<&Trace> {
-    let floor = at.0.saturating_sub(u64::from(window));
+fn live_traces<'a>(traces: &'a [Trace], at: Horizon<'_>, window: u32) -> Vec<&'a Trace> {
     let mut live: Vec<&Trace> = traces
         .iter()
-        .filter(|trace| trace.sequence.0 >= floor && trace.sequence <= at)
+        .filter(|trace| at.within(trace.sequence, window))
         .collect();
     live.sort_by_key(|trace| (trace.sequence, trace.offset));
     live.dedup_by_key(|trace| (trace.sequence, trace.offset));
@@ -284,7 +285,7 @@ fn deposits_by_sequence<'a>(live: &[&'a Trace]) -> BTreeMap<Sequence, Vec<Deposi
 /// Decayed weight of each member's own topiced deposits.
 fn specialisation<'a>(
     live: &[&'a Trace],
-    at: Sequence,
+    at: Horizon<'_>,
     policy: &DirectoryPolicy,
 ) -> BTreeMap<(&'a str, &'a TopicId), i64> {
     let mut scored: BTreeMap<(&str, &TopicId), i64> = BTreeMap::new();
@@ -318,7 +319,7 @@ type Attribution<'a> = BTreeMap<(&'a str, Sequence), BTreeSet<&'a TopicId>>;
 fn credibility<'a>(
     live: &[&'a Trace],
     deposits: &BTreeMap<Sequence, Vec<Deposit<'a>>>,
-    at: Sequence,
+    at: Horizon<'_>,
     policy: &DirectoryPolicy,
 ) -> BTreeMap<(&'a str, &'a TopicId), i64> {
     let mut attributed: Attribution<'a> = BTreeMap::new();
@@ -421,6 +422,6 @@ fn candidates<'a>(
 }
 
 /// The salience field's decay curve, applied to a deposit's age.
-fn decayed(at: Sequence, sequence: Sequence, policy: &DirectoryPolicy) -> i64 {
-    decay(at.0.saturating_sub(sequence.0), policy.half_life)
+fn decayed(at: Horizon<'_>, sequence: Sequence, policy: &DirectoryPolicy) -> i64 {
+    decay(at.distance(sequence), policy.half_life)
 }

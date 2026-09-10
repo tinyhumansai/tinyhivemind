@@ -21,6 +21,7 @@ use crate::metrics::{
     Aggregate, arm_header, arm_row, detail_header, detail_row, json_line, paired_against,
     paired_diff_line,
 };
+use crate::parallel;
 use crate::policy::{
     blind_wide_policy, default_policy, deferring_policy, evidential_policy,
     knowing_deferring_policy, knowing_policy, refuting_policy, widened_policy,
@@ -212,6 +213,86 @@ struct Totals {
     ladder: Aggregate,
     /// The same ladder, given a directory the room earned.
     ladder_directed: Aggregate,
+}
+
+impl Totals {
+    /// Every arm's totals, in one array, so a fold over all of them does not
+    /// have to name each one twice.
+    fn arms_mut(&mut self) -> [&mut Aggregate; 24] {
+        [
+            &mut self.hive_default,
+            &mut self.hive_tuned,
+            &mut self.hive_refuting,
+            &mut self.hive_evidential,
+            &mut self.hive_knowing,
+            &mut self.hive_deferring,
+            &mut self.hive_aside,
+            &mut self.hive_ask,
+            &mut self.hive_aside_informed,
+            &mut self.hive_aside_fact,
+            &mut self.hive_aside_mute,
+            &mut self.hive_aside_alongside,
+            &mut self.hive_aside_exchange,
+            &mut self.hive_exchange_rounds,
+            &mut self.hive_aside_hush,
+            &mut self.hive_exchange_quiet,
+            &mut self.hive_aside_offfloor,
+            &mut self.hive_pooled,
+            &mut self.hive_wide,
+            &mut self.hive_blind_wide,
+            &mut self.hive_both,
+            &mut self.all_reasoning,
+            &mut self.vote,
+            &mut self.ladder,
+        ]
+    }
+
+    /// The same array, borrowed.
+    fn arms(&self) -> [&Aggregate; 24] {
+        [
+            &self.hive_default,
+            &self.hive_tuned,
+            &self.hive_refuting,
+            &self.hive_evidential,
+            &self.hive_knowing,
+            &self.hive_deferring,
+            &self.hive_aside,
+            &self.hive_ask,
+            &self.hive_aside_informed,
+            &self.hive_aside_fact,
+            &self.hive_aside_mute,
+            &self.hive_aside_alongside,
+            &self.hive_aside_exchange,
+            &self.hive_exchange_rounds,
+            &self.hive_aside_hush,
+            &self.hive_exchange_quiet,
+            &self.hive_aside_offfloor,
+            &self.hive_pooled,
+            &self.hive_wide,
+            &self.hive_blind_wide,
+            &self.hive_both,
+            &self.all_reasoning,
+            &self.vote,
+            &self.ladder,
+        ]
+    }
+
+    /// Fold another chunk of rooms' totals in, arm by arm.
+    ///
+    /// Called in **room order**, which is the whole contract: see
+    /// [`Aggregate::merge`] for why folding out of order would leave every
+    /// paired interval in the second table quietly wrong.
+    ///
+    /// `ladder_directed` sits outside the arrays above because it is the one
+    /// arm whose per-room work depends on a directory earned over `--history`
+    /// prior episodes of the *same* room, so it is merged explicitly here
+    /// rather than being reachable through an index.
+    fn merge(&mut self, other: &Self) {
+        for (mine, theirs) in self.arms_mut().into_iter().zip(other.arms()) {
+            mine.merge(theirs);
+        }
+        self.ladder_directed.merge(&other.ladder_directed);
+    }
 }
 
 /// Run every arm over the same rooms, and say how long the whole sample took.
@@ -419,9 +500,19 @@ fn run_arms(options: &Options, rooms: &[Room]) -> Result<(Totals, std::time::Dur
     let knowing = knowing_policy(&tuned);
     let deferring = deferring_policy(&tuned, options.defer_cap);
     let both = knowing_deferring_policy(&tuned, options.defer_cap);
-    let mut totals = Totals::default();
     let wall = Instant::now();
-    for (index, room) in rooms.iter().enumerate() {
+    // Each room is decided into totals of its own, in a worker, and those are
+    // merged here in room order. The body below is exactly the sequential
+    // fold it replaced — what changed is who owns the `Totals` it folds into.
+    // See `crate::parallel` for why the merge order is not a detail.
+    // Indexed rather than bare, because two arms seed themselves off the
+    // room's position in the sample and a worker cannot recover it from a
+    // reference.
+    let indexed: Vec<(usize, &Room)> = rooms.iter().enumerate().collect();
+    let per_room: Vec<Totals> = parallel::map_in_order(&indexed, options.jobs, |(index, room)| {
+        let (index, room) = (*index, *room);
+        let mut totals = Totals::default();
+
         totals
             .hive_default
             .add(&run_episode(room, &default, TASK, false)?);
@@ -475,6 +566,12 @@ fn run_arms(options: &Options, rooms: &[Room]) -> Result<(Totals, std::time::Dur
         totals
             .vote
             .add_arm(&arms::run_vote(room, tuned.turn_budget));
+        Ok(totals)
+    })?;
+
+    let mut totals = Totals::default();
+    for chunk in &per_room {
+        totals.merge(chunk);
     }
     Ok((totals, wall.elapsed()))
 }

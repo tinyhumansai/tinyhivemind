@@ -38,7 +38,7 @@ mod budget;
 pub use budget::{BudgetPolicy, BudgetRequest, BudgetShare, BudgetVerdict, allocate_chars};
 pub use types::{AgentThreshold, Bid, BidContext, BidReason};
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     error::{Error, Result},
@@ -46,6 +46,7 @@ use crate::{
     salience::{standing, with_relevance},
     trace::{TopicId, Trace, TraceKind},
 };
+use tinyhivemind::Sequence;
 
 /// Bonus applied when a trace cited or objected to the member's own message.
 const ADDRESSED_BONUS: i64 = 2_000;
@@ -83,6 +84,7 @@ pub fn bids(context: &BidContext<'_>) -> Result<Vec<Bid>> {
     let quiet = quietest(context.members, &shares);
     let deadlocked = deadlocked_topics(context.standings);
     let contested = contested_topic(context, &live);
+    let addressed = addressed_members(&live);
 
     // Saturation and the recency-and-importance half of salience are
     // properties of a trace, not of the member reading it, so both are folded
@@ -110,7 +112,7 @@ pub fn bids(context: &BidContext<'_>) -> Result<Vec<Bid>> {
         }
 
         let mut reason = BidReason::Salience;
-        if addresses(&live, member) {
+        if addressed.contains(*member) {
             urge += ADDRESSED_BONUS;
             reason = BidReason::Addressed;
         } else if !deadlocked.is_empty() && !backs_any(&deadlocked, member) {
@@ -226,14 +228,10 @@ fn index_thresholds(thresholds: &[AgentThreshold]) -> Result<BTreeMap<&str, &Age
 /// the price of one, so counting those would reward exactly the behaviour the
 /// equality guard exists to damp.
 fn grounded_shares<'a>(context: &BidContext<'a>, live: &[&'a Trace]) -> BTreeMap<&'a str, u32> {
-    let floor = context
-        .at
-        .0
-        .saturating_sub(u64::from(context.quorum.window));
     let mut shares: BTreeMap<&str, u32> =
         context.members.iter().map(|member| (*member, 0)).collect();
     for trace in live {
-        if trace.sequence.0 < floor || !trace.grounded() {
+        if !context.at.within(trace.sequence, context.quorum.window) || !trace.grounded() {
             continue;
         }
         let Some(agent) = trace.agent_id() else {
@@ -289,14 +287,10 @@ fn exceeds(share: u32, total: u32, cap: u32) -> bool {
 /// by first-advocated order.
 fn contested_topic<'a>(context: &BidContext<'a>, live: &[&'a Trace]) -> Option<&'a TopicId> {
     context.directory?;
-    let floor = context
-        .at
-        .0
-        .saturating_sub(u64::from(context.quorum.window));
     let deferrals: Vec<&&Trace> = live
         .iter()
         .filter(|trace| trace.kind == TraceKind::Defer)
-        .filter(|trace| trace.sequence.0 >= floor && trace.sequence <= context.at)
+        .filter(|trace| context.at.within(trace.sequence, context.quorum.window))
         .collect();
     let under_cap = context
         .defer_cap
@@ -364,17 +358,36 @@ fn argues(trace: &Trace, topic: &TopicId) -> bool {
     }
 }
 
-fn addresses(traces: &[&Trace], member: &str) -> bool {
-    let own: Vec<_> = traces
-        .iter()
-        .filter(|trace| trace.agent_id() == Some(member))
-        .map(|trace| trace.sequence)
-        .collect();
-    traces.iter().any(|trace| {
-        trace.agent_id() != Some(member)
-            && (trace.target.is_some_and(|target| own.contains(&target))
-                || trace.cites.iter().any(|cited| own.contains(cited)))
-    })
+/// Which members some other member's trace cited or objected to.
+///
+/// Folded once for the whole room rather than asked per member. The per-member
+/// form rebuilt the author's own sequence set and then scanned it for every
+/// citation of every trace, which is quadratic in the traces *and* linear in
+/// the room on top — the single most expensive thing a large desk did per
+/// turn. One pass over the traces answers it for everybody.
+fn addressed_members<'a>(traces: &[&'a Trace]) -> BTreeSet<&'a str> {
+    let mut author_at: BTreeMap<Sequence, BTreeSet<&str>> = BTreeMap::new();
+    for trace in traces {
+        if let Some(agent) = trace.agent_id() {
+            author_at.entry(trace.sequence).or_default().insert(agent);
+        }
+    }
+    let mut addressed: BTreeSet<&str> = BTreeSet::new();
+    for trace in traces {
+        let author = trace.agent_id();
+        let cited = trace.target.iter().chain(trace.cites.iter());
+        for sequence in cited {
+            let Some(authors) = author_at.get(sequence) else {
+                continue;
+            };
+            // A trace never addresses its own author: a member citing its own
+            // earlier row has told the room nothing new about who is owed a
+            // hearing, and counting it would let one member hold the floor by
+            // quoting itself.
+            addressed.extend(authors.iter().copied().filter(|held| Some(*held) != author));
+        }
+    }
+    addressed
 }
 
 fn deadlocked_topics(standings: &[TopicStanding]) -> Vec<&TopicStanding> {

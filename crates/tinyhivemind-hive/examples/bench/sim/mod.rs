@@ -58,6 +58,7 @@ mod agent;
 mod chain;
 mod facet;
 mod generation;
+mod naming;
 mod view;
 
 use agent::Holdings;
@@ -67,6 +68,8 @@ use generation::{
 };
 
 pub(crate) use agent::{CheckStyle, SimAgent};
+use naming::MAX_MEMBERS_U32;
+pub(crate) use naming::{MAX_MEMBERS, MAX_TOPICS, MEMBER_ROLES, Role, member_at, topic_at};
 pub(crate) use view::check_selfcheck;
 
 /// How far a stage decided wrongly lifts the next stage's decoy.
@@ -78,72 +81,6 @@ pub(crate) use view::check_selfcheck;
 /// by enough to matter against the noise, or a chain would merely be a repeat
 /// with extra steps. Forty is three quarters of the way to unrecoverable.
 pub(crate) const POISON_LIFT: i32 = 40;
-
-/// Names drawn on, in order, for a room's options.
-pub(crate) const TOPIC_NAMES: [&str; 8] = [
-    "stage", "ship", "revert", "shadow", "canary", "freeze", "split", "pilot",
-];
-
-/// The largest room this harness will build, as a `u32`.
-///
-/// Declared first and widened into [`MAX_MEMBERS`] rather than the other way
-/// round, so the refutation cap below is a plain constant rather than a cast
-/// that has to argue it cannot truncate.
-const MAX_MEMBERS_U32: u32 = 256;
-
-/// The largest room this harness will build.
-///
-/// Not a property of the library, which has no room-size limit — a bound on
-/// what a *benchmark* will spend. Every arm decides the same rooms, so one
-/// swept size costs every arm at once, and a room of a thousand members would
-/// spend minutes per size to answer a question the shape of the curve already
-/// answers by a hundred.
-pub(crate) const MAX_MEMBERS: usize = MAX_MEMBERS_U32 as usize;
-
-/// Names and roles drawn on, in order, for a room's first eight members.
-///
-/// Beyond them [`member_at`] generates, because a fixed table is a cap on room
-/// size dressed as a convenience: `--agents` clamped to 8 for no reason other
-/// than that this array ends there.
-pub(crate) const MEMBER_ROLES: [(&str, Role); 8] = [
-    ("planner", Role::Proposer),
-    ("critic", Role::Critic),
-    ("archivist", Role::Archivist),
-    ("scout", Role::Proposer),
-    ("auditor", Role::Critic),
-    ("historian", Role::Archivist),
-    ("builder", Role::Proposer),
-    ("reviewer", Role::Critic),
-];
-
-/// The name and role of member `index`, for a room of any size.
-///
-/// The first eight keep the names the recorded benchmarks were written
-/// against, so every number at those sizes is reproduced exactly rather than
-/// approximately. Past them the roles cycle in the same order — a room of
-/// thirty-two is four of the same rotation, which keeps the mix of proposers,
-/// critics and archivists flat as the room grows instead of letting one role
-/// dominate a large desk by accident.
-pub(crate) fn member_at(index: usize) -> (String, Role) {
-    MEMBER_ROLES.get(index).map_or_else(
-        || {
-            let (_, role) = MEMBER_ROLES[index % MEMBER_ROLES.len()];
-            (format!("seat{index}"), role)
-        },
-        |(name, role)| ((*name).to_string(), *role),
-    )
-}
-
-/// How a participant fills a turn it has no strong move for.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum Role {
-    /// Puts its own best option on the floor early.
-    Proposer,
-    /// Objects to a leading option it privately rates poorly.
-    Critic,
-    /// Supplies grounds without taking a side.
-    Archivist,
-}
 
 /// Evaluation of the genuinely best option, before noise.
 const TRUE_QUALITY: i32 = 100;
@@ -411,13 +348,9 @@ impl Room {
         expertise: Expertise,
         cost_tiers: bool,
     ) -> Self {
-        let topic_count = topics.clamp(2, TOPIC_NAMES.len());
+        let topic_count = topics.clamp(2, MAX_TOPICS);
         let agent_count = agents.clamp(2, MAX_MEMBERS);
-        let names: Vec<TopicId> = TOPIC_NAMES
-            .iter()
-            .take(topic_count)
-            .map(|name| TopicId::from(*name))
-            .collect();
+        let names: Vec<TopicId> = (0..topic_count).map(topic_at).collect();
         // The truth is placed by the seed rather than at a fixed index, so no
         // arm of the benchmark can score by preferring the first option.
         let truth_index =

@@ -235,6 +235,9 @@ fn seat_synthetic(
 /// independent-vote control is run against the same agents so the deliberation
 /// has something to be scored against.
 pub(crate) fn live_episode(options: &Options) -> Result<(), String> {
+    if let Some(directory) = &options.scenario_dir {
+        return live_corpus(options, directory);
+    }
     match &options.scenario {
         Some(path) => {
             let text = std::fs::read_to_string(path)
@@ -244,6 +247,61 @@ pub(crate) fn live_episode(options: &Options) -> Result<(), String> {
         }
         None => live_synthetic(options),
     }
+}
+
+/// Run every scenario in a directory, in name order.
+///
+/// One problem is one problem. A room that gets an SRE incident right has been
+/// shown to hold the grammar on an SRE incident, and the shipped corpus was a
+/// single genre for long enough that it was worth saying so out loud: this runs
+/// the lot, so diversity is a measured axis rather than a claim about the
+/// fixtures.
+///
+/// Scenarios are run in sorted file-name order so two runs of the same
+/// directory report in the same order, and each is announced before it runs —
+/// a live corpus takes minutes per scenario, and a caller watching it needs to
+/// know which one is spending them.
+///
+/// # Errors
+///
+/// Returns a read or parse failure for the directory, for any entry in it, or
+/// for any scenario. A scenario that fails to *read* or to *parse* stops the
+/// run rather than being skipped: a silently ignored fixture is a corpus that
+/// quietly shrinks, and a run that reports a corpus it did not finish is worse
+/// than one that refuses.
+fn live_corpus(options: &Options, directory: &str) -> Result<(), String> {
+    // Every entry is resolved before any is filtered, and a failure to read
+    // one stops the run. `read_dir` succeeding does not mean iterating it
+    // will, and dropping the entries that fail is exactly the quietly
+    // shrinking corpus this function's own contract refuses.
+    let entries: Vec<std::fs::DirEntry> = std::fs::read_dir(directory)
+        .map_err(|error| format!("could not read {directory}: {error}"))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("could not read an entry of {directory}: {error}"))?;
+    let mut paths: Vec<std::path::PathBuf> = entries
+        .into_iter()
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().is_some_and(|kind| kind == "txt"))
+        .collect();
+    paths.sort();
+    if paths.is_empty() {
+        return Err(format!("no .txt scenarios in {directory}"));
+    }
+
+    println!("corpus {directory}: {} scenarios\n", paths.len());
+    for path in &paths {
+        let name = path.file_name().map_or_else(
+            || path.display().to_string(),
+            |name| name.to_string_lossy().into_owned(),
+        );
+        let text = std::fs::read_to_string(path)
+            .map_err(|error| format!("could not read {}: {error}", path.display()))?;
+        let scenario = Scenario::parse(&text)?;
+        println!("── {name} ──");
+        live_scenario(options, &scenario)?;
+        println!();
+    }
+    Ok(())
 }
 
 /// Deliberate a real problem, then poll the same agents independently.

@@ -5,6 +5,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use crate::{
     attention::{AgentThreshold, BidReason},
     directory::DirectoryPolicy,
+    horizon::Basis,
     quorum::{QuorumPolicy, TopicStanding},
     salience::SalienceWeights,
     trace::TopicId,
@@ -126,6 +127,19 @@ pub struct EpisodePolicy {
     /// [`Error::ZeroDeferCap`]: crate::error::Error::ZeroDeferCap
     #[serde(deserialize_with = "deserialize_required_defer_cap")]
     pub defer_cap: Option<u32>,
+    /// How the window and the decay measure distance back through the
+    /// transcript.
+    ///
+    /// [`Basis::Sequence`] subtracts raw sequence numbers, so every row the
+    /// host wrote counts against the window whether or not this episode folds
+    /// it — an aside, a row from a retired agent, an off-floor question put to
+    /// another channel. [`Basis::Live`] counts only the rows the fold reads,
+    /// so the policy means the same thing on a busy desk as on a quiet one.
+    ///
+    /// The two are identical on a dense journal the episode owns end to end,
+    /// which is the benchmark's case and the reason its recorded numbers do
+    /// not move. They diverge exactly where a real host differs from it.
+    pub distance: Basis,
     /// When a topic is entitled to carry.
     pub quorum: QuorumPolicy,
     /// Salience weights.
@@ -174,9 +188,82 @@ impl EpisodePolicy {
         repetition_cap: 3,
         directory: None,
         defer_cap: None,
+        distance: Basis::Sequence,
         quorum: QuorumPolicy::DEFAULT,
         weights: SalienceWeights::DEFAULT,
     };
+
+    /// The policy a desk of `members` should carry.
+    ///
+    /// **Use this rather than [`Self::DEFAULT`] for any desk above about a
+    /// dozen.** Three of the default's numbers are absolute where the quantity
+    /// they bound scales with the room, and each one fails silently:
+    ///
+    /// - `turn_budget: 12` is fewer turns than a room of thirteen has members.
+    ///   With `blind_round` set, visibility lifts only once *every* member has
+    ///   authored a live row, so such a room stays [`Visibility::Blind`] for
+    ///   the whole episode and never deliberates at all. It still returns
+    ///   turns, and nothing in the result says the room never saw itself.
+    /// - `quorum.threshold: 2` is two supporters whether the desk holds five
+    ///   members or a thousand.
+    /// - `weights.half_life: 20` is twenty rows against an opening round that
+    ///   is `members` rows long.
+    /// - `round_width: 4` is the one that costs *depth* rather than accuracy.
+    ///   [`DEFAULT_ROUND_WIDTH`]'s own reasoning is that widening a **blind**
+    ///   round is free — "a blind member could not read that row anyway" — so
+    ///   the free width is the size of the room, and four takes all of it only
+    ///   in a room of four. A room of 128 spends 32 rounds completing an
+    ///   opening round that could take one.
+    ///
+    /// The budget is three turns per member with a floor of six: a blind
+    /// opening round costs one turn per member before anyone has seen anyone,
+    /// a majority then has to assemble on one option, and the decision has to
+    /// be recorded. It is a cap rather than a cost — the benchmark's
+    /// five-member room finishes in under seven of the fifteen turns it is
+    /// allowed — and a budget that does *not* scale is what makes a larger room
+    /// look worse than a smaller one: at a fixed twelve, an eight-member room
+    /// fails to decide a third of the time and scores 64%; at twenty-four it
+    /// decides 96% of the time and scores 88%.
+    ///
+    /// The round is widened to the whole room and `revealed_width` is left at
+    /// [`DEFAULT_REVEALED_WIDTH`]. That is the shipping default's own rule —
+    /// take all of the free concurrency and none of the paid kind — applied to
+    /// a room whose size the constructor actually knows. Measured on the
+    /// hidden profile at 128 members, it is the difference between waiting 135
+    /// rounds and waiting 2.1, with the accuracy column unchanged.
+    ///
+    /// See [`QuorumPolicy::for_room`] and [`SalienceWeights::for_room`] for
+    /// the other two.
+    ///
+    /// ```
+    /// use tinyhivemind_hive::EpisodePolicy;
+    ///
+    /// let policy = EpisodePolicy::for_room(100);
+    /// assert_eq!(policy.turn_budget, 300);
+    /// assert_eq!(policy.quorum.threshold, 51);
+    /// // The window covers the whole episode, so an opening reading still
+    /// // counts when the room settles.
+    /// assert_eq!(policy.quorum.window, 300);
+    /// // The blind round is the whole room at once; a revealed one is not.
+    /// assert_eq!(policy.round_width, 100);
+    /// assert_eq!(policy.revealed_width, 1);
+    /// ```
+    #[must_use]
+    pub const fn for_room(members: u32) -> Self {
+        let budget = members.saturating_mul(3);
+        let turn_budget = if budget < 6 { 6 } else { budget };
+        Self {
+            turn_budget,
+            // The whole room's blind round in one round, which is what a blind
+            // round already means: nobody can read anybody, so running them
+            // together changes what is *waited for* and not what is read.
+            round_width: if members == 0 { 1 } else { members },
+            revealed_width: DEFAULT_REVEALED_WIDTH,
+            quorum: QuorumPolicy::for_room(members, turn_budget),
+            weights: SalienceWeights::for_room(members),
+            ..Self::DEFAULT
+        }
+    }
 }
 
 impl Default for EpisodePolicy {
@@ -303,9 +390,29 @@ pub enum HiveStep {
         topics: Vec<TopicId>,
     },
     /// The turn budget is spent.
+    ///
+    /// The standings the budget bought are carried with it. Without them
+    /// exhaustion is undiagnosable: a room that spent thirty turns arguing two
+    /// options to within one supporter of quorum and a room that spent thirty
+    /// turns depositing nothing at all return the same thing, and the second
+    /// is a protocol failure the host needs to know about. A federation whose
+    /// desks were spending their entire budget asking each other questions
+    /// exhausted with *empty* standings on every desk, and it took a source
+    /// reading rather than a step result to find that out.
+    ///
+    /// `visibility` reports the other silent failure. Under `blind_round` the
+    /// room sees itself only once every member has authored a live row, so a
+    /// desk with more members than `turn_budget` stays [`Visibility::Blind`]
+    /// for its entire episode and never deliberates — it takes turns and
+    /// nothing more. [`Visibility::Blind`] here says that happened.
+    /// [`EpisodePolicy::for_room`] derives a budget that cannot produce it.
     Exhausted {
         /// Turns taken.
         spent: u32,
+        /// Where every advocated topic stood when the budget ran out.
+        standings: Vec<TopicStanding>,
+        /// How much of itself the room could see when the budget ran out.
+        visibility: Visibility,
     },
     /// Nobody's urge cleared their threshold.
     Idle,

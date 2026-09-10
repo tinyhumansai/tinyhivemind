@@ -60,6 +60,21 @@
 //! `docs/adr/0014-a-round-authorizes-concurrent-turns.md`, which supersedes
 //! `docs/adr/0002-hive-episodes-are-sequential.md` on the terms that ADR set.
 //!
+//! # Sizing a policy to the room
+//!
+//! [`EpisodePolicy::DEFAULT`] is written for a room of about five, and four of
+//! its numbers are absolute where the quantity they bound scales with the desk:
+//! a budget of twelve turns, a quorum of two supporters, a decay half-life of
+//! twenty rows, and a blind round four turns wide. The first three fail
+//! **without saying so** above about a dozen members — most sharply the budget,
+//! because a room with more members than turns never completes its blind
+//! opening round and so never sees itself at all. The fourth costs depth rather
+//! than accuracy: widening a blind round is free by [`DEFAULT_ROUND_WIDTH`]'s
+//! own argument, and the free width is the size of the room.
+//!
+//! [`EpisodePolicy::for_room`] derives all four from the size of the desk, and
+//! is what a host with a real roster should use.
+//!
 //! # What this crate deliberately does not hold
 //!
 //! - **A port.** There is no trait here for a host to implement. An episode is
@@ -89,6 +104,8 @@
 //!   what each owner reads. The one mechanism here whose default is *on*.
 //! - [`episode`] — the pure state machine, and the visibility filter.
 //! - [`error`] — typed failures from malformed inputs.
+//! - [`horizon`] — where a fold is measured to, and whether distance counts
+//!   every row the host wrote or only the rows the fold reads.
 //! - [`quorum`] — standings, cross-inhibition, and the consensus predicate.
 //! - [`mod@salience`] — recency decay, importance, and relevance.
 //! - [`trace`] — the stigmergic grammar and its read.
@@ -169,6 +186,7 @@ pub mod division;
 pub mod episode;
 pub mod error;
 pub mod exchange;
+pub mod horizon;
 pub mod quorum;
 pub mod salience;
 pub mod trace;
@@ -185,6 +203,7 @@ pub use episode::{
 };
 pub use error::{Error, Result};
 pub use exchange::{ExchangePolicy, ExchangeRound, ExchangeState, NoExchangeReason, exchange};
+pub use horizon::{Basis, Horizon};
 pub use quorum::{ConsensusState, QuorumPolicy, TopicStanding, consensus, standings};
 pub use salience::{Salience, SalienceWeights, salience};
 pub use trace::{TRACE_CAP, TopicId, Trace, TraceKind, read, resolve};

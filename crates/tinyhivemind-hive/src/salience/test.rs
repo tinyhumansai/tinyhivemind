@@ -5,7 +5,7 @@
 use super::*;
 
 use crate::trace::{TopicId, Trace};
-use tinyhivemind::SessionAuthor;
+use tinyhivemind::{Sequence, SessionAuthor};
 
 fn trace(sequence: u64, kind: TraceKind) -> Trace {
     Trace {

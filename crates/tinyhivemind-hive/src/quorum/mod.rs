@@ -5,7 +5,7 @@
 //! swarms actually settle on a nest site rather than from voting theory.
 //!
 //! **Quorum is local.** A topic carries when `threshold` *distinct*
-//! participants have supported it within the last `window` sequences — not
+//! participants have supported it within the last `window` of transcript — not
 //! when it holds a majority of anything. The count is order-independent and
 //! idempotent, so a participant that catches up late folds to the same
 //! standing as one that watched live.
@@ -43,6 +43,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     error::{Error, Result},
+    horizon::Horizon,
     salience::importance,
     trace::{TopicId, Trace, TraceKind},
 };
@@ -51,7 +52,9 @@ use tinyhivemind::Sequence;
 /// Fold traces into one standing per topic.
 ///
 /// Only [`TraceKind::Propose`] and [`TraceKind::Support`] add a supporter, and
-/// only within `policy.window` sequences of `at`. Under
+/// only within `policy.window` of `at` — counted in raw sequences or in folded
+/// rows according to the [`Horizon`] the caller passes. A bare [`Sequence`]
+/// gives the raw count. Under
 /// `policy.require_grounded`, support that cites nothing is ignored entirely:
 /// it joins neither the supporter set nor the weight.
 ///
@@ -75,11 +78,12 @@ use tinyhivemind::Sequence;
 /// Returns [`Error::ZeroQuorumThreshold`], [`Error::ZeroQuorumWindow`], or
 /// [`Error::ZeroRefutationCap`] when the policy would make the count
 /// meaningless.
-pub fn standings(
+pub fn standings<'a>(
     traces: &[Trace],
-    at: Sequence,
+    at: impl Into<Horizon<'a>>,
     policy: &QuorumPolicy,
 ) -> Result<Vec<TopicStanding>> {
+    let at = at.into();
     if policy.threshold == 0 {
         return Err(Error::ZeroQuorumThreshold);
     }
@@ -90,10 +94,9 @@ pub fn standings(
         return Err(Error::ZeroRefutationCap);
     }
 
-    let floor = at.0.saturating_sub(u64::from(policy.window));
     let mut live: Vec<&Trace> = traces
         .iter()
-        .filter(|trace| trace.sequence.0 >= floor && trace.sequence <= at)
+        .filter(|trace| at.within(trace.sequence, policy.window))
         .collect();
     // A trace is addressed by where it was authored, so `(sequence, offset)`
     // identifies it. Sorting and deduplicating on that address is what makes

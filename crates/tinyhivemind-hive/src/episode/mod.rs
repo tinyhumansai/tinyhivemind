@@ -17,10 +17,13 @@ pub use types::{
     Phase, Visibility,
 };
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use crate::{
     attention::{AgentThreshold, BidContext, bids, floor_round},
     directory::{Directory, directory, validate_policy as validate_directory_policy},
     error::{Error, Result},
+    horizon::{Basis, Horizon},
     quorum::{ConsensusState, consensus, standings},
     trace::{TraceKind, read_borrowed},
 };
@@ -36,13 +39,16 @@ const SPEAK_COST: i64 = 500;
 /// Evaluation order is fixed, and each rung is checked before the next:
 ///
 /// 1. the roster, desk snapshots and policy are validated;
-/// 2. a spent budget returns [`HiveStep::Exhausted`];
-/// 3. traces, standings and — when `policy.directory` is set — the directory
-///    are folded from the transcript, all at the same sequence;
-/// 4. quorum in [`Phase::Commit`] returns [`HiveStep::Converged`];
-/// 5. quorum in [`Phase::Deliberate`] flips the phase and emits one commit turn;
-/// 6. a deadlock nobody can break returns [`HiveStep::Deadlocked`];
-/// 7. otherwise the highest bid takes the floor, or [`HiveStep::Idle`].
+/// 2. traces and standings are folded from the transcript;
+/// 3. a spent budget returns [`HiveStep::Exhausted`], carrying those
+///    standings — and returns *before* the directory is folded, since an
+///    exhausted episode authorizes nobody and so has no bid to route;
+/// 4. when `policy.directory` is set, the directory is folded at the same
+///    sequence as the standings, on every path that reaches a bid;
+/// 5. quorum in [`Phase::Commit`] returns [`HiveStep::Converged`];
+/// 6. quorum in [`Phase::Deliberate`] flips the phase and emits one commit turn;
+/// 7. a deadlock nobody can break returns [`HiveStep::Deadlocked`];
+/// 8. otherwise the highest bid takes the floor, or [`HiveStep::Idle`].
 ///
 /// `transcript` is the projection of the episode's conversation. Messages at or
 /// below `state.watermark` are context and are not folded into traces, so an
@@ -74,12 +80,26 @@ pub fn step(
     }
     let members = active_members(roster, desks, state)?;
 
-    if state.spent >= policy.turn_budget {
-        return Ok(HiveStep::Exhausted { spent: state.spent });
-    }
+    // Folded before the budget check rather than after it, so an exhausted
+    // episode can say what the budget bought. It costs one fold on the step
+    // that ends the episode and buys the difference between "spent thirty
+    // turns and nearly carried two options" and "spent thirty turns and
+    // deposited nothing", which are the same report without it.
+    let (live, traces, rows) = live_traces(transcript, state, &members);
+    let at = rows.last().copied().unwrap_or(state.watermark);
+    let horizon = match policy.distance {
+        Basis::Sequence => Horizon::at(at),
+        Basis::Live => Horizon::over(at, &rows),
+    };
+    let standings = standings(&traces, horizon, &policy.quorum)?;
 
-    let (live, traces, at) = live_traces(transcript, state, &members);
-    let standings = standings(&traces, at, &policy.quorum)?;
+    if state.spent >= policy.turn_budget {
+        return Ok(HiveStep::Exhausted {
+            spent: state.spent,
+            standings,
+            visibility: visibility(policy, &live, &members),
+        });
+    }
 
     let consensus = consensus(&standings, &policy.quorum);
     match &consensus {
@@ -112,9 +132,12 @@ pub fn step(
     // The directory is folded at the same sequence as the standings, so the
     // bid reads one consistent view of the transcript rather than two.
     let known = match &policy.directory {
-        Some(directory_policy) => {
-            Some(directory(&traces, at, directory_policy, &state.thresholds)?)
-        }
+        Some(directory_policy) => Some(directory(
+            &traces,
+            horizon,
+            directory_policy,
+            &state.thresholds,
+        )?),
         None => None,
     };
     let context = context(
@@ -123,7 +146,7 @@ pub fn step(
         &members,
         state,
         policy,
-        at,
+        horizon,
         known.as_ref(),
     );
     let bids = bids(&context)?;
@@ -295,13 +318,21 @@ fn active_members<'a>(
     state: &EpisodeState,
 ) -> Result<Vec<&'a str>> {
     let desk_id = desks.resolve_id(&state.conversation.desk_id)?;
+    // The roster's own `active_member` is a scan, so asking it once per desk
+    // member is quadratic in the roster. The answer is the same set every
+    // time, so it is collected once and each member is a lookup.
+    let active: BTreeSet<&str> = roster
+        .active_members()
+        .map(|member| member.id.as_str())
+        .collect();
     let members: Vec<&str> = desks
         .members(desk_id)?
         .into_iter()
-        .filter(|id| roster.active_member(id).is_some())
+        .filter(|id| active.contains(id))
         .collect();
+    let seated: BTreeSet<&str> = members.iter().copied().collect();
     for threshold in &state.thresholds {
-        if !members.iter().any(|id| *id == threshold.agent_id) {
+        if !seated.contains(threshold.agent_id.as_str()) {
             return Err(Error::UnknownThresholdMember {
                 agent_id: threshold.agent_id.clone(),
                 desk_id: desk_id.to_owned(),
@@ -335,7 +366,7 @@ fn live_traces<'a>(
 ) -> (
     Vec<&'a SessionMessage>,
     Vec<crate::trace::Trace>,
-    tinyhivemind::Sequence,
+    Vec<tinyhivemind::Sequence>,
 ) {
     let live: Vec<&SessionMessage> = transcript
         .iter()
@@ -349,10 +380,15 @@ fn live_traces<'a>(
         })
         .collect();
     let traces = read_borrowed(&live);
-    let at = live
-        .last()
-        .map_or(state.watermark, |message| message.sequence);
-    (live, traces, at)
+    // The sequences of exactly the rows this episode folds, ascending — the
+    // ruler [`Basis::Live`] measures with. Sorted rather than assumed sorted:
+    // the caller hands over a projection, and every other fold in this crate
+    // is order-independent on the same grounds.
+    let mut rows: Vec<tinyhivemind::Sequence> =
+        live.iter().map(|message| message.sequence).collect();
+    rows.sort_unstable();
+    rows.dedup();
+    (live, traces, rows)
 }
 
 /// The standing to converge on, if the commit turn actually recorded it.
@@ -498,7 +534,7 @@ fn context<'a>(
     members: &'a [&'a str],
     state: &'a EpisodeState,
     policy: &'a EpisodePolicy,
-    at: tinyhivemind::Sequence,
+    at: Horizon<'a>,
     known: Option<&'a Directory>,
 ) -> BidContext<'a> {
     BidContext {
@@ -572,19 +608,28 @@ fn charged(
     members: &[&str],
     speakers: &[&str],
 ) -> Vec<AgentThreshold> {
+    // Both sides indexed once rather than searched per member: the carried
+    // records are as long as the desk and the round is as wide as the policy
+    // allows, so the search form is quadratic in the room and is paid on every
+    // authorized round.
+    let held: BTreeMap<&str, &AgentThreshold> = thresholds
+        .iter()
+        .map(|record| (record.agent_id.as_str(), record))
+        .collect();
+    let spoke: BTreeSet<&str> = speakers.iter().copied().collect();
     members
         .iter()
         .map(|member| {
-            let mut record = thresholds
-                .iter()
-                .find(|held| held.agent_id == *member)
+            let mut record = held
+                .get(*member)
+                .copied()
                 .cloned()
                 .unwrap_or_else(|| AgentThreshold::new(*member, 0));
             // Every speaker in the round is charged once and everyone silent
             // through it accrues once, whatever the round's width. Charging
             // per round rather than per turn would make a wide round cheap and
             // rotate the floor slower the more concurrent it got.
-            record.threshold = if speakers.contains(member) {
+            record.threshold = if spoke.contains(*member) {
                 record.threshold.saturating_add(SPEAK_COST)
             } else {
                 record.threshold.saturating_sub(SPEAK_COST / 2)
