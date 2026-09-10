@@ -9,7 +9,6 @@ use crate::{
     salience::SalienceWeights,
     trace::{TopicId, Trace},
 };
-use tinyhivemind::Sequence;
 
 /// One member's standing willingness to take the floor.
 ///
@@ -139,7 +138,8 @@ pub struct BidContext<'a> {
     pub thresholds: &'a [AgentThreshold],
     /// Where the room is deciding from, and the ruler it measures back with.
     ///
-    /// Takes a bare [`Sequence`] for raw sequence distance, or a
+    /// Takes a bare [`Sequence`](tinyhivemind::Sequence) for raw sequence
+    /// distance, or a
     /// [`Horizon::over`] the folded rows to measure in rows the fold read.
     pub at: Horizon<'a>,
     /// Salience weights.
