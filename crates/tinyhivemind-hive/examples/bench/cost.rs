@@ -180,6 +180,15 @@ impl CostModel {
     }
 }
 
+impl Default for CostModel {
+    /// [`CostModel::DEFAULT`], so an [`crate::metrics::Aggregate`] built by
+    /// `Default` is priced at the same point as one built by
+    /// [`crate::metrics::Aggregate::priced_at`].
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
 /// One round of an episode, as the thing that gets priced.
 ///
 /// Recorded by the driver rather than reconstructed afterwards: an arm that
