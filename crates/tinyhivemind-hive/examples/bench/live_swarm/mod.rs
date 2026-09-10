@@ -32,7 +32,7 @@ use crate::live_single::{plurality, verdict};
 use crate::policy::{quorum_threshold, turn_budget};
 use crate::rng::mix;
 use crate::scenario::Scenario;
-use crate::swarm::{self, AskChannel, Channel, Exchange, SwarmMember, run_swarm};
+use crate::swarm::{self, Channel, Exchange, SwarmMember, run_swarm};
 
 /// The referral policy the swarm arm runs at.
 ///
