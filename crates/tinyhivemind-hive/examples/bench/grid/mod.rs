@@ -40,7 +40,7 @@ pub(crate) use axes::{Axes, Cell};
 
 use crate::arms;
 use crate::cli::Options;
-use crate::metrics::{Aggregate, arm_row, wilson};
+use crate::metrics::{Aggregate, arm_row, json_line, wilson};
 use crate::parallel;
 use crate::policy::{tuned_policy, widened_policy};
 use crate::rng::mix;
@@ -96,14 +96,26 @@ pub(crate) fn run(options: &Options) -> Result<(), String> {
         options.seed,
     );
 
-    println!("{}", header());
+    if !options.json {
+        println!("{}", header());
+    }
     let mut every: Vec<(Cell, Vec<CellRow>)> = Vec::new();
     for cell in cells {
         let rows = run_cell(options, cell)?;
         for row in &rows {
-            println!("{}{}", cell.columns(), arm_row(row.name, &row.totals));
+            if options.json {
+                // The cell's own coordinates ride on every line, so one JSON
+                // object is a complete record of one arm in one cell and a
+                // consumer never has to carry state across lines to know which
+                // cell it is reading.
+                println!("{}", cell_json(&cell, row.name, &row.totals));
+            } else {
+                println!("{}{}", cell.columns(), arm_row(row.name, &row.totals));
+            }
         }
-        println!();
+        if !options.json {
+            println!();
+        }
         every.push((cell, rows));
     }
 
@@ -111,6 +123,27 @@ pub(crate) fn run(options: &Options) -> Result<(), String> {
         summarise(&every);
     }
     Ok(())
+}
+
+/// One arm's line of `--grid --json`: the cell's coordinates spliced into the
+/// arm's own JSON object.
+///
+/// Built by splicing rather than by a serializer because the harness takes no
+/// serde dependency, and [`json_line`] already emits the arm half in the exact
+/// shape `--json` consumers read elsewhere -- so the two outputs cannot drift
+/// into disagreeing about a field name.
+fn cell_json(cell: &Cell, name: &str, totals: &Aggregate) -> String {
+    let arm = json_line(name, totals);
+    let coordinates = format!(
+        "{{\"topic\":\"{}\",\"scale\":{},\"complexity\":{},\"concurrency\":{},",
+        cell.topic.name(),
+        cell.scale,
+        cell.complexity.0,
+        cell.concurrency,
+    );
+    // `json_line` opens with `{`; replacing that one byte with the coordinate
+    // prefix keeps every field it emits, in its order, without reparsing.
+    arm.replacen('{', &coordinates, 1)
 }
 
 /// The header for the grid table: the four axes, then the six metrics.
