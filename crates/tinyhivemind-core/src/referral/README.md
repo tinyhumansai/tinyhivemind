@@ -78,11 +78,18 @@ bound: it grows with the federation while the asking desk's turn budget stays
 whatever its own size earned. Ten members earn thirty turns; fifty desks
 present forty-nine peers to ask.
 
-Measured on the benchmark's federation, that is a total collapse — 100% correct
+Measured on the benchmark's federation — ten members a desk, 128 options, so
+every desk has a blind spot of its own — that is a total collapse: 100% correct
 at twelve desks, **0.0% at twenty-five and above**, every desk episode ending
 `exhausted`. Bounding width at a stated constant of two restores 100% and
 spends *less*: 1343 turns against 6624 at a hundred desks. See
 [`docs/experiments/2026-09-10-hive-at-scale.md`](../../../../docs/experiments/2026-09-10-hive-at-scale.md).
+
+Those conditions matter and the two numbers below are not in tension. Narrow the
+slate so desks *share* blind spots — eight options across a hundred desks — and
+the bounded ask scores 0.0% too, because the peer it asks holds the same error.
+Width two fixes a desk that is wrong on its own; nothing pairwise fixes a
+federation that is wrong together.
 
 Two rules follow:
 
@@ -94,11 +101,11 @@ Two rules follow:
    [ADR 0012](../../../../docs/adr/0012-an-exchange-round-spends-model-calls-not-turns.md)
    one level up.
 
-And one limit: a bounded question cannot recover an error the whole federation
-shares, because the peer it asks holds the same error. Where every desk is
-wrong about the same thing, what lifts it is a desk publishing its reading to
-*every* channel — one model call rather than one per peer — which is a
-different mechanism and not more of this one.
+And that limit again, stated as a rule: a bounded question cannot recover an
+error the whole federation shares. Where every desk is wrong about the same
+thing, what lifts it is a desk publishing its reading to *every* channel — one
+model call rather than one per peer — which is a different mechanism and not
+more of this one.
 - With only `enabled` and `max_hops` set (`reach: Local`), the decision is
   exactly what `mention_dispatch` decides on the same conversation — asserted
   by test, not merely claimed.
