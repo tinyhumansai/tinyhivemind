@@ -10,9 +10,10 @@
 
 use std::time::Duration;
 
-use super::Aggregate;
+use super::{Aggregate, json_line};
 use crate::TASK;
 use crate::arms;
+use crate::cost::CostModel;
 use crate::policy::tuned_policy;
 use crate::rng::mix;
 use crate::run::run_episode;
