@@ -232,6 +232,7 @@ fn run_federated_arms(
     let mut siloed = SwarmTotals::default();
     let mut swarmed = SwarmTotals::default();
     let mut offfloor = SwarmTotals::default();
+    let mut digested = SwarmTotals::default();
     let mut free = SwarmTotals::default();
     let mut merged = Aggregate::default();
     let mut vote = Aggregate::default();
@@ -239,6 +240,7 @@ fn run_federated_arms(
         siloed.add(&outcome.siloed);
         swarmed.add(&outcome.swarmed);
         offfloor.add(&outcome.offfloor);
+        digested.add(&outcome.digested);
         free.add(&outcome.free);
         merged.add_arm(&outcome.merged);
         vote.add_arm(&outcome.vote);
@@ -248,6 +250,7 @@ fn run_federated_arms(
         siloed,
         swarmed,
         offfloor,
+        digested,
         free,
         merged,
         vote,
@@ -271,6 +274,8 @@ struct SwarmTotals {
     stranded: u64,
     /// Questions put to another channel off the floor, taking no turn.
     off_floor_asks: u64,
+    /// Readings published federation-wide, taking no turn.
+    digests: u64,
     /// Desk episodes that ended in a recorded decision.
     converged: u32,
     /// Desk episodes that tied with nobody left to break it.
@@ -301,6 +306,7 @@ impl SwarmTotals {
         self.off_floor_asks = self
             .off_floor_asks
             .saturating_add(u64::from(report.off_floor_asks));
+        self.digests = self.digests.saturating_add(u64::from(report.digests));
         self.step_calls = self.step_calls.saturating_add(u64::from(report.step_calls));
         self.library_time += report.library_time;
         for desk in &report.desks {
@@ -317,13 +323,14 @@ impl SwarmTotals {
     fn row(&self, name: &str) -> String {
         let runs = u64::from(self.runs);
         format!(
-            "{name:<9} {:>7.1}% {:>7} {:>9.1} {:>10.1} {:>9.1} {:>8.1}",
+            "{name:<9} {:>7.1}% {:>7} {:>9.1} {:>10.1} {:>9.1} {:>8.1} {:>9.1}",
             metrics::ratio(u64::from(self.correct), runs) * 100.0,
             self.decided,
             metrics::ratio(self.turns, runs),
             metrics::ratio(self.crossings, runs),
             metrics::ratio(self.stranded, runs),
             metrics::ratio(self.off_floor_asks, runs),
+            metrics::ratio(self.digests, runs),
         )
     }
 }
@@ -573,20 +580,22 @@ fn tabulate(totals: &FederatedTotals, wall: std::time::Duration, federations: us
         siloed,
         swarmed,
         offfloor,
+        digested,
         free,
         merged,
         vote,
     } = totals;
     println!(
-        "{:<9} {:>8} {:>8} {:>9} {:>10} {:>9} {:>8}",
-        "arm", "correct", "decided", "turns", "crossings", "stranded", "asks/ep",
+        "{:<9} {:>8} {:>8} {:>9} {:>10} {:>9} {:>8} {:>9}",
+        "arm", "correct", "decided", "turns", "crossings", "stranded", "asks/ep", "digests",
     );
     println!("{}", siloed.row("siloed"));
     println!("{}", swarmed.row("swarm"));
     println!("{}", offfloor.row("swarm°"));
+    println!("{}", digested.row("swarm◦"));
     println!("{}", free.row("pooled"));
     println!(
-        "{:<9} {:>7.1}% {:>7} {:>9.1} {:>10} {:>9} {:>8}",
+        "{:<9} {:>7.1}% {:>7} {:>9.1} {:>10} {:>9} {:>8} {:>9}",
         "merged",
         merged.accuracy(),
         merged.converged,
@@ -594,13 +603,15 @@ fn tabulate(totals: &FederatedTotals, wall: std::time::Duration, federations: us
         "—",
         "—",
         "—",
+        "—",
     );
     println!(
-        "{:<9} {:>7.1}% {:>7} {:>9.1} {:>10} {:>9} {:>8}",
+        "{:<9} {:>7.1}% {:>7} {:>9.1} {:>10} {:>9} {:>8} {:>9}",
         "vote",
         vote.accuracy(),
         vote.converged,
         vote.turns_per_episode(),
+        "—",
         "—",
         "—",
         "—",
@@ -617,6 +628,10 @@ fn tabulate(totals: &FederatedTotals, wall: std::time::Duration, federations: us
     println!(
         "swarm° desk endings: converged {} · deadlocked {} · exhausted {} · idle {}",
         offfloor.converged, offfloor.deadlocked, offfloor.exhausted, offfloor.idle,
+    );
+    println!(
+        "swarm◦ desk endings: converged {} · deadlocked {} · exhausted {} · idle {}",
+        digested.converged, digested.deadlocked, digested.exhausted, digested.idle,
     );
     println!(
         "library time {:.1} ms over {} steps ({:.0} ns/step)",
