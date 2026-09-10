@@ -259,3 +259,74 @@ fn an_ask_cap_of_zero_means_on_the_floor_in_every_arm() {
     .expect("runs");
     assert_eq!(on_floor.off_floor_asks, 0, "nothing is asked off the floor");
 }
+
+#[test]
+fn planting_puts_the_cure_for_a_desk_on_another_desk() {
+    // The whole structure of the experiment. A desk that held the fact about
+    // its own decoy could answer its blind spot alone, and the arms would
+    // measure nothing about crossing a channel.
+    let plain = federation();
+    assert!(
+        plain.agents.iter().all(|agent| agent.ruled_out.is_empty()),
+        "a federation holds no facts until they are planted",
+    );
+
+    let planted = plain.planted();
+    assert!(planted.evidence);
+    for (index, desk) in planted.desks.iter().enumerate() {
+        // Nobody on this desk may hold the fact that would cure this desk...
+        let seats: Vec<&crate::sim::SimAgent> = planted
+            .agents
+            .iter()
+            .filter(|agent| desk.members.iter().any(|member| *member == agent.id))
+            .collect();
+        assert!(
+            !seats
+                .iter()
+                .any(|agent| agent.ruled_out.contains(&desk.decoy)),
+            "desk {} can cure its own blind spot",
+            desk.name,
+        );
+
+        // ...and the next desk round must.
+        let holder = &planted.desks[(index + 1) % planted.desks.len()];
+        let holds = planted
+            .agents
+            .iter()
+            .filter(|agent| holder.members.iter().any(|member| *member == agent.id))
+            .filter(|agent| agent.ruled_out.contains(&desk.decoy))
+            .count();
+        assert_eq!(
+            holds,
+            holder.members.len(),
+            "the holding desk knows what it holds, on every seat",
+        );
+    }
+}
+
+#[test]
+fn a_fact_crosses_a_channel_and_a_reading_does_not_carry_it() {
+    // The wire-level claim: with facts planted, a desk's outgoing line says
+    // what it can disqualify; without them the same line is exactly the line
+    // the harness always wrote.
+    let plain = federation();
+    let planted = plain.planted();
+    let policy = desk_policy(&plain);
+    let exchange = Exchange::from_caps(2, 1);
+
+    let quiet = run_swarm(&plain, &policy, referrals(), exchange, "Decide.", true).expect("runs");
+    assert!(
+        !quiet.trace.iter().any(|line| line.contains("rules out")),
+        "no facts exist, so none are stated",
+    );
+
+    let carrying =
+        run_swarm(&planted, &policy, referrals(), exchange, "Decide.", true).expect("runs");
+    assert!(
+        carrying.trace.iter().any(|line| line.contains("rules out")),
+        "a planted fact reaches the wire",
+    );
+    // The cost is a clause, not a call: the same asks and the same digests.
+    assert_eq!(carrying.off_floor_asks, quiet.off_floor_asks);
+    assert_eq!(carrying.digests, quiet.digests);
+}
