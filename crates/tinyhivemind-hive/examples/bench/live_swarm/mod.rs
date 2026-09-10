@@ -53,6 +53,19 @@ const fn swarm_referrals() -> ReferralPolicy {
 /// Run every federated arm over the same federations and print the comparison.
 pub(crate) fn swarm_compare(options: &Options) -> Result<(), String> {
     if options.agent.is_some() || options.api_base.is_some() {
+        // `--evidence` (and `--fact-noise`, which implies it) plants facts
+        // into the simulated `Federation` this branch never builds: a live
+        // run drives real agents over `--scenario` instead, so silently
+        // ignoring the flag would run an ordinary live scenario while
+        // appearing, from the command line, to run an evidence experiment.
+        if options.evidence {
+            return Err(
+                "--evidence and --fact-noise are simulated-federation flags; they have \
+                 no effect on a live run (--agent or --api-base) and are refused rather \
+                 than silently ignored"
+                    .to_owned(),
+            );
+        }
         let Some(path) = &options.scenario else {
             return Err("a live federation needs --scenario".to_owned());
         };
@@ -63,8 +76,9 @@ pub(crate) fn swarm_compare(options: &Options) -> Result<(), String> {
     }
     let federations: Vec<Federation> = (0..options.episodes)
         .map(|index| {
+            let seed = mix(options.seed, u64::from(index));
             let federation = Federation::generate(
-                mix(options.seed, u64::from(index)),
+                seed,
                 options.desks,
                 options.per_desk,
                 options.topics,
@@ -74,9 +88,12 @@ pub(crate) fn swarm_compare(options: &Options) -> Result<(), String> {
             // `--evidence` changes the task rather than the wire: it plants
             // the disqualifying facts, each on a desk other than the one that
             // needs it. Without it there are no facts to exchange and the arms
-            // below measure what an exchange of *opinions* is worth.
+            // below measure what an exchange of *opinions* is worth. Each
+            // federation's own seed goes in too, so a multi-episode
+            // `--fact-noise` run samples wrong-fact positions independently
+            // per episode rather than reusing one placement per desk count.
             if options.evidence {
-                federation.planted_with(options.fact_noise)
+                federation.planted_with(options.fact_noise, seed)
             } else {
                 federation
             }
