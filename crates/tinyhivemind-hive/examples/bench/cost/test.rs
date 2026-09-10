@@ -78,7 +78,7 @@ fn merging_two_samples_equals_pricing_one() {
     let mut folded = MODEL.price(&left);
     folded.merge(MODEL.price(&right));
 
-    let together = MODEL.price(&[left[0], left[1], right[0]]);
+    let together = MODEL.price(&[left[0].clone(), left[1].clone(), right[0].clone()]);
     assert_eq!(folded, together);
 }
 
