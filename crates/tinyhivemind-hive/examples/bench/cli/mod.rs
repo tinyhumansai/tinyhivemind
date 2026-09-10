@@ -505,5 +505,20 @@ impl Options {
     }
 }
 
+/// Promote the parser's default mode to [`Mode::Grid`] when an axis flag is
+/// given, without overwriting a mode the operator already chose explicitly.
+///
+/// Naming an axis (`--topic`, `--scale`, `--complexity`, `--concurrency`)
+/// alone selects the grid, so it is never silently ignored -- but
+/// `--swarm --topic hidden` must keep running the federation `--swarm` asked
+/// for rather than switching to a grid because the axis flag happened to
+/// come second. Only [`Mode::Compare`], the parser's own default, is safe to
+/// promote.
+fn select_grid_axis(options: &mut Options) {
+    if matches!(options.mode, Mode::Compare) {
+        options.mode = Mode::Grid;
+    }
+}
+
 #[cfg(test)]
 mod test;
