@@ -504,6 +504,13 @@ struct RoundLog<'a> {
     tally: &'a mut Tally,
     /// Turns spent so far, across every round.
     turns: &'a mut u32,
+    /// Rows each turn in this round actually read, filled as the round runs.
+    ///
+    /// Taken from the turn's own projection rather than from the journal's
+    /// length: a turn cannot see a private aside addressed to somebody else,
+    /// and cannot see a peer's row authored after the round was authorized.
+    /// Charging it for rows it never received would overstate its prompt.
+    rows: &'a mut Vec<u32>,
 }
 
 /// Compose and append every turn in one round, returning the last of them.
@@ -534,6 +541,8 @@ fn run_round(
         let Some(agent) = agents.iter_mut().find(|agent| agent.id() == turn.agent_id) else {
             return Err(format!("no agent named {}", turn.agent_id));
         };
+        log.rows
+            .push(u32::try_from(visible.len()).unwrap_or(u32::MAX));
         let content = agent.speak(turn, &visible)?;
         // An alongside aside is asked for over the same projection the floor
         // move was composed from, before either row is appended, so the
@@ -615,12 +624,10 @@ pub(crate) fn drive_with(
                 turns: round,
                 next_state,
             } => {
-                // Read before the round runs: these are the rows its turns
-                // were folded against, and the rows they are charged for.
-                // After `run_round` the journal also holds the round's own
-                // output, which no turn in it could see.
-                let rows = u32::try_from(host.journal.len()).unwrap_or(u32::MAX);
-                let width = u32::try_from(round.len()).unwrap_or(u32::MAX);
+                // Filled by `run_round` from each turn's own projection, so a
+                // turn is charged for the rows it actually received rather
+                // than for every row the journal happened to hold.
+                let mut rows = Vec::new();
                 let last = run_round(
                     &mut host,
                     agents,
@@ -629,13 +636,14 @@ pub(crate) fn drive_with(
                         trace: keep_trace.then_some(&mut trace),
                         tally: &mut tally,
                         turns: &mut turns,
+                        rows: &mut rows,
                     },
                     aside_mode,
                     member_ids.len(),
                 )?;
                 state = *next_state;
                 rounds = rounds.saturating_add(1);
-                shape.push(crate::cost::RoundShape { rows, turns: width });
+                shape.push(crate::cost::RoundShape { rows });
 
                 // An exchange round, between rounds and never during one. The
                 // library says whether one is open and who it names; the
@@ -643,6 +651,12 @@ pub(crate) fn drive_with(
                 // for any of it.
                 if aside_mode == AsideMode::OffFloor {
                     let members = member_ids.len();
+                    // Read *before* the exchange runs. An exchange appends
+                    // rows of its own, and a member asked during it was handed
+                    // the journal as it stood when the round opened -- reading
+                    // the length afterwards charges every asked member for the
+                    // answers the exchange itself produced.
+                    let before = u32::try_from(host.journal.len()).unwrap_or(u32::MAX);
                     let (ran, spent) =
                         one_exchange(&mut host, agents, &last, &state, &exchange, opened, members)?;
                     contacts = contacts.saturating_add(ran.calls);
@@ -653,10 +667,7 @@ pub(crate) fn drive_with(
                     // with nothing else. Charged at the journal as it now
                     // stands, which is what `one_exchange` hands its members.
                     if ran.calls > 0 {
-                        shape.push(crate::cost::RoundShape {
-                            rows: u32::try_from(host.journal.len()).unwrap_or(u32::MAX),
-                            turns: ran.calls,
-                        });
+                        shape.push(crate::cost::RoundShape::uniform(before, ran.calls));
                     }
                 }
                 continue;
