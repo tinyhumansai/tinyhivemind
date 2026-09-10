@@ -83,3 +83,24 @@ fn a_grounded_objection_carries_the_room_through_a_deadlock() {
     };
     assert_eq!(topic, TopicId("stage".into()));
 }
+
+#[test]
+fn a_majority_threshold_does_not_make_deadlock_unreachable() {
+    // A majority threshold removes deadlock only while each member backs at
+    // most one topic. The trace grammar does not require that, and the
+    // `deadlocked()` fixture is the counter-example: `planner` proposes
+    // #stage and also supports #ship, so one member is in both supporter
+    // sets and two disjoint majorities are not needed to carry two topics.
+    //
+    // Three members, `for_room(3)`'s threshold of two, and both topics carry.
+    let room = Room::new();
+    let policy = EpisodePolicy::for_room(3);
+    assert_eq!(policy.quorum.threshold, 2);
+    assert_eq!(
+        run(&room, &state(), &deadlocked(), &policy),
+        HiveStep::Deadlocked {
+            topics: vec![TopicId("stage".into()), TopicId("ship".into())],
+        },
+        "a member backing both topics puts both over a majority threshold",
+    );
+}
