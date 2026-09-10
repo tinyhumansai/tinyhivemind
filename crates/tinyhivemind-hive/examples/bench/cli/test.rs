@@ -101,3 +101,56 @@ fn a_valid_fact_noise_value_is_parsed_and_enables_evidence() {
     assert_eq!(options.fact_noise, 250);
     assert!(options.evidence, "--fact-noise implies --evidence");
 }
+
+/// `--calibrate --api-base <url>` is the documented argument order, and
+/// `--api-base`'s handler used to promote every non-swarm mode straight to
+/// `Mode::Live`, which ran a live episode instead of calibrating. It must
+/// leave an explicitly chosen `Calibrate` alone.
+#[test]
+fn api_base_does_not_override_an_explicit_calibrate_mode() {
+    let mut options = Options::defaults();
+    apply_mode_flag(&mut options, "--calibrate");
+    let mut args = ["http://localhost:8080".to_owned()].into_iter();
+    apply_live_flag(&mut options, "--api-base", &mut args);
+    assert!(
+        matches!(options.mode, Mode::Calibrate),
+        "--api-base must not overwrite an explicitly chosen --calibrate mode",
+    );
+}
+
+/// The reverse order is the common case and must keep working: a bare
+/// `--api-base` still promotes the parser's own default to `Mode::Live`.
+#[test]
+fn api_base_still_promotes_the_default_mode_to_live() {
+    let mut options = Options::defaults();
+    let mut args = ["http://localhost:8080".to_owned()].into_iter();
+    apply_live_flag(&mut options, "--api-base", &mut args);
+    assert!(matches!(options.mode, Mode::Live));
+}
+
+/// Naming a grid axis used to set `options.mode` to `Mode::Grid`
+/// unconditionally, so `--swarm --topic hidden` silently ran a grid instead
+/// of the federation the operator asked for. An axis flag may only promote
+/// the parser's own default mode, never overwrite an explicit one.
+#[test]
+fn a_grid_axis_flag_does_not_override_an_explicit_swarm_mode() {
+    let mut options = Options::parse(vec![
+        "--swarm".to_owned(),
+        "--topic".to_owned(),
+        "hidden".to_owned(),
+    ])
+    .expect("a valid --swarm --topic combination must parse");
+    assert!(
+        matches!(options.mode, Mode::Swarm),
+        "naming an axis after --swarm must not overwrite the explicit swarm mode",
+    );
+}
+
+/// The common case, order-independent: naming an axis alone still selects
+/// the grid from the parser's default mode.
+#[test]
+fn a_grid_axis_flag_still_selects_the_grid_from_the_default_mode() {
+    let options = Options::parse(vec!["--topic".to_owned(), "hidden".to_owned()])
+        .expect("a valid --topic value must parse");
+    assert!(matches!(options.mode, Mode::Grid));
+}
