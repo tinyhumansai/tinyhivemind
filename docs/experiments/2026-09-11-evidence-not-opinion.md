@@ -97,7 +97,7 @@ Fifty desks, twenty-four federations a cell:
 wrong facts (per mille)      0      100      250      500
 swarm°  (ask two)         87.5     41.7      8.3      0.0
 swarm◦  (publish)        100.0     79.2     37.5      4.2
-vote     (no facts)       37.5     16.7      4.2      0.0
+vote     (no facts)       20.8      4.2      0.0      0.0
 pooled  (free, averaged) 100.0    100.0    100.0     83.3
 ```
 
