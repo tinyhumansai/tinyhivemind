@@ -231,6 +231,12 @@ fn run(options: &Options) -> Result<(), String> {
     if matches!(options.mode, Mode::Swarm) {
         return swarm_compare(options);
     }
+    if matches!(options.mode, Mode::Grid) {
+        // Its own rooms, one set per cell, at that cell's own size and
+        // difficulty -- so nothing here generates a room at the single
+        // `--agents` size that every cell would then ignore.
+        return grid::run(options);
+    }
     let rooms: Vec<Room> = (0..options.episodes)
         .map(|index| {
             // Mixed rather than xor-ed: `seed ^ index` over a range of
@@ -259,9 +265,12 @@ fn run(options: &Options) -> Result<(), String> {
     match &options.mode {
         // Handled above, each before the rooms this arm of the match would
         // have needed were generated.
-        Mode::Swarm | Mode::StatsCheck | Mode::ScaleSweep | Mode::StageSweep | Mode::FacetSweep => {
-            Ok(())
-        }
+        Mode::Swarm
+        | Mode::StatsCheck
+        | Mode::ScaleSweep
+        | Mode::StageSweep
+        | Mode::FacetSweep
+        | Mode::Grid => Ok(()),
         Mode::Compare => compare(options, &rooms),
         Mode::Trace => trace(&rooms, &options.policy),
         Mode::Sweep => sweep_policies(options, &rooms),
