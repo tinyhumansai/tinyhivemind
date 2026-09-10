@@ -248,14 +248,41 @@ impl Federation {
     /// by position rather than at random so the same seed plants the same
     /// facts.
     pub(crate) fn planted(&self) -> Self {
+        self.planted_with(0)
+    }
+
+    /// The same, with `wrong` per mille of the planted facts naming the
+    /// **truth** instead of the decoy they were meant to disqualify.
+    ///
+    /// This is the other half of the experiment and the half that could sink
+    /// it. A fact does not average, which is exactly why it survives a shared
+    /// bias — and exactly why a *wrong* one is more dangerous than a wrong
+    /// opinion. A mistaken reading is diluted by every peer who disagrees; a
+    /// mistaken disqualification subtracts its flat `GROUNDS_WEIGHT` from the
+    /// right answer for every desk it reaches, and the mechanism that makes
+    /// evidence worth carrying is the same mechanism that spreads the error.
+    ///
+    /// A protocol that only ever moves true facts measures the value of a
+    /// channel and nothing about the risk of one.
+    pub(crate) fn planted_with(&self, wrong: u32) -> Self {
         let mut federation = self.clone();
         federation.evidence = true;
         let count = federation.desks.len();
+        let truth = federation.truth.clone();
+        let mut draws = Rng::seeded(mix(0xFAC7_0000, count as u64));
         for desk in 0..count {
             // The cure for desk `desk` is held by the next desk round, so no
             // desk can answer its own blind spot without crossing a channel.
-            let Some(cure) = federation.desks.get(desk).map(|held| held.decoy.clone()) else {
+            let Some(decoy) = federation.desks.get(desk).map(|held| held.decoy.clone()) else {
                 continue;
+            };
+            // A mistaken fact names the truth: the worst thing a
+            // disqualification can say, and the one a real participant that
+            // misreads its own evidence would say.
+            let cure = if wrong > 0 && draws.below(wrong) {
+                truth.clone()
+            } else {
+                decoy
             };
             let holder = (desk + 1) % count.max(1);
             let Some(seat) = federation
