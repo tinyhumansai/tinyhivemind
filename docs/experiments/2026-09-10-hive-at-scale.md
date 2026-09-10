@@ -82,7 +82,8 @@ by hiding what it spent.
 
 ## The result
 
-Ten members per desk, 128 options, twenty federations per size.
+Ten members per desk, 128 options — enough that every desk gets a blind spot
+of its own. Twenty federations per size, eight at a hundred desks.
 
 ```text
                     3       12       25       50      100  desks
