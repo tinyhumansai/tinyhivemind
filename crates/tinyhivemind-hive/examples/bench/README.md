@@ -240,18 +240,18 @@ so the benchmark measures the protocol rather than a formatter.
 arm                quality     speed       thru    conc    tok/ep     tok/s
 ladder               57.6%     2.6s       1.4k     1.0       822       320
 vote                 78.5%     2.6s       1.4k    15.0     12.3k      4.8k
-hive                 73.3%    15.8s        228     1.0      5.7k       363
-hive+                82.1%    17.3s        208     1.0      6.4k       369
-hive+ref             75.0%    23.1s        156     1.0      9.1k       393
-hive+ev              55.9%    26.4s        136     1.0     10.8k       409
-hive+dir             82.1%    17.3s        208     1.0      6.4k       369
-hive+defer           82.1%    17.3s        208     1.0      6.4k       369
-hive+dir+defer       82.1%    17.3s        208     1.0      6.4k       369
+hive                 73.3%    15.8s        228     1.0      5.3k       336
+hive+                82.1%    17.3s        208     1.0      6.0k       345
+hive+ref             75.0%    23.1s        156     1.0      8.7k       375
+hive+ev              55.9%    26.4s        136     1.0     10.4k       393
+hive+dir             82.1%    17.3s        208     1.0      6.0k       345
+hive+defer           82.1%    17.3s        208     1.0      6.0k       345
+hive+dir+defer       82.1%    17.3s        208     1.0      6.0k       345
 ladder+dir           49.5%     2.6s       1.4k     1.0       822       320
-hive+rounds          82.3%    34.3s        105     3.0     42.0k      1.2k
-hive+pooled          91.5%    15.6s        231     1.0      5.6k       362
-hive+wide            77.1%     8.7s        415     2.3      7.1k       818
-hive+blind           82.1%     9.6s        374     1.8      6.1k       639
+hive+rounds          82.3%    34.3s        105     3.0     39.8k      1.2k
+hive+pooled          91.5%    15.6s        231     1.0      5.2k       335
+hive+wide            77.1%     8.7s        415     2.3      6.9k       798
+hive+blind           82.1%     9.6s        374     1.8      6.0k       621
 ```
 
 The tuned deliberation beats the matched-budget control by 3.6 points at half
