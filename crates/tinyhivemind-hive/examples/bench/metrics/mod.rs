@@ -16,7 +16,12 @@ use std::fmt::Write as _;
 use std::time::Duration;
 
 use format::{dash_unless, dash_unless_2, deliberates, json_f64, json_f64_if, row};
-use stats::{doubled_ranks, lossy, percentile};
+use stats::lossy;
+
+// Re-exported so `compare.rs`, `main.rs` and the sweeps keep importing the
+// benchmark's statistics from `metrics`, where they are used, rather than
+// having to know which file inside it they now live in.
+pub(crate) use stats::{paired_bootstrap, spearman_milli, wilson};
 
 use crate::arms::ArmReport;
 use crate::rng::Rng;

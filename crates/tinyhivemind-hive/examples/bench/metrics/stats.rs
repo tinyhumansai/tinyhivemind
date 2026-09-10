@@ -83,7 +83,7 @@ pub(super) fn doubled_ranks(values: &[u32]) -> Vec<i64> {
 /// `f64` here is display-only: the returned bounds are printed in a table and
 /// enter no ordering, no policy comparison, and no control flow anywhere in
 /// the harness.
-pub(crate) fn wilson(successes: u32, trials: u32) -> (f64, f64) {
+pub(super) fn wilson(successes: u32, trials: u32) -> (f64, f64) {
     // The two-sided 97.5th percentile of the standard normal, to four places.
     const Z: f64 = 1.96;
     if trials == 0 {
@@ -115,7 +115,7 @@ pub(crate) fn wilson(successes: u32, trials: u32) -> (f64, f64) {
 /// draw, and the mismatched-length case is a caller error this harness has no
 /// way to report, so it is reported as "no evidence of a difference" rather
 /// than by panicking).
-pub(crate) fn paired_bootstrap(a: &[bool], b: &[bool], seed: u64, resamples: u32) -> (f64, f64) {
+pub(super) fn paired_bootstrap(a: &[bool], b: &[bool], seed: u64, resamples: u32) -> (f64, f64) {
     let n = a.len();
     if n == 0 || a.len() != b.len() || resamples == 0 {
         return (0.0, 0.0);
@@ -174,7 +174,7 @@ pub(crate) fn paired_bootstrap(a: &[bool], b: &[bool], seed: u64, resamples: u32
 /// be the same length. Returns `0` for fewer than two pairs, where rank
 /// correlation is undefined, and for a constant vector, whose variance is zero
 /// and whose correlation with anything is therefore undefined too.
-pub(crate) fn spearman_milli(x: &[u32], y: &[u32]) -> i64 {
+pub(super) fn spearman_milli(x: &[u32], y: &[u32]) -> i64 {
     let n = x.len();
     if n < 2 || y.len() != n {
         return 0;
