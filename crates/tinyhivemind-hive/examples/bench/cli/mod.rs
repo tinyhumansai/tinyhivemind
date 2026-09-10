@@ -473,9 +473,15 @@ impl Options {
                     // alone does what it plainly says rather than being
                     // silently ignored by whichever mode happened to be
                     // selected -- the same reason an unrecognised flag is
-                    // refused below.
+                    // refused below. But it must not *overwrite* a mode the
+                    // operator already chose explicitly: `--swarm --topic
+                    // hidden` runs a federation over the named topic, not a
+                    // grid, regardless of which flag came first. Only the
+                    // parser's own default is safe to promote.
                     if options.axes.set(&flag, &mut args)? {
-                        options.mode = Mode::Grid;
+                        if matches!(options.mode, Mode::Compare) {
+                            options.mode = Mode::Grid;
+                        }
                         continue;
                     }
                     let known = apply_mode_flag(&mut options, &flag)
