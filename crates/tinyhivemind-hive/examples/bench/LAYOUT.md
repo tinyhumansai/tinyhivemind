@@ -17,7 +17,8 @@ resolves it to `sim/mod.rs` transparently.
 | `live_single.rs` | driving one live desk or episode through a real agent |
 | `live_swarm/mod.rs` | driving a live federation of desks through real agents |
 | `live_swarm/totals.rs` | what a federated comparison counts, and the table it prints |
-| `sim/mod.rs` | the rooms, the private evaluations, the `Expertise` shapes (`--specialists`, `--hidden-profile`) that redistribute those evaluations, the evidence-first opening (`--blind-evidence`), the tuning constants, `Role`, `Expertise`, and the `Room` type and its generation |
+| `sim/mod.rs` | the rooms, the private evaluations, the `Expertise` shapes (`--specialists`, `--hidden-profile`) that redistribute those evaluations, the evidence-first opening (`--blind-evidence`), the tuning constants, `Expertise`, and the `Room` type and its generation |
+| `sim/naming.rs` | what a room's members and options are called and how many of each this harness builds: the two eight-entry name tables, the generators past them, `Role`, and the `MAX_MEMBERS` / `MAX_TOPICS` ceilings |
 | `sim/chain.rs` | a room as one link of a `--stages` chain: renaming its options, inheriting the last stage's window, and being poisoned by a wrong answer |
 | `sim/facet.rs` | a room as one facet of a `--facets` task: renaming its options so no facet is scored against another's question, and reading one seat's load rather than the room's mean |
 | `sim/generation.rs` | drawing a room's members and their expertise |
