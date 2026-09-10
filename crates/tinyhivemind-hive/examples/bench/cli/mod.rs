@@ -267,6 +267,7 @@ impl Options {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum Mode {
     /// Compare every arm.
     Compare,
