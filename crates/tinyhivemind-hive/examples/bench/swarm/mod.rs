@@ -34,20 +34,18 @@
 //! in `member`; the wire text those participants read and write lives in
 //! `format`.
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use tinyhivemind_hive::{
-    Conversation, EpisodePolicy, EpisodeState, HiveStep, HiveTurn, Sequence, SessionAuthor,
+    Conversation, EpisodePolicy, EpisodeState, HiveTurn, Sequence, SessionAuthor,
     SessionMessage,
     desk::{Desk, DeskSet, ResponderMode},
     referral::{Referral, ReferralPolicy},
     roster::{Roster, RosterMember},
-    step,
     trace::TopicId,
 };
 
 use crate::federation::Federation;
-use crate::parallel;
 use crate::run::Ending;
 use tinyhivemind_hive::aside::Audience;
 
