@@ -583,6 +583,12 @@ pub(crate) fn drive_with(
     // them. `turns` stays beside it because it is what the budget bounds and
     // what every recorded number before ADR 0014 was priced in.
     let mut rounds = 0_u32;
+    // The shape every round actually ran in, for `cost::CostModel::price`.
+    // Recorded here rather than reconstructed from `turns` and `rounds`,
+    // because those two cannot say which rounds were the wide ones and the
+    // price depends on it: a wide round early reads a short transcript and a
+    // wide round late reads a long one.
+    let mut shape: Vec<crate::cost::RoundShape> = Vec::new();
     // Calls made in exchange rounds, and the round count carried across them.
     // The count is the host's because a round nobody wrote in leaves no row to
     // fold it back out of, and that round still cost its calls.
@@ -608,6 +614,12 @@ pub(crate) fn drive_with(
                 turns: round,
                 next_state,
             } => {
+                // Read before the round runs: these are the rows its turns
+                // were folded against, and the rows they are charged for.
+                // After `run_round` the journal also holds the round's own
+                // output, which no turn in it could see.
+                let rows = u32::try_from(host.journal.len()).unwrap_or(u32::MAX);
+                let width = u32::try_from(round.len()).unwrap_or(u32::MAX);
                 let last = run_round(
                     &mut host,
                     agents,
@@ -622,6 +634,7 @@ pub(crate) fn drive_with(
                 )?;
                 state = *next_state;
                 rounds = rounds.saturating_add(1);
+                shape.push(crate::cost::RoundShape { rows, turns: width });
 
                 // An exchange round, between rounds and never during one. The
                 // library says whether one is open and who it names; the
@@ -634,6 +647,16 @@ pub(crate) fn drive_with(
                     contacts = contacts.saturating_add(ran.calls);
                     opened = ran.next;
                     library_time += spent;
+                    // An exchange round is a round the host waits for like any
+                    // other: its calls run concurrently with each other and
+                    // with nothing else. Charged at the journal as it now
+                    // stands, which is what `one_exchange` hands its members.
+                    if ran.calls > 0 {
+                        shape.push(crate::cost::RoundShape {
+                            rows: u32::try_from(host.journal.len()).unwrap_or(u32::MAX),
+                            turns: ran.calls,
+                        });
+                    }
                 }
                 continue;
             }
@@ -669,6 +692,7 @@ pub(crate) fn drive_with(
             correct: false,
             turns,
             rounds,
+            shape,
             context_rows: mean_context_rows(agents),
             step_calls,
             library_time,
