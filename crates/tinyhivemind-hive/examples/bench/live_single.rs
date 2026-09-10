@@ -235,6 +235,9 @@ fn seat_synthetic(
 /// independent-vote control is run against the same agents so the deliberation
 /// has something to be scored against.
 pub(crate) fn live_episode(options: &Options) -> Result<(), String> {
+    if let Some(directory) = &options.scenario_dir {
+        return live_corpus(options, directory);
+    }
     match &options.scenario {
         Some(path) => {
             let text = std::fs::read_to_string(path)
@@ -244,6 +247,51 @@ pub(crate) fn live_episode(options: &Options) -> Result<(), String> {
         }
         None => live_synthetic(options),
     }
+}
+
+/// Run every scenario in a directory, in name order.
+///
+/// One problem is one problem. A room that gets an SRE incident right has been
+/// shown to hold the grammar on an SRE incident, and the shipped corpus was a
+/// single genre for long enough that it was worth saying so out loud: this runs
+/// the lot, so diversity is a measured axis rather than a claim about the
+/// fixtures.
+///
+/// Scenarios are run in sorted file-name order so two runs of the same
+/// directory report in the same order, and each is announced before it runs —
+/// a live corpus takes minutes per scenario, and a caller watching it needs to
+/// know which one is spending them.
+///
+/// # Errors
+///
+/// Returns a read or parse failure for the directory or any scenario in it. A
+/// scenario that *fails to parse* stops the run rather than being skipped: a
+/// silently ignored fixture is a corpus that quietly shrinks.
+fn live_corpus(options: &Options, directory: &str) -> Result<(), String> {
+    let mut paths: Vec<std::path::PathBuf> = std::fs::read_dir(directory)
+        .map_err(|error| format!("could not read {directory}: {error}"))?
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter(|path| path.extension().is_some_and(|kind| kind == "txt"))
+        .collect();
+    paths.sort();
+    if paths.is_empty() {
+        return Err(format!("no .txt scenarios in {directory}"));
+    }
+
+    println!("corpus {directory}: {} scenarios\n", paths.len());
+    for path in &paths {
+        let name = path.file_name().map_or_else(
+            || path.display().to_string(),
+            |name| name.to_string_lossy().into_owned(),
+        );
+        let text = std::fs::read_to_string(path)
+            .map_err(|error| format!("could not read {}: {error}", path.display()))?;
+        let scenario = Scenario::parse(&text)?;
+        println!("── {name} ──");
+        live_scenario(options, &scenario)?;
+        println!();
+    }
+    Ok(())
 }
 
 /// Deliberate a real problem, then poll the same agents independently.

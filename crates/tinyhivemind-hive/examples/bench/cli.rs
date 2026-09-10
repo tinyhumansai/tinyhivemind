@@ -69,6 +69,12 @@ pub(crate) struct Options {
     pub(crate) mode: Mode,
     /// A real problem for the live room, if one was given.
     pub(crate) scenario: Option<String>,
+    /// A directory of them, run in name order, if one was given.
+    ///
+    /// Takes precedence over `scenario`: a caller that names both meant the
+    /// corpus, and running one file out of it instead would be the quieter and
+    /// worse reading.
+    pub(crate) scenario_dir: Option<String>,
     /// How many times to run a live scenario.
     pub(crate) repeat: u32,
     /// Desks in a federation.
@@ -195,6 +201,7 @@ impl Options {
             policy: tuned_policy(5),
             mode: Mode::Compare,
             scenario: None,
+            scenario_dir: None,
             repeat: 1,
             desks: 3,
             per_desk: 4,
@@ -382,6 +389,12 @@ fn apply_scale_flag(
             options.jobs = usize::try_from(next_number(args).unwrap_or(1))
                 .unwrap_or(1)
                 .max(1);
+        }
+        "--scenario-dir" => {
+            options.scenario_dir = args.next();
+            if !matches!(options.mode, Mode::Swarm) {
+                options.mode = Mode::Live;
+            }
         }
         "--ask-cap" => {
             options.ask_cap = usize::try_from(next_number(args).unwrap_or(2)).unwrap_or(2);
