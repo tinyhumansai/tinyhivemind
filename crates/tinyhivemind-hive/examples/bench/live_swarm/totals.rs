@@ -318,4 +318,3 @@ pub(super) fn tabulate(totals: &FederatedTotals, wall: std::time::Duration, fede
         federations,
     );
 }
-
