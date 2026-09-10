@@ -13,6 +13,10 @@
 //! `--stats-check` runs all three against properties they are defined to
 //! have; see `main.rs`.
 
+use crate::rng::Rng;
+
+use super::ratio;
+
 /// Widen a value too large for an exact `f64::from`, accepting the rounding
 /// that only matters far above any sample size this benchmark runs.
 pub(super) fn lossy(value: u64) -> f64 {
