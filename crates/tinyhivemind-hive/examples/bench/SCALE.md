@@ -201,10 +201,12 @@ It costs a clause, not a call: the same asks, the same digests, and the same
 turn budget.
 
 `--fact-noise N` plants `N` per mille of those facts **wrong**, naming the
-truth instead of a decoy. That is the other half of the experiment: the
-property that makes a fact survive a shared bias is the same property that
-makes a wrong one spread, and a protocol measured only on true facts has
-measured the value of a channel and nothing about the risk of one.
+truth instead of a decoy, and it is the half that bites. The property that makes
+a fact survive a shared bias is the same property that makes a wrong one
+spread: one wrong fact in ten costs the broadcast arm twenty points, one in four
+costs it sixty-two. Averaging opinions plateaus below the ceiling and is robust;
+exchanging evidence reaches the ceiling and is brittle. Values run `0..=1000`
+and anything above is refused.
 
 The findings are in
 [the evidence write-up](../../../../docs/experiments/2026-09-11-evidence-not-opinion.md).
