@@ -36,10 +36,7 @@ fn a_digest_costs_one_call_per_desk_however_many_peers_hear_it() {
         &federation,
         &policy,
         referrals(),
-        Exchange {
-            asking: AskChannel::OffFloor { cap: 2 },
-            digest: 1,
-        },
+        Exchange::from_caps(2, 1),
         "Decide.",
         false,
     )
@@ -55,10 +52,7 @@ fn a_digest_costs_one_call_per_desk_however_many_peers_hear_it() {
 fn a_digest_is_off_unless_the_caller_asks_for_it() {
     let federation = federation();
     let policy = desk_policy(&federation);
-    let quiet = Exchange {
-        asking: AskChannel::OffFloor { cap: 2 },
-        digest: 0,
-    };
+    let quiet = Exchange::from_caps(2, 0);
     let report =
         run_swarm(&federation, &policy, referrals(), quiet, "Decide.", false).expect("runs");
     assert_eq!(report.digests, 0);
@@ -84,10 +78,7 @@ fn a_digest_carries_information_and_never_support() {
         &federation,
         &policy,
         referrals(),
-        Exchange {
-            asking: AskChannel::OffFloor { cap: 2 },
-            digest: 1,
-        },
+        Exchange::from_caps(2, 1),
         "Decide.",
         true,
     )
@@ -126,10 +117,7 @@ fn a_digest_is_bounded_by_its_own_count_and_cannot_run_the_loop() {
         &federation,
         &policy,
         referrals(),
-        Exchange {
-            asking: AskChannel::OffFloor { cap: 2 },
-            digest: 2,
-        },
+        Exchange::from_caps(2, 2),
         "Decide.",
         false,
     )
@@ -177,10 +165,7 @@ fn the_concurrent_pass_still_answers_the_referrals_it_routes() {
     // concurrent stage beside the turns. If that move dropped an answer, the
     // questions would still cross and nothing would come back.
     let federation = federation();
-    let exchange = Exchange {
-        asking: AskChannel::OffFloor { cap: 2 },
-        digest: 0,
-    };
+    let exchange = Exchange::from_caps(2, 0);
     let report = drive_concurrently(&federation, exchange, 4);
 
     assert!(
@@ -203,10 +188,7 @@ fn the_concurrent_pass_is_deterministic_in_its_width() {
     // authorized them, whatever order the calls return in. So the number of
     // workers is a wall-clock knob and nothing else.
     let federation = federation();
-    let exchange = Exchange {
-        asking: AskChannel::OffFloor { cap: 2 },
-        digest: 1,
-    };
+    let exchange = Exchange::from_caps(2, 1);
     let narrow = drive_concurrently(&federation, exchange, 2);
     let wide = drive_concurrently(&federation, exchange, 16);
 
