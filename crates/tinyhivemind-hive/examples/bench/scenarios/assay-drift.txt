@@ -1,0 +1,54 @@
+# A hidden profile in a laboratory rather than an operations room.
+#
+# The brief plants #reagent, because a lot change on the same day is the
+# coincidence any scientist reaches for first, and it is ruled out by a
+# retained-control result only the lab manager holds. The truth, #calibrate,
+# rests on two facts held apart: that the instrument passed its service
+# threshold, and that the drift is a uniform multiplicative shift including the
+# blanks — which is an optical property and cannot be chemistry.
+#
+# This one is deliberately the least operational scenario in the corpus. The
+# decisive move is an inference from the *shape* of the error rather than a
+# lookup, which is a different demand on a participant than the incident
+# scenarios make.
+
+task: The screening assay's positive rate has gone from four percent to nine over the last two weeks, with no change in the sample population. A reagent lot changed on the third, which is where everyone has been looking. Decide exactly one action, and say which.
+
+truth: calibrate
+
+[option reagent]
+Discard the new reagent lot and revert to the retained lot.
+
+[option calibrate]
+Take the plate reader out of service and recalibrate it.
+
+[option retrain]
+Retrain the readers and re-score the ambiguous plates.
+
+[option requeue]
+Re-randomise the sample queue and rerun the affected batches.
+
+[agent planner]
+role: lab manager, who owns the reagents
+knows: The retained controls from the old lot were rerun on the new lot last Friday and returned values identical to their original readings, within assay noise. The new lot behaves exactly as the old one did.
+knows: Both lots are from the same manufacturer and the same master bank, and the certificate of analysis for each is within specification on every parameter.
+
+[agent critic]
+role: assay scientist, who owns the protocol
+knows: Plates are scored automatically by the instrument's own software against a fixed threshold. No human reads a plate, so there is nobody whose scoring could have drifted.
+knows: The scoring threshold in the software has not been edited this year; the configuration is under version control and the last change was in the previous calendar year.
+
+[agent archivist]
+role: instrument engineer, who owns the hardware
+knows: The plate reader's lamp-hour counter passed two thousand on the third. The manufacturer specifies recalibration every fifteen hundred hours, and the last calibration was at eight hundred.
+knows: An aged lamp on this model loses output unevenly across the spectrum, and the instrument compensates by raising detector gain rather than by reporting a fault.
+
+[agent scout]
+role: sample coordinator, who owns intake
+knows: The sample queue is randomised on intake by a fixed procedure that has not changed, and the batch composition over the last two weeks matches the preceding quarter on every recorded covariate.
+knows: Intake volume, source sites and collection method are all unchanged, so the population being screened is the same one.
+
+[agent auditor]
+role: biostatistician, who owns the numbers
+knows: The shift is a uniform multiplicative increase across every well on every plate, including the blank wells that contain no sample at all.
+knows: A chemistry or population effect cannot move a blank. Whatever changed acts on the measurement rather than on what is being measured.
