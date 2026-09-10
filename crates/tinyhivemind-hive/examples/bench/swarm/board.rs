@@ -238,6 +238,25 @@ impl Exchange {
         asking: AskChannel::OnFloor,
         digest: 0,
     };
+
+    /// What `--ask-cap` and `--digest` mean, in one place.
+    ///
+    /// `--ask-cap 0` is documented as putting asking back **on the floor**,
+    /// and it has to mean that everywhere or the arms stop being comparable:
+    /// read literally as `OffFloor { cap: 0 }` it instead means *no asking at
+    /// all*, which is the siloed control wearing the off-floor arm's label.
+    /// The live driver mapped it and the simulated arms did not, so the two
+    /// disagreed about what the same flag meant.
+    pub(crate) const fn from_caps(ask_cap: usize, digest: usize) -> Self {
+        Self {
+            asking: if ask_cap == 0 {
+                AskChannel::OnFloor
+            } else {
+                AskChannel::OffFloor { cap: ask_cap }
+            },
+            digest,
+        }
+    }
 }
 
 pub(super) struct Board<'a> {

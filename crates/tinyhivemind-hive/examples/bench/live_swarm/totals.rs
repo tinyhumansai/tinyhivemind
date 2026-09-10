@@ -99,12 +99,7 @@ pub(super) fn run_federated_arms(
                     federation,
                     desk_policy,
                     swarm_referrals(),
-                    Exchange {
-                        asking: AskChannel::OffFloor {
-                            cap: options.ask_cap,
-                        },
-                        digest: 0,
-                    },
+                    Exchange::from_caps(options.ask_cap, 0),
                     TASK,
                     false,
                 )?,
@@ -116,12 +111,7 @@ pub(super) fn run_federated_arms(
                     federation,
                     desk_policy,
                     swarm_referrals(),
-                    Exchange {
-                        asking: AskChannel::OffFloor {
-                            cap: options.ask_cap,
-                        },
-                        digest: options.digest,
-                    },
+                    Exchange::from_caps(options.ask_cap, options.digest),
                     TASK,
                     false,
                 )?,

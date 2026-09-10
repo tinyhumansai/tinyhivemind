@@ -175,16 +175,7 @@ fn live_federation(options: &Options, scenario: &Scenario) -> Result<(), String>
     // simulated one does: a desk that spends its authorized turns asking has
     // none left to decide with. `--ask-cap 0` puts it back on the floor, which
     // is what every recorded live run used.
-    let exchange = Exchange {
-        asking: if options.ask_cap == 0 {
-            AskChannel::OnFloor
-        } else {
-            AskChannel::OffFloor {
-                cap: options.ask_cap,
-            }
-        },
-        digest: options.digest,
-    };
+    let exchange = Exchange::from_caps(options.ask_cap, options.digest);
     let report = swarm::drive_swarm(
         &channels,
         &mut members,
