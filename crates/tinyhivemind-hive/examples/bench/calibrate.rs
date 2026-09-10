@@ -39,13 +39,17 @@
 //! the calibration reports what the probes actually produced so the operator
 //! can set it from a real run rather than from here.
 
-use std::fmt::Write as _;
 use std::time::Instant;
 
 use crate::backend::http_config;
 use crate::cli::Options;
 use crate::cost::CostModel;
 use crate::http::{Usage, UsageHandle, ask, usage_of};
+use crate::live::AgentPrompt;
+use tinyhivemind_hive::{
+    Audience, BidReason, HiveTurn, Phase, QuorumPolicy, Sequence, SessionAuthor, SessionMessage,
+    Visibility,
+};
 
 /// Rows of synthetic transcript the short and long prompt probes carry.
 ///
@@ -202,31 +206,57 @@ fn best_of(config: &crate::http::HttpConfig, model: &str, prompt: &str) -> Resul
 /// A probe prompt carrying `rows` of synthetic transcript and asking for
 /// roughly `completion` tokens back.
 ///
-/// The rows are deliberately uniform filler rather than a real transcript: the
-/// quantity being fitted is tokens *per row*, and rows of varying length would
-/// fit the average length of this harness's own filler instead of the
-/// endpoint's tokenisation of a row.
+/// Built through [`AgentPrompt::prompt_with`] — the *real* prompt a live seat
+/// is given — rather than through a synthetic preamble of this module's own.
+/// That matters precisely because of what `prompt_base` is defined to be: the
+/// whole non-transcript cost of a turn. A hand-written preamble omits the
+/// identity line, the private-facts block, the protocol grammar, the standings
+/// and the directory, so its intercept would be this module's cost rather than
+/// the benchmark's, and every fitted run would underprice every turn.
+///
+/// The rows are uniform filler because the quantity being fitted is tokens
+/// *per row*: rows of varying length would fit the mean length of this
+/// harness's filler instead of the endpoint's tokenisation of a row.
 fn probe_prompt(rows: usize, completion: u32) -> String {
-    let mut prompt = String::from(
-        "You are one seat on a desk deciding between rollout options. \
-         Below is the desk transcript so far.\n\n",
+    let seat = AgentPrompt::new(
+        "planner",
+        "planner",
+        QuorumPolicy::DEFAULT,
+        "You alone know the staged rollout was reverted once before.".to_owned(),
     );
-    for row in 0..rows {
-        // `write!` into a `String` cannot fail, and the harness may not
-        // `unwrap` -- so the result is dropped explicitly rather than
-        // silently, which is also what the lint asks for.
-        let _ = writeln!(
-            prompt,
-            "[{row}] alex: !propose stage — the staged rollout limits blast radius \
-             and we can halt it at any ring."
-        );
-    }
-    let _ = write!(
-        prompt,
-        "\nWrite approximately {completion} tokens of plain prose summarising the \
-         state of the discussion. Do not use lists."
-    );
-    prompt
+    let turn = HiveTurn {
+        agent_id: "planner".to_owned(),
+        phase: Phase::Deliberate,
+        visibility: Visibility::Full,
+        reason: BidReason::Salience,
+        authorized_after: Sequence(0),
+        opened_at: Sequence(0),
+    };
+    let visible: Vec<SessionMessage> = (0..rows)
+        .map(|row| {
+            let sequence = u64::try_from(row).unwrap_or(u64::MAX).saturating_add(1);
+            SessionMessage {
+                sequence: Sequence(sequence),
+                author: SessionAuthor::Agent {
+                    id: "alex".to_owned(),
+                    label: "alex".to_owned(),
+                },
+                content: "!propose #stage The staged rollout limits blast radius \
+                          and we can halt it at any ring."
+                    .to_owned(),
+                audience: Audience::Desk,
+                elided: None,
+            }
+        })
+        .collect();
+    seat.prompt_with(
+        &turn,
+        &visible,
+        &format!(
+            "Write approximately {completion} tokens of plain prose summarising \
+             the state of the discussion. Do not use lists."
+        ),
+    )
 }
 
 /// `numerator / denominator`, rounded to nearest, with a zero denominator
