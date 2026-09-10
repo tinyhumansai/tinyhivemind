@@ -88,6 +88,14 @@ pub(crate) struct Federation {
     pub(crate) desks: Vec<FederatedDesk>,
     /// Every member, flattened in desk order.
     pub(crate) agents: Vec<SimAgent>,
+    /// Whether the disqualifying facts were planted, and so exist to be
+    /// exchanged at all.
+    ///
+    /// Off by default, and every recorded federated number was taken with it
+    /// off: without it a federation holds **no facts**, only scored readings,
+    /// and the only thing a channel can carry is one desk's opinion of an
+    /// option. See [`Self::planted`].
+    pub(crate) evidence: bool,
     /// Whether every desk is wrong about a *different* option.
     ///
     /// There are only `topics - 1` options that are not the truth, so a
@@ -203,8 +211,72 @@ impl Federation {
             topics: names,
             desks: records,
             agents,
+            evidence: false,
             decoys_distinct,
         }
+    }
+
+    /// The same federation with the disqualifying facts planted, each one on a
+    /// desk **other than** the one that needs it.
+    ///
+    /// Without this a federation carries no facts at all. Every member holds a
+    /// noisy score per option and a slant toward its own desk's decoy, so the
+    /// only thing that can cross a channel is an opinion — and averaging
+    /// opinions is exactly the operation that imports a shared bias rather
+    /// than cancelling it. That is the shape the digest arm ran into: it moves
+    /// information perfectly and still cannot beat the correlation.
+    ///
+    /// A *fact* behaves differently. `SimAgent::score` subtracts a flat
+    /// `GROUNDS_WEIGHT` from an option this member has been told is
+    /// disqualified, whoever told it and however many peers disagree. It does
+    /// not average, so it cannot be diluted and a shared bias cannot reinforce
+    /// it.
+    ///
+    /// **Where the fact sits is the whole design.** Planting a desk's cure on
+    /// that desk would let it heal itself and measure nothing about crossing a
+    /// channel. Planting it on desk `d + 1` makes the cure real, held, and
+    /// *elsewhere* — the hidden profile's own structure, one level up. The
+    /// prediction that follows is sharp: a bounded pairwise ask reaches two of
+    /// `D - 1` peers, so at a hundred desks it finds the desk holding its cure
+    /// about two times in ninety-nine, while a digest reaches every desk at
+    /// once and should find it every time.
+    ///
+    /// One member per desk holds it, chosen by seat rather than at random so
+    /// the same seed plants the same facts: the decisive seat is the desk's
+    /// *last* one, which is the seat the role rotation is least likely to have
+    /// made a proposer.
+    pub(crate) fn planted(&self) -> Self {
+        let mut federation = self.clone();
+        federation.evidence = true;
+        let count = federation.desks.len();
+        for desk in 0..count {
+            // The cure for desk `desk` is held by the next desk round, so no
+            // desk can answer its own blind spot without crossing a channel.
+            let Some(cure) = federation.desks.get(desk).map(|held| held.decoy.clone()) else {
+                continue;
+            };
+            let holder = (desk + 1) % count.max(1);
+            let Some(seat) = federation
+                .desks
+                .get(holder)
+                .and_then(|held| held.members.last())
+                .cloned()
+            else {
+                continue;
+            };
+            // A desk whose own decoy is the cure it holds would be healing
+            // itself, which is the arrangement this deliberately avoids. It
+            // can only happen when two desks share a decoy, and then the fact
+            // is simply redundant rather than wrong.
+            if let Some(index) = federation.seat_of(&seat)
+                && let Some(agent) = federation.agents.get_mut(index)
+            {
+                agent.refutes = Some(cure.clone());
+                agent.note_fact(&cure);
+                agent.recompute_favourite();
+            }
+        }
+        federation
     }
 
     /// The desk a member sits on.
