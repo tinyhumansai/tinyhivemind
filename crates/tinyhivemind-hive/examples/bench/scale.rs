@@ -206,6 +206,88 @@ pub(crate) fn sweep(options: &Options) -> Result<(), String> {
     Ok(())
 }
 
+/// Every channel, over one room, folded before it leaves the worker.
+///
+/// Split from [`one_size`] because it is the whole body of the parallel map
+/// and reads as one thing: nine arms decide the same room, and each is reduced
+/// to a `Channel` here rather than carried out as a report.
+///
+/// # Errors
+///
+/// Returns whatever an episode returns when the host contract is violated.
+fn one_room(options: &Options, room: &Room, tuned: &EpisodePolicy) -> Result<RoomOutcome, String> {
+    let arm = |report: &crate::arms::ArmReport| {
+        let mut channel = Channel::default();
+        channel.add_arm(report);
+        channel
+    };
+    let episode = |report: &crate::run::EpisodeReport| {
+        let mut channel = Channel::default();
+        channel.add(report);
+        channel
+    };
+    Ok(RoomOutcome {
+        ladder: arm(&arms::run_ladder(room, options.seed)?),
+        vote: arm(&arms::run_vote(room, tuned.turn_budget)),
+        broadcast: episode(&run_episode(room, tuned, TASK, false)?),
+        on_floor: episode(&run_episode_checking(
+            room,
+            tuned,
+            TASK,
+            false,
+            0,
+            AsideMode::Private,
+            options.aside_cap,
+            CheckStyle::FACT,
+        )?),
+        rounds: episode(&run_episode_exchanging_with(
+            room,
+            tuned,
+            TASK,
+            false,
+            options.exchange_cap,
+            CheckStyle::EXCHANGE,
+        )?),
+        off_floor: episode(&run_episode(
+            &room.pre_checked(options.aside_cap, true),
+            tuned,
+            TASK,
+            false,
+        )?),
+        // `--aside-cap 0` is documented and used as the kill switch that
+        // leaves every aside arm bit-identical to `hive+`, `hive+pooled`
+        // included (see `compare.rs`), so honor it here too by skipping the
+        // pool rather than silently pooling regardless of the cap.
+        pooled: episode(&run_episode(
+            &if options.aside_cap == 0 {
+                room.clone()
+            } else {
+                room.pooled()
+            },
+            tuned,
+            TASK,
+            false,
+        )?),
+        // The same broadcast room, run in concurrent rounds. This is the
+        // arm the scale result asks for: every floor-bound channel dies as
+        // the room grows because turns per member is `budget / n`, and a
+        // round is the only thing that changes that ratio without changing
+        // the budget.
+        wide: episode(&run_episode(
+            room,
+            &widened_policy(tuned, options.round_width),
+            TASK,
+            false,
+        )?),
+        blind_wide: episode(&run_episode(
+            room,
+            &blind_wide_policy(tuned, options.round_width),
+            TASK,
+            false,
+        )?),
+    })
+}
+
 /// Every channel, over one size's rooms.
 fn one_size(
     options: &Options,
@@ -218,78 +300,8 @@ fn one_size(
     // work does not: `Aggregate::correct_flags` is positional and the paired
     // bootstrap under the table resamples arms index-for-index because they
     // decided the *same* rooms. See `crate::parallel`.
-    let decided: Vec<RoomOutcome> = parallel::map_in_order(rooms, options.jobs, |room| {
-        let arm = |report: &crate::arms::ArmReport| {
-            let mut channel = Channel::default();
-            channel.add_arm(report);
-            channel
-        };
-        let episode = |report: &crate::run::EpisodeReport| {
-            let mut channel = Channel::default();
-            channel.add(report);
-            channel
-        };
-        Ok(RoomOutcome {
-            ladder: arm(&arms::run_ladder(room, options.seed)?),
-            vote: arm(&arms::run_vote(room, tuned.turn_budget)),
-            broadcast: episode(&run_episode(room, tuned, TASK, false)?),
-            on_floor: episode(&run_episode_checking(
-                room,
-                tuned,
-                TASK,
-                false,
-                0,
-                AsideMode::Private,
-                options.aside_cap,
-                CheckStyle::FACT,
-            )?),
-            rounds: episode(&run_episode_exchanging_with(
-                room,
-                tuned,
-                TASK,
-                false,
-                options.exchange_cap,
-                CheckStyle::EXCHANGE,
-            )?),
-            off_floor: episode(&run_episode(
-                &room.pre_checked(options.aside_cap, true),
-                tuned,
-                TASK,
-                false,
-            )?),
-            // `--aside-cap 0` is documented and used as the kill switch that
-            // leaves every aside arm bit-identical to `hive+`, `hive+pooled`
-            // included (see `compare.rs`), so honor it here too by skipping the
-            // pool rather than silently pooling regardless of the cap.
-            pooled: episode(&run_episode(
-                &if options.aside_cap == 0 {
-                    room.clone()
-                } else {
-                    room.pooled()
-                },
-                tuned,
-                TASK,
-                false,
-            )?),
-            // The same broadcast room, run in concurrent rounds. This is the
-            // arm the scale result asks for: every floor-bound channel dies as
-            // the room grows because turns per member is `budget / n`, and a
-            // round is the only thing that changes that ratio without changing
-            // the budget.
-            wide: episode(&run_episode(
-                room,
-                &widened_policy(tuned, options.round_width),
-                TASK,
-                false,
-            )?),
-            blind_wide: episode(&run_episode(
-                room,
-                &blind_wide_policy(tuned, options.round_width),
-                TASK,
-                false,
-            )?),
-        })
-    })?;
+    let decided: Vec<RoomOutcome> =
+        parallel::map_in_order(rooms, options.jobs, |room| one_room(options, room, tuned))?;
 
     let mut ladder = Channel::default();
     let mut vote = Channel::default();
