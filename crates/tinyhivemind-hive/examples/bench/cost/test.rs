@@ -6,7 +6,7 @@
 //! a flag that cannot be parsed stops the run rather than quietly measuring
 //! something else.
 
-use super::{Cost, CostModel, Round};
+use super::{Cost, CostModel, RoundShape};
 
 /// The model every test below prices against, with round numbers so an
 /// expected value can be checked by hand rather than by rerunning the code
@@ -29,7 +29,7 @@ fn args(values: &[&str]) -> impl Iterator<Item = String> + use<> {
 
 #[test]
 fn charges_a_turn_its_base_prompt_plus_a_token_per_row() {
-    let cost = MODEL.price(&[Round { rows: 3, turns: 1 }]);
+    let cost = MODEL.price(&[RoundShape { rows: 3, turns: 1 }]);
     assert_eq!(cost.prompt, 500 + 3 * 10);
     assert_eq!(cost.completion, 100);
     assert_eq!(cost.tokens(), 630);
@@ -37,8 +37,8 @@ fn charges_a_turn_its_base_prompt_plus_a_token_per_row() {
 
 #[test]
 fn a_wider_round_costs_more_tokens_but_no_more_wall_clock() {
-    let narrow = MODEL.price(&[Round { rows: 4, turns: 1 }]);
-    let wide = MODEL.price(&[Round { rows: 4, turns: 4 }]);
+    let narrow = MODEL.price(&[RoundShape { rows: 4, turns: 1 }]);
+    let wide = MODEL.price(&[RoundShape { rows: 4, turns: 4 }]);
 
     // The reason depth and width are counted separately: turns in one round
     // are authorized against the same transcript and cannot read each other,
@@ -52,11 +52,11 @@ fn a_wider_round_costs_more_tokens_but_no_more_wall_clock() {
 #[test]
 fn wall_clock_is_a_sum_over_rounds_not_over_turns() {
     let deep = MODEL.price(&[
-        Round { rows: 0, turns: 1 },
-        Round { rows: 1, turns: 1 },
-        Round { rows: 2, turns: 1 },
+        RoundShape { rows: 0, turns: 1 },
+        RoundShape { rows: 1, turns: 1 },
+        RoundShape { rows: 2, turns: 1 },
     ]);
-    let flat = MODEL.price(&[Round { rows: 0, turns: 3 }]);
+    let flat = MODEL.price(&[RoundShape { rows: 0, turns: 3 }]);
 
     assert_eq!(deep.turns, flat.turns);
     // 500 ms to first token plus 100 tokens at 100 tok/s, three times over.
@@ -69,8 +69,8 @@ fn merging_two_samples_equals_pricing_one() {
     // The property that lets the per-room loops spread across `--jobs`
     // threads without moving a printed number, exactly as
     // `metrics::Aggregate::merge` is held to.
-    let left = [Round { rows: 1, turns: 2 }, Round { rows: 3, turns: 1 }];
-    let right = [Round { rows: 5, turns: 4 }];
+    let left = [RoundShape { rows: 1, turns: 2 }, RoundShape { rows: 3, turns: 1 }];
+    let right = [RoundShape { rows: 5, turns: 4 }];
 
     let mut folded = MODEL.price(&left);
     folded.merge(MODEL.price(&right));
@@ -92,7 +92,7 @@ fn an_empty_episode_reports_no_rate_rather_than_dividing_by_zero() {
 #[test]
 fn tokens_per_second_divides_the_whole_sample_by_its_wall_clock() {
     // One round: 630 tokens in 1.5 s.
-    let cost = MODEL.price(&[Round { rows: 3, turns: 1 }]);
+    let cost = MODEL.price(&[RoundShape { rows: 3, turns: 1 }]);
     assert!((cost.tokens_per_second() - 630.0 / 1.5).abs() < 1e-9);
     assert!((cost.episodes_per_hour(1) - 3_600.0 / 1.5).abs() < 1e-9);
 }

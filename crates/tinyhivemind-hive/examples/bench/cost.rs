@@ -163,7 +163,7 @@ impl CostModel {
     /// turn's, however wide it is. That is the entire reason depth and width
     /// are counted separately, and it is what makes `concurrency` a column
     /// worth printing rather than a restatement of `turns/ep`.
-    pub(crate) fn price(&self, shape: &[Round]) -> Cost {
+    pub(crate) fn price(&self, shape: &[RoundShape]) -> Cost {
         let mut cost = Cost::ZERO;
         for round in shape {
             cost.turns = cost.turns.saturating_add(u64::from(round.turns));
@@ -188,7 +188,7 @@ impl CostModel {
 /// and guessing one from the pair is how a benchmark starts reporting a
 /// protocol it never ran.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct Round {
+pub(crate) struct RoundShape {
     /// Transcript rows every turn in this round could read.
     pub(crate) rows: u32,
     /// Turns the round authorized, all reading the same `rows`.
