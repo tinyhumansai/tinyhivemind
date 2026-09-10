@@ -23,6 +23,18 @@
 //! rather than as concurrency. See
 //! `docs/adr/0002-hive-episodes-are-sequential.md`.
 //!
+//! # Sizing a policy to the room
+//!
+//! [`EpisodePolicy::DEFAULT`] is written for a room of about five, and three of
+//! its numbers are absolute where the quantity they bound scales with the desk:
+//! a budget of twelve turns, a quorum of two supporters, and a decay half-life
+//! of twenty rows. Above about a dozen members each fails **without saying so** —
+//! most sharply the budget, because a room with more members than turns never
+//! completes its blind opening round and so never sees itself at all.
+//!
+//! [`EpisodePolicy::for_room`] derives all three from the size of the desk, and
+//! is what a host with a real roster should use.
+//!
 //! # What this crate deliberately does not hold
 //!
 //! - **A port.** There is no trait here for a host to implement. An episode is
@@ -50,6 +62,8 @@
 //!   citations they drew.
 //! - [`episode`] — the pure state machine, and the visibility filter.
 //! - [`error`] — typed failures from malformed inputs.
+//! - [`horizon`] — where a fold is measured to, and whether distance counts
+//!   every row the host wrote or only the rows the fold reads.
 //! - [`quorum`] — standings, cross-inhibition, and the consensus predicate.
 //! - [`mod@salience`] — recency decay, importance, and relevance.
 //! - [`trace`] — the stigmergic grammar and its read.
