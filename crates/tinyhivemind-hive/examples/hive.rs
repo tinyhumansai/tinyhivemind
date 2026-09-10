@@ -225,7 +225,7 @@ fn report(step: &HiveStep) {
             if standings.is_empty() {
                 println!("  nothing was advocated: the turns went somewhere else");
             }
-            if visibility == Visibility::Blind {
+            if *visibility == Visibility::Blind {
                 println!("  the room never saw itself: the budget is below the roster");
             }
             for standing in standings {
