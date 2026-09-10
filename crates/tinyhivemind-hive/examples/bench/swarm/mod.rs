@@ -296,13 +296,16 @@ impl SwarmHost {
 pub(crate) fn drive_swarm(
     channels: &[Channel],
     members: &mut [Vec<&mut dyn SwarmMember>],
-    policy: &EpisodePolicy,
-    referrals: ReferralPolicy,
-    asking: AskChannel,
-    jobs: usize,
+    run: &SwarmRun<'_>,
     task: &str,
     keep_trace: bool,
 ) -> Result<SwarmReport, String> {
+    let SwarmRun {
+        policy,
+        referrals,
+        asking,
+        jobs,
+    } = *run;
     let count = channels.len();
     let mut board = Board::new(channels, referrals, keep_trace, asking);
     for desk in 0..count {
@@ -401,6 +404,24 @@ pub(crate) fn run_swarm(
         correct: report.decided.as_ref() == Some(&federation.truth),
         ..report
     })
+}
+
+/// How one federation-wide run is configured.
+///
+/// Four settings that travel together because they are one decision — what the
+/// desks are allowed to do and what it costs them — and because passing them
+/// separately made every entry point a wall of arguments.
+#[derive(Clone, Copy)]
+pub(crate) struct SwarmRun<'a> {
+    /// The policy each desk's own episode runs at.
+    pub(crate) policy: &'a EpisodePolicy,
+    /// Whether a question may cross a channel, and how deep a chain may run.
+    pub(crate) referrals: ReferralPolicy,
+    /// Where a desk pays for a question, and how many it may ask.
+    pub(crate) asking: AskChannel,
+    /// How many desks may be waiting on a model at once. `1` selects the
+    /// sequential scheduler, which is the reference — see `schedule.rs`.
+    pub(crate) jobs: usize,
 }
 
 /// Group a federation's members by the desk they sit on, in seating order.

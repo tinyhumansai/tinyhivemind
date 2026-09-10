@@ -136,8 +136,8 @@ pub(super) fn concurrent_pass(
     // Phase one, sequential and cheap: settle what every desk owes before
     // anybody speaks. A pending answer and an off-floor question are both
     // desk-local and both rare next to turns.
-    for desk in 0..count {
-        if finished[desk].is_some() {
+    for (desk, outcome) in finished.iter().enumerate() {
+        if outcome.is_some() {
             board.strand(desk);
             continue;
         }
