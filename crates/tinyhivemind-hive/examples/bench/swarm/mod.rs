@@ -37,8 +37,7 @@
 use std::time::Duration;
 
 use tinyhivemind_hive::{
-    Conversation, EpisodePolicy, EpisodeState, HiveTurn, Sequence, SessionAuthor,
-    SessionMessage,
+    Conversation, EpisodePolicy, EpisodeState, HiveTurn, Sequence, SessionAuthor, SessionMessage,
     desk::{Desk, DeskSet, ResponderMode},
     referral::{Referral, ReferralPolicy},
     roster::{Roster, RosterMember},
