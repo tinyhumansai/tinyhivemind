@@ -14,6 +14,24 @@ use crate::sim::Expertise;
 use tinyhivemind_hive::Basis;
 use tinyhivemind_hive::DirectoryPolicy;
 
+/// Promote the parser's default mode to [`Mode::Live`] when a live-backend
+/// flag is given, without clobbering a mode the operator already chose
+/// explicitly.
+///
+/// `--swarm`, `--grid`, `--calibrate` and the sweep family are all terminal
+/// selections: `main.rs`'s dispatch never reaches [`Mode::Live`] for them, so
+/// unconditionally overwriting one with `Live` would silently run a single
+/// episode instead of the mode the earlier flag asked for -- exactly what
+/// happened to `--calibrate --api-base <url>` before this existed. Only
+/// [`Mode::Compare`], the parser's own default, is safe to promote, and
+/// [`Mode::Live`] itself, so a second live flag is a no-op rather than a
+/// regression.
+pub(super) fn set_live_floor(options: &mut Options) {
+    if matches!(options.mode, Mode::Compare | Mode::Live) {
+        options.mode = Mode::Live;
+    }
+}
+
 /// Apply one of the scale flags (`--jobs`, `--ask-cap`, `--digest`,
 /// `--distance`, `--evidence`) to `options`.
 ///
