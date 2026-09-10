@@ -234,39 +234,60 @@ so the benchmark measures the protocol rather than a formatter.
 
 ## Results
 
-5000 rooms, 5 agents, 4 options, `--noise 90`, on one core:
+5000 rooms, 5 agents, 4 options, `--noise 90`, at the default cost model:
 
 ```text
-arm       turns/ep rounds/ep   decided %   correct %
-ladder        1.00      1.00       100.0        57.6
-vote         15.00      1.00       100.0        78.5
-hive          6.16      6.16        89.7        73.3
-hive+         6.75      6.75        99.4        82.1
-hive+ref      8.99      8.99        88.6        75.0
-hive+ev      10.29     10.29        60.8        55.9
-hive+dir      6.75      6.75        99.4        82.1
-hive+defer    6.75      6.75        99.4        82.1
-hive+dir+defer 6.75      6.75        99.4        82.1
-ladder+dir    1.00      1.00       100.0        49.5
-hive+pooled   6.06      6.06       100.0        91.5
-hive+blind    6.75      3.75        99.4        82.1
+arm                quality     speed       thru    conc    tok/ep     tok/s
+ladder               57.6%     2.6s       1.4k     1.0       822       320
+vote                 78.5%     2.6s       1.4k    15.0     12.3k      4.8k
+hive                 73.3%    15.8s        228     1.0      5.7k       363
+hive+                82.1%    17.3s        208     1.0      6.4k       369
+hive+ref             75.0%    23.1s        156     1.0      9.1k       393
+hive+ev              55.9%    26.4s        136     1.0     10.8k       409
+hive+dir             82.1%    17.3s        208     1.0      6.4k       369
+hive+defer           82.1%    17.3s        208     1.0      6.4k       369
+hive+dir+defer       82.1%    17.3s        208     1.0      6.4k       369
+ladder+dir           49.5%     2.6s       1.4k     1.0       822       320
+hive+rounds          82.3%    34.3s        105     3.0     42.0k      1.2k
+hive+pooled          91.5%    15.6s        231     1.0      5.6k       362
+hive+wide            77.1%     8.7s        415     2.3      7.1k       818
+hive+blind           82.1%     9.6s        374     1.8      6.1k       639
 ```
+
+The tuned deliberation beats the matched-budget control by 3.6 points at half
+the budget, and one responder off the ladder reaches 57.6%. The quorum
+threshold and the turn budget decide that, and the blind round is worth 24
+points on its own.
+
+**And it takes six and a half times as long.** `vote` answers in one round;
+`hive+` takes seven. Those 3.6 points cost 14.7 extra seconds — and save half
+the tokens, because a poll pays a full base prompt for every member of the
+room. That trade is the result, and it was unreadable for as long as the table
+reported the library's nanoseconds instead of the system's seconds.
+
+Two more things fall straight out of the six columns:
+
+- **Concurrency buys most of the latency back.** `hive+wide` gives up 5 points
+  and halves the wall clock; `hive+blind`, which widens only the blind round,
+  gives up *nothing* and still saves 45% — see [`DEPTH.md`](DEPTH.md).
+- **`hive+rounds` costs 6.6× the tokens of `hive+` for 0.2 points.** An
+  off-floor exchange spends model calls rather than turns, so it never showed
+  up in a table that counted turns. Now it does.
 
 The three delegation arms score exactly what `hive+` scores, as the
 specification predicted for a room of uniform expertise: with nothing to route
 on, a directory routes nowhere. `ladder+dir` is eight points *worse* than the
 uninformed ladder; [`DELEGATION.md`](DELEGATION.md) says why.
 
-The tuned deliberation beats the matched-budget control at half the budget, and
-one responder off the ladder reaches 57.6%. The quorum threshold and the turn
-budget decide this, the blind round is worth 24 points on its own, and the state
-machine costs about 2.3 µs per step. Those turns are *width*: priced in depth,
-`vote` is one round and `hive+` is 6.75 — see [`DEPTH.md`](DEPTH.md).
-
 The two refutation arms lose, which is why both knobs are off in
 `QuorumPolicy::DEFAULT`. `hive+ref` falls below even the vote control, and
-`hive+ev` starves the room — it fails to decide two episodes in five. [The benchmark write-up](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks)
-has the tables behind each of those, across desk sizes, plus what the benchmark does not show.
+`hive+ev` starves the room — it fails to decide two episodes in five.
+
+The library's own cost is printed under a heading of its own, and is about
+2.3 µs per step: six orders of magnitude below a model turn.
+[The benchmark write-up](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks)
+has the tables behind each of those, across desk sizes, plus what the benchmark
+does not show.
 
 ## A horizon, and a spread
 
