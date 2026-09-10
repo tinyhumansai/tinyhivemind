@@ -438,21 +438,64 @@ pub(crate) fn ratio(numerator: u64, denominator: u64) -> f64 {
 /// The header for the arm comparison table.
 pub(crate) fn arm_header() -> String {
     format!(
-        "{:<8}{:>10}{:>10}{:>12}{:>12}{:>14}{:>14}",
-        "arm", "turns/ep", "rounds/ep", "decided %", "correct %", "ns/step", "episodes/s"
+        "{:<16}{:>10}{:>10}{:>11}{:>8}{:>10}{:>10}",
+        "arm", "quality", "speed", "thru", "conc", "tok/ep", "tok/s"
     )
 }
 
 /// One row of the arm comparison table.
+///
+/// Six columns, the same six for every arm, and every one of them a quantity a
+/// host pays or receives:
+///
+/// - **quality** — share of episodes that decided the genuinely best option.
+/// - **speed** — mean wall clock from brief to decision, summed over rounds.
+/// - **thru** — episodes one seat pool finishes per hour at that latency.
+/// - **conc** — mean turns in flight, `1.0` for a strictly sequential arm.
+/// - **tok/ep** — prompt and completion tokens one episode spends.
+/// - **tok/s** — the rate those tokens are drawn at, which is what a provider
+///   rate limit is written against.
+///
+/// The columns this replaced — `ns/step` and `episodes/s` — measured the
+/// library rather than the system, and reading them as though they measured
+/// the system is what made `vote` look infinitely fast: a poll never calls the
+/// library at all. `ns/step` still exists and is still worth knowing; it moved
+/// to [`library_header`], under a heading that says what it is.
 pub(crate) fn arm_row(name: &str, totals: &Aggregate) -> String {
     let rest = format!(
-        "{:>10.2}{:>10.2}{:>12.1}{:>12.1}{:>14.0}{:>14.0}",
+        "{:>9.1}%{:>9}{:>11}{:>8.1}{:>10}{:>10}",
+        totals.accuracy(),
+        duration(totals.latency_ms()),
+        count(totals.episodes_per_hour()),
+        totals.concurrency(),
+        count(totals.tokens_per_episode()),
+        count(totals.tokens_per_second()),
+    );
+    row(name, &rest)
+}
+
+/// The header for what the *library* costs, as against what the system costs.
+///
+/// Kept apart from [`arm_header`] on purpose. These two columns are the price
+/// of running the state machine with every agent's own time excluded, and they
+/// are genuinely tiny — which is the finding. Printed beside token and latency
+/// columns they invited the opposite reading, that an arm taking no library
+/// time was free.
+pub(crate) fn library_header() -> String {
+    format!(
+        "{:<16}{:>10}{:>10}{:>12}{:>14}",
+        "arm", "turns/ep", "rounds/ep", "decided %", "ns/step"
+    )
+}
+
+/// One row of the library-cost table.
+pub(crate) fn library_row(name: &str, totals: &Aggregate) -> String {
+    let rest = format!(
+        "{:>10.2}{:>10.2}{:>12.1}{:>14.0}",
         totals.turns_per_episode(),
         totals.rounds_per_episode(),
         totals.decision_rate(),
-        totals.accuracy(),
         totals.nanos_per_step(),
-        totals.episodes_per_second(),
     );
     row(name, &rest)
 }
