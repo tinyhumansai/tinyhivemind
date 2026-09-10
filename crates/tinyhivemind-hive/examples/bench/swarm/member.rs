@@ -152,27 +152,53 @@ impl SwarmMember for SwarmSim {
         _visible: &[SessionMessage],
     ) -> Result<String, String> {
         let carried = readings(&incoming.content);
-        if carried.is_empty() {
+        // Facts travel the same wire, parsed independently of readings, and
+        // have to be preserved on both hops the same way: a question or an
+        // answer that carries a `rules out` clause and drops it on the way
+        // through silently downgrades a fact back into an opinion, which is
+        // the one thing this whole mechanism exists not to do.
+        let carried_facts = facts(&incoming.content);
+        if carried.is_empty() && carried_facts.is_empty() {
             return Ok("!question I cannot read a rating out of that.".to_owned());
         }
         Ok(match incoming.kind {
-            // Repeat what was asked and add this desk's own reading, so the
-            // whole exchange is legible to everybody here rather than only to
-            // the two agents in it.
+            // Repeat what was asked — readings and any facts it carried — and
+            // add this desk's own reading (with its own facts, via
+            // `self.slate()`), so the whole exchange is legible to everybody
+            // here rather than only to the two agents in it.
             ReferralKind::Forward => {
-                format!("!evidence {} {}", restate(&carried), self.slate())
+                let mut evidence = restate(&carried);
+                if !carried_facts.is_empty() {
+                    if !evidence.is_empty() {
+                        evidence.push(' ');
+                    }
+                    let _ = write!(evidence, "{}", restate_facts(&carried_facts));
+                }
+                format!("!evidence {evidence} {}", self.slate())
             }
-            // Carrying an answer home: only the far desk's readings are news.
+            // Carrying an answer home: only the far desk's readings and facts
+            // are news.
             ReferralKind::Return => {
                 let from = self.desk_name(&incoming.from.desk_id).to_owned();
                 let theirs: Vec<Reading> = carried
                     .into_iter()
                     .filter(|reading| reading.desk == from)
                     .collect();
-                if theirs.is_empty() {
+                let theirs_facts: Vec<Fact> = carried_facts
+                    .into_iter()
+                    .filter(|fact| fact.desk == from)
+                    .collect();
+                if theirs.is_empty() && theirs_facts.is_empty() {
                     return Ok("!question That answer carried no rating I can use.".to_owned());
                 }
-                format!("!evidence {}", restate(&theirs))
+                let mut evidence = restate(&theirs);
+                if !theirs_facts.is_empty() {
+                    if !evidence.is_empty() {
+                        evidence.push(' ');
+                    }
+                    let _ = write!(evidence, "{}", restate_facts(&theirs_facts));
+                }
+                format!("!evidence {evidence}")
             }
         })
     }
