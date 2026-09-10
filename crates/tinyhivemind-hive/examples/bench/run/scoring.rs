@@ -11,7 +11,9 @@ use std::time::Duration;
 
 use tinyhivemind_hive::{
     BidReason, Directory, DirectoryPolicy, EpisodeState, HiveTurn, Phase, Sequence, SessionAuthor,
-    SessionMessage, aside::AsidePolicy, directory,
+    SessionMessage,
+    aside::AsidePolicy,
+    directory,
     trace::{TopicId, Trace, TraceKind, resolve},
 };
 
