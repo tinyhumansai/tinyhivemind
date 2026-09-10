@@ -249,13 +249,19 @@ pub(super) fn append_turn(
 }
 
 /// What one exchange round did.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub(super) struct Round {
     /// Members actually asked for a line — the model calls this round paid for,
     /// whether or not the member had anything to say.
     pub(super) calls: u32,
     /// Private rows appended.
     pub(super) rows: u32,
+    /// Transcript rows each *called* member's own projection actually held,
+    /// one entry per call -- not the journal as it stands once every member
+    /// has spoken, which would charge a later member for rows the round
+    /// itself just wrote. [`crate::cost::RoundShape::rows`] reads straight
+    /// from this.
+    pub(super) seen: Vec<u32>,
     /// The exchange state to carry into the next round.
     pub(super) next: ExchangeState,
 }
