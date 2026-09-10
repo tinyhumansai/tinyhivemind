@@ -74,10 +74,14 @@ is worth carrying only if it arrives:
 ```text
 8 options, 10 a desk        25       50      100  desks
 swarm°  opinions           95.8     58.3      0.0
-swarm°  evidence          100.0     83.3      0.0
+swarm°  evidence          100.0     87.5      0.0
 swarm◦  opinions           62.5     62.5     62.5
 swarm◦  evidence          100.0    100.0    100.0
 ```
+
+A bounded ask does carry a fact usefully while the federation is small enough
+for two peers to be a real fraction of it. At fifty desks it reaches 87.5%; at a
+hundred it reaches nothing, because two of ninety-nine is not a sample.
 
 ## The half that could have sunk it
 
