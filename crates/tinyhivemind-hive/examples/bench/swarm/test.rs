@@ -339,13 +339,16 @@ fn a_wrong_fact_names_the_truth_and_spreads_the_same_way() {
     // Planting them all wrong is the extreme, and it must actually reach the
     // wire or the robustness sweep beside it measures nothing.
     let federation = federation();
-    let wrong = federation.planted_with(1_000);
+    let wrong = federation.planted_with(1_000, 7);
     assert!(wrong.evidence);
+    let ruled_out: Vec<&TopicId> = wrong
+        .agents
+        .iter()
+        .flat_map(|agent| agent.ruled_out.iter())
+        .collect();
+    assert!(!ruled_out.is_empty(), "planting produced facts to check");
     assert!(
-        wrong
-            .agents
-            .iter()
-            .any(|agent| agent.ruled_out.contains(&federation.truth)),
+        ruled_out.iter().all(|topic| **topic == federation.truth),
         "every planted fact names the truth at a thousand per mille",
     );
 
