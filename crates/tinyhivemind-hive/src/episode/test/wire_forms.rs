@@ -2,8 +2,8 @@
 //! `HiveStep` variants, plus the shipping default's budget.
 
 use super::super::*;
-use crate::quorum::TopicStanding;
 use super::support::state;
+use crate::quorum::TopicStanding;
 
 #[test]
 fn the_policy_and_state_pin_their_wire_forms() {

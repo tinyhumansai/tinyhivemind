@@ -53,7 +53,10 @@ fn a_window_admits_a_row_the_raw_ruler_would_have_dropped() {
 #[test]
 fn nothing_after_the_horizon_is_ever_in_window() {
     let rows = rows();
-    for horizon in [Horizon::from(Sequence(20)), Horizon::over(Sequence(20), &rows)] {
+    for horizon in [
+        Horizon::from(Sequence(20)),
+        Horizon::over(Sequence(20), &rows),
+    ] {
         assert!(!horizon.within(Sequence(30), 1_000));
         // ...and it is zero distance rather than a negative one.
         assert_eq!(horizon.distance(Sequence(30)), 0);

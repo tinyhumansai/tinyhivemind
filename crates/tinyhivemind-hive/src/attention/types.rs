@@ -3,8 +3,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    horizon::Horizon,
     directory::{Directory, DirectoryPolicy},
+    horizon::Horizon,
     quorum::{QuorumPolicy, TopicStanding},
     salience::SalienceWeights,
     trace::{TopicId, Trace},

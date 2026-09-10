@@ -18,9 +18,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     attention::{AgentThreshold, BidContext, bids, floor_holder},
-    horizon::{Basis, Horizon},
     directory::{Directory, directory, validate_policy as validate_directory_policy},
     error::{Error, Result},
+    horizon::{Basis, Horizon},
     quorum::{ConsensusState, consensus, standings},
     trace::{TraceKind, read_borrowed},
 };
@@ -124,9 +124,12 @@ pub fn step(
     // The directory is folded at the same sequence as the standings, so the
     // bid reads one consistent view of the transcript rather than two.
     let known = match &policy.directory {
-        Some(directory_policy) => {
-            Some(directory(&traces, horizon, directory_policy, &state.thresholds)?)
-        }
+        Some(directory_policy) => Some(directory(
+            &traces,
+            horizon,
+            directory_policy,
+            &state.thresholds,
+        )?),
         None => None,
     };
     let context = context(

@@ -348,8 +348,9 @@ impl<'a> Board<'a> {
         // Off the floor, an authorized turn is never spent asking: the ask
         // has its own channel and its own bound, and this turn is for
         // deliberating.
-        let budget =
-            self.exchange.asking.on_floor() && self.referrals.enabled && self.asks[desk] < self.ask_width();
+        let budget = self.exchange.asking.on_floor()
+            && self.referrals.enabled
+            && self.asks[desk] < self.ask_width();
         Ok(PlannedTurn {
             desk,
             seat,
@@ -440,7 +441,9 @@ impl<'a> Board<'a> {
 
     /// Peer channels one desk may ask, under this run's ask channel.
     fn ask_width(&self) -> usize {
-        self.exchange.asking.width(self.channels.len().saturating_sub(1))
+        self.exchange
+            .asking
+            .width(self.channels.len().saturating_sub(1))
     }
 
     /// Put one question to another channel **without taking a turn for it**.
@@ -464,7 +467,9 @@ impl<'a> Board<'a> {
         members: &mut [Vec<&mut dyn SwarmMember>],
         desk: usize,
     ) -> Result<bool, String> {
-        if self.exchange.asking.on_floor() || !self.referrals.enabled || self.asks[desk] >= self.ask_width()
+        if self.exchange.asking.on_floor()
+            || !self.referrals.enabled
+            || self.asks[desk] >= self.ask_width()
         {
             return Ok(false);
         }

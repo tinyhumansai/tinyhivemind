@@ -9,8 +9,8 @@
 
 use crate::http::{Thinking, Wire};
 use crate::policy::tuned_policy;
-use tinyhivemind_hive::Basis;
 use crate::sim::Expertise;
+use tinyhivemind_hive::Basis;
 use tinyhivemind_hive::{DirectoryPolicy, EpisodePolicy};
 
 /// How much a desk overrates its own decoy, by default.

@@ -107,7 +107,10 @@ fn the_budget_check_bounds_the_spend_before_it_can_overflow() {
     // never reached. That is why there is no overflow error to return.
     assert!(matches!(
         run(&room, &turn.next_state, &converging(), &policy),
-        HiveStep::Exhausted { spent: u32::MAX, .. },
+        HiveStep::Exhausted {
+            spent: u32::MAX,
+            ..
+        },
     ));
 }
 

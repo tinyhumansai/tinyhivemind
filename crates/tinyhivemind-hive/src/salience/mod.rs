@@ -57,11 +57,7 @@ pub fn salience<'a>(
 ///
 /// Returns [`Error::ZeroHalfLife`] when the weights would make recency
 /// undefined.
-pub(crate) fn standing(
-    trace: &Trace,
-    at: Horizon<'_>,
-    weights: &SalienceWeights,
-) -> Result<i64> {
+pub(crate) fn standing(trace: &Trace, at: Horizon<'_>, weights: &SalienceWeights) -> Result<i64> {
     if weights.half_life == 0 {
         return Err(Error::ZeroHalfLife);
     }
