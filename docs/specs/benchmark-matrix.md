@@ -72,10 +72,22 @@ calibration reports what its probes wrote rather than fitting it. Therefore:
 
 ### R4 — The round shape is recorded, not reconstructed
 
-An episode records `(rows visible, turns authorized)` per round as it runs.
-`(turns, rounds)` cannot distinguish `4,1,1,1` reading a growing transcript
-from `1,1,1,4` reading a short one, and those price differently. Off-floor
-exchange rounds are recorded too, since a host waits for those as well.
+An episode records, per round, the rows **each** authorized turn actually
+read — taken from that turn's own projection, not from the journal's length.
+Two things make that necessary rather than fussy:
+
+- `(turns, rounds)` cannot distinguish `4,1,1,1` reading a growing transcript
+  from `1,1,1,4` reading a short one, and those price differently.
+- A turn does not necessarily see every row that exists. A private aside
+  addressed to somebody else is invisible to it, and a peer's row authored
+  after the round was authorized is withheld from it. Charging the journal's
+  length would overstate the prompt of exactly the arms that exist to test
+  those two mechanisms.
+
+Off-floor exchange rounds are recorded too, since a host waits for those as
+well, and their row count is read *before* the exchange runs — an exchange
+appends rows of its own, and charging asked members for the answers the round
+produced would price a round against its own output.
 
 ### R5 — Four axes, one cross product, one table shape
 

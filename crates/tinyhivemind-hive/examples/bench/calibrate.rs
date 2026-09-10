@@ -1,5 +1,9 @@
-//! Measure [`crate::cost::CostModel`]'s four constants against a real
-//! endpoint.
+//! Measure the four endpoint-dependent constants of
+//! [`crate::cost::CostModel`] against a real endpoint.
+//!
+//! Four of the model's five. The fifth, `tokens_per_turn`, is a property of
+//! the prompt this harness sends rather than of the endpoint, and is reported
+//! rather than fitted — see the closing section.
 //!
 //! The cost model is what turns a round shape into the tokens and milliseconds
 //! every table's headline columns report, and its defaults are a guess about a
