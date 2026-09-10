@@ -360,6 +360,28 @@ numbers and why the sweep reports an ordering rather than a value.
 
 ## Flags
 
+### The grid, and what a turn costs
+
+| flag | meaning |
+| --- | --- |
+| `--grid` | walk the cross product of the four axes; a bare `--grid` is one cell |
+| `--topic LIST` | `uniform`, `expert`, `hidden`, or `all` |
+| `--scale LIST` | members per room, two or more |
+| `--complexity LIST` | `1`–`5`, or `all` |
+| `--concurrency LIST` | turns one round may authorize at once, one or more |
+| `--tokens-per-row N` | prompt tokens one transcript row contributes (default 42) |
+| `--tokens-per-turn N` | completion tokens one turn writes (default 180) |
+| `--prompt-base N` | prompt tokens charged before the first row (default 600) |
+| `--ttft N` | milliseconds to a seat's first completion token (default 450) |
+| `--decode-rate N` | completion tokens a seat decodes per second (default 85) |
+| `--calibrate` | measure those four against `--api-base` and print the flags that pin them |
+
+Naming any axis selects `--grid`. A value off its axis, or a cost constant that
+will not parse, stops the run — see [`COST.md`](COST.md) for why a silently
+defaulted cost constant is worse than a stopped run.
+
+### Everything else
+
 | flag | meaning |
 | --- | --- |
 | `--episodes N` | rooms to simulate (default 500) |
