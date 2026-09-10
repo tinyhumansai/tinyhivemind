@@ -189,3 +189,6 @@ pub(super) fn line(
         channels[desk].name, sequence.0, agent_id,
     )
 }
+
+#[cfg(test)]
+mod test;
