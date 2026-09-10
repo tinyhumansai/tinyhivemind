@@ -62,14 +62,17 @@
 //!
 //! # Sizing a policy to the room
 //!
-//! [`EpisodePolicy::DEFAULT`] is written for a room of about five, and three of
+//! [`EpisodePolicy::DEFAULT`] is written for a room of about five, and four of
 //! its numbers are absolute where the quantity they bound scales with the desk:
-//! a budget of twelve turns, a quorum of two supporters, and a decay half-life
-//! of twenty rows. Above about a dozen members each fails **without saying so** —
-//! most sharply the budget, because a room with more members than turns never
-//! completes its blind opening round and so never sees itself at all.
+//! a budget of twelve turns, a quorum of two supporters, a decay half-life of
+//! twenty rows, and a blind round four turns wide. The first three fail
+//! **without saying so** above about a dozen members — most sharply the budget,
+//! because a room with more members than turns never completes its blind
+//! opening round and so never sees itself at all. The fourth costs depth rather
+//! than accuracy: widening a blind round is free by [`DEFAULT_ROUND_WIDTH`]'s
+//! own argument, and the free width is the size of the room.
 //!
-//! [`EpisodePolicy::for_room`] derives all three from the size of the desk, and
+//! [`EpisodePolicy::for_room`] derives all four from the size of the desk, and
 //! is what a host with a real roster should use.
 //!
 //! # What this crate deliberately does not hold
