@@ -533,7 +533,21 @@ fn apply_scale_flag(
         }
         "--evidence" => options.evidence = true,
         "--fact-noise" => {
-            options.fact_noise = next_number(args).unwrap_or(0);
+            let noise = next_number(args).unwrap_or(0);
+            // `Federation::planted_with` reads `draws.below(1_000) < wrong`,
+            // which is already `true` for every draw once `wrong` passes
+            // 1000 — a value above the scale silently behaves exactly like
+            // 1000 rather than the (nonsensical) "more than all of them" an
+            // operator might have meant. Refused rather than clamped, on the
+            // same rule an unrecognised flag is refused for: a benchmark that
+            // silently measures something other than what was asked for is
+            // worse than one that stops.
+            if noise > 1_000 {
+                return Err(format!(
+                    "--fact-noise takes a value from 0 to 1000 (per mille), not {noise}"
+                ));
+            }
+            options.fact_noise = noise;
             options.evidence = true;
         }
         _ => return Ok(false),
