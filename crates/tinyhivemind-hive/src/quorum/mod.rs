@@ -5,7 +5,7 @@
 //! swarms actually settle on a nest site rather than from voting theory.
 //!
 //! **Quorum is local.** A topic carries when `threshold` *distinct*
-//! participants have supported it within the last `window` sequences — not
+//! participants have supported it within the last `window` of transcript — not
 //! when it holds a majority of anything. The count is order-independent and
 //! idempotent, so a participant that catches up late folds to the same
 //! standing as one that watched live.
@@ -52,7 +52,9 @@ use tinyhivemind::Sequence;
 /// Fold traces into one standing per topic.
 ///
 /// Only [`TraceKind::Propose`] and [`TraceKind::Support`] add a supporter, and
-/// only within `policy.window` sequences of `at`. Under
+/// only within `policy.window` of `at` — counted in raw sequences or in folded
+/// rows according to the [`Horizon`] the caller passes. A bare [`Sequence`]
+/// gives the raw count. Under
 /// `policy.require_grounded`, support that cites nothing is ignored entirely:
 /// it joins neither the supporter set nor the weight.
 ///

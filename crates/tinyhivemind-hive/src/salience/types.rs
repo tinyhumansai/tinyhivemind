@@ -17,7 +17,15 @@ pub struct SalienceWeights {
     pub importance: u16,
     /// Weight on caller-supplied topical relevance, in tenths.
     pub relevance: u16,
-    /// Sequence distance at which the recency term halves.
+    /// Distance at which the recency term halves.
+    ///
+    /// Measured in whatever [`EpisodePolicy::distance`] counts — raw sequences
+    /// by default, folded rows under [`Basis::Live`] — and in rows rather than
+    /// in ratios either way, which is why it has to move with the size of the
+    /// room. See [`Self::for_room`].
+    ///
+    /// [`EpisodePolicy::distance`]: crate::episode::EpisodePolicy::distance
+    /// [`Basis::Live`]: crate::horizon::Basis::Live
     pub half_life: u32,
 }
 

@@ -23,7 +23,17 @@ where
 pub struct QuorumPolicy {
     /// Distinct supporters a topic needs to carry.
     pub threshold: u32,
-    /// How many sequences back support still counts.
+    /// How far back support still counts.
+    ///
+    /// The unit is whatever [`EpisodePolicy::distance`] says: raw sequences by
+    /// default, or the rows the fold actually reads under [`Basis::Live`].
+    /// The distinction matters on any desk that carries traffic this episode
+    /// does not fold — an aside, an off-floor row, a reading from another
+    /// channel — because under raw sequences all of it counts against this
+    /// window.
+    ///
+    /// [`EpisodePolicy::distance`]: crate::episode::EpisodePolicy::distance
+    /// [`Basis::Live`]: crate::horizon::Basis::Live
     pub window: u32,
     /// Whether support must cite grounds to count.
     pub require_grounded: bool,
