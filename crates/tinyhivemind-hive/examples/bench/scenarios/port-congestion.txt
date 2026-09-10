@@ -1,0 +1,54 @@
+# A hidden profile outside incident triage.
+#
+# Every scenario shipped before this one is an SRE incident, which makes the
+# corpus a test of one genre as much as of the protocol. This is the same
+# structure — a decoy the brief itself plants, and a truth reachable only by
+# conjunction — in logistics, where the decisive facts are contractual and
+# physical rather than telemetric.
+#
+# The brief plants #air, which is what anybody reaches for when a part is late.
+# It is ruled out by a fact only the shipping lead holds. The truth, #reroute,
+# needs two facts held by two different members: that the adjacent port is
+# clear, and that the bonded transfer it would need is already available. Each
+# alone is inert.
+
+task: The cell modules for next quarter's build are sitting on a vessel that has been at anchor outside Northgate for nine days. The line that consumes them stops in three weeks, the expediting budget is approved and unspent, and the programme office has already asked twice why we have not simply flown them. Commit to exactly one action today, and say which.
+
+truth: reroute
+
+[option air]
+Break the shipment out and fly the modules in.
+
+[option reroute]
+Divert the vessel to Southgate and move the containers overland.
+
+[option resource]
+Place the order with the qualified second supplier instead.
+
+[option hold]
+Wait for the Northgate backlog to clear.
+
+[agent planner]
+role: shipping lead, who owns how freight physically moves
+knows: The modules are lithium cells above 100Wh. No carrier will accept them as air cargo without a Section II dangerous-goods certification that this packaging does not have, and recertifying the packaging takes six weeks.
+knows: The vessel is still at anchor and has not begun discharge, so it can still be redirected without unstuffing anything.
+
+[agent critic]
+role: procurement manager, who owns supplier contracts
+knows: The qualified second supplier quotes eleven weeks from order to delivery, and has no finished stock — their line is committed through the quarter.
+knows: The expediting budget cannot be spent on a second order; it is scoped to freight only, and reallocating it needs a board sign-off that takes a month.
+
+[agent archivist]
+role: customs broker, who owns clearance
+knows: Southgate is running a two-day berth wait against Northgate's nineteen, and Northgate's backlog has grown every day for six days.
+knows: Our bonded-transfer authorisation covers Southgate as a port of entry and has done since the last renewal. Nothing new has to be filed to land there.
+
+[agent scout]
+role: contracts analyst, who owns what the agreements say
+knows: The supply agreement's late-delivery penalty begins accruing on day seven of a line stoppage, at a rate that exceeds the entire freight budget within a fortnight.
+knows: There is no force-majeure relief for port congestion under this agreement; the clause names weather and labour action only.
+
+[agent auditor]
+role: inland operations, who owns everything after the quay
+knows: Southgate to the plant is a four-day overland move on a lane we already run weekly, and the haulier has capacity this month.
+knows: Northgate's own inland lane is unaffected, so the delay is entirely berth wait — moving the boxes off Northgate would not help unless the vessel itself goes elsewhere.
