@@ -153,6 +153,39 @@ impl AskChannel {
     }
 }
 
+/// How one desk reaches the rest of the federation.
+///
+/// Two mechanisms, and they answer different failures. [`AskChannel`] is a
+/// *question to one peer*, and it fixes a desk that is wrong on its own. The
+/// digest is a *reading published to every peer*, and it is the only thing
+/// measured here that touches a federation whose desks are wrong about the
+/// same thing.
+///
+/// The distinction is worth stating because the second looks like the first
+/// done more times, and it is not. Asking every peer costs `D - 1` questions
+/// and `D - 1` answers per desk; publishing costs **one** model call per desk,
+/// and the row it writes reaches every peer's transcript. What it buys is
+/// bounded by the same argument: at a hundred desks sharing seven blind spots,
+/// the peer a desk would have asked shares its blind spot, and no number of
+/// pairwise questions recovers an error the whole federation holds.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct Exchange {
+    /// Where a desk pays for a question it puts to one other channel.
+    pub(crate) asking: AskChannel,
+    /// Readings one desk publishes to every other channel, across the episode.
+    ///
+    /// Zero is off, and off is what every recorded number was taken against.
+    pub(crate) digest: usize,
+}
+
+impl Exchange {
+    /// Ask on the floor and publish nothing: the original arm.
+    pub(crate) const ON_FLOOR: Self = Self {
+        asking: AskChannel::OnFloor,
+        digest: 0,
+    };
+}
+
 pub(super) struct Board<'a> {
     /// The desks-and-journals host every episode runs against.
     host: SwarmHost,
@@ -167,8 +200,14 @@ pub(super) struct Board<'a> {
     pending: Vec<VecDeque<Referral>>,
     /// Peer channels each desk has already asked.
     asks: Vec<usize>,
-    /// Where an ask is paid for, and how many one desk may make.
-    asking: AskChannel,
+    /// Where an ask is paid for, how many one desk may make, and how many
+    /// readings it publishes to the whole federation.
+    exchange: Exchange,
+    /// Readings each desk has already published federation-wide.
+    published: Vec<usize>,
+    /// Members of each desk offered the digest so far, so publishing rotates
+    /// rather than always landing on seat zero.
+    publishers: Vec<usize>,
     /// Members of each desk offered the off-floor ask so far, so the offer
     /// rotates rather than always landing on seat zero.
     askers: Vec<usize>,
@@ -182,7 +221,7 @@ impl<'a> Board<'a> {
         channels: &'a [Channel],
         referrals: ReferralPolicy,
         keep_trace: bool,
-        asking: AskChannel,
+        exchange: Exchange,
     ) -> Self {
         let count = channels.len();
         Self {
@@ -190,7 +229,9 @@ impl<'a> Board<'a> {
             channels,
             referrals,
             keep_trace,
-            asking,
+            exchange,
+            published: vec![0; count],
+            publishers: vec![0; count],
             askers: vec![0; count],
             pending: vec![VecDeque::new(); count],
             // Asks are counted per desk rather than per member, and capped at one
@@ -308,7 +349,7 @@ impl<'a> Board<'a> {
         // has its own channel and its own bound, and this turn is for
         // deliberating.
         let budget =
-            self.asking.on_floor() && self.referrals.enabled && self.asks[desk] < self.ask_width();
+            self.exchange.asking.on_floor() && self.referrals.enabled && self.asks[desk] < self.ask_width();
         Ok(PlannedTurn {
             desk,
             seat,
@@ -399,7 +440,7 @@ impl<'a> Board<'a> {
 
     /// Peer channels one desk may ask, under this run's ask channel.
     fn ask_width(&self) -> usize {
-        self.asking.width(self.channels.len().saturating_sub(1))
+        self.exchange.asking.width(self.channels.len().saturating_sub(1))
     }
 
     /// Put one question to another channel **without taking a turn for it**.
@@ -423,7 +464,7 @@ impl<'a> Board<'a> {
         members: &mut [Vec<&mut dyn SwarmMember>],
         desk: usize,
     ) -> Result<bool, String> {
-        if self.asking.on_floor() || !self.referrals.enabled || self.asks[desk] >= self.ask_width()
+        if self.exchange.asking.on_floor() || !self.referrals.enabled || self.asks[desk] >= self.ask_width()
         {
             return Ok(false);
         }
@@ -456,6 +497,62 @@ impl<'a> Board<'a> {
         self.asks[desk] = self.asks[desk].saturating_add(1);
         self.report.off_floor_asks = self.report.off_floor_asks.saturating_add(1);
         self.route(desk, &asker, &content, sequence, 0, None)?;
+        Ok(true)
+    }
+
+    /// Publish one desk's reading of the whole slate to every other channel.
+    ///
+    /// Returns whether one went out. Like an off-floor ask this takes no turn
+    /// and is priced in its own column, and unlike one it is not a question:
+    /// nobody answers it, so it costs exactly one model call however many
+    /// desks are in the federation.
+    ///
+    /// **The row lands on every peer desk authored by a member of the
+    /// publishing desk**, which is what makes it safe. `episode::step` folds a
+    /// trace only when its author is a current member of the desk it is
+    /// folding, so a digest deposits information into every reader's view and
+    /// support into nobody's standings. It is the same guarantee a referral's
+    /// `!evidence` carries, arrived at from the other direction: there the
+    /// answer is restated by a member of the receiving desk and counts as that
+    /// desk's own evidence, here it stays foreign and counts as nothing until
+    /// a member of the desk spends a turn saying it.
+    ///
+    /// It does consume a sequence number on every peer's journal, and under
+    /// [`Basis::Sequence`] that shortens their quorum window by one per
+    /// digest. That is exactly the interaction [`Basis::Live`] exists for, and
+    /// the arm is run both ways for that reason.
+    ///
+    /// [`Basis::Sequence`]: tinyhivemind_hive::Basis::Sequence
+    /// [`Basis::Live`]: tinyhivemind_hive::Basis::Live
+    pub(super) fn publish_digest(
+        &mut self,
+        members: &mut [Vec<&mut dyn SwarmMember>],
+        desk: usize,
+    ) -> Result<bool, String> {
+        if self.published[desk] >= self.exchange.digest {
+            return Ok(false);
+        }
+        let seats = &self.channels[desk].members;
+        if seats.is_empty() {
+            return Ok(false);
+        }
+        let author = seats[self.publishers[desk] % seats.len()].clone();
+        self.publishers[desk] = self.publishers[desk].saturating_add(1);
+        let seat = seat_of(&members[desk], &author)?;
+        let Some(content) = members[desk][seat].publish() else {
+            return Ok(false);
+        };
+        // Counted before the appends, so a publisher that reaches nobody --
+        // a federation of one -- still records the call it made.
+        self.published[desk] = self.published[desk].saturating_add(1);
+        self.report.digests = self.report.digests.saturating_add(1);
+        for peer in 0..self.channels.len() {
+            if peer == desk {
+                continue;
+            }
+            self.commit_charging(members, peer, &author, &content, false);
+            self.report.crossings = self.report.crossings.saturating_add(1);
+        }
         Ok(true)
     }
 
