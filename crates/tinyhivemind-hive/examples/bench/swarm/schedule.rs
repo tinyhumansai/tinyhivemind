@@ -52,7 +52,7 @@
 
 use std::time::Instant;
 
-use tinyhivemind_hive::{EpisodeState, EpisodePolicy, HiveStep, step};
+use tinyhivemind_hive::{EpisodePolicy, EpisodeState, HiveStep, step};
 
 use super::board::{Board, PlannedTurn, fill_turn};
 use super::{Channel, DeskOutcome, Ending, SwarmMember, member};

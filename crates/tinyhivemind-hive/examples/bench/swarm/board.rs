@@ -307,9 +307,8 @@ impl<'a> Board<'a> {
         // Off the floor, an authorized turn is never spent asking: the ask
         // has its own channel and its own bound, and this turn is for
         // deliberating.
-        let budget = self.asking.on_floor()
-            && self.referrals.enabled
-            && self.asks[desk] < self.ask_width();
+        let budget =
+            self.asking.on_floor() && self.referrals.enabled && self.asks[desk] < self.ask_width();
         Ok(PlannedTurn {
             desk,
             seat,
@@ -336,7 +335,8 @@ impl<'a> Board<'a> {
     ) -> Result<(), String> {
         let desk = spoken.desk;
         let sequence = self.commit(members, desk, &spoken.agent_id, &spoken.content);
-        let routed = budget && self.route(desk, &spoken.agent_id, &spoken.content, sequence, 0, None)?;
+        let routed =
+            budget && self.route(desk, &spoken.agent_id, &spoken.content, sequence, 0, None)?;
         // A turn spent asking is spent whether or not the question found its
         // way out, so the budget is charged either way.
         if spoken.offered || routed {

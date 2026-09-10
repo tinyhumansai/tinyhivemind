@@ -144,7 +144,12 @@ where
         let handles: Vec<_> = items
             .chunks_mut(chunk)
             .map(|slice| {
-                scope.spawn(|| slice.iter_mut().map(&work).collect::<Result<Vec<R>, String>>())
+                scope.spawn(|| {
+                    slice
+                        .iter_mut()
+                        .map(&work)
+                        .collect::<Result<Vec<R>, String>>()
+                })
             })
             .collect();
         for handle in handles {

@@ -57,9 +57,9 @@ use board::Board;
 use member::SwarmSim;
 
 mod board;
-mod schedule;
 mod format;
 mod member;
+mod schedule;
 
 /// One channel: a desk id, its display name, and who sits on it.
 #[derive(Clone, Debug)]

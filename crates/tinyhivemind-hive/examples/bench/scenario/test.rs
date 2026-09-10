@@ -15,10 +15,7 @@ use super::Scenario;
 /// missing entry here is caught by the count assertion below rather than by
 /// nobody noticing.
 const SHIPPED: [(&str, &str); 7] = [
-    (
-        "assay-drift",
-        include_str!("../scenarios/assay-drift.txt"),
-    ),
+    ("assay-drift", include_str!("../scenarios/assay-drift.txt")),
     (
         "chargeback-spike",
         include_str!("../scenarios/chargeback-spike.txt"),
@@ -48,8 +45,8 @@ const SHIPPED: [(&str, &str); 7] = [
 #[test]
 fn every_shipped_scenario_parses() {
     for (name, text) in SHIPPED {
-        let scenario = Scenario::parse(text)
-            .unwrap_or_else(|error| panic!("{name} does not parse: {error}"));
+        let scenario =
+            Scenario::parse(text).unwrap_or_else(|error| panic!("{name} does not parse: {error}"));
         assert!(
             scenario.options.len() >= 2,
             "{name} needs options to choose between"
