@@ -152,7 +152,9 @@ what a test may reach, only where it lives.
   authored, so such a room stays `Visibility::Blind` for its whole episode and
   never deliberates at all; `quorum.threshold: 2` is two supporters whether the
   desk holds five members or a thousand; `weights.half_life: 20` is twenty rows
-  against an opening round that is `members` rows long. Use
+  against an opening round that is `members` rows long; and `round_width: 4`
+  takes all of the free blind concurrency only in a room of four, so a room of
+  128 spends 32 rounds on an opening round that could take one. Use
   `EpisodePolicy::for_room`. `HiveStep::Exhausted` reports the first of the
   three when it happens, rather than leaving it to be inferred.
 - **Exhaustion is diagnosable.** `Exhausted` carries the standings and the

@@ -34,14 +34,36 @@ bound scales with the room. Each fails without saying so.
   half-lives old before the round has finished — worth about one seven-thousandth
   of a fresh one. The opening round is the one carrying the independent
   readings, so that is precisely the wrong thing to decay.
+- `round_width: 4` is a fourth, found only when this work was merged against
+  the concurrent-rounds change that landed alongside it. It costs *depth*
+  rather than accuracy, and the library's own reasoning is what condemns it:
+  `DEFAULT_ROUND_WIDTH` says widening a **blind** round is free — "a blind
+  member could not read that row anyway" — and then fixes the free width at
+  four. The free width is the size of the room. A room of 128 spends 32 rounds
+  completing an opening round that could take one.
 
-`EpisodePolicy::for_room(members)` derives all three. The budget and threshold
+`EpisodePolicy::for_room(members)` derives all four. The budget and threshold
 arithmetic is not new — the benchmark has scaled both host-side since the size
 sweep, and the reasoning behind each bound was recorded then. What is new is
 that the derivation now lives where a host will find it instead of in an
 example's `policy.rs`.
 
-The window is the one addition. `for_room` sets `quorum.window` to the budget,
+The round is widened to the whole room, with `revealed_width` left at one —
+the shipping default's own rule, *take all of the free concurrency and none of
+the paid kind*, applied by a constructor that knows the room's size. Measured on
+the hidden profile:
+
+```text
+rounds/ep            8       32       64      128  members
+hive+              9.3     33.1     65.1    135.4
+hive+blind         2.3      2.1      2.1      2.6
+```
+
+Same accuracy in every column — the arms are identical on the `correct %` table
+— and 52x less depth at 128 members. Depth is what a host with async seats
+actually waits for.
+
+The window is the other addition. `for_room` sets `quorum.window` to the budget,
 so support deposited in the opening round still counts when the room settles;
 an absolute window silently stops covering the episode somewhere above thirty
 turns, and the benchmark's own fixed `window: 100` does not cover a 768-turn
