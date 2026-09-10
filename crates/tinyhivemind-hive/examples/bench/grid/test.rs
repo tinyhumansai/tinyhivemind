@@ -128,6 +128,12 @@ fn refuses_a_point_that_is_not_on_its_axis() {
     assert!(axes.set("--complexity", &mut args(&["0"])).is_err());
     assert!(axes.set("--complexity", &mut args(&["6"])).is_err());
     assert!(axes.set("--scale", &mut args(&["1"])).is_err());
+    // Bounded above too: `Room::generate_with` clamps to `MAX_MEMBERS`, so a
+    // larger value would run a smaller room than the column header claims.
+    let over = (crate::sim::MAX_MEMBERS + 1).to_string();
+    assert!(axes.set("--scale", &mut args(&[&over])).is_err());
+    let at_limit = crate::sim::MAX_MEMBERS.to_string();
+    assert_eq!(axes.set("--scale", &mut args(&[&at_limit])), Ok(true));
     assert!(axes.set("--concurrency", &mut args(&["0"])).is_err());
     // Every refusal above left the axes as they were, so a run that stops on
     // a bad value never half-applied one.

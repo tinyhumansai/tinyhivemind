@@ -309,11 +309,20 @@ impl Axes {
                 self.scales = parts
                     .iter()
                     .map(|raw| {
+                        // Bounded above as well as below. `Room::generate_with`
+                        // clamps to `MAX_MEMBERS`, so `--scale 3000` would
+                        // silently run 1024-member rooms and print them in a
+                        // column headed 3000 -- a benchmark reporting a size it
+                        // never ran. Refused for the same reason an off-axis
+                        // topic is.
                         raw.parse::<usize>()
                             .ok()
-                            .filter(|size| *size >= 2)
+                            .filter(|size| (2..=crate::sim::MAX_MEMBERS).contains(size))
                             .ok_or_else(|| {
-                                format!("--scale takes room sizes of two or more, not {raw:?}")
+                                format!(
+                                    "--scale takes room sizes from 2 to {}, not {raw:?}",
+                                    crate::sim::MAX_MEMBERS
+                                )
                             })
                     })
                     .collect::<Result<_, _>>()?;
