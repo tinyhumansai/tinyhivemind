@@ -155,8 +155,9 @@ Read it as a **crossover, not a win**. Publishing is flat in the size of the
 federation because every desk hears every desk either way; asking degrades
 because the peer pool degrades. Below fifty desks the bounded ask is better and
 the digest is a real cost in accuracy; from fifty up the digest is the only
-bounded arm still standing. Turns are within 1% of each other throughout, so
-what is being bought is not paid for in floor time.
+bounded arm still standing. Turns are within 1.3% of each other throughout —
+356.9 against 352.6 at twenty-five desks is the widest gap — so what is being
+bought is not paid for in floor time.
 
 It does not reach `pooled`, and the gap is the point: `pooled` hands over every
 member's *private facts*, while a digest hands over a desk's *scored reading*.

@@ -220,7 +220,8 @@ bounded arm still standing, and at a hundred it is the difference between 62.5%
 and nothing — `swarm°` there does not even agree with itself, deciding eleven of
 twenty-four federations against the digest arm's twenty-four.
 
-Turns are within 1% throughout, so what is bought is not paid for in floor time.
+Turns are within 1.3% throughout — 356.9 against 352.6 at twenty-five desks is
+the widest gap — so what is bought is not paid for in floor time.
 
 It does not reach `pooled`, and the gap is the point. `pooled` hands over every
 member's *private facts*; a digest hands over a desk's *scored reading*, and

@@ -133,16 +133,23 @@ swarm         0.0%        0     370.0      246.0      20.0
 swarm  desk endings: converged 0 · deadlocked 0 · exhausted 2400 · idle 0
 ```
 
-Every desk exhausted its turn budget. A referral costs the *answering* desk a
-floor turn, and a desk in a federation of twelve is asked by eleven peers while
-its own budget stays what it was for a federation of three. The incoming load
-scales with the federation and the budget does not, so the federation spends
-itself answering and never decides. Twenty answers are stranded on top of that.
+Every desk exhausted its turn budget, and the cost is on the **ask**.
+`Board::take_turn` lets a member spend the turn its episode authorized on
+asking another channel, and the host's width bound permits one ask per peer —
+`D - 1` of them — against a budget of `3 x per_desk`. At twelve desks of four
+that is eleven asks against twelve turns. The number of peers grows with the
+federation while a desk's budget stays whatever its own size earned, so the
+federation spends itself asking and never decides. Twenty answers are stranded
+on top of that, because the desks that asked had closed before the replies
+arrived.
 
-That is the on-floor exchange law again, one level up: inside a room it costs
-the asker a turn, and between desks it costs the asker one there too — see the
-correction at the head of this section, which replaces the "answerable off the
-floor" reading below. The fix implied is that a referral should be **askable**
+(An earlier reading of this table blamed the *answering* desk. It is wrong:
+`Board::deliver` appends an answer without calling `step`, so answering spends
+no budget at all. The retraction at the head of this section has the detail.)
+
+That is the on-floor exchange law again, one level up: inside a room an
+exchange tied to the floor costs the asker a turn, and between desks it costs
+the asker one there too. The fix implied is that a referral should be **askable**
 off the floor, and it is implemented and measured in
 [`2026-09-10-hive-at-scale.md`](2026-09-10-hive-at-scale.md).
 
