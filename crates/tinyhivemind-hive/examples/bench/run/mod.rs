@@ -573,7 +573,7 @@ pub(crate) fn drive_with(
     host.operator(task);
 
     let mut state = EpisodeState::opened(host.conversation(), host.watermark());
-    let mut counters = Counters::default();
+    let mut recorded = Recorded::default();
     let mut library_time = Duration::ZERO;
     let mut step_time = Duration::ZERO;
     let mut step_calls = 0_u32;
@@ -667,33 +667,26 @@ pub(crate) fn drive_with(
             HiveStep::Idle => (Ending::Idle, None),
         };
 
-        counters.library_time = library_time;
-        counters.step_time = step_time;
-        counters.step_calls = step_calls;
-        counters.turns = turns;
-        counters.rounds = rounds;
-        counters.contacts = contacts;
-        return finished(
-            &host,
-            agents,
-            &state,
-            (ending, decided),
-            tally,
-            shape,
-            &counters,
-            trace,
-        );
+        recorded.library_time = library_time;
+        recorded.step_time = step_time;
+        recorded.step_calls = step_calls;
+        recorded.turns = turns;
+        recorded.rounds = rounds;
+        recorded.contacts = contacts;
+        recorded.shape = shape;
+        recorded.trace = trace;
+        return finished(&host, agents, &state, (ending, decided), tally, &mut recorded);
     }
 }
 
-/// The running totals `drive_with` carries across its loop.
+/// What `drive_with`'s loop recorded, as one value.
 ///
-/// Grouped so that [`finished`] takes one argument rather than seven. They are
-/// genuinely one thing — what this episode has cost so far — and passing them
-/// as a bundle is what lets the terminal scoring live in a function of its
-/// own rather than inside the loop that produced them.
+/// Genuinely one thing — everything the loop wrote down as it ran, as against
+/// everything [`finished`] folds back out of the journal afterwards — and
+/// grouping it is what lets that terminal scoring live in a function of its
+/// own rather than inside the loop that produced it.
 #[derive(Default)]
-struct Counters {
+struct Recorded {
     /// Time spent inside the library, exchange rounds included.
     library_time: Duration,
     /// Time spent inside `step` calls alone.
@@ -706,6 +699,10 @@ struct Counters {
     rounds: u32,
     /// Off-floor model calls made in exchange rounds.
     contacts: u32,
+    /// Every round's width and the rows it read, for `cost::CostModel::price`.
+    shape: Vec<crate::cost::RoundShape>,
+    /// One line per turn, for the trace view. Empty unless asked for.
+    trace: Vec<String>,
 }
 
 /// Score a finished episode and assemble its report.
@@ -726,9 +723,7 @@ fn finished(
     state: &EpisodeState,
     outcome: (Ending, Option<tinyhivemind_hive::trace::TopicId>),
     tally: Tally,
-    shape: Vec<crate::cost::RoundShape>,
-    counters: &Counters,
-    trace: Vec<String>,
+    recorded: &mut Recorded,
 ) -> Result<EpisodeReport, String> {
     let (ending, decided) = outcome;
     // Read back out of the journal the same way any participant would, rather
@@ -755,14 +750,14 @@ fn finished(
         ending,
         decided,
         correct: false,
-        turns: counters.turns,
-        rounds: counters.rounds,
-        shape,
+        turns: recorded.turns,
+        rounds: recorded.rounds,
+        shape: std::mem::take(&mut recorded.shape),
         context_rows: mean_context_rows(agents),
-        step_calls: counters.step_calls,
-        library_time: counters.library_time,
-        step_time: counters.step_time,
-        trace,
+        step_calls: recorded.step_calls,
+        library_time: recorded.library_time,
+        step_time: recorded.step_time,
+        trace: std::mem::take(&mut recorded.trace),
         proposer,
         has_expert: false,
         decisive: None,
@@ -772,7 +767,7 @@ fn finished(
         knows_turns: tally.knows_turns,
         speech: tally.speech,
         cost_units: tally.cost_units,
-        contacts: counters.contacts,
+        contacts: recorded.contacts,
         first_deposit: tally.first_deposit,
         commit_at: tally.commit_at,
         first_spoke: tally.first_spoke,
