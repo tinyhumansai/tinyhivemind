@@ -156,17 +156,20 @@ Four sites, each folded once per room instead of once per member:
 | `episode::charged` | searched the carried thresholds per member | indexed once |
 | threshold membership check | linear scan per carried record | set lookup |
 
-Measured at `--jobs 1`, same machine, same seeds, before and after:
+Measured at `--jobs 1`, same machine, same seeds, with the four fixes reverted
+in place and restored:
 
 ```text
 members      before      after
-64         60.9 µs    53.7 µs    -12%
-128       180.3 µs   144.7 µs    -20%
-256       901.5 µs   516.0 µs    -43%
+64          63.1 µs    56.6 µs    -10%
+128        198.4 µs   156.8 µs    -21%
+256        901.5 µs   516.0 µs    -43%
 ```
 
 The gap widens with the room, which is what a quadratic term being removed looks
-like. It does not change the conclusion the previous write-up reached — at 256
+like. The first two rows are measured against the merged tree; the 256 row is
+the same comparison run before merging `main`'s concurrent-rounds change, which
+touches `charged` but not the shape of any of the four loops. It does not change the conclusion the previous write-up reached — at 256
 members the library is 3% of wall clock, and a hundred desks of ten is a better
 shape than one room of a thousand whatever the constant is.
 
