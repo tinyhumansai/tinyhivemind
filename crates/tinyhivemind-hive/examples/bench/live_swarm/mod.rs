@@ -63,14 +63,23 @@ pub(crate) fn swarm_compare(options: &Options) -> Result<(), String> {
     }
     let federations: Vec<Federation> = (0..options.episodes)
         .map(|index| {
-            Federation::generate(
+            let federation = Federation::generate(
                 mix(options.seed, u64::from(index)),
                 options.desks,
                 options.per_desk,
                 options.topics,
                 options.noise,
                 options.bias,
-            )
+            );
+            // `--evidence` changes the task rather than the wire: it plants
+            // the disqualifying facts, each on a desk other than the one that
+            // needs it. Without it there are no facts to exchange and the arms
+            // below measure what an exchange of *opinions* is worth.
+            if options.evidence {
+                federation.planted()
+            } else {
+                federation
+            }
         })
         .collect();
     let Some(first) = federations.first() else {
