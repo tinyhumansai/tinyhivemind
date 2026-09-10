@@ -242,7 +242,9 @@ pub(super) fn concurrent_pass(
             })
             .collect();
         parallel::map_mut_in_order(&mut work, jobs, |(job, seats)| match job {
-            Job::Answer(plan) => fill_answer(seats, plan).map(Spoken::Answer),
+            Job::Answer(plan) => {
+                fill_answer(seats, plan).map(|said| Spoken::Answer(Box::new(said)))
+            }
             Job::Round(round) => round
                 .iter()
                 .map(|plan| fill_turn(seats, plan))
@@ -292,7 +294,11 @@ enum Job<'a> {
 /// What one desk's job produced.
 enum Spoken {
     /// The answer, and the referral it routes back along.
-    Answer(SpokenAnswer),
+    ///
+    /// Boxed because a `SpokenAnswer` carries the whole `Referral` it replies
+    /// to and a `Round` carries a `Vec`, so the unboxed variants differ in
+    /// size by enough that every round would pay for the answer's payload.
+    Answer(Box<SpokenAnswer>),
     /// The round, in the order the library authorized it.
     Round(Vec<SpokenTurn>),
 }
