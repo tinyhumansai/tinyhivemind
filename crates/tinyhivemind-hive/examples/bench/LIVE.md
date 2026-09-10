@@ -128,6 +128,34 @@ pools what its members separately know.
 `crates/tinyhivemind-hive/tests/openrouter_hive_live.rs` is the asserting
 version, behind the `e2e` feature.
 
+## A corpus rather than one problem
+
+One scenario is one genre. Every scenario this harness shipped until recently
+was an SRE incident, which made the corpus a test of incident triage as much as
+of the protocol — so a room that held the grammar on `checkout-503` had been
+shown to hold it on an incident and nothing more.
+
+`--scenario-dir` runs every `.txt` in a directory, in name order, announcing
+each before it spends minutes on it:
+
+```sh
+cargo run --release -p tinyhivemind-hive --example bench -- \
+  --scenario-dir crates/tinyhivemind-hive/examples/bench/scenarios \
+  --api-base http://127.0.0.1:6969 --model flash --thinking off
+```
+
+The shipped corpus is now seven scenarios across four domains — incident triage
+(`checkout-503`, `index-lock-*`), logistics (`port-congestion`), payments fraud
+(`chargeback-spike`) and laboratory measurement (`assay-drift`). Every one is
+the same structure: a decoy the brief itself plants, and a truth reachable only
+by a conjunction of facts no single member holds. They differ in what the
+decisive move *is* — a contractual prohibition, a volume figure, an inference
+from the shape of an error rather than a lookup.
+
+A scenario that fails to parse stops the run rather than being skipped, and
+`scenario/test.rs` parses all seven under `cargo test`, so a typo in a fixture
+is found before a run spends money on it.
+
 ## The two backends
 
 `--agent-cmd` shells out to a CLI, one process per turn. `--api-base` instead

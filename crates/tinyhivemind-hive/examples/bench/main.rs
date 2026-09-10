@@ -60,6 +60,7 @@
 //! | `--desks N`, `--per-desk N`, `--bias N` | the federation `--swarm` builds |
 //! | `--agent-cmd CMD` | drive one episode through a real agent CLI |
 //! | `--scenario PATH` | give the live room a real problem with private facts |
+//! | `--scenario-dir PATH` | run every `.txt` scenario in a directory, in name order |
 //! | `--repeat N` | run a live scenario N times and count both arms |
 //! | `--timeout SECS` | per-turn deadline for a live agent or HTTP request (default 180) |
 //! | `--api-base URL` | drive seats directly over HTTP instead of a CLI |

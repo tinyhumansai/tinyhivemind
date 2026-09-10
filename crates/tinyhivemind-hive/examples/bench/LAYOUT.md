@@ -37,7 +37,8 @@ resolves it to `sim/mod.rs` transparently.
 | `live/{agent,desk}.rs` | `LiveAgent`, driving one seat through a CLI subprocess; `LiveDeskAgent`, driving one seat as a member of a swarm desk |
 | `http.rs` | the direct-HTTP backend: the same prompt state over `curl`, and its usage table |
 | `scenario.rs` | the scenario file format, the briefs, and the recorded answer |
-| `scenarios/` | the scenario files themselves |
+| `scenarios/` | the scenario files themselves: seven hidden profiles across incident triage, logistics, payments fraud and laboratory measurement |
+| `scenario/test.rs` | that every shipped scenario parses, records a truth that is on offer, and gives every member something of its own |
 | `DELEGATION.md` | the delegation arms, the three questions they answer, and what they scored |
 | `LIVE.md` | live rooms: the prompt, the scenario format, and the CLI and HTTP backends |
 | `CONTEXT.md` | the context-budget window model, and what a bounded prompt does and does not change about the arms above |
