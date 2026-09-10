@@ -192,6 +192,14 @@ averaging correlated readings imports the correlation. Where every desk's blind
 spot is its own, the bounded ask already holds 100% and the digest only adds
 cost.
 
+**What it costs is rows, not calls.** One model call per desk, but `D - 1` row
+appends each, every one carrying the whole slate — so the transcript grows as
+`D² x topics` while the spend grows as `D`. At a hundred desks and eight options
+that is ten thousand short rows and costs nothing noticeable; at a hundred desks
+and 128 options it is ten thousand long ones and the harness slows down
+markedly. A host with a wide slate should publish the options in contention
+rather than the whole slate.
+
 `--digest` is off by default and every recorded number was taken with it off.
 
 ## 6. The width guidance was in the wrong place
