@@ -219,24 +219,27 @@ impl Axes {
     ///
     /// The order is the reading order of the table, and it is chosen so that
     /// adjacent rows differ in one axis — the comparison a reader makes
-    /// without meaning to.
+    /// without meaning to. A plain nested-loop product does not keep that
+    /// promise once two axes both hold more than one point: the moment the
+    /// fastest axis wraps, the next one up also advances, changing two
+    /// coordinates in the same step. This instead walks each axis in a
+    /// boustrophedon (a "snake"): every other pass over an axis runs in
+    /// reverse, so the row where an outer axis advances always meets the row
+    /// before it on every inner coordinate.
     pub(crate) fn cells(&self) -> Vec<Cell> {
-        let mut cells = Vec::new();
-        for topic in &self.topics {
-            for scale in &self.scales {
-                for complexity in &self.complexities {
-                    for concurrency in &self.concurrencies {
-                        cells.push(Cell {
-                            topic: *topic,
-                            scale: *scale,
-                            complexity: *complexity,
-                            concurrency: *concurrency,
-                        });
-                    }
-                }
-            }
-        }
-        cells
+        let by_concurrency: Vec<u32> = self.concurrencies.clone();
+        let by_complexity = snake(&self.complexities, &by_concurrency);
+        let by_scale = snake(&self.scales, &by_complexity);
+        let by_topic = snake(&self.topics, &by_scale);
+        by_topic
+            .into_iter()
+            .map(|(topic, (scale, (complexity, concurrency)))| Cell {
+                topic,
+                scale,
+                complexity,
+                concurrency,
+            })
+            .collect()
     }
 
     /// Apply one grid axis flag.
