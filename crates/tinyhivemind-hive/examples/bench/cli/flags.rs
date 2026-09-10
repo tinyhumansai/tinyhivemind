@@ -73,7 +73,20 @@ pub(super) fn apply_scale_flag(
         }
         "--evidence" => options.evidence = true,
         "--fact-noise" => {
-            let noise = next_number(args).unwrap_or(0);
+            // Parsed strictly rather than through `next_number`'s
+            // `unwrap_or(0)`: that default reads a missing or nonnumeric
+            // value as "no wrong facts", which is truthful evidence rather
+            // than the garbage input it actually was, and — because
+            // `args.next()` still consumes the token either way — it also
+            // eats whatever flag came next. `--fact-noise --swarm` would
+            // silently drop `--swarm` and leave the mode unchanged. Read the
+            // token and reject it explicitly instead.
+            let raw = args
+                .next()
+                .ok_or_else(|| "--fact-noise requires a per-mille value".to_owned())?;
+            let noise = raw.parse::<u32>().map_err(|_| {
+                format!("--fact-noise takes a value from 0 to 1000 (per mille), not {raw}")
+            })?;
             // `Federation::planted_with` reads `draws.below(1_000) < wrong`,
             // which is already `true` for every draw once `wrong` passes
             // 1000 — a value above the scale silently behaves exactly like
