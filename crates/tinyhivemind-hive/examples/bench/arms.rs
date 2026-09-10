@@ -84,7 +84,7 @@ fn blind_shape(turns: u32) -> Vec<RoundShape> {
     if turns == 0 {
         return Vec::new();
     }
-    vec![RoundShape { rows: 1, turns }]
+    vec![RoundShape::uniform(1, turns)]
 }
 
 /// Route one message through the real responder ladder and take that
