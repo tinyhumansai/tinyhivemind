@@ -8,6 +8,8 @@
 //! function with the most to say about what the benchmark measures, and it
 //! says most of it through the doc comments on [`Totals`]'s fields.
 
+mod totals;
+
 use std::time::Instant;
 
 use tinyhivemind_hive::{
@@ -31,6 +33,7 @@ use crate::run::{
     AsideMode, run_episode, run_episode_checking, run_episode_exchanging_with, run_episode_with,
 };
 use crate::sim::{CheckStyle, Room, SPECIALIST_COST_UNIT};
+use totals::Totals;
 
 /// Run every arm over the same rooms and print the comparison.
 pub(crate) fn compare(options: &Options, rooms: &[Room]) -> Result<(), String> {
