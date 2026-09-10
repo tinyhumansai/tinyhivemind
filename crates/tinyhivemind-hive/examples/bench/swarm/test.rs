@@ -6,6 +6,7 @@
 use super::*;
 use crate::federation::Federation;
 use crate::policy::tuned_policy;
+use super::member::SwarmSim;
 
 /// A small federation with distinct decoys, deliberate rather than clamped.
 fn federation() -> Federation {
@@ -135,4 +136,91 @@ fn a_digest_is_bounded_by_its_own_count_and_cannot_run_the_loop() {
     .expect("runs");
     let desks = u32::try_from(federation.desks.len()).unwrap();
     assert_eq!(report.digests, desks.saturating_mul(2));
+}
+
+/// Drive a federation through the concurrent scheduler, which `run_swarm`
+/// never selects: a simulated turn is arithmetic, so the simulated path always
+/// passes `jobs: 1`. Everything the concurrent pass does differently is
+/// therefore untested unless a test asks for it directly.
+fn drive_concurrently(federation: &Federation, exchange: Exchange, jobs: usize) -> SwarmReport {
+    let channels = channels(federation);
+    let policy = desk_policy(federation);
+    let mut seated: Vec<SwarmSim> = federation
+        .agents
+        .iter()
+        .map(|agent| {
+            let mut agent = agent.clone();
+            agent.set_quorum(policy.quorum);
+            SwarmSim::new(federation, agent)
+        })
+        .collect();
+    let mut members = group_by_desk(&channels, seated.iter_mut().map(|member| member as _));
+    drive_swarm(
+        &channels,
+        &mut members,
+        &SwarmRun {
+            policy: &policy,
+            referrals: referrals(),
+            exchange,
+            jobs,
+        },
+        "Decide.",
+        false,
+    )
+    .expect("runs")
+}
+
+#[test]
+fn the_concurrent_pass_still_answers_the_referrals_it_routes() {
+    // The regression this guards: answering a referral is a model call, so it
+    // was moved out of the scheduler's sequential settle phase and into the
+    // concurrent stage beside the turns. If that move dropped an answer, the
+    // questions would still cross and nothing would come back.
+    let federation = federation();
+    let exchange = Exchange {
+        asking: AskChannel::OffFloor { cap: 2 },
+        digest: 0,
+    };
+    let report = drive_concurrently(&federation, exchange, 4);
+
+    assert!(
+        report.crossings > 0,
+        "the arm under test is the one where questions cross",
+    );
+    assert_eq!(
+        report.desks.len(),
+        federation.desks.len(),
+        "every desk reaches an ending rather than hanging on an answer",
+    );
+    // Nothing was left queued for a desk that had already finished, which is
+    // what a dropped or late answer would show up as.
+    assert_eq!(report.stranded, 0);
+}
+
+#[test]
+fn the_concurrent_pass_is_deterministic_in_its_width() {
+    // Rows land in desk order, and within a desk in the order the library
+    // authorized them, whatever order the calls return in. So the number of
+    // workers is a wall-clock knob and nothing else.
+    let federation = federation();
+    let exchange = Exchange {
+        asking: AskChannel::OffFloor { cap: 2 },
+        digest: 1,
+    };
+    let narrow = drive_concurrently(&federation, exchange, 2);
+    let wide = drive_concurrently(&federation, exchange, 16);
+
+    assert_eq!(narrow.decided, wide.decided);
+    assert_eq!(narrow.turns, wide.turns);
+    assert_eq!(narrow.crossings, wide.crossings);
+    assert_eq!(narrow.digests, wide.digests);
+    assert_eq!(narrow.off_floor_asks, wide.off_floor_asks);
+    let endings = |report: &SwarmReport| {
+        report
+            .desks
+            .iter()
+            .map(|desk| (desk.name.clone(), desk.ending, desk.decided.clone()))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(endings(&narrow), endings(&wide));
 }
