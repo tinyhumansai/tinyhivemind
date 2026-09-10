@@ -89,15 +89,28 @@ impl QuorumPolicy {
     /// reason.
     ///
     /// The threshold is bounded on both sides, and the benchmark found both
-    /// bounds rather than reasoning them out. *Above half the desk* is what
-    /// removes deadlock: any two options that both clear the line are
-    /// deadlocked by definition, and no further support resolves it, so a
-    /// majority makes the state unreachable and the measured deadlock rate
-    /// falls to zero. *Below the whole desk* is what keeps a decision
-    /// reachable: cross-inhibition removes a silenced advocate and never puts
-    /// them back, so at unanimity one grounded `!object` ends the episode's
-    /// chance of quorum. Between the two, the smallest majority that still
-    /// leaves a member to spare.
+    /// bounds rather than reasoning them out.
+    ///
+    /// *Above half the desk* is what suppresses deadlock. Two options that
+    /// both clear the line are deadlocked by definition and no further support
+    /// resolves it, so raising the line above half makes two *disjoint*
+    /// supporter sets impossible — and the benchmark's measured deadlock rate
+    /// falls to zero.
+    ///
+    /// **It does not make deadlock unreachable, and this is worth stating
+    /// precisely.** The trace grammar lets one member back several topics, and
+    /// a member in both supporter sets is not two members. Three members at a
+    /// threshold of two deadlock the moment one of them advocates both
+    /// options — `episode::test::deadlock::a_majority_threshold_does_not_make_deadlock_unreachable`
+    /// is that case. What the benchmark measures is a room whose members each
+    /// back one option; a host whose participants argue for two should expect
+    /// [`ConsensusState::Deadlocked`] and handle it, not assume it away.
+    ///
+    /// *Below the whole desk* is what keeps a decision reachable:
+    /// cross-inhibition removes a silenced advocate and never puts them back,
+    /// so at unanimity one grounded `!object` ends the episode's chance of
+    /// quorum. Between the two, the smallest majority that still leaves a
+    /// member to spare.
     ///
     /// The window is the episode: support deposited in the opening round has
     /// to still count when the room settles, and an absolute window silently

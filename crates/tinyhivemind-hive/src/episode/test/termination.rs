@@ -218,9 +218,11 @@ fn a_policy_for_a_room_scales_every_absolute_bound_with_it() {
     // which is the failure `DEFAULT` produces on any desk above a dozen.
     assert!(policy.turn_budget > 256);
 
-    // A threshold above half the desk, so no two topics can carry at once,
-    // and below the whole of it, so one grounded objection cannot make quorum
-    // unreachable.
+    // A threshold above half the desk, so no two *disjoint* supporter sets can
+    // both carry — one member backing both topics still can, which
+    // `deadlock::a_majority_threshold_does_not_make_deadlock_unreachable`
+    // pins — and below the whole of it, so one grounded objection cannot make
+    // quorum unreachable.
     assert!(policy.quorum.threshold > 256 / 2);
     assert!(policy.quorum.threshold < 256);
 }
