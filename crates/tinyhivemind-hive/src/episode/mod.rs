@@ -14,6 +14,8 @@ mod types;
 
 pub use types::{EpisodePolicy, EpisodeState, HiveStep, HiveTurn, Phase, Visibility};
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use crate::{
     attention::{AgentThreshold, BidContext, bids, floor_holder},
     directory::{Directory, directory, validate_policy as validate_directory_policy},
@@ -166,13 +168,21 @@ fn active_members<'a>(
     state: &EpisodeState,
 ) -> Result<Vec<&'a str>> {
     let desk_id = desks.resolve_id(&state.conversation.desk_id)?;
+    // The roster's own `active_member` is a scan, so asking it once per desk
+    // member is quadratic in the roster. The answer is the same set every
+    // time, so it is collected once and each member is a lookup.
+    let active: BTreeSet<&str> = roster
+        .active_members()
+        .map(|member| member.id.as_str())
+        .collect();
     let members: Vec<&str> = desks
         .members(desk_id)?
         .into_iter()
-        .filter(|id| roster.active_member(id).is_some())
+        .filter(|id| active.contains(id))
         .collect();
+    let seated: BTreeSet<&str> = members.iter().copied().collect();
     for threshold in &state.thresholds {
-        if !members.iter().any(|id| *id == threshold.agent_id) {
+        if !seated.contains(threshold.agent_id.as_str()) {
             return Err(Error::UnknownThresholdMember {
                 agent_id: threshold.agent_id.clone(),
                 desk_id: desk_id.to_owned(),
@@ -395,12 +405,19 @@ fn visibility(policy: &EpisodePolicy, live: &[&SessionMessage], members: &[&str]
 /// [`directory`](crate::directory::directory), which is folded fresh on every
 /// step rather than carried in state.
 fn charged(thresholds: &[AgentThreshold], members: &[&str], speaker: &str) -> Vec<AgentThreshold> {
+    // Indexed once rather than searched per member: the carried records and
+    // the desk are the same length, so the search form is quadratic in the
+    // room and is paid on every authorized turn.
+    let held: BTreeMap<&str, &AgentThreshold> = thresholds
+        .iter()
+        .map(|record| (record.agent_id.as_str(), record))
+        .collect();
     members
         .iter()
         .map(|member| {
-            let mut record = thresholds
-                .iter()
-                .find(|held| held.agent_id == *member)
+            let mut record = held
+                .get(*member)
+                .copied()
                 .cloned()
                 .unwrap_or_else(|| AgentThreshold::new(*member, 0));
             record.threshold = if *member == speaker {
