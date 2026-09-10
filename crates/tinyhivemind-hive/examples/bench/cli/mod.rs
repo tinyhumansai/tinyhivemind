@@ -479,9 +479,7 @@ impl Options {
                     // grid, regardless of which flag came first. Only the
                     // parser's own default is safe to promote.
                     if options.axes.set(&flag, &mut args)? {
-                        if matches!(options.mode, Mode::Compare) {
-                            options.mode = Mode::Grid;
-                        }
+                        select_grid_axis(&mut options);
                         continue;
                     }
                     let known = apply_mode_flag(&mut options, &flag)
