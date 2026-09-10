@@ -8,6 +8,32 @@ use super::member::SwarmSim;
 use super::*;
 use crate::federation::Federation;
 use crate::policy::tuned_policy;
+use tinyhivemind_hive::dispatch::{DispatchConversation, DispatchKey};
+use tinyhivemind_hive::referral::ReferralKind;
+
+/// A referral of `kind`, `content` "arriving from" `from_desk` at `member`,
+/// on the desk conversation `member` itself sits on. Deliberately minimal —
+/// only the fields [`SwarmSim::answer`] actually reads are given real
+/// values, and the rest carry the cheapest value that type-checks.
+fn incoming(kind: ReferralKind, from_desk: &str, content: &str) -> Referral {
+    Referral {
+        key: DispatchKey { trigger_sequence: 0 },
+        kind,
+        source_id: "asker".to_owned(),
+        target_id: "answerer".to_owned(),
+        content: content.to_owned(),
+        from: DispatchConversation {
+            desk_id: from_desk.to_owned(),
+            thread_root: None,
+        },
+        to: DispatchConversation {
+            desk_id: "answerer-desk".to_owned(),
+            thread_root: None,
+        },
+        origin: None,
+        child_hop: 1,
+    }
+}
 
 /// A small federation with distinct decoys, deliberate rather than clamped.
 fn federation() -> Federation {
