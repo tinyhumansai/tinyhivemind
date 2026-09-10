@@ -457,7 +457,7 @@ and why the sweep reports an ordering rather than a value are in
 | `--json` | print one flat JSON object per arm, ahead of the tables |
 | `--ask-cap N` | questions one desk may put to other channels off the floor; `0` puts asking back on the floor (default 2) |
 | `--digest N` | readings one desk publishes to **every** other channel, off the floor (default 0, off) |
-| `--distance sequence\|live` | whether the quorum window and salience decay count every row the host wrote or only the rows the episode folds (default `sequence`) |
+| `--distance sequence\|live` | whether the quorum window and salience decay count every row the host wrote, or only the rows the episode folds ([ADR 0014](../../../../docs/adr/0014-distance-is-measured-in-the-rows-a-fold-reads.md); default `sequence`) |
 | `--jobs N` | threads the per-sample loops spread across (default one per core) |
 | `--stats-check` | run the statistics module's self-check, and the check arms' own, and exit `0` or `1` |
 | `calls/ep` (column) | model calls made in off-floor exchange rounds per episode — members *asked*, not rows written, so a declined round costs what it actually cost. Kept out of `cost/ep`, which is each speaker's own cost times its turns |
