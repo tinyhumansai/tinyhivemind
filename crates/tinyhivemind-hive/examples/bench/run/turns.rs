@@ -249,7 +249,7 @@ pub(super) fn append_turn(
 }
 
 /// What one exchange round did.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub(super) struct Round {
     /// Members actually asked for a line — the model calls this round paid for,
     /// whether or not the member had anything to say.

@@ -651,12 +651,6 @@ pub(crate) fn drive_with(
                 // for any of it.
                 if aside_mode == AsideMode::OffFloor {
                     let members = member_ids.len();
-                    // Read *before* the exchange runs. An exchange appends
-                    // rows of its own, and a member asked during it was handed
-                    // the journal as it stood when the round opened -- reading
-                    // the length afterwards charges every asked member for the
-                    // answers the exchange itself produced.
-                    let before = u32::try_from(host.journal.len()).unwrap_or(u32::MAX);
                     let (ran, spent) =
                         one_exchange(&mut host, agents, &last, &state, &exchange, opened, members)?;
                     contacts = contacts.saturating_add(ran.calls);
@@ -666,8 +660,15 @@ pub(crate) fn drive_with(
                     // other: its calls run concurrently with each other and
                     // with nothing else. Charged at the journal as it now
                     // stands, which is what `one_exchange` hands its members.
-                    if ran.calls > 0 {
-                        shape.push(crate::cost::RoundShape::uniform(before, ran.calls));
+                    // Each asked member's own projected row count, recorded by
+                    // `exchange_round` as it went. Not the journal's length,
+                    // and not a uniform count either: private exchange rows
+                    // have audiences, so once any exist the callers in one
+                    // round stop reading the same thing as each other.
+                    if !ran.rows_read.is_empty() {
+                        shape.push(crate::cost::RoundShape {
+                            rows: ran.rows_read.clone(),
+                        });
                     }
                 }
                 continue;
