@@ -60,6 +60,7 @@ mod board;
 mod format;
 mod member;
 mod schedule;
+mod work;
 
 /// One channel: a desk id, its display name, and who sits on it.
 #[derive(Clone, Debug)]
