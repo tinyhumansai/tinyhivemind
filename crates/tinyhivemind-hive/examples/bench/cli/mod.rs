@@ -380,7 +380,8 @@ impl Options {
         // The policy is rebuilt once the room size is known, then any explicit
         // policy flag is applied over it, so `--agents` moves the quorum
         // threshold with the desk while `--quorum` still overrides it.
-        let args: Vec<String> = std::env::args().skip(1).collect();
+        let raw: Vec<String> = std::env::args().skip(1).collect();
+        let args = raw.clone();
         // The federation has its own noise default. A desk is only a
         // correlation boundary if its shared bias is legible *through* each
         // member's individual error: at the single-room default of ±90 the
