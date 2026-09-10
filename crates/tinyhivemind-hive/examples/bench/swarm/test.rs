@@ -373,7 +373,7 @@ fn planting_no_wrong_facts_leaves_the_truth_alone() {
     // The control for the test above: at zero noise nothing disqualifies the
     // answer, so a difference in the sweep is the noise and not the planting.
     let federation = federation();
-    let planted = federation.planted_with(0);
+    let planted = federation.planted_with(0, 7);
     assert!(
         !planted
             .agents
