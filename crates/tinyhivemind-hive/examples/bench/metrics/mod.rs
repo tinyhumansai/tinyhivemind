@@ -561,6 +561,5 @@ pub(crate) fn json_line(name: &str, totals: &Aggregate) -> String {
     line
 }
 
-
 #[cfg(test)]
 mod test;
