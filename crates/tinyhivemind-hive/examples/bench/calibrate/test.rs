@@ -44,7 +44,12 @@ fn the_two_prompt_probes_differ_only_in_how_many_rows_they_carry() {
 
     // Same skeleton on both sides of the transcript, so everything outside the
     // rows cancels in the subtraction.
-    let head = |prompt: &str| prompt.split("Shared attributed transcript:").next().map(str::to_owned);
+    let head = |prompt: &str| {
+        prompt
+            .split("Shared attributed transcript:")
+            .next()
+            .map(str::to_owned)
+    };
     assert_eq!(head(&short), head(&long));
     assert!(short.ends_with("Your one line:") && long.ends_with("Your one line:"));
 }
@@ -58,15 +63,15 @@ fn a_probe_is_built_from_the_prompt_a_live_seat_actually_gets() {
     // private-facts block and the protocol grammar are all inside the
     // intercept where they belong.
     let prompt = probe_prompt(PROBE_ROWS.0, PROBE_COMPLETION.0);
-    assert!(prompt.contains("You are @planner"), "no identity line: {prompt}");
+    assert!(
+        prompt.contains("You are @planner"),
+        "no identity line: {prompt}"
+    );
     assert!(
         prompt.contains("reverted once before"),
         "no private-facts block: {prompt}"
     );
-    assert!(
-        prompt.contains("!commit"),
-        "no protocol grammar: {prompt}"
-    );
+    assert!(prompt.contains("!commit"), "no protocol grammar: {prompt}");
     assert!(prompt.contains("Shared attributed transcript:"));
 }
 
