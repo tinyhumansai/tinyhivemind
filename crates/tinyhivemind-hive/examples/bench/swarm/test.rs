@@ -408,3 +408,101 @@ fn planting_no_wrong_facts_leaves_the_truth_alone() {
         "a true fact never names the truth",
     );
 }
+
+/// Regression for the referral answer dropping a fact clause on either hop.
+///
+/// `readings` and `facts` are parsed independently of each other by design —
+/// see `swarm/format.rs` — which means an `answer` built only from `readings`
+/// silently discards any `rules out` clause in what it is answering. That is
+/// exactly what forwarding and returning a referral both used to do, so
+/// `--evidence` over a referral (rather than a digest) measured nothing about
+/// a fact crossing a channel: `swarm` and `swarm°` were carrying discounted
+/// numeric opinions and nothing more.
+#[test]
+fn answer_forward_preserves_the_asking_desks_fact() {
+    let federation = federation();
+    let seat = federation.agents[0].clone();
+    let mut member = SwarmSim::new(&federation, seat);
+
+    // The question, as `ask` would have written it: the asking desk's own
+    // reading, and a fact it holds.
+    let question = incoming(
+        ReferralKind::Forward,
+        "platform",
+        "@#mobile We are about to back #a here. Platform reads #a at 40, #b at 100. \
+         Platform rules out #a.",
+    );
+    let answer = member.answer(&question, &[]).expect("answers");
+
+    assert!(
+        answer.contains("Platform rules out #a"),
+        "the asking desk's own fact must survive the forward hop: {answer}",
+    );
+    assert!(
+        answer.contains("Platform reads"),
+        "the asking desk's reading is unaffected by the fix: {answer}",
+    );
+}
+
+/// The companion regression: the far desk's fact, carried home on the return
+/// hop, must not be dropped either.
+#[test]
+fn answer_return_preserves_the_far_desks_fact() {
+    let federation = federation();
+    let seat = federation.agents[0].clone();
+    let mut member = SwarmSim::new(&federation, seat);
+
+    // What the far desk (Mobile) answered on the forward hop: its own
+    // reading and its own fact, exactly as `answer(Forward)` now writes it.
+    let carried_answer = incoming(
+        ReferralKind::Return,
+        "mobile",
+        "Mobile reads #a at 50, #b at 90. Mobile rules out #b.",
+    );
+    let answer = member.answer(&carried_answer, &[]).expect("answers");
+
+    assert!(
+        answer.contains("Mobile rules out #b"),
+        "the far desk's fact must survive the return hop: {answer}",
+    );
+    assert!(
+        answer.contains("Mobile reads"),
+        "the far desk's reading is unaffected by the fix: {answer}",
+    );
+}
+
+/// Regression for the free-information control pooling readings but not the
+/// facts a planted `--evidence` run adds.
+///
+/// `swarm::pooled` is the ceiling every bounded arm is measured against: it
+/// hands every desk every other desk's information for free. Before this fix
+/// it only ever imported numeric slates, so under `--evidence` a member
+/// pooled with the ceiling still held only the one fact planted on its own
+/// desk — the exact thing a real exchange (digest or referral) is supposed to
+/// beat it by *not* withholding.
+#[test]
+fn pooled_hands_over_every_other_desks_facts() {
+    let plain = federation();
+    let planted = plain.planted();
+    let result = pooled(&planted);
+
+    for (index, desk) in planted.desks.iter().enumerate() {
+        for member in &desk.members {
+            let Some(seat) = result.seat_of(member) else {
+                panic!("every planted member has a seat");
+            };
+            let held = &result.agents[seat].ruled_out;
+            for (other, other_desk) in planted.desks.iter().enumerate() {
+                if other == index {
+                    continue;
+                }
+                assert!(
+                    held.contains(&other_desk.decoy),
+                    "{member} pooled with the ceiling must hold {}'s fact about {}",
+                    other_desk.name,
+                    other_desk.decoy,
+                );
+            }
+        }
+    }
+}
