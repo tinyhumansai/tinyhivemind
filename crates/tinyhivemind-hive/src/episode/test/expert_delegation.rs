@@ -198,8 +198,8 @@ fn a_defer_chain_terminates_at_the_turn_budget_without_a_cap() {
         spent: 3,
         ..state()
     };
-    assert_eq!(
+    assert!(matches!(
         run(&room, &spent, &transcript, &policy),
-        HiveStep::Exhausted { spent: 3 },
-    );
+        HiveStep::Exhausted { spent: 3, .. },
+    ));
 }

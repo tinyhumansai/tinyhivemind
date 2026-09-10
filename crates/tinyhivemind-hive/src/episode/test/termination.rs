@@ -25,10 +25,10 @@ fn a_spent_budget_is_exhausted_and_authorizes_no_turn() {
         spent: 4,
         ..state()
     };
-    assert_eq!(
+    assert!(matches!(
         run(&room, &spent, &converging(), &policy),
-        HiveStep::Exhausted { spent: 4 },
-    );
+        HiveStep::Exhausted { spent: 4, .. },
+    ));
 }
 
 #[test]
@@ -38,10 +38,10 @@ fn a_zero_budget_never_authorizes_a_first_turn() {
         turn_budget: 0,
         ..EpisodePolicy::DEFAULT
     };
-    assert_eq!(
+    assert!(matches!(
         run(&room, &state(), &converging(), &policy),
-        HiveStep::Exhausted { spent: 0 },
-    );
+        HiveStep::Exhausted { spent: 0, .. },
+    ));
 }
 
 #[test]
@@ -65,10 +65,10 @@ fn an_episode_terminates_within_its_budget() {
         assert_eq!(turn.next_state.spent, expected);
         state = turn.next_state;
     }
-    assert_eq!(
+    assert!(matches!(
         run(&room, &state, &transcript, &policy),
-        HiveStep::Exhausted { spent: 5 },
-    );
+        HiveStep::Exhausted { spent: 5, .. },
+    ));
 }
 
 #[test]
@@ -104,8 +104,8 @@ fn the_budget_check_bounds_the_spend_before_it_can_overflow() {
 
     // ...and at the ceiling the budget check fires first, so the addition is
     // never reached. That is why there is no overflow error to return.
-    assert_eq!(
+    assert!(matches!(
         run(&room, &turn.next_state, &converging(), &policy),
-        HiveStep::Exhausted { spent: u32::MAX },
-    );
+        HiveStep::Exhausted { spent: u32::MAX, .. },
+    ));
 }
