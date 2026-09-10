@@ -244,11 +244,12 @@ pub(super) fn apply_live_flag(
         "--api-base" => {
             if let Some(base) = args.next() {
                 options.api_base = Some(base);
-                // `--swarm --api-base` drives a federation rather than one
-                // room, so the swarm mode keeps the floor.
-                if !matches!(options.mode, Mode::Swarm) {
-                    options.mode = Mode::Live;
-                }
+                // `--swarm --api-base` drives a federation, and
+                // `--calibrate --api-base` measures the cost model, rather
+                // than either running one room -- `set_live_floor` only
+                // promotes the parser's own default, so both modes keep the
+                // floor regardless of argument order.
+                set_live_floor(options);
             }
         }
         "--api-key-env" => {
