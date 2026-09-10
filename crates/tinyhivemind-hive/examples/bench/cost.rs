@@ -166,14 +166,21 @@ impl CostModel {
     pub(crate) fn price(&self, shape: &[RoundShape]) -> Cost {
         let mut cost = Cost::ZERO;
         for round in shape {
-            cost.turns = cost.turns.saturating_add(u64::from(round.turns));
+            let width = u64::try_from(round.rows.len()).unwrap_or(u64::MAX);
+            cost.turns = cost.turns.saturating_add(width);
             cost.rounds = cost.rounds.saturating_add(1);
-            cost.prompt = cost
-                .prompt
-                .saturating_add(self.prompt_tokens(round.rows) * u64::from(round.turns));
+            // Priced per turn rather than `rows.first() * width`: turns in
+            // one round need not have read the same number of rows. A blind
+            // turn withholds its peers' rows from this same round, and an
+            // exchange round asks members whose own history differs, so the
+            // uniform case (every turn reading the same count) is the common
+            // one rather than the only one.
+            for rows in &round.rows {
+                cost.prompt = cost.prompt.saturating_add(self.prompt_tokens(*rows));
+            }
             cost.completion = cost
                 .completion
-                .saturating_add(u64::from(self.tokens_per_turn) * u64::from(round.turns));
+                .saturating_add(u64::from(self.tokens_per_turn) * width);
             cost.wall_ms = cost.wall_ms.saturating_add(self.turn_ms());
         }
         cost
