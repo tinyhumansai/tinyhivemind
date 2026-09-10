@@ -77,6 +77,7 @@ fn every_step_pins_its_tagged_wire_form() {
                 refuted_by: Vec::new(),
                 support: 900,
             }],
+            visibility: Visibility::Blind,
         })
         .expect("serializes"),
         serde_json::json!({
@@ -89,6 +90,7 @@ fn every_step_pins_its_tagged_wire_form() {
                 "refuted_by": [],
                 "support": 900,
             }],
+            "visibility": "blind",
         }),
     );
     assert_eq!(
