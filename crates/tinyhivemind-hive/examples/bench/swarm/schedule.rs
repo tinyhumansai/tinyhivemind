@@ -224,9 +224,10 @@ pub(super) fn concurrent_pass(
         }
     }
 
-    // Phase three, concurrent: every turn of every desk's round is filled at
-    // the same time. The width is now two-dimensional — `desks x round_width`
-    // model calls in flight — and `--jobs` is what bounds it.
+    // Phase three, concurrent: one job per desk, filled at the same time.
+    // `--jobs` bounds the desks in flight; a desk's own round is filled in
+    // order inside its worker, so the calls a pass makes and the calls
+    // outstanding at once are different numbers.
     // A desk either answers a referral or takes a round, never both, so one
     // work item per desk covers the whole federation's model calls.
     let spoken: Vec<Spoken> = {

@@ -141,9 +141,11 @@ a bounded *round* of turns that may run at once, on the argument that members
 writing simultaneously cannot read each other — so a concurrent round is a blind
 round. **Across desks** the host decides, and that is what the scheduler here
 and `--jobs` are: separate episodes, separate journals, separate budgets, and
-only the waiting overlapped. The two multiply — `desks x round_width` calls in
-flight — and neither one is the other's business. What this work did *not* do is
-widen a round; what ADR 0014 did *not* do is make two host schedules agree.
+only the waiting overlapped. `--jobs` bounds desks in flight, not calls — a
+worker fills one desk's whole round in order — so widening a round shortens a
+pass rather than putting more calls in the air. Neither width is the other's
+business: what this work did *not* do is widen a round, and what ADR 0014 did
+*not* do is make two host schedules agree.
 
 ## 4. The room-size hot loops were quadratic
 
