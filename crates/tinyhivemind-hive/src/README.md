@@ -11,6 +11,7 @@ public surface; this file is only the index.
 | [`episode/`](episode/README.md) | The pure state machine: given a transcript, who speaks next, and has the room finished. |
 | [`error/`](error/README.md) | The crate-wide `Error` and `Result<T>`. |
 | [`exchange/`](exchange/README.md) | Private, off-floor contact between turns that spends no floor and starts no turn. |
+| [`horizon/`](horizon/README.md) | Where a fold is measured to, and whether distance counts every row the host wrote or only the rows the fold reads. |
 | [`quorum/`](quorum/README.md) | Whether a topic has carried, and cross-inhibition that silences an advocate rather than debiting an option. |
 | [`salience/`](salience/README.md) | Recency decay, importance, and relevance, folded into one comparable score. |
 | [`trace/`](trace/README.md) | The stigmergic grammar: what a message deposits, and how it is read back. |
