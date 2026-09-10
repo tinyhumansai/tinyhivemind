@@ -190,3 +190,6 @@ impl Totals {
         self.ladder_directed.merge(&other.ladder_directed);
     }
 }
+
+#[cfg(test)]
+mod test;
