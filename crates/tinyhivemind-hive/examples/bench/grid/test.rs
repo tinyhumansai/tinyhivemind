@@ -263,13 +263,54 @@ fn best_credits_every_arm_tied_for_the_lead() {
         }
     };
     let mut led: Vec<[u32; 4]> = ARMS.iter().map(|_| [0; 4]).collect();
-    best(&rows, &mut led, 0, value_of, true);
+    best(&rows, &mut led, 0, value_of, true, true);
     let ladder = ARMS.iter().position(|&name| name == "ladder").unwrap();
     let hive_plus = ARMS.iter().position(|&name| name == "hive+").unwrap();
     let vote = ARMS.iter().position(|&name| name == "vote").unwrap();
     assert_eq!(led[ladder][0], 1, "the tied leader must be credited");
     assert_eq!(led[hive_plus][0], 1, "every tied leader must be credited");
     assert_eq!(led[vote][0], 0, "a trailing arm must not be credited");
+}
+
+#[test]
+fn every_arm_leads_on_quality_when_every_arm_scores_zero() {
+    // A quality of 0% is a real measurement -- every arm missing on a hard
+    // cell -- and on such a cell they are all tied leaders. Filtering zero the
+    // way an empty-sample latency is filtered credited nobody, which is the
+    // one reading that is certainly wrong.
+    let rows: Vec<CellRow> = ARMS
+        .iter()
+        .map(|&name| CellRow {
+            name,
+            totals: Aggregate::priced_at(CostModel::DEFAULT),
+        })
+        .collect();
+    let mut led: Vec<[u32; 4]> = ARMS.iter().map(|_| [0; 4]).collect();
+    best(&rows, &mut led, 0, |_| 0.0, true, true);
+    assert!(
+        led.iter().all(|counts| counts[0] == 1),
+        "every arm tied at zero quality must be credited: {led:?}"
+    );
+}
+
+#[test]
+fn an_arm_that_never_ran_does_not_lead_on_speed() {
+    // The other side of the same rule: a latency, a throughput or a token
+    // count of zero means the sample was empty, and an arm that never ran is
+    // not the fast one.
+    let rows: Vec<CellRow> = ARMS
+        .iter()
+        .map(|&name| CellRow {
+            name,
+            totals: Aggregate::priced_at(CostModel::DEFAULT),
+        })
+        .collect();
+    let mut led: Vec<[u32; 4]> = ARMS.iter().map(|_| [0; 4]).collect();
+    best(&rows, &mut led, 1, |_| 0.0, false, false);
+    assert!(
+        led.iter().all(|counts| counts[1] == 0),
+        "an empty sample must not be credited as fastest: {led:?}"
+    );
 }
 
 #[test]
