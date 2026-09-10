@@ -17,7 +17,9 @@ use tinyhivemind_hive::referral::ReferralKind;
 /// values, and the rest carry the cheapest value that type-checks.
 fn incoming(kind: ReferralKind, from_desk: &str, content: &str) -> Referral {
     Referral {
-        key: DispatchKey { trigger_sequence: 0 },
+        key: DispatchKey {
+            trigger_sequence: 0,
+        },
         kind,
         source_id: "asker".to_owned(),
         target_id: "answerer".to_owned(),
