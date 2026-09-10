@@ -63,6 +63,12 @@ effect the old `cost/ep` column — which counted turns — could never show.
 
 ## What it does not model
 
+**Nothing outside a turn.** Every model call a protocol makes is priced, the
+responder ladder's router call included — that one is a round of its own,
+because nobody can answer until the router has said who answers. What is *not*
+priced is anything a host does that is not a model call: retries, tool calls a
+seat makes on its own, and the host's own bookkeeping.
+
 **Queueing.** Every round is priced as though the host had a seat free for
 every turn the round authorized. `conc` is the width the *protocol* asked for,
 not the width a particular deployment could afford. A host with fewer seats
@@ -139,7 +145,7 @@ tokens a point of quality costs — because tokens do not scale with them.
 
 The pair that can genuinely reorder is `--tokens-per-row` against
 `--prompt-base`. Arms differ sharply in how much transcript their turns read: a
-one-turn `ladder` reads one row, and the last turn of a long deliberation reads
+`ladder` turn reads one row, and the last turn of a long deliberation reads
 everything before it. Raise the per-row cost and the deep arms get relatively
 more expensive; raise the base and the *many-turn* arms do, deep and wide
 alike. An ordering on **tok/ep** or **tok/s** that flips between those two

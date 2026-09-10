@@ -103,7 +103,7 @@ Every arm decides the same rooms from the same private evaluations.
 
 | arm | what it is |
 | --- | --- |
-| `ladder` | Today's behaviour: `responder_plan` in `tinyhivemind` selects one responder off the real ladder and that agent answers alone. One turn. |
+| `ladder` | Today's behaviour: `responder_plan` in `tinyhivemind` selects one responder off the real ladder and that agent answers alone. One deliberation turn — but two model calls when the ladder takes the `Select` rung, since the router has to be asked who answers before anybody does, and the two are sequential. |
 | `vote` | The honest matched-budget control — independent answers decided by plurality, nobody seeing anybody. It is given the *whole* budget, more turns than the deliberation actually spends. |
 | `hive` | A deliberation episode at `EpisodePolicy::DEFAULT`. |
 | `hive+` | The same, at the tuned policy: a majority quorum that is never unanimity, and three turns of budget per member. |
@@ -238,7 +238,7 @@ so the benchmark measures the protocol rather than a formatter.
 
 ```text
 arm                quality     speed       thru    conc    tok/ep     tok/s
-ladder               57.6%     2.6s       1.4k     1.0       822       320
+ladder               57.6%     5.1s        701     1.0      1.6k       320
 vote                 78.5%     2.6s       1.4k    15.0     12.3k      4.8k
 hive                 73.3%    15.8s        228     1.0      5.3k       336
 hive+                82.1%    17.3s        208     1.0      6.0k       345
@@ -247,7 +247,7 @@ hive+ev              55.9%    26.4s        136     1.0     10.4k       393
 hive+dir             82.1%    17.3s        208     1.0      6.0k       345
 hive+defer           82.1%    17.3s        208     1.0      6.0k       345
 hive+dir+defer       82.1%    17.3s        208     1.0      6.0k       345
-ladder+dir           49.5%     2.6s       1.4k     1.0       822       320
+ladder+dir           49.5%     5.1s        701     1.0      1.6k       320
 hive+rounds          82.3%    34.3s        105     3.0     39.8k      1.2k
 hive+pooled          91.5%    15.6s        231     1.0      5.2k       335
 hive+wide            77.1%     8.7s        415     2.3      6.9k       798
@@ -255,7 +255,9 @@ hive+blind           82.1%     9.6s        374     1.8      6.0k       621
 ```
 
 The tuned deliberation beats the matched-budget control by 3.6 points at half
-the budget, and one responder off the ladder reaches 57.6%. The quorum
+the budget, and one responder off the ladder reaches 57.6% — for two model
+calls, not one, because the ladder has to ask a router who should answer
+before anybody does. The quorum
 threshold and the turn budget decide that, and the blind round is worth 24
 points on its own.
 
