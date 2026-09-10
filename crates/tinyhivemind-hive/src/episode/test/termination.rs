@@ -209,6 +209,10 @@ fn a_policy_for_a_room_scales_every_absolute_bound_with_it() {
     assert_eq!(policy.quorum.threshold, 129);
     assert_eq!(policy.quorum.window, 768);
     assert_eq!(policy.weights.half_life, 256);
+    // The blind round is the whole room at once; a revealed one stays at one,
+    // which is the shipping default's own rule rather than a new opinion.
+    assert_eq!(policy.round_width, 256);
+    assert_eq!(policy.revealed_width, 1);
 
     // A budget above the roster, so the blind round can always complete —
     // which is the failure `DEFAULT` produces on any desk above a dozen.
@@ -230,6 +234,11 @@ fn a_policy_for_a_small_room_keeps_the_defaults_it_should() {
     assert_eq!(policy.weights.half_life, SalienceWeights::DEFAULT.half_life);
     // The floor keeps a tiny room able to open, support and record.
     assert_eq!(policy.turn_budget, 6);
+    assert_eq!(policy.round_width, 2);
+
+    // A round is never zero-width: a policy that authorizes no turns would
+    // make the episode unable to advance rather than merely narrow.
+    assert_eq!(EpisodePolicy::for_room(0).round_width, 1);
 
     // A one-member desk cannot reach a threshold of two, and the constructor
     // does not pretend otherwise: `members - 1` is zero, so the floor of two
