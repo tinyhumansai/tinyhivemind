@@ -197,7 +197,8 @@ bias reinforce it. A fact is **subtracted** — a flat discount on that option,
 whoever said it and however many peers disagree — so it cannot be diluted and a
 shared bias cannot outvote it.
 
-It costs a clause, not a call: the same asks, the same digests, the same turns.
+It costs a clause, not a call: the same asks, the same digests, and the same
+turn budget.
 
 `--fact-noise N` plants `N` per mille of those facts **wrong**, naming the
 truth instead of a decoy. That is the other half of the experiment: the
