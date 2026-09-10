@@ -17,9 +17,8 @@ cargo run --release -p tinyhivemind-hive --example bench -- \
   --agent-cmd "opencode run --pure -m openrouter/~openai/gpt-mini-latest"
 ```
 
-Every sample loop runs across cores; `--jobs` bounds it and changes wall clock
-and nothing else. Running at a thousand agents — the size ceilings, the
-`--ask-cap` knob that decides whether a large federation decides anything, and
+Running at a thousand agents — `--jobs`, the size ceilings, the `--ask-cap` and
+`--digest` knobs that decide whether a large federation decides anything, and
 what a big room actually costs — is [`SCALE.md`](SCALE.md).
 
 This file documents the harness. The findings it produces, and what they do and
