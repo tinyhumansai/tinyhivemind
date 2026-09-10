@@ -393,10 +393,12 @@ pub(crate) fn run_swarm(
     let report = drive_swarm(
         &channels,
         &mut members,
-        policy,
-        referrals,
-        asking,
-        1,
+        &SwarmRun {
+            policy,
+            referrals,
+            asking,
+            jobs: 1,
+        },
         task,
         keep_trace,
     )?;

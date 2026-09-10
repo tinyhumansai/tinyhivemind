@@ -360,8 +360,10 @@ fn live_federation(options: &Options, scenario: &Scenario) -> Result<(), String>
     let report = swarm::drive_swarm(
         &channels,
         &mut members,
-        &policy,
-        swarm_referrals(),
+        &swarm::SwarmRun {
+            policy: &policy,
+            referrals: swarm_referrals(),
+            asking:
         // A live federation asks off the floor too, and for the same reason a
         // simulated one does: a desk that spends its authorized turns asking
         // has none left to decide with. `--ask-cap 0` puts it back on the
