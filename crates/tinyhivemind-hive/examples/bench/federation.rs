@@ -290,9 +290,30 @@ impl Federation {
             let cure = if wrong > 0 && draws.below(1_000) < wrong {
                 truth.clone()
             } else {
-                decoy
+                decoy.clone()
             };
-            let holder = (desk + 1) % count.max(1);
+            // The next physical desk only ever a *different* desk, never a
+            // different blind spot: when decoys collide — every desk shares
+            // one at `--topics 2`, or the wraparound repeats one whenever
+            // `desks` outruns `topics - 1` and `decoys_distinct` is already
+            // `false` — the "next" desk can hold exactly the decoy it is
+            // itself biased toward, and curing it there is curing a desk's
+            // own blind spot on its own floor: no channel to cross, and the
+            // whole point of *where* a fact is planted evaporates. So the
+            // search walks forward from the next desk for one whose own
+            // decoy actually differs from the one being disqualified, and
+            // plants nothing for this desk when no such holder exists —
+            // which happens only when every desk in the federation shares
+            // the same blind spot, the `decoys_distinct: false` case this
+            // module already reports rather than quietly mismeasures.
+            let Some(holder) = (1..count).map(|step| (desk + step) % count).find(|&candidate| {
+                federation
+                    .desks
+                    .get(candidate)
+                    .is_some_and(|held| held.decoy != decoy)
+            }) else {
+                continue;
+            };
             let Some(seat) = federation
                 .desks
                 .get(holder)
