@@ -268,15 +268,21 @@ fn summarise(every: &[(Cell, Vec<CellRow>)]) {
     let mut led: Vec<[u32; 4]> = ARMS.iter().map(|_| [0; 4]).collect();
     for (_, rows) in every {
         // Quality and throughput are won by the largest; speed and tokens by
-        // the smallest. An arm that decided nothing is not a fast arm, so a
-        // zero latency -- which only an empty sample produces -- never wins.
-        best(rows, &mut led, 0, |row| row.totals.accuracy(), true);
-        best(rows, &mut led, 1, |row| row.totals.latency_ms(), false);
+        // the smallest.
+        //
+        // Quality alone counts a zero as a measurement: an arm that decided
+        // nothing right on a hard cell really did score 0%, and if every arm
+        // did then every arm led. The other three are rates over a sample,
+        // where a zero can only mean the sample was empty -- and an arm that
+        // never ran is not the fast one.
+        best(rows, &mut led, 0, |row| row.totals.accuracy(), true, true);
+        best(rows, &mut led, 1, |row| row.totals.latency_ms(), false, false);
         best(
             rows,
             &mut led,
             2,
             |row| row.totals.tokens_per_episode(),
+            false,
             false,
         );
         best(
@@ -285,6 +291,7 @@ fn summarise(every: &[(Cell, Vec<CellRow>)]) {
             3,
             |row| row.totals.episodes_per_hour(),
             true,
+            false,
         );
     }
     for (name, counts) in ARMS.iter().zip(&led) {
