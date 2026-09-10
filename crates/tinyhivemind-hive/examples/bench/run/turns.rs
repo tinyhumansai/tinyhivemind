@@ -254,6 +254,14 @@ pub(super) struct Round {
     /// Members actually asked for a line — the model calls this round paid for,
     /// whether or not the member had anything to say.
     pub(super) calls: u32,
+    /// Rows each asked member could actually read, one entry per call.
+    ///
+    /// Taken from that member's own projection rather than from the journal's
+    /// length. Private exchange rows have audiences, so once any exist the
+    /// callers in one round no longer read the same count as each other — and
+    /// a uniform charge would bill every caller for rows hidden from it while
+    /// missing rows visible to a later one.
+    pub(super) rows_read: Vec<u32>,
     /// Private rows appended.
     pub(super) rows: u32,
     /// The exchange state to carry into the next round.
@@ -351,6 +359,8 @@ fn exchange_round(
         };
         let started = Instant::now();
         let visible = project_for(&as_member, &host.journal);
+        ran.rows_read
+            .push(u32::try_from(visible.len()).unwrap_or(u32::MAX));
         *library += started.elapsed();
         let Some(agent) = agents.iter_mut().find(|agent| agent.id() == member) else {
             continue;
