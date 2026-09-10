@@ -67,8 +67,28 @@ fn every_step_pins_its_tagged_wire_form() {
         serde_json::json!({ "step": "idle" }),
     );
     assert_eq!(
-        serde_json::to_value(HiveStep::Exhausted { spent: 12 }).expect("serializes"),
-        serde_json::json!({ "step": "exhausted", "spent": 12 }),
+        serde_json::to_value(HiveStep::Exhausted {
+            spent: 12,
+            standings: vec![TopicStanding {
+                topic: "ship".into(),
+                supporters: vec!["planner".into()],
+                silenced: Vec::new(),
+                refuted_by: Vec::new(),
+                support: 900,
+            }],
+        })
+        .expect("serializes"),
+        serde_json::json!({
+            "step": "exhausted",
+            "spent": 12,
+            "standings": [{
+                "topic": "ship",
+                "supporters": ["planner"],
+                "silenced": [],
+                "refuted_by": [],
+                "support": 900,
+            }],
+        }),
     );
     assert_eq!(
         serde_json::to_value(HiveStep::Deadlocked {
