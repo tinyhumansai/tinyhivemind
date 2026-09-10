@@ -12,8 +12,15 @@ cargo run --release -p tinyhivemind-hive --example bench -- --swarm # several de
 cargo run --release -p tinyhivemind-hive --example bench -- \
   --scale-sweep --hidden-profile          # room size against channel topology
 cargo run --release -p tinyhivemind-hive --example bench -- \
+  --swarm --desks 100 --per-desk 10 --topics 128   # a thousand agents
+cargo run --release -p tinyhivemind-hive --example bench -- \
   --agent-cmd "opencode run --pure -m openrouter/~openai/gpt-mini-latest"
 ```
+
+Every sample loop runs across cores; `--jobs` bounds it and changes wall clock
+and nothing else. Running at a thousand agents — the size ceilings, the
+`--ask-cap` knob that decides whether a large federation decides anything, and
+what a big room actually costs — is [`SCALE.md`](SCALE.md).
 
 This file documents the harness. The findings it produces, and what they do and
 do not claim, are in [the benchmark write-up](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks).
