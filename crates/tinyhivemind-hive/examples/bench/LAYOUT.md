@@ -54,5 +54,6 @@ resolves it to `sim/mod.rs` transparently.
 | `LIVE.md` | live rooms: the prompt, the scenario format, and the CLI and HTTP backends |
 | `HORIZON.md` | what a task with a history costs, and whether a room or a soloist pays less |
 | `DEPTH.md` | the two cost columns — depth beside width — and what the concurrency arms scored |
+| `SCALE.md` | running the harness at a thousand agents: `--jobs`, the size ceilings, `--ask-cap`, `--digest` and `--distance` |
 | `CONTEXT.md` | the context-budget window model, and what a bounded prompt does and does not change about the arms above |
 | `rng.rs` | a seeded `SplitMix64`, so every run reproduces |
