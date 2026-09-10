@@ -461,3 +461,6 @@ fn plurality(tally: &[(&TopicId, u32)]) -> Option<TopicId> {
     }
     Some(leader.0.clone())
 }
+
+#[cfg(test)]
+mod test;
