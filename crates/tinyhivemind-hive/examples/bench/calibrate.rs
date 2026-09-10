@@ -207,10 +207,10 @@ fn probe_prompt(rows: usize, completion: u32) -> String {
         // `write!` into a `String` cannot fail, and the harness may not
         // `unwrap` -- so the result is dropped explicitly rather than
         // silently, which is also what the lint asks for.
-        let _ = write!(
+        let _ = writeln!(
             prompt,
             "[{row}] alex: !propose stage — the staged rollout limits blast radius \
-             and we can halt it at any ring.\n"
+             and we can halt it at any ring."
         );
     }
     let _ = write!(
