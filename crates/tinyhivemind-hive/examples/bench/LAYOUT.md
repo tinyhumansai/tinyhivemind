@@ -20,7 +20,9 @@ resolves it to `sim/mod.rs` transparently.
 | `cli/flags.rs` | the per-family flag handlers `Options::parse` delegates to, including `apply_mode_flag` and the precedence between the flags that select what a run does |
 | `cli/test.rs` | unit tests for CLI flag parsing |
 | `policy.rs` | `default_policy`, `tuned_policy`, and the delegation-arm policy variants built from it |
-| `compare.rs` | the simulated multi-arm comparison engine: `compare`, `Totals`, `run_arms`, `endings`, and the cost table |
+| `compare/mod.rs` | the simulated multi-arm comparison engine: `compare`, `run_arms`, the check-arm runners, `endings`, and the cost table |
+| `compare/totals.rs` | `Totals` — every arm's running aggregate, built at a chosen cost model and merged in room order |
+| `compare/totals/test.rs` | that the selected cost model reaches every arm, `ladder_directed` included, which sits outside `arms_mut`'s array |
 | `backend.rs` | seat/backend configuration shared by both live drivers: API keys, HTTP config, seat model and command resolution, usage accounting |
 | `live_single.rs` | driving one live desk or episode through a real agent |
 | `live_swarm/mod.rs` | driving a live federation of desks through real agents |
@@ -41,8 +43,10 @@ resolves it to `sim/mod.rs` transparently.
 | `swarm/schedule.rs` | the two passes over a federation's desks — one desk at a time, or every desk's round in flight at once — and why they are not equivalent |
 | `swarm/test.rs` | the digest's cost, its bound, and the property that keeps a published reading out of a foreign desk's standings |
 | `run/mod.rs` | the host: a journal, a roster, and the step loop — `Host`, `Ending`, and the episode entry points |
-| `run/{turns,scoring}.rs` | per-turn machinery (audience, appending a turn, one exchange), then `EpisodeReport`, `Tally`, and an episode's accounting |
-| `arms.rs` | the `ladder`, `vote`, `merged` and federated controls |
+| `run/turns.rs` | per-turn machinery: audience, appending a turn, one exchange round and the per-caller row counts it records |
+| `run/scoring.rs` | `EpisodeReport`, `Tally`, `Recorded`, and `finished` — what an episode came to, folded out of the journal once nobody speaks again |
+| `arms.rs` | the `ladder`, `vote`, `merged` and federated controls, and what each is charged — including the router's own call on the `Select` rung |
+| `arms/test.rs` | the controls' pricing: that a routed ladder pays for the asking and that its router's prompt grows with the room |
 | `scale.rs` | `--scale-sweep`: room size against channel topology, one table per axis |
 | `horizon/mod.rs` | the chain ladder: a task with several stages, the arms that decide one, and the soloist controls |
 | `horizon/test.rs` | its unit tests, promoted out to match the house convention |
@@ -52,11 +56,13 @@ resolves it to `sim/mod.rs` transparently.
 | `parallel.rs` | spreading the per-room loops across cores: `map_in_order`, which returns results in *input* order whatever order the threads finish in, and `default_jobs` |
 | `parallel/test.rs` | that ordering guarantee, at every `--jobs` value and under deliberately reversed completion order |
 | `metrics/test.rs` | that merging two samples equals folding one, which is what lets the loops above run in parallel without moving a number |
-| `metrics/mod.rs` | aggregation, formatting, and the confidence-interval, bootstrap and rank-correlation statistics: `Aggregate` and the printed/JSON tables |
+| `metrics/mod.rs` | aggregation and the confidence-interval, bootstrap and rank-correlation statistics: `Aggregate` and the fold that builds one |
+| `metrics/tables.rs` | the printed and `--json` tables themselves: the six-column headline row, the library-cost row beside it, the detail and cost tables, and the paired-difference lines |
 | `metrics/{format,stats}.rs` | formatting helpers for those tables, then the small numeric statistics helpers (percentile, rank correlation) |
 | `live/mod.rs` | the shared prompt state both live backends assemble: `AgentPrompt`, plus the external agent CLI backend and the solo poll |
 | `live/{agent,desk}.rs` | `LiveAgent`, driving one seat through a CLI subprocess; `LiveDeskAgent`, driving one seat as a member of a swarm desk |
-| `http.rs` | the direct-HTTP backend: the same prompt state over `curl`, and its usage table |
+| `http.rs` | the direct-HTTP backend: the same prompt state over `curl`, the two wire formats, `ask` (which retries) and `ask_once` (which does not, for calibration probes) |
+| `http/usage.rs` | what a run spent and how a seat's total reaches the table: `Usage`, `UsageHandle`, and `usage_of` |
 | `scenario.rs` | the scenario file format, the briefs, and the recorded answer |
 | `scenarios/` | the scenario files themselves: seven hidden profiles across incident triage, logistics, payments fraud and laboratory measurement |
 | `scenario/test.rs` | that every shipped scenario parses, records a truth that is on offer, and gives every member something of its own |
