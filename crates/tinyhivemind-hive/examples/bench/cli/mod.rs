@@ -15,7 +15,10 @@ use crate::grid::Axes;
 use crate::http::{Thinking, Wire};
 use crate::policy::tuned_policy;
 use crate::sim::Expertise;
-use flags::{apply_expertise_flag, apply_live_flag, apply_scale_flag, flag_number, next_number};
+use flags::{
+    apply_expertise_flag, apply_live_flag, apply_mode_flag, apply_scale_flag, flag_number,
+    next_number,
+};
 use tinyhivemind_hive::EpisodePolicy;
 
 /// How much a desk overrates its own decoy, by default.
@@ -447,16 +450,6 @@ impl Options {
                     options.bias = i32::try_from(next_number(&mut args).unwrap_or(SWARM_BIAS_U32))
                         .unwrap_or(SWARM_BIAS);
                 }
-                "--swarm" => options.mode = Mode::Swarm,
-                "--trace" => {
-                    options.trace = true;
-                    // `--swarm --trace` prints a federation transcript rather
-                    // than a single room's, so the swarm mode keeps the floor.
-                    if !matches!(options.mode, Mode::Swarm) {
-                        options.mode = Mode::Trace;
-                    }
-                }
-                "--sweep" => options.mode = Mode::Sweep,
                 "--agent-cmd" => {
                     if let Some(command) = args.next() {
                         options.agent = Some(command);
@@ -470,9 +463,6 @@ impl Options {
                 "--scenario" => options.scenario = args.next(),
                 "--repeat" => options.repeat = next_number(&mut args).unwrap_or(1).max(1),
                 "--json" => options.json = true,
-                "--stats-check" => options.mode = Mode::StatsCheck,
-                "--grid" => options.mode = Mode::Grid,
-                "--calibrate" => options.mode = Mode::Calibrate,
                 // Everything below is either the expertise surface or the
                 // live-backend one: a CLI or HTTP seat, per-seat overrides,
                 // and the usage table. Split into their own functions so
@@ -488,7 +478,8 @@ impl Options {
                         options.mode = Mode::Grid;
                         continue;
                     }
-                    let known = options.cost_model.set(&flag, &mut args)?
+                    let known = apply_mode_flag(&mut options, &flag)
+                        || options.cost_model.set(&flag, &mut args)?
                         || apply_scale_flag(&mut options, &flag, &mut args)?
                         || apply_expertise_flag(&mut options, &flag, &mut args)
                         || apply_live_flag(&mut options, &flag, &mut args);

@@ -301,3 +301,34 @@ pub(super) fn flag_number(args: &[String], flag: &str) -> Option<u32> {
     let at = args.iter().position(|argument| argument == flag)?;
     args.get(at + 1)?.parse().ok()
 }
+
+/// Apply one of the flags that select what the run *does* rather than how it
+/// is configured.
+///
+/// Returns whether `flag` was one of them, on the same contract as
+/// [`apply_expertise_flag`]. Grouped here because they are the one family of
+/// flags that are mutually exclusive in effect but not in spelling: several of
+/// them are commonly given together (`--swarm --trace`), and the precedence
+/// between them is a rule rather than a last-one-wins accident. Keeping that
+/// rule in one function is what makes it reviewable.
+///
+/// The rule: `--swarm` selects a federation and keeps the floor against
+/// `--trace`, which then prints a federation transcript rather than a single
+/// room's. Everything else is last-one-wins.
+pub(super) fn apply_mode_flag(options: &mut Options, flag: &str) -> bool {
+    match flag {
+        "--swarm" => options.mode = Mode::Swarm,
+        "--sweep" => options.mode = Mode::Sweep,
+        "--stats-check" => options.mode = Mode::StatsCheck,
+        "--grid" => options.mode = Mode::Grid,
+        "--calibrate" => options.mode = Mode::Calibrate,
+        "--trace" => {
+            options.trace = true;
+            if !matches!(options.mode, Mode::Swarm) {
+                options.mode = Mode::Trace;
+            }
+        }
+        _ => return false,
+    }
+    true
+}
