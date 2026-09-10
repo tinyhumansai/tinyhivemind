@@ -264,13 +264,23 @@ pub(crate) fn live_episode(options: &Options) -> Result<(), String> {
 ///
 /// # Errors
 ///
-/// Returns a read or parse failure for the directory or any scenario in it. A
-/// scenario that *fails to parse* stops the run rather than being skipped: a
-/// silently ignored fixture is a corpus that quietly shrinks.
+/// Returns a read or parse failure for the directory, for any entry in it, or
+/// for any scenario. A scenario that fails to *read* or to *parse* stops the
+/// run rather than being skipped: a silently ignored fixture is a corpus that
+/// quietly shrinks, and a run that reports a corpus it did not finish is worse
+/// than one that refuses.
 fn live_corpus(options: &Options, directory: &str) -> Result<(), String> {
-    let mut paths: Vec<std::path::PathBuf> = std::fs::read_dir(directory)
+    // Every entry is resolved before any is filtered, and a failure to read
+    // one stops the run. `read_dir` succeeding does not mean iterating it
+    // will, and dropping the entries that fail is exactly the quietly
+    // shrinking corpus this function's own contract refuses.
+    let entries: Vec<std::fs::DirEntry> = std::fs::read_dir(directory)
         .map_err(|error| format!("could not read {directory}: {error}"))?
-        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("could not read an entry of {directory}: {error}"))?;
+    let mut paths: Vec<std::path::PathBuf> = entries
+        .into_iter()
+        .map(|entry| entry.path())
         .filter(|path| path.extension().is_some_and(|kind| kind == "txt"))
         .collect();
     paths.sort();
