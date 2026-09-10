@@ -347,8 +347,8 @@ heard every other. Outside that window the experiment measures nothing, which
 | arm | what it is |
 | --- | --- |
 | `siloed` | The same desks, members and budgets, with referrals off. A desk can only talk to itself. |
-| `swarm` / `swarm°` / `swarm◦` | The same, with referrals on: two hops, desk mentions and returns. `swarm°` asks **off the floor** under `--ask-cap` rather than spending the authorized turn — what keeps a federation above eight desks deciding at all — and `swarm◦` also publishes each desk's reading to every channel under `--digest`, the only bounded arm left standing once desks share blind spots. See [`SCALE.md`](SCALE.md#correlated-desks-and---digest). |
-| `pooled` | The ceiling control. Every desk is handed every other desk's readings *for free* — no turn, no referral, no channel crossed — and then deliberates siloed. |
+| `swarm` / `swarm°` / `swarm◦` | The same, with referrals on: two hops, desk mentions and returns. `swarm°` asks **off the floor** under `--ask-cap` rather than spending the authorized turn — what keeps a federation above eight desks deciding at all — and `swarm◦` also publishes each desk's reading to every channel under `--digest`, the only bounded arm left standing once desks share blind spots. See [`SCALE.md`](SCALE.md#correlated-desks-and---digest). Under `--evidence` the same arms also carry what a desk can **disqualify**, not only what it scores — which is what closes `swarm◦`'s gap to `pooled`. See [`SCALE.md`](SCALE.md#--evidence-what-a-channel-carries-not-how-wide-it-is). |
+| `pooled` | The ceiling control. Every desk is handed every other desk's readings — and, under `--evidence`, facts — *for free*: no turn, no referral, no channel crossed. Then deliberates siloed. |
 | `merged` | Every member of every desk on one desk, given the whole federation's budget. The control that removes the boundary rather than crossing it. |
 | `vote` | One independent answer per member, decided by plurality. |
 
@@ -452,9 +452,9 @@ numbers and why the sweep reports an ordering rather than a value.
 | `--trace` | print one episode turn by turn |
 | `--sweep` | score the policy grid, swept relative to the desk size |
 | `--swarm` | run a federation of desks instead of one room |
-| `--desks N` | channels in the federation, 2–64 (default 3) |
-| `--per-desk N` | members on each channel, 2–256 (default 4) |
+| `--desks N` `--per-desk N` | channels in the federation, 2–64 (default 3); members on each channel, 2–256 (default 4) |
 | `--bias N` | how much a desk overrates its own decoy (default 110) |
+| `--evidence` `--fact-noise N` | plant disqualifying facts, each on a desk other than the one that needs it, and carry them alongside readings; `--fact-noise N` also names `N` per mille of them wrong (0–1000), naming the truth instead of the decoy — see [`SCALE.md`](SCALE.md#--evidence-what-a-channel-carries-not-how-wide-it-is) |
 | `--agent-cmd CMD` | drive one episode through a real agent CLI |
 | `--scenario PATH` | give the live room a real problem with private facts |
 | `--repeat N` | run a live scenario N times and count both arms |

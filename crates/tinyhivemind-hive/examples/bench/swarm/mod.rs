@@ -497,7 +497,8 @@ pub(crate) fn channels(federation: &Federation) -> Vec<Channel> {
         .collect()
 }
 
-/// Hand every desk every other desk's readings for free, before anybody speaks.
+/// Hand every desk every other desk's readings — and, under `--evidence`,
+/// every other desk's facts — for free, before anybody speaks.
 ///
 /// This is the ceiling control, and it is the one that keeps the swarm arm
 /// honest. The swarm's members exchange numeric readings, which the siloed
@@ -507,10 +508,20 @@ pub(crate) fn channels(federation: &Federation) -> Vec<Channel> {
 /// referral, no mention and no channel crossed. Whatever it scores is what the
 /// information is worth; whatever the swarm scores below it is what the channel
 /// boundary still costs after `referral` has done its work.
+///
+/// Under `--evidence` a desk also holds facts, not only readings, and the
+/// ceiling has to hand those over too: a control that pools opinions but
+/// withholds the one thing that does not average measures a different,
+/// easier question than the one the digest and referral arms answer. A fact
+/// is desk-wide the moment any one of its members holds it — that is what
+/// [`super::member::SwarmSim::absorb`]'s missing same-desk guard already
+/// means for a live exchange — so the source here is the union of every
+/// member's `ruled_out` on the desk, read off before any import lands.
 pub(crate) fn pooled(federation: &Federation) -> Federation {
     let mut pooled = federation.clone();
-    // Read every desk's slate off the desk it belongs to *before* any import,
-    // so no desk's contribution is contaminated by another's.
+    // Read every desk's slate, and every fact it holds, off the desk it
+    // belongs to *before* any import, so no desk's contribution is
+    // contaminated by another's.
     let slates: Vec<Vec<(TopicId, i32)>> = federation
         .desks
         .iter()
@@ -529,6 +540,24 @@ pub(crate) fn pooled(federation: &Federation) -> Federation {
                 .collect()
         })
         .collect();
+    let facts: Vec<Vec<TopicId>> = federation
+        .desks
+        .iter()
+        .map(|desk| {
+            let mut held: Vec<TopicId> = Vec::new();
+            for member in &desk.members {
+                let Some(seat) = federation.seat_of(member) else {
+                    continue;
+                };
+                for topic in &federation.agents[seat].ruled_out {
+                    if !held.contains(topic) {
+                        held.push(topic.clone());
+                    }
+                }
+            }
+            held
+        })
+        .collect();
     for (index, desk) in federation.desks.iter().enumerate() {
         for member in &desk.members {
             let Some(seat) = federation.seat_of(member) else {
@@ -542,6 +571,15 @@ pub(crate) fn pooled(federation: &Federation) -> Federation {
                     pooled.agents[seat].import(topic, *value);
                 }
             }
+            for (from, held) in facts.iter().enumerate() {
+                if from == index {
+                    continue;
+                }
+                for topic in held {
+                    pooled.agents[seat].note_fact(topic);
+                }
+            }
+            pooled.agents[seat].recompute_favourite();
         }
     }
     pooled

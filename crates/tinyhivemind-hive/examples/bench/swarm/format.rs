@@ -7,6 +7,13 @@
 //! set of readings back out in the same form, so a reply that carries them on
 //! can be read the same way at the far end. [`line`] is unrelated to the wire
 //! format itself — it renders one transcript entry for the `--trace` view.
+//!
+//! [`facts`] reads the *other* kind of thing a desk can say. A reading is an
+//! opinion and averages with its reader's own; a fact is a disqualification
+//! and does not. They travel in the same row and are parsed independently —
+//! `<Desk> reads #a at 40, #b at 100. <Desk> rules out #a.` — so a line
+//! carrying both is read the same way by a reader that understands only the
+//! first half.
 
 use std::fmt::Write as _;
 
@@ -90,6 +97,85 @@ pub(super) fn readings(content: &str) -> Vec<Reading> {
     found
 }
 
+/// One desk's disqualification of one option, as it appears in a message.
+///
+/// Deliberately not a [`Reading`] with a sentinel value. A reading is averaged
+/// into the reader's own and a fact is subtracted from it whatever anyone else
+/// thinks, so the two are different operations on the far end and giving them
+/// one type would invite a caller to treat them as one.
+#[derive(Clone, Debug)]
+pub(super) struct Fact {
+    /// The desk that holds it, by display name.
+    pub(super) desk: String,
+    /// The option it disqualifies.
+    pub(super) topic: TopicId,
+}
+
+/// Write a set of facts out in the form [`facts`] reads them from.
+pub(super) fn restate_facts(held: &[Fact]) -> String {
+    let mut line = String::new();
+    let mut current: Option<&str> = None;
+    for fact in held {
+        if current.is_none_or(|desk| desk != fact.desk) {
+            if current.is_some() {
+                line.push_str(". ");
+            }
+            let _ = write!(line, "{} rules out", fact.desk);
+            current = Some(fact.desk.as_str());
+        } else {
+            line.push(',');
+        }
+        let _ = write!(line, " #{}", fact.topic);
+    }
+    if current.is_some() {
+        line.push('.');
+    }
+    line
+}
+
+/// Read every `<Desk> rules out #option.` clause out of a message.
+///
+/// Shaped exactly like [`readings`] and parsed independently of it: a desk
+/// name followed by `rules out` opens a clause, and every `#option` until the
+/// next desk name belongs to it. An option that carries an `at <n>` is a
+/// reading rather than a disqualification and is left to [`readings`], so the
+/// two can share a row without either having to know about the other.
+pub(super) fn facts(content: &str) -> Vec<Fact> {
+    let words: Vec<&str> = content.split_whitespace().collect();
+    let mut found = Vec::new();
+    let mut desk: Option<String> = None;
+    for (at, word) in words.iter().enumerate() {
+        if *word == "rules" && words.get(at + 1) == Some(&"out") {
+            desk = at
+                .checked_sub(1)
+                .and_then(|before| words.get(before))
+                .map(|name| (*name).to_owned());
+            continue;
+        }
+        // A desk name followed by `reads` closes any open fact clause: what
+        // follows is that desk's opinion, not its disqualifications.
+        if *word == "reads" {
+            desk = None;
+            continue;
+        }
+        let Some(topic) = word.strip_prefix('#') else {
+            continue;
+        };
+        let topic = topic.trim_end_matches(['.', ',', ';', '?', '!']);
+        if topic.is_empty() || words.get(at + 1) == Some(&"at") {
+            continue;
+        }
+        let Some(desk) = desk.clone() else {
+            continue;
+        };
+        found.push(Fact {
+            desk,
+            topic: TopicId::from(topic),
+        });
+    }
+    found
+}
+
 /// One transcript line, tagged with the channel it was written in.
 pub(super) fn line(
     channels: &[Channel],
@@ -103,3 +189,6 @@ pub(super) fn line(
         channels[desk].name, sequence.0, agent_id,
     )
 }
+
+#[cfg(test)]
+mod test;

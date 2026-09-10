@@ -88,6 +88,14 @@ pub(crate) struct Federation {
     pub(crate) desks: Vec<FederatedDesk>,
     /// Every member, flattened in desk order.
     pub(crate) agents: Vec<SimAgent>,
+    /// Whether the disqualifying facts were planted, and so exist to be
+    /// exchanged at all.
+    ///
+    /// Off by default, and every recorded federated number was taken with it
+    /// off: without it a federation holds **no facts**, only scored readings,
+    /// and the only thing a channel can carry is one desk's opinion of an
+    /// option. See [`Self::planted`].
+    pub(crate) evidence: bool,
     /// Whether every desk is wrong about a *different* option.
     ///
     /// There are only `topics - 1` options that are not the truth, so a
@@ -203,8 +211,154 @@ impl Federation {
             topics: names,
             desks: records,
             agents,
+            evidence: false,
             decoys_distinct,
         }
+    }
+
+    /// The same federation with the disqualifying facts planted, each one on a
+    /// desk **other than** the one that needs it.
+    ///
+    /// Without this a federation carries no facts at all. Every member holds a
+    /// noisy score per option and a slant toward its own desk's decoy, so the
+    /// only thing that can cross a channel is an opinion — and averaging
+    /// opinions is exactly the operation that imports a shared bias rather
+    /// than cancelling it. That is the shape the digest arm ran into: it moves
+    /// information perfectly and still cannot beat the correlation.
+    ///
+    /// A *fact* behaves differently. `SimAgent::score` subtracts a flat
+    /// `GROUNDS_WEIGHT` from an option this member has been told is
+    /// disqualified, whoever told it and however many peers disagree. It does
+    /// not average, so it cannot be diluted and a shared bias cannot reinforce
+    /// it.
+    ///
+    /// **Where the fact sits is the whole design.** Planting a desk's cure on
+    /// that desk would let it heal itself and measure nothing about crossing a
+    /// channel. Planting it on desk `d + 1` makes the cure real, held, and
+    /// *elsewhere* — the hidden profile's own structure, one level up. The
+    /// prediction that follows is sharp: a bounded pairwise ask reaches two of
+    /// `D - 1` peers, so at a hundred desks it finds the desk holding its cure
+    /// about two times in ninety-nine, while a digest reaches every desk at
+    /// once and should find it every time.
+    ///
+    /// Every member of the holding desk knows it — the hidden profile is
+    /// across desks, not inside one — and the desk's *last* seat holds it as
+    /// `refutes`, so its own floor sees a member with grounds to refute rather
+    /// than only a room quietly scoring the option lower. The seat is chosen
+    /// by position rather than at random so the same seed plants the same
+    /// facts.
+    #[cfg(test)]
+    pub(crate) fn planted(&self) -> Self {
+        self.planted_with(0, 0)
+    }
+
+    /// The same, with `wrong` per mille of the planted facts naming the
+    /// **truth** instead of the decoy they were meant to disqualify.
+    ///
+    /// This is the other half of the experiment and the half that could sink
+    /// it. A fact does not average, which is exactly why it survives a shared
+    /// bias — and exactly why a *wrong* one is more dangerous than a wrong
+    /// opinion. A mistaken reading is diluted by every peer who disagrees; a
+    /// mistaken disqualification subtracts its flat `GROUNDS_WEIGHT` from the
+    /// right answer for every desk it reaches, and the mechanism that makes
+    /// evidence worth carrying is the same mechanism that spreads the error.
+    ///
+    /// A protocol that only ever moves true facts measures the value of a
+    /// channel and nothing about the risk of one.
+    ///
+    /// `seed` is the episode's own seed — the one [`Federation::generate`] was
+    /// built from, not a constant shared by every federation with the same
+    /// desk count. Without it every federation of a given size draws the
+    /// *same* wrong-fact positions, so a multi-episode `--fact-noise` run
+    /// repeatedly exercises one placement pattern instead of sampling the
+    /// requested per-mille rate across episodes.
+    pub(crate) fn planted_with(&self, wrong: u32, seed: u64) -> Self {
+        let mut federation = self.clone();
+        federation.evidence = true;
+        let count = federation.desks.len();
+        let truth = federation.truth.clone();
+        let mut draws = Rng::seeded(mix(mix(seed, 0xFAC7_0000), count as u64));
+        for desk in 0..count {
+            // The cure for desk `desk` is held by the next desk round, so no
+            // desk can answer its own blind spot without crossing a channel.
+            let Some(decoy) = federation.desks.get(desk).map(|held| held.decoy.clone()) else {
+                continue;
+            };
+            // A mistaken fact names the truth: the worst thing a
+            // disqualification can say, and the one a real participant that
+            // misreads its own evidence would say.
+            let cure = if wrong > 0 && draws.below(1_000) < wrong {
+                truth.clone()
+            } else {
+                decoy.clone()
+            };
+            // The next physical desk only ever a *different* desk, never a
+            // different blind spot: when decoys collide — every desk shares
+            // one at `--topics 2`, or the wraparound repeats one whenever
+            // `desks` outruns `topics - 1` and `decoys_distinct` is already
+            // `false` — the "next" desk can hold exactly the decoy it is
+            // itself biased toward, and curing it there is curing a desk's
+            // own blind spot on its own floor: no channel to cross, and the
+            // whole point of *where* a fact is planted evaporates. So the
+            // search walks forward from the next desk for one whose own
+            // decoy actually differs from the one being disqualified, and
+            // plants nothing for this desk when no such holder exists —
+            // which happens only when every desk in the federation shares
+            // the same blind spot, the `decoys_distinct: false` case this
+            // module already reports rather than quietly mismeasures.
+            let Some(holder) = (1..count)
+                .map(|step| (desk + step) % count)
+                .find(|&candidate| {
+                    federation
+                        .desks
+                        .get(candidate)
+                        .is_some_and(|held| held.decoy != decoy)
+                })
+            else {
+                continue;
+            };
+            let Some(seat) = federation
+                .desks
+                .get(holder)
+                .and_then(|held| held.members.last())
+                .cloned()
+            else {
+                continue;
+            };
+            // The *holding desk* knows what it holds. The hidden profile here
+            // is across desks, not inside one: desk `d` cannot cure its own
+            // blind spot, but the desk that owns the fact is not keeping it
+            // from its own members. Noting it on every seat is also what puts
+            // it where it can leave — an ask or a digest is written by
+            // whichever seat the rotation reached, and a fact parked on a seat
+            // that never writes to the wire is a fact no channel can carry.
+            // (The first version of this planted it on one seat and measured
+            // nothing at all, for exactly that reason.)
+            let Some(desks) = federation
+                .desks
+                .get(holder)
+                .map(|held| held.members.clone())
+            else {
+                continue;
+            };
+            for member in &desks {
+                if let Some(index) = federation.seat_of(member)
+                    && let Some(agent) = federation.agents.get_mut(index)
+                {
+                    agent.note_fact(&cure);
+                    agent.recompute_favourite();
+                }
+            }
+            // The decisive seat also *holds* it, so the desk's own floor sees
+            // a member with grounds to refute rather than only a room that
+            // quietly scores the option lower.
+            if let Some(index) = federation.seat_of(&seat)
+                && let Some(agent) = federation.agents.get_mut(index)
+            {
+                agent.refutes = Some(cure.clone());
+            }
+        }
+        federation
     }
 
     /// The desk a member sits on.

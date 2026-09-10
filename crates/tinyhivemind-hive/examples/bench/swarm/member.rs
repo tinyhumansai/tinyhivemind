@@ -16,7 +16,7 @@ use tinyhivemind_hive::{
     trace::TopicId,
 };
 
-use super::format::{Reading, readings, restate};
+use super::format::{Fact, Reading, facts, readings, restate, restate_facts};
 use super::{Channel, DeskOutcome, SwarmMember};
 use crate::federation::Federation;
 use crate::run::Ending;
@@ -57,6 +57,13 @@ impl SwarmSim {
     }
 
     /// How this member reads every option, written the way a member would.
+    ///
+    /// The reading is followed by whatever this member can *disqualify*, when
+    /// the federation planted any. A member that holds a fact ruling an option
+    /// out and says only what it scores things at has withheld the most useful
+    /// thing it has — so the fact rides in the same row, on the same call, at
+    /// the cost of a clause. What it buys is measured in
+    /// `docs/experiments/2026-09-11-evidence-not-opinion.md`.
     fn slate(&self) -> String {
         let mut line = format!("{} reads", self.here);
         for (at, topic) in self.topics.iter().enumerate() {
@@ -64,7 +71,34 @@ impl SwarmSim {
             let _ = write!(line, "{separator} #{topic} at {}", self.agent.score(topic));
         }
         line.push('.');
+        for held in self.held_facts() {
+            let _ = write!(line, " {}", restate_facts(&[held]));
+        }
         line
+    }
+
+    /// What this member can disqualify outright, if the run planted facts.
+    ///
+    /// Read from `ruled_out` rather than from `refutes`, and the difference
+    /// matters: `refutes` is the one fact this member was *given*, while
+    /// `ruled_out` is everything it can currently disqualify — what it was
+    /// given, and what another desk has since told it. So a fact does not stop
+    /// at the first desk it reaches; a desk that learned one relays it, which
+    /// is how a disqualification crosses a federation wider than any one
+    /// desk's ask.
+    ///
+    /// Empty unless `--evidence` planted them, which is what keeps every
+    /// recorded number taken without it byte-identical: a member with nothing
+    /// to disqualify writes exactly the line it always wrote.
+    fn held_facts(&self) -> Vec<Fact> {
+        self.agent
+            .ruled_out
+            .iter()
+            .map(|topic| Fact {
+                desk: self.here.clone(),
+                topic: topic.clone(),
+            })
+            .collect()
     }
 
     /// A desk's display name.
@@ -118,27 +152,53 @@ impl SwarmMember for SwarmSim {
         _visible: &[SessionMessage],
     ) -> Result<String, String> {
         let carried = readings(&incoming.content);
-        if carried.is_empty() {
+        // Facts travel the same wire, parsed independently of readings, and
+        // have to be preserved on both hops the same way: a question or an
+        // answer that carries a `rules out` clause and drops it on the way
+        // through silently downgrades a fact back into an opinion, which is
+        // the one thing this whole mechanism exists not to do.
+        let carried_facts = facts(&incoming.content);
+        if carried.is_empty() && carried_facts.is_empty() {
             return Ok("!question I cannot read a rating out of that.".to_owned());
         }
         Ok(match incoming.kind {
-            // Repeat what was asked and add this desk's own reading, so the
-            // whole exchange is legible to everybody here rather than only to
-            // the two agents in it.
+            // Repeat what was asked — readings and any facts it carried — and
+            // add this desk's own reading (with its own facts, via
+            // `self.slate()`), so the whole exchange is legible to everybody
+            // here rather than only to the two agents in it.
             ReferralKind::Forward => {
-                format!("!evidence {} {}", restate(&carried), self.slate())
+                let mut evidence = restate(&carried);
+                if !carried_facts.is_empty() {
+                    if !evidence.is_empty() {
+                        evidence.push(' ');
+                    }
+                    let _ = write!(evidence, "{}", restate_facts(&carried_facts));
+                }
+                format!("!evidence {evidence} {}", self.slate())
             }
-            // Carrying an answer home: only the far desk's readings are news.
+            // Carrying an answer home: only the far desk's readings and facts
+            // are news.
             ReferralKind::Return => {
                 let from = self.desk_name(&incoming.from.desk_id).to_owned();
                 let theirs: Vec<Reading> = carried
                     .into_iter()
                     .filter(|reading| reading.desk == from)
                     .collect();
-                if theirs.is_empty() {
+                let theirs_facts: Vec<Fact> = carried_facts
+                    .into_iter()
+                    .filter(|fact| fact.desk == from)
+                    .collect();
+                if theirs.is_empty() && theirs_facts.is_empty() {
                     return Ok("!question That answer carried no rating I can use.".to_owned());
                 }
-                format!("!evidence {}", restate(&theirs))
+                let mut evidence = restate(&theirs);
+                if !theirs_facts.is_empty() {
+                    if !evidence.is_empty() {
+                        evidence.push(' ');
+                    }
+                    let _ = write!(evidence, "{}", restate_facts(&theirs_facts));
+                }
+                format!("!evidence {evidence}")
             }
         })
     }
@@ -170,6 +230,28 @@ impl SwarmMember for SwarmSim {
             }
             self.agent.import(&reading.topic, reading.value);
         }
+        // A fact from another desk, applied on the same terms a reading is:
+        // it has to name a desk this federation actually has, and this
+        // member's own desk tells it nothing it does not already hold. What
+        // differs is the arithmetic on the far side — `note_fact` discounts
+        // the option outright rather than averaging into it, so a fact cannot
+        // be diluted by peers who disagree and a shared bias cannot reinforce
+        // it. That asymmetry is the whole experiment.
+        for fact in facts(content) {
+            // No same-desk guard, unlike a reading. A reading is averaged, so
+            // counting one's own desk twice would weight it twice; a fact is
+            // idempotent — `note_fact` will not record one it already holds —
+            // and a desk-mate stating a disqualification is exactly how a desk
+            // pools what one of its members knows.
+            if !self.directory.iter().any(|(_, name)| *name == fact.desk) {
+                continue;
+            }
+            if !self.topics.contains(&fact.topic) {
+                continue;
+            }
+            self.agent.note_fact(&fact.topic);
+        }
+        self.agent.recompute_favourite();
     }
 }
 

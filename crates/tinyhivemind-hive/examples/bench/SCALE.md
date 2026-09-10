@@ -175,6 +175,42 @@ than of all of them.
 
 `--digest` is off by default, and every recorded number was taken with it off.
 
+## `--evidence`: what a channel carries, not how wide it is
+
+Every mechanism above moves **opinions** — one desk's scored reading of the
+slate, averaged into its reader's own. That is why the digest plateaus: an
+average of correlated readings imports the correlation, so moving more of them
+faster does not help.
+
+`--evidence` changes what there is to move. It plants the disqualifying facts
+that a federation otherwise has none of, each on a desk **other than** the one
+that needs it, so no desk can cure its own blind spot without crossing a
+channel. A member then states what it can rule out alongside what it scores:
+
+```text
+Desk-1 reads #stage at 42, #ship at 118. Desk-1 rules out #canary.
+```
+
+The two clauses behave differently on the far side, and that is the whole
+point. A reading is **averaged** into the reader's own, so peers who share a
+bias reinforce it. A fact is **subtracted** — a flat discount on that option,
+whoever said it and however many peers disagree — so it cannot be diluted and a
+shared bias cannot outvote it.
+
+It costs a clause, not a call: the same asks, the same digests, and the same
+turn budget.
+
+`--fact-noise N` plants `N` per mille of those facts **wrong**, naming the
+truth instead of a decoy, and it is the half that bites. The property that makes
+a fact survive a shared bias is the same property that makes a wrong one
+spread: one wrong fact in ten costs the broadcast arm twenty points, one in four
+costs it sixty-two. Averaging opinions plateaus below the ceiling and is robust;
+exchanging evidence reaches the ceiling and is brittle. Values run `0..=1000`
+and anything above is refused.
+
+The findings are in
+[the evidence write-up](../../../../docs/experiments/2026-09-11-evidence-not-opinion.md).
+
 ## Driving it live
 
 `--jobs` also decides how many live desks call a model at once, and there it

@@ -8,6 +8,34 @@ use super::member::SwarmSim;
 use super::*;
 use crate::federation::Federation;
 use crate::policy::tuned_policy;
+use tinyhivemind_hive::dispatch::{DispatchConversation, DispatchKey};
+use tinyhivemind_hive::referral::ReferralKind;
+
+/// A referral of `kind`, `content` "arriving from" `from_desk` at `member`,
+/// on the desk conversation `member` itself sits on. Deliberately minimal —
+/// only the fields [`SwarmSim::answer`] actually reads are given real
+/// values, and the rest carry the cheapest value that type-checks.
+fn incoming(kind: ReferralKind, from_desk: &str, content: &str) -> Referral {
+    Referral {
+        key: DispatchKey {
+            trigger_sequence: 0,
+        },
+        kind,
+        source_id: "asker".to_owned(),
+        target_id: "answerer".to_owned(),
+        content: content.to_owned(),
+        from: DispatchConversation {
+            desk_id: from_desk.to_owned(),
+            thread_root: None,
+        },
+        to: DispatchConversation {
+            desk_id: "answerer-desk".to_owned(),
+            thread_root: None,
+        },
+        origin: None,
+        child_hop: 1,
+    }
+}
 
 /// A small federation with distinct decoys, deliberate rather than clamped.
 fn federation() -> Federation {
@@ -258,4 +286,261 @@ fn an_ask_cap_of_zero_means_on_the_floor_in_every_arm() {
     )
     .expect("runs");
     assert_eq!(on_floor.off_floor_asks, 0, "nothing is asked off the floor");
+}
+
+#[test]
+fn planting_puts_the_cure_for_a_desk_on_another_desk() {
+    // The whole structure of the experiment. A desk that held the fact about
+    // its own decoy could answer its blind spot alone, and the arms would
+    // measure nothing about crossing a channel.
+    let plain = federation();
+    assert!(
+        plain.agents.iter().all(|agent| agent.ruled_out.is_empty()),
+        "a federation holds no facts until they are planted",
+    );
+
+    let planted = plain.planted();
+    assert!(planted.evidence);
+    for (index, desk) in planted.desks.iter().enumerate() {
+        // Nobody on this desk may hold the fact that would cure this desk...
+        let seats: Vec<&crate::sim::SimAgent> = planted
+            .agents
+            .iter()
+            .filter(|agent| desk.members.contains(&agent.id))
+            .collect();
+        assert!(
+            !seats
+                .iter()
+                .any(|agent| agent.ruled_out.contains(&desk.decoy)),
+            "desk {} can cure its own blind spot",
+            desk.name,
+        );
+
+        // ...and the next desk round must.
+        let holder = &planted.desks[(index + 1) % planted.desks.len()];
+        let holds = planted
+            .agents
+            .iter()
+            .filter(|agent| holder.members.contains(&agent.id))
+            .filter(|agent| agent.ruled_out.contains(&desk.decoy))
+            .count();
+        assert_eq!(
+            holds,
+            holder.members.len(),
+            "the holding desk knows what it holds, on every seat",
+        );
+    }
+}
+
+/// Regression for choosing the next *physical* desk as a holder without
+/// checking that its own decoy actually differs.
+///
+/// At `--topics 2` there is exactly one non-truth option, so every desk in
+/// the federation shares the same decoy: `decoys_distinct` is `false`, and
+/// the "next desk" is, unavoidably, a desk with the *same* blind spot as the
+/// one being cured. Planting the fact there would let that desk answer its
+/// own blind spot on its own floor — no channel crossed, the whole point of
+/// *where* a fact goes evaporated. The fix searches for a holder whose own
+/// decoy differs and plants nothing when none exists, so the invariant this
+/// module documents ("no desk can cure its own blind spot") holds even here.
+#[test]
+fn planting_never_cures_a_desk_that_shares_every_decoy() {
+    let plain = Federation::generate(7, 6, 4, 2, 0, 110);
+    assert!(
+        !plain.decoys_distinct,
+        "two topics leaves only one non-truth option, so every desk shares it",
+    );
+    let planted = plain.planted();
+
+    for desk in &planted.desks {
+        let seats: Vec<&crate::sim::SimAgent> = planted
+            .agents
+            .iter()
+            .filter(|agent| desk.members.contains(&agent.id))
+            .collect();
+        assert!(
+            !seats
+                .iter()
+                .any(|agent| agent.ruled_out.contains(&desk.decoy)),
+            "desk {} can cure its own blind spot even though every desk shares one decoy",
+            desk.name,
+        );
+    }
+}
+
+#[test]
+fn a_fact_crosses_a_channel_and_a_reading_does_not_carry_it() {
+    // The wire-level claim: with facts planted, a desk's outgoing line says
+    // what it can disqualify; without them the same line is exactly the line
+    // the harness always wrote.
+    let plain = federation();
+    let planted = plain.planted();
+    let policy = desk_policy(&plain);
+    let exchange = Exchange::from_caps(2, 1);
+
+    let quiet = run_swarm(&plain, &policy, referrals(), exchange, "Decide.", true).expect("runs");
+    assert!(
+        !quiet.trace.iter().any(|line| line.contains("rules out")),
+        "no facts exist, so none are stated",
+    );
+
+    let carrying =
+        run_swarm(&planted, &policy, referrals(), exchange, "Decide.", true).expect("runs");
+    assert!(
+        carrying.trace.iter().any(|line| line.contains("rules out")),
+        "a planted fact reaches the wire",
+    );
+    // The cost is a clause, not a call: the same asks and the same digests.
+    assert_eq!(carrying.off_floor_asks, quiet.off_floor_asks);
+    assert_eq!(carrying.digests, quiet.digests);
+}
+
+#[test]
+fn a_wrong_fact_names_the_truth_and_spreads_the_same_way() {
+    // The adversarial half. A fact does not average, which is why it survives
+    // a shared bias — and why a mistaken one is worse than a mistaken opinion:
+    // it discounts the right answer for every desk it reaches, undiluted.
+    // Planting them all wrong is the extreme, and it must actually reach the
+    // wire or the robustness sweep beside it measures nothing.
+    let federation = federation();
+    let wrong = federation.planted_with(1_000, 7);
+    assert!(wrong.evidence);
+    let ruled_out: Vec<&TopicId> = wrong
+        .agents
+        .iter()
+        .flat_map(|agent| agent.ruled_out.iter())
+        .collect();
+    assert!(!ruled_out.is_empty(), "planting produced facts to check");
+    assert!(
+        ruled_out.iter().all(|topic| **topic == federation.truth),
+        "every planted fact names the truth at a thousand per mille",
+    );
+
+    let report = run_swarm(
+        &wrong,
+        &desk_policy(&federation),
+        referrals(),
+        Exchange::from_caps(2, 1),
+        "Decide.",
+        true,
+    )
+    .expect("runs");
+    let truth = format!("rules out #{}", federation.truth);
+    assert!(
+        report.trace.iter().any(|line| line.contains(&truth)),
+        "a wrong fact crosses exactly as a right one does",
+    );
+}
+
+#[test]
+fn planting_no_wrong_facts_leaves_the_truth_alone() {
+    // The control for the test above: at zero noise nothing disqualifies the
+    // answer, so a difference in the sweep is the noise and not the planting.
+    let federation = federation();
+    let planted = federation.planted_with(0, 7);
+    assert!(
+        !planted
+            .agents
+            .iter()
+            .any(|agent| agent.ruled_out.contains(&federation.truth)),
+        "a true fact never names the truth",
+    );
+}
+
+/// Regression for the referral answer dropping a fact clause on either hop.
+///
+/// `readings` and `facts` are parsed independently of each other by design —
+/// see `swarm/format.rs` — which means an `answer` built only from `readings`
+/// silently discards any `rules out` clause in what it is answering. That is
+/// exactly what forwarding and returning a referral both used to do, so
+/// `--evidence` over a referral (rather than a digest) measured nothing about
+/// a fact crossing a channel: `swarm` and `swarm°` were carrying discounted
+/// numeric opinions and nothing more.
+#[test]
+fn answer_forward_preserves_the_asking_desks_fact() {
+    let federation = federation();
+    let seat = federation.agents[0].clone();
+    let mut member = SwarmSim::new(&federation, seat);
+
+    // The question, as `ask` would have written it: the asking desk's own
+    // reading, and a fact it holds.
+    let question = incoming(
+        ReferralKind::Forward,
+        "platform",
+        "@#mobile We are about to back #a here. Platform reads #a at 40, #b at 100. \
+         Platform rules out #a.",
+    );
+    let answer = member.answer(&question, &[]).expect("answers");
+
+    assert!(
+        answer.contains("Platform rules out #a"),
+        "the asking desk's own fact must survive the forward hop: {answer}",
+    );
+    assert!(
+        answer.contains("Platform reads"),
+        "the asking desk's reading is unaffected by the fix: {answer}",
+    );
+}
+
+/// The companion regression: the far desk's fact, carried home on the return
+/// hop, must not be dropped either.
+#[test]
+fn answer_return_preserves_the_far_desks_fact() {
+    let federation = federation();
+    let seat = federation.agents[0].clone();
+    let mut member = SwarmSim::new(&federation, seat);
+
+    // What the far desk (Mobile) answered on the forward hop: its own
+    // reading and its own fact, exactly as `answer(Forward)` now writes it.
+    let carried_answer = incoming(
+        ReferralKind::Return,
+        "mobile",
+        "Mobile reads #a at 50, #b at 90. Mobile rules out #b.",
+    );
+    let answer = member.answer(&carried_answer, &[]).expect("answers");
+
+    assert!(
+        answer.contains("Mobile rules out #b"),
+        "the far desk's fact must survive the return hop: {answer}",
+    );
+    assert!(
+        answer.contains("Mobile reads"),
+        "the far desk's reading is unaffected by the fix: {answer}",
+    );
+}
+
+/// Regression for the free-information control pooling readings but not the
+/// facts a planted `--evidence` run adds.
+///
+/// `swarm::pooled` is the ceiling every bounded arm is measured against: it
+/// hands every desk every other desk's information for free. Before this fix
+/// it only ever imported numeric slates, so under `--evidence` a member
+/// pooled with the ceiling still held only the one fact planted on its own
+/// desk — the exact thing a real exchange (digest or referral) is supposed to
+/// beat it by *not* withholding.
+#[test]
+fn pooled_hands_over_every_other_desks_facts() {
+    let plain = federation();
+    let planted = plain.planted();
+    let result = pooled(&planted);
+
+    for (index, desk) in planted.desks.iter().enumerate() {
+        for member in &desk.members {
+            let Some(seat) = result.seat_of(member) else {
+                panic!("every planted member has a seat");
+            };
+            let held = &result.agents[seat].ruled_out;
+            for (other, other_desk) in planted.desks.iter().enumerate() {
+                if other == index {
+                    continue;
+                }
+                assert!(
+                    held.contains(&other_desk.decoy),
+                    "{member} pooled with the ceiling must hold {}'s fact about {}",
+                    other_desk.name,
+                    other_desk.decoy,
+                );
+            }
+        }
+    }
 }
