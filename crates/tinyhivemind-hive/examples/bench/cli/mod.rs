@@ -172,6 +172,20 @@ pub(crate) struct Options {
     ///
     /// `0` is off, and off is what every recorded number was taken against.
     pub(crate) digest: usize,
+    /// Whether the federation's disqualifying **facts** are planted, and so
+    /// exist to be exchanged at all.
+    ///
+    /// Without it a federation holds only scored readings: every member has a
+    /// noisy opinion of every option and a slant toward its own desk's decoy,
+    /// so the only thing a channel can carry is an opinion — and averaging
+    /// opinions imports a shared bias rather than cancelling it. With it, one
+    /// member per desk holds a fact that disqualifies **another** desk's
+    /// decoy, so the cure for a desk's blind spot is real, held, and
+    /// elsewhere.
+    ///
+    /// It changes the task rather than only the wire, so every arm is
+    /// re-baselined under it and nothing recorded without it moves.
+    pub(crate) evidence: bool,
     /// Threads the per-room loops are spread across.
     ///
     /// A wall-clock knob and nothing else: rooms are independent and results
@@ -302,6 +316,7 @@ impl Options {
             // Off. It is a new mechanism and the convention here is that a
             // new mechanism ships off until an arm has scored it.
             digest: 0,
+            evidence: false,
             jobs: crate::parallel::default_jobs(),
             timeout: 180,
             api_base: None,
@@ -449,8 +464,8 @@ impl Options {
     }
 }
 
-/// Apply one of the scale flags (`--jobs`, `--ask-cap`, `--digest`) to
-/// `options`.
+/// Apply one of the scale flags (`--jobs`, `--ask-cap`, `--digest`,
+/// `--distance`, `--evidence`) to `options`.
 ///
 /// Returns whether the flag was one of them, on the same contract as
 /// [`apply_expertise_flag`]. These two are together because they are the two
@@ -506,6 +521,7 @@ fn apply_scale_flag(
         "--digest" => {
             options.digest = usize::try_from(next_number(args).unwrap_or(1)).unwrap_or(1);
         }
+        "--evidence" => options.evidence = true,
         _ => return Ok(false),
     }
     Ok(true)
