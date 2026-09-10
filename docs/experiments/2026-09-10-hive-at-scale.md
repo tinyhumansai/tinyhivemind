@@ -4,8 +4,11 @@
 **Status** Recorded
 **Code** `cargo run --release -p tinyhivemind-hive --example bench -- --swarm`
 on `hive-at-scale`, with `--desks N --per-desk 10 --topics 128 --episodes 20`.
-**Sample** 20 seeded federations per size, every arm deciding the same
-federations. Simulated participants, so the numbers reproduce from the seed.
+**Sample** 20 seeded federations per size out to fifty desks and 8 at a
+hundred, every arm deciding the same federations. Simulated participants, so
+the numbers reproduce from the seed. The sample shrinks at the largest size
+because the arm being refuted is the expensive one: `swarm` spends 6624 agent
+turns per federation there, against `swarm°`'s 1342.
 **Machine** 28 cores. Every run at `--jobs 28`; `--jobs` changes wall clock and
 nothing else, which is asserted rather than assumed.
 
@@ -88,13 +91,14 @@ siloed            0.0      0.0      0.0      0.0      0.0
 swarm            75.0    100.0      0.0      0.0      0.0
 swarm°           75.0    100.0    100.0    100.0    100.0
 pooled           85.0    100.0    100.0    100.0    100.0
-vote              0.0     95.0    100.0        —        —
+vote              0.0     95.0    100.0    100.0    100.0
+merged           10.0     80.0      0.0      0.0      0.0
 ```
 
 ```text
 turns/ep            3       12       25       50      100  desks
 swarm            47.6    510.2   1868.0   3624.0   6624.0
-swarm°           47.1    186.8    356.8    684.2   1342.5
+swarm°           47.1    186.8    356.8    685.0   1342.5
 asks/ep           6.0     24.0     50.0    100.0    200.0
 ```
 
