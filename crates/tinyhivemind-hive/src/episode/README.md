@@ -13,26 +13,35 @@ an executor, or a mock.
 
 ```text
 validate roster + desks + policy
-  └─ budget spent?                          → Exhausted
-     └─ fold traces (above the watermark,
-        and only from current desk members)
-        └─ fold standings and, when `directory` is set, the directory,
-           both at the same sequence; take consensus
+  └─ fold traces (above the watermark,
+     and only from current desk members)
+     └─ fold standings at the horizon the policy's `distance` selects
+        ├─ budget spent?         → Exhausted (with those standings,
+        │                          and the visibility it ended at)
+        └─ fold the directory when `directory` is set, at the same
+           sequence; take consensus
            ├─ Quorum & Commit & !commit recorded → Converged
            ├─ Quorum & Deliberate    → flip phase, emit one commit turn
            ├─ Deadlock & no free member         → Deadlocked
            └─ otherwise take bids
-              ├─ a winner                       → Speak (exactly one)
+              ├─ winners        → Speak (a round, up to the width)
               └─ nobody cleared threshold       → Idle
 ```
 
-### Exactly one turn
+Standings are folded **before** the budget check so an exhausted episode can
+say what its budget bought. The directory is not: an exhausted episode
+authorizes nobody, so there is no bid to route and nothing to route it with.
 
-`HiveStep::Speak` carries a single `HiveTurn`, and there is no variant that
-carries two. The charter's *one message, one turn* rule is therefore a type
-invariant rather than a convention, in the same way
-`MentionDispatchDecision::One` already is. `floor_holder` taking the argmax —
-rather than everyone above threshold — is what produces that single winner.
+### A round of bounded width
+
+`HiveStep::Speak` carries a `Vec<HiveTurn>` and the state to commit once
+**every** one of them is durably appended — committing after a subset would
+charge a threshold nobody spent. The round is bounded by `round_width` while
+the room is `Blind` and by `revealed_width` once it can see itself, which is
+where the charter's *one message, one round, of bounded width* rule lives.
+`floor_holder` still takes an argmax; a round is the top `n` of them rather
+than a broadcast. See
+[ADR 0014](../../../../docs/adr/0014-a-round-authorizes-concurrent-turns.md).
 
 ### Who may vote
 
