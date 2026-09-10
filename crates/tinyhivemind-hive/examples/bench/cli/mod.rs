@@ -11,6 +11,7 @@ mod flags;
 
 use crate::context::{Compaction, ContextBudget, FOLD_FIDELITY};
 use crate::cost::CostModel;
+use crate::grid::Axes;
 use crate::http::{Thinking, Wire};
 use crate::policy::tuned_policy;
 use crate::sim::Expertise;
@@ -58,6 +59,12 @@ const HIDDEN_NOISE: u32 = 50;
 // field, not a state machine with exclusive states.
 #[allow(clippy::struct_excessive_bools)]
 pub(crate) struct Options {
+    /// The cross product of axes a `--grid` run walks.
+    ///
+    /// Defaults to a single point reproducing the single-room comparison, so a
+    /// bare `--grid` prints one small table and each axis is widened by naming
+    /// it. See [`crate::grid`].
+    pub(crate) axes: Axes,
     /// What a turn costs in tokens and how long a host waits for one.
     ///
     /// Every table's headline columns are computed against this, and every
@@ -282,6 +289,9 @@ pub(crate) enum Mode {
     /// Run the hidden self-check over `wilson`, `paired_bootstrap` and
     /// `spearman_milli` and exit.
     StatsCheck,
+    /// Walk the cross product of topic, scale, complexity and concurrency,
+    /// reporting the same six columns in every cell.
+    Grid,
 }
 
 impl Options {
@@ -292,6 +302,7 @@ impl Options {
     /// is therefore useless to a test.
     pub(crate) fn defaults() -> Self {
         Self {
+            axes: Axes::point(),
             cost_model: CostModel::DEFAULT,
             episodes: 500,
             agents: 5,
@@ -457,12 +468,22 @@ impl Options {
                 "--repeat" => options.repeat = next_number(&mut args).unwrap_or(1).max(1),
                 "--json" => options.json = true,
                 "--stats-check" => options.mode = Mode::StatsCheck,
+                "--grid" => options.mode = Mode::Grid,
                 // Everything below is either the expertise surface or the
                 // live-backend one: a CLI or HTTP seat, per-seat overrides,
                 // and the usage table. Split into their own functions so
                 // `parse` itself stays under the line budget clippy holds
                 // every function to.
                 _ => {
+                    // Naming an axis selects the grid, so `--topic hidden`
+                    // alone does what it plainly says rather than being
+                    // silently ignored by whichever mode happened to be
+                    // selected -- the same reason an unrecognised flag is
+                    // refused below.
+                    if options.axes.set(&flag, &mut args)? {
+                        options.mode = Mode::Grid;
+                        continue;
+                    }
                     let known = options.cost_model.set(&flag, &mut args)?
                         || apply_scale_flag(&mut options, &flag, &mut args)?
                         || apply_expertise_flag(&mut options, &flag, &mut args)

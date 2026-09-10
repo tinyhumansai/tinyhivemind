@@ -90,6 +90,7 @@ mod compare;
 mod cost;
 mod context;
 mod federation;
+mod grid;
 mod horizon;
 mod http;
 mod live;
