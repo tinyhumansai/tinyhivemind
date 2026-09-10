@@ -39,6 +39,7 @@ struct FederationOutcome {
     siloed: SwarmReport,
     swarmed: SwarmReport,
     offfloor: SwarmReport,
+    digested: SwarmReport,
     free: SwarmReport,
     merged: crate::arms::ArmReport,
     vote: crate::arms::ArmReport,
@@ -135,6 +136,8 @@ struct FederatedTotals {
     swarmed: SwarmTotals,
     /// Desks that reach each other off the floor, bounded by `--ask-cap`.
     offfloor: SwarmTotals,
+    /// The same, plus one reading published to every channel per desk.
+    digested: SwarmTotals,
     /// The ceiling: every desk's reading already in every member's hands.
     free: SwarmTotals,
     /// One room holding every member of every desk.
@@ -165,7 +168,7 @@ fn run_federated_arms(
                     federation,
                     desk_policy,
                     ReferralPolicy::DEFAULT,
-                    AskChannel::OnFloor,
+                    Exchange::ON_FLOOR,
                     TASK,
                     false,
                 )?,
@@ -173,7 +176,7 @@ fn run_federated_arms(
                     federation,
                     desk_policy,
                     swarm_referrals(),
-                    AskChannel::OnFloor,
+                    Exchange::ON_FLOOR,
                     TASK,
                     false,
                 )?,
@@ -185,8 +188,28 @@ fn run_federated_arms(
                     federation,
                     desk_policy,
                     swarm_referrals(),
-                    AskChannel::OffFloor {
-                        cap: options.ask_cap,
+                    Exchange {
+                        asking: AskChannel::OffFloor {
+                            cap: options.ask_cap,
+                        },
+                        digest: 0,
+                    },
+                    TASK,
+                    false,
+                )?,
+                // The same arm again with every desk publishing its reading
+                // once to every channel. The question it answers is the one
+                // the bounded ask cannot: a federation whose desks are wrong
+                // about the same thing has no peer worth asking.
+                digested: run_swarm(
+                    federation,
+                    desk_policy,
+                    swarm_referrals(),
+                    Exchange {
+                        asking: AskChannel::OffFloor {
+                            cap: options.ask_cap,
+                        },
+                        digest: options.digest,
                     },
                     TASK,
                     false,
@@ -195,7 +218,7 @@ fn run_federated_arms(
                     &pooled(federation),
                     desk_policy,
                     ReferralPolicy::DEFAULT,
-                    AskChannel::OnFloor,
+                    Exchange::ON_FLOOR,
                     TASK,
                     false,
                 )?,
@@ -361,12 +384,15 @@ fn live_federation(options: &Options, scenario: &Scenario) -> Result<(), String>
     // simulated one does: a desk that spends its authorized turns asking has
     // none left to decide with. `--ask-cap 0` puts it back on the floor, which
     // is what every recorded live run used.
-    let asking = if options.ask_cap == 0 {
-        AskChannel::OnFloor
-    } else {
-        AskChannel::OffFloor {
-            cap: options.ask_cap,
-        }
+    let exchange = Exchange {
+        asking: if options.ask_cap == 0 {
+            AskChannel::OnFloor
+        } else {
+            AskChannel::OffFloor {
+                cap: options.ask_cap,
+            }
+        },
+        digest: options.digest,
     };
     let report = swarm::drive_swarm(
         &channels,
@@ -374,7 +400,7 @@ fn live_federation(options: &Options, scenario: &Scenario) -> Result<(), String>
         &swarm::SwarmRun {
             policy: &policy,
             referrals: swarm_referrals(),
-            asking,
+            exchange,
             // Live desks, so this is where the concurrency is worth having:
             // each desk authorizes exactly one speaker, and `--jobs` decides
             // how many of those model calls are in flight at once.
@@ -508,7 +534,7 @@ fn trace_swarm(first: &Federation, desk_policy: &EpisodePolicy) -> Result<(), St
         first,
         desk_policy,
         swarm_referrals(),
-        AskChannel::OnFloor,
+        Exchange::ON_FLOOR,
         TASK,
         true,
     )?;
