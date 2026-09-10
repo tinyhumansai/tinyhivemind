@@ -269,9 +269,15 @@ fn route(
     }
     .map_err(|error| error.to_string())?;
 
+    // Whether the ladder had to *ask* who should answer. On the `Select` rung
+    // a host puts the candidate list to a router, which is a model call like
+    // any other and has to be paid for; on `Decided` the ladder answered from
+    // the roster alone and nothing was spent.
+    let mut routed = false;
     let responder = match plan {
         ResponderPlan::Decided { decision } => decision.responder_id,
         ResponderPlan::Select { request, fallback } => {
+            routed = true;
             let named = select(&request.candidates);
             accept_selection(&named, &request.candidates).unwrap_or(fallback.responder_id)
         }
@@ -292,8 +298,31 @@ fn route(
         cost_units: u64::from(room.cost_of(&responder)),
         routed_right: room.deciding_expert().map(|held| held == responder),
         library_time,
-        shape: blind_shape(1),
+        shape: routed_shape(routed),
     })
+}
+
+/// What the ladder costs: the responder's own turn, preceded by the router's
+/// call when the ladder took the `Select` rung.
+///
+/// Two rounds rather than one wide round, because the two are *sequential* --
+/// nobody can answer until the router has said who answers -- so a host waits
+/// for both in series. Pricing the selection as free understated the arm on
+/// every column that matters: a routed ladder is twice the latency and roughly
+/// twice the tokens of the one-turn arm it was being reported as.
+///
+/// `turns` and `rounds` on the report stay at `1`. Those two count what the
+/// *room* spent deliberating, which is what every recorded number before the
+/// cost model was priced in, and a router call is not a deliberation turn.
+fn routed_shape(routed: bool) -> Vec<RoundShape> {
+    if routed {
+        // The router reads the brief and the candidate list; the responder
+        // reads the brief. One row each is the same conservative count
+        // `blind_shape` uses -- neither of them reads a transcript, because
+        // there is not one yet.
+        return vec![RoundShape::uniform(1, 1), RoundShape::uniform(1, 1)];
+    }
+    blind_shape(1)
 }
 
 /// Spend a matched budget on independent answers and take the plurality.
