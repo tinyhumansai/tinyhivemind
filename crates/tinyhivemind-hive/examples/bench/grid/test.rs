@@ -236,6 +236,36 @@ fn every_arm_has_a_name_and_they_are_all_different() {
     assert_eq!(names.len(), ARMS.len());
 }
 
+/// Two arms tied for the best value of a metric must both be credited, not
+/// just whichever sits first in [`ARMS`]. Exact ties are common for a
+/// finite-sample accuracy and for a deterministic cost metric, so a strict
+/// "first wins" comparison would silently misattribute a shared lead.
+#[test]
+fn best_credits_every_arm_tied_for_the_lead() {
+    let rows: Vec<CellRow> = ARMS
+        .iter()
+        .map(|&name| CellRow {
+            name,
+            totals: Aggregate::priced_at(CostModel::DEFAULT),
+        })
+        .collect();
+    // "ladder" and "hive+" tie for the largest value; everyone else trails.
+    let value_of = |row: &CellRow| -> f64 {
+        match row.name {
+            "ladder" | "hive+" => 2.0,
+            _ => 1.0,
+        }
+    };
+    let mut led: Vec<[u32; 4]> = ARMS.iter().map(|_| [0; 4]).collect();
+    best(&rows, &mut led, 0, value_of, true);
+    let ladder = ARMS.iter().position(|&name| name == "ladder").unwrap();
+    let hive_plus = ARMS.iter().position(|&name| name == "hive+").unwrap();
+    let vote = ARMS.iter().position(|&name| name == "vote").unwrap();
+    assert_eq!(led[ladder][0], 1, "the tied leader must be credited");
+    assert_eq!(led[hive_plus][0], 1, "every tied leader must be credited");
+    assert_eq!(led[vote][0], 0, "a trailing arm must not be credited");
+}
+
 #[test]
 fn a_ratio_against_nothing_is_zero_rather_than_infinite() {
     assert!((ratio(5.0, 0.0) - 0.0).abs() < f64::EPSILON);
