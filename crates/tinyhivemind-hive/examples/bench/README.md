@@ -1,23 +1,89 @@
 # The deliberation benchmark
 
-A simulation harness for `tinyhivemind-hive`: it runs whole deliberation episodes
-against reproducible synthetic rooms, scores them against two controls, sweeps
-the episode policy, and reports what the library itself costs per step.
+A simulation harness for `tinyhivemind-hive`. It runs whole deliberation episodes
+against reproducible synthetic rooms and answers one question — **what does
+each way of running a room cost, and what does it buy** — across four axes and
+in six columns that mean the same thing for every arm.
 
 ```sh
-cargo run --release -p tinyhivemind-hive --example bench            # compare arms
-cargo run --release -p tinyhivemind-hive --example bench -- --trace # one episode
-cargo run --release -p tinyhivemind-hive --example bench -- --sweep # tune the policy
-cargo run --release -p tinyhivemind-hive --example bench -- --swarm # several desks
+# The grid: one table shape, four axes, six columns.
+cargo run --release -p tinyhivemind-hive --example bench -- --grid
 cargo run --release -p tinyhivemind-hive --example bench -- \
-  --scale-sweep --hidden-profile          # room size against channel topology
+  --grid --topic all --scale 5,11,23 --complexity 1,3,5 --concurrency 1,2,4
+
+# The mechanism probes: every arm, at one point of the grid.
+cargo run --release -p tinyhivemind-hive --example bench
+
+# Pin the cost model to the endpoint you actually deploy against.
 cargo run --release -p tinyhivemind-hive --example bench -- \
-  --agent-cmd "opencode run --pure -m openrouter/~openai/gpt-mini-latest"
+  --calibrate --api-base "$URL" --model flash
 ```
 
-This file documents the harness and [`SCALE.md`](SCALE.md) documents running it
-at scale; the findings, and what they do and do not claim, are in
-[the benchmark write-up](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks).
+## The six columns
+
+Every arm, in every cell, reports the same six things, and each of them is a
+quantity somebody pays or receives:
+
+| column | what it is |
+| --- | --- |
+| **quality** | Share of episodes that decided the genuinely best option. |
+| **speed** | Mean wall clock from brief to decision — a sum over *rounds*, since a round's turns run concurrently. |
+| **thru** | Episodes one seat pool finishes per hour at that latency. |
+| **conc** | Mean turns in flight. `1.0` is a strictly sequential protocol; the ceiling is the room's size. |
+| **tok/ep** | Prompt and completion tokens one episode spends. |
+| **tok/s** | The rate those tokens are drawn at — what a provider rate limit is written against. |
+
+Five of the six come from a **model** of what a turn costs, documented with its
+assumptions in [`COST.md`](COST.md). Every run prints the point it was taken
+at, every constant has a flag, and `--calibrate` measures all four against a
+real endpoint. Nothing here should be believed at one setting of those
+constants that does not survive moving them.
+
+The columns this replaced — `ns/step` and `episodes/s` — measured the *library*
+rather than the system. They still exist, under a heading that says so, because
+they answer a real question (what does the state machine cost, with every
+agent's own time excluded — the answer is microseconds). They stopped sharing a
+table with token and latency columns because `vote`'s `ns/step 0` and
+`episodes/s inf` read as "this arm is free" rather than "this arm never calls
+the library", which is what they mean.
+
+## The grid
+
+Four axes, walked as a cross product, with the same arms and the same columns
+in every cell:
+
+| axis | flag | points |
+| --- | --- | --- |
+| **topic** | `--topic` | `uniform` — everybody equally informed, pooling is the whole job. `expert` — some members hold some options far more tightly; routing is worth something. `hidden` — one member alone holds the fact that rules out the decoy everybody else prefers. `all` takes every point. |
+| **scale** | `--scale` | Members per room. Any size from 2 up. |
+| **complexity** | `--complexity` | `1`–`5`, or `all`. One ordinal knob standing for options-on-offer and evaluation noise together: level 1 is 2 options at ±40, level 3 is the harness's historical default of 4 at ±90, level 5 is 8 at ±150. |
+| **concurrency** | `--concurrency` | Turns one round may authorize at once. `1` is the sequential episode and reproduces every recorded number bit-for-bit. |
+
+A bare `--grid` is a **single cell** reproducing the single-room comparison,
+and each axis is widened by naming it. That default is deliberate: a benchmark
+whose cheapest invocation is a sixty-cell run is one nobody runs before
+pushing, and a benchmark nobody runs stops being true.
+
+Naming any axis selects the grid, so `--topic hidden` alone does what it says.
+A value that is not a point on its axis stops the run rather than being skipped
+— a misspelled topic quietly dropped would run a *smaller* grid than was asked
+for and print it under the heading that was typed.
+
+Each cell seeds its own rooms from its own coordinates, so two cells are
+different rooms rather than the same rooms under different labels, and
+re-running one cell alone draws exactly the rooms it had inside the whole grid.
+A cell's label (`topic=hidden scale=9 complexity=4 concurrency=2`) is therefore
+a complete reproduction recipe.
+
+### What the grid runs
+
+Five systems, not the twenty-four below: `ladder`, `vote`, `hive+`,
+`hive+wide`, and `hive+pooled` as the unreachable ceiling. The twenty-four are
+*mechanism probes* — each asks whether one move is worth its turns against a
+control differing from it in exactly one thing — and reproducing that table in
+every cell would print hundreds of rows to answer a question about four axes.
+Run the plain `bench` for those; they answer a different question, and they
+answer it at one point.
 
 ## The task
 
