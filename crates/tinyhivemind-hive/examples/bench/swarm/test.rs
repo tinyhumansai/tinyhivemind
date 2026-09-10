@@ -332,6 +332,42 @@ fn planting_puts_the_cure_for_a_desk_on_another_desk() {
     }
 }
 
+/// Regression for choosing the next *physical* desk as a holder without
+/// checking that its own decoy actually differs.
+///
+/// At `--topics 2` there is exactly one non-truth option, so every desk in
+/// the federation shares the same decoy: `decoys_distinct` is `false`, and
+/// the "next desk" is, unavoidably, a desk with the *same* blind spot as the
+/// one being cured. Planting the fact there would let that desk answer its
+/// own blind spot on its own floor — no channel crossed, the whole point of
+/// *where* a fact goes evaporated. The fix searches for a holder whose own
+/// decoy differs and plants nothing when none exists, so the invariant this
+/// module documents ("no desk can cure its own blind spot") holds even here.
+#[test]
+fn planting_never_cures_a_desk_that_shares_every_decoy() {
+    let plain = Federation::generate(7, 6, 4, 2, 0, 110);
+    assert!(
+        !plain.decoys_distinct,
+        "two topics leaves only one non-truth option, so every desk shares it",
+    );
+    let planted = plain.planted();
+
+    for desk in &planted.desks {
+        let seats: Vec<&crate::sim::SimAgent> = planted
+            .agents
+            .iter()
+            .filter(|agent| desk.members.contains(&agent.id))
+            .collect();
+        assert!(
+            !seats
+                .iter()
+                .any(|agent| agent.ruled_out.contains(&desk.decoy)),
+            "desk {} can cure its own blind spot even though every desk shares one decoy",
+            desk.name,
+        );
+    }
+}
+
 #[test]
 fn a_fact_crosses_a_channel_and_a_reading_does_not_carry_it() {
     // The wire-level claim: with facts planted, a desk's outgoing line says
