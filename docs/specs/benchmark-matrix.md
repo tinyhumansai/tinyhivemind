@@ -56,11 +56,14 @@ restatement of `turns/ep`.
 
 ### R3 — The cost model is visible, movable, and measurable
 
-Five of the six columns are computed from four constants. Therefore:
+Five of the six columns are computed from five constants, four of which
+`--calibrate` fits from the endpoint. The fifth, `tokens_per_turn`, is a
+property of the prompt this harness sends rather than of the endpoint, so
+calibration reports what its probes wrote rather than fitting it. Therefore:
 
 - every run prints them, with the flags that reproduce them, above every table;
 - each has a flag;
-- `--calibrate` fits all four against a live endpoint, as two two-point fits —
+- `--calibrate` fits the four endpoint constants, as two two-point fits —
   prompt tokens against transcript rows, and latency against completion length.
   A one-point probe cannot separate either pair;
 - a constant that will not parse **stops the run**. Defaulting it to zero would

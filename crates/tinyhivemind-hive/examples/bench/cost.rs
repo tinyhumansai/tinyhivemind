@@ -37,7 +37,13 @@
 //! seat pool would make the arms incomparable across scales, which is the axis
 //! the grid exists to walk.
 
-/// The four constants that turn a round shape into tokens and milliseconds.
+/// The five constants that turn a round shape into tokens and milliseconds.
+///
+/// Four of them describe the endpoint and are what `--calibrate` fits.
+/// [`Self::tokens_per_turn`] is the fifth and is not: how long a turn is, is a
+/// property of the prompt this harness sends and the protocol it asks for, so
+/// a calibration reports what its probes happened to write rather than
+/// pretending to have measured it.
 ///
 /// Defaults are a mid-sized hosted model serving a short structured turn, and
 /// are the point every table in this harness reports at unless a flag moves
