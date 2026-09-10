@@ -18,7 +18,7 @@ use crate::TASK;
 use crate::arms;
 use crate::cli::Options;
 use crate::metrics::{
-    Aggregate, arm_header, arm_row, detail_header, detail_row, json_line, paired_against,
+    Aggregate, arm_header, arm_row, detail_header, library_header, library_row, detail_row, json_line, paired_against,
     paired_diff_line,
 };
 use crate::parallel;
@@ -35,6 +35,7 @@ use crate::sim::{CheckStyle, Room, SPECIALIST_COST_UNIT};
 /// Run every arm over the same rooms and print the comparison.
 pub(crate) fn compare(options: &Options, rooms: &[Room]) -> Result<(), String> {
     let tuned = options.policy;
+    println!("{}\n", options.cost_model.header());
     println!(
         "rooms {}  agents {}  options {}  eval noise ±{}\n\
          tuned policy: budget {}  quorum {}  blind {}  dominance {}  repetition {}\n",
@@ -92,6 +93,16 @@ pub(crate) fn compare(options: &Options, rooms: &[Room]) -> Result<(), String> {
     println!("{}", arm_header());
     for (name, arm) in arms {
         println!("{}", arm_row(name, arm));
+    }
+
+    // The library's own cost, under a heading that says so. It used to sit in
+    // the table above, where `ns/step 0` and `episodes/s inf` on the `vote`
+    // row read as "this arm is free" rather than "this arm never calls the
+    // library" -- which is what they mean.
+    println!("\nwhat the library itself costs, with every agent's time excluded");
+    println!("{}", library_header());
+    for (name, arm) in arms {
+        println!("{}", library_row(name, arm));
     }
 
     println!("\n{}", detail_header());
@@ -524,7 +535,7 @@ fn run_arms(options: &Options, rooms: &[Room]) -> Result<(Totals, std::time::Dur
     let indexed: Vec<(usize, &Room)> = rooms.iter().enumerate().collect();
     let per_room: Vec<Totals> = parallel::map_in_order(&indexed, options.jobs, |(index, room)| {
         let (index, room) = (*index, *room);
-        let mut totals = Totals::default();
+        let mut totals = Totals::priced_at(options.cost_model);
 
         totals
             .hive_default
@@ -582,7 +593,7 @@ fn run_arms(options: &Options, rooms: &[Room]) -> Result<(Totals, std::time::Dur
         Ok(totals)
     })?;
 
-    let mut totals = Totals::default();
+    let mut totals = Totals::priced_at(options.cost_model);
     for chunk in &per_room {
         totals.merge(chunk);
     }
