@@ -47,8 +47,8 @@ use crate::cost::CostModel;
 use crate::http::{Usage, UsageHandle, ask, usage_of};
 use crate::live::AgentPrompt;
 use tinyhivemind_hive::{
-    Audience, BidReason, HiveTurn, Phase, QuorumPolicy, Sequence, SessionAuthor, SessionMessage,
-    Visibility,
+    BidReason, HiveTurn, Phase, QuorumPolicy, Sequence, SessionAuthor, SessionMessage, Visibility,
+    aside::Audience,
 };
 
 /// Rows of synthetic transcript the short and long prompt probes carry.
@@ -229,8 +229,8 @@ fn probe_prompt(rows: usize, completion: u32) -> String {
         phase: Phase::Deliberate,
         visibility: Visibility::Full,
         reason: BidReason::Salience,
-        authorized_after: Sequence(0),
-        opened_at: Sequence(0),
+        watermark: Sequence(0),
+        round_start: Sequence(0),
     };
     let visible: Vec<SessionMessage> = (0..rows)
         .map(|row| {
