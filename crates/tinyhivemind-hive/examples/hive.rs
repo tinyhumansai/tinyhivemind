@@ -221,7 +221,7 @@ fn report(step: &HiveStep) {
             if standings.is_empty() {
                 println!("  nothing was advocated: the turns went somewhere else");
             }
-            for standing in &standings {
+            for standing in standings {
                 println!(
                     "  #{} held {} supporter(s) when the budget ran out",
                     standing.topic,
