@@ -81,7 +81,7 @@ pub fn bids(context: &BidContext<'_>) -> Result<Vec<Bid>> {
     let quiet = quietest(context.members, &shares);
     let deadlocked = deadlocked_topics(context.standings);
     let contested = contested_topic(context, &live);
-    let addressed = addressed(&live);
+    let addressed = addressed_members(&live);
 
     // Saturation and the recency-and-importance half of salience are
     // properties of a trace, not of the member reading it, so both are folded
@@ -333,7 +333,7 @@ fn argues(trace: &Trace, topic: &TopicId) -> bool {
 /// citation of every trace, which is quadratic in the traces *and* linear in
 /// the room on top — the single most expensive thing a large desk did per
 /// turn. One pass over the traces answers it for everybody.
-fn addressed<'a>(traces: &[&'a Trace]) -> BTreeSet<&'a str> {
+fn addressed_members<'a>(traces: &[&'a Trace]) -> BTreeSet<&'a str> {
     let mut author_at: BTreeMap<Sequence, BTreeSet<&str>> = BTreeMap::new();
     for trace in traces {
         if let Some(agent) = trace.agent_id() {
