@@ -249,7 +249,7 @@ impl Federation {
     /// facts.
     #[cfg(test)]
     pub(crate) fn planted(&self) -> Self {
-        self.planted_with(0)
+        self.planted_with(0, 0)
     }
 
     /// The same, with `wrong` per mille of the planted facts naming the
@@ -265,12 +265,19 @@ impl Federation {
     ///
     /// A protocol that only ever moves true facts measures the value of a
     /// channel and nothing about the risk of one.
-    pub(crate) fn planted_with(&self, wrong: u32) -> Self {
+    ///
+    /// `seed` is the episode's own seed — the one [`Federation::generate`] was
+    /// built from, not a constant shared by every federation with the same
+    /// desk count. Without it every federation of a given size draws the
+    /// *same* wrong-fact positions, so a multi-episode `--fact-noise` run
+    /// repeatedly exercises one placement pattern instead of sampling the
+    /// requested per-mille rate across episodes.
+    pub(crate) fn planted_with(&self, wrong: u32, seed: u64) -> Self {
         let mut federation = self.clone();
         federation.evidence = true;
         let count = federation.desks.len();
         let truth = federation.truth.clone();
-        let mut draws = Rng::seeded(mix(0xFAC7_0000, count as u64));
+        let mut draws = Rng::seeded(mix(mix(seed, 0xFAC7_0000), count as u64));
         for desk in 0..count {
             // The cure for desk `desk` is held by the next desk round, so no
             // desk can answer its own blind spot without crossing a channel.
