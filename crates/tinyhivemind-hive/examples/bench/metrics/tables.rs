@@ -9,11 +9,11 @@
 //! `super::test` cover the fold without a table's formatting noise.
 
 use super::Aggregate;
-use super::wilson;
-use crate::metrics::format::{
+use super::format::{
     count, dash_unless, dash_unless_2, deliberates, duration, json_f64, json_f64_if, row,
 };
-use crate::metrics::paired_bootstrap;
+use super::stats::lossy;
+use super::{paired_bootstrap, wilson};
 
 /// A safe ratio that never divides by zero.
 pub(crate) fn ratio(numerator: u64, denominator: u64) -> f64 {
