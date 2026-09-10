@@ -16,7 +16,11 @@ fn a_ladder_that_had_to_ask_who_answers_pays_for_the_asking() {
     let decided = routed_shape(false);
 
     assert_eq!(routed.len(), 2, "the router's call is a round of its own");
-    assert_eq!(decided.len(), 1, "a ladder that never asked pays for one turn");
+    assert_eq!(
+        decided.len(),
+        1,
+        "a ladder that never asked pays for one turn"
+    );
 
     // Sequential, not one wide round: nobody can answer until the router has
     // said who answers, so a host waits for the two in series.
