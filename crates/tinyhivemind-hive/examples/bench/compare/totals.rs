@@ -9,7 +9,6 @@
 
 use crate::metrics::Aggregate;
 
-
 /// Every arm's running totals over one sample of rooms.
 #[derive(Default)]
 pub(super) struct Totals {
