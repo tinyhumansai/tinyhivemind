@@ -48,7 +48,7 @@ use crate::federation::Federation;
 use crate::run::Ending;
 use tinyhivemind_hive::aside::Audience;
 
-pub(crate) use board::AskChannel;
+pub(crate) use board::{AskChannel, Exchange};
 
 use board::Board;
 use member::SwarmSim;
@@ -107,6 +107,17 @@ pub(crate) trait SwarmMember: Send {
     fn answer(&mut self, incoming: &Referral, visible: &[SessionMessage])
     -> Result<String, String>;
 
+    /// State this desk's reading of the whole slate, for every other channel.
+    ///
+    /// Returns `None` from a member with nothing to publish, which is the
+    /// default and is what every live participant does today: publishing is a
+    /// prompt of its own and no live arm has been written for it. A member
+    /// that declines simply contributes no digest, and the arm reports the
+    /// calls it actually made.
+    fn publish(&mut self) -> Option<String> {
+        None
+    }
+
     /// Take in whatever a message just appended to this desk carries.
     ///
     /// Every member of a desk is offered every line written on it, which is
@@ -135,6 +146,12 @@ pub(crate) struct SwarmReport {
     /// same principle the off-floor exchange's `calls/ep` follows: it is a
     /// model call the federation paid for and the turn count does not show.
     pub(crate) off_floor_asks: u32,
+    /// Readings published to the whole federation, taking no turn.
+    ///
+    /// One model call each, however many desks received the row, which is the
+    /// whole reason the mechanism is worth a column of its own beside
+    /// `off_floor_asks`.
+    pub(crate) digests: u32,
     /// Answers that arrived after the desk that asked had already finished.
     pub(crate) stranded: u32,
     /// Turns, across every desk, whose content is a `!defer` line.
@@ -302,11 +319,11 @@ pub(crate) fn drive_swarm(
     let SwarmRun {
         policy,
         referrals,
-        asking,
+        exchange,
         jobs,
     } = *run;
     let count = channels.len();
-    let mut board = Board::new(channels, referrals, keep_trace, asking);
+    let mut board = Board::new(channels, referrals, keep_trace, exchange);
     for desk in 0..count {
         board.host_mut().operator(desk, task);
     }
@@ -366,7 +383,7 @@ pub(crate) fn run_swarm(
     federation: &Federation,
     policy: &EpisodePolicy,
     referrals: ReferralPolicy,
-    asking: AskChannel,
+    exchange: Exchange,
     task: &str,
     keep_trace: bool,
 ) -> Result<SwarmReport, String> {
@@ -395,7 +412,7 @@ pub(crate) fn run_swarm(
         &SwarmRun {
             policy,
             referrals,
-            asking,
+            exchange,
             jobs: 1,
         },
         task,
