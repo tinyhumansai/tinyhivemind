@@ -689,3 +689,6 @@ fn parse(config: &HttpConfig, payload: &Value) -> Result<(String, u64, u64), Str
         }
     }
 }
+
+#[cfg(test)]
+mod test;
