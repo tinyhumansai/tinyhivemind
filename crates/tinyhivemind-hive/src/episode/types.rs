@@ -208,6 +208,12 @@ impl EpisodePolicy {
     ///   members or a thousand.
     /// - `weights.half_life: 20` is twenty rows against an opening round that
     ///   is `members` rows long.
+    /// - `round_width: 4` is the one that costs *depth* rather than accuracy.
+    ///   [`DEFAULT_ROUND_WIDTH`]'s own reasoning is that widening a **blind**
+    ///   round is free — "a blind member could not read that row anyway" — so
+    ///   the free width is the size of the room, and four takes all of it only
+    ///   in a room of four. A room of 128 spends 32 rounds completing an
+    ///   opening round that could take one.
     ///
     /// The budget is three turns per member with a floor of six: a blind
     /// opening round costs one turn per member before anyone has seen anyone,
@@ -218,6 +224,13 @@ impl EpisodePolicy {
     /// look worse than a smaller one: at a fixed twelve, an eight-member room
     /// fails to decide a third of the time and scores 64%; at twenty-four it
     /// decides 96% of the time and scores 88%.
+    ///
+    /// The round is widened to the whole room and `revealed_width` is left at
+    /// [`DEFAULT_REVEALED_WIDTH`]. That is the shipping default's own rule —
+    /// take all of the free concurrency and none of the paid kind — applied to
+    /// a room whose size the constructor actually knows. Measured on the
+    /// hidden profile at 128 members, it is the difference between waiting 135
+    /// rounds and waiting 2.1, with the accuracy column unchanged.
     ///
     /// See [`QuorumPolicy::for_room`] and [`SalienceWeights::for_room`] for
     /// the other two.
@@ -231,6 +244,9 @@ impl EpisodePolicy {
     /// // The window covers the whole episode, so an opening reading still
     /// // counts when the room settles.
     /// assert_eq!(policy.quorum.window, 300);
+    /// // The blind round is the whole room at once; a revealed one is not.
+    /// assert_eq!(policy.round_width, 100);
+    /// assert_eq!(policy.revealed_width, 1);
     /// ```
     #[must_use]
     pub const fn for_room(members: u32) -> Self {
@@ -238,6 +254,11 @@ impl EpisodePolicy {
         let turn_budget = if budget < 6 { 6 } else { budget };
         Self {
             turn_budget,
+            // The whole room's blind round in one round, which is what a blind
+            // round already means: nobody can read anybody, so running them
+            // together changes what is *waited for* and not what is read.
+            round_width: if members == 0 { 1 } else { members },
+            revealed_width: DEFAULT_REVEALED_WIDTH,
             quorum: QuorumPolicy::for_room(members, turn_budget),
             weights: SalienceWeights::for_room(members),
             ..Self::DEFAULT
