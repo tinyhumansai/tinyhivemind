@@ -495,7 +495,7 @@ keep the profile solvable but not trivial.
 
 Every module that outgrew a single file is a directory: `mod.rs` holds its
 module doc, its core types, and whatever re-exports the rest of the crate
-actually needs; its siblings hold one cohesive slice of the rest. The `mod
-sim;`-style declaration in `main.rs` is unchanged either way, since Rust
-resolves it to `sim/mod.rs` transparently. [`LAYOUT.md`](LAYOUT.md) has the
-full file-by-file table.
+actually needs; its siblings hold one cohesive slice of the rest. A `mod sim;`
+declaration in `main.rs` resolves to `sim/mod.rs` transparently, so the split is
+invisible from outside. [`LAYOUT.md`](LAYOUT.md) has the full file-by-file
+table.
