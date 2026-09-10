@@ -44,7 +44,7 @@ use std::time::Instant;
 use crate::backend::http_config;
 use crate::cli::Options;
 use crate::cost::CostModel;
-use crate::http::{Usage, UsageHandle, ask, usage_of};
+use crate::http::{Usage, ask_once};
 use crate::live::AgentPrompt;
 use tinyhivemind_hive::{
     BidReason, HiveTurn, Phase, QuorumPolicy, Sequence, SessionAuthor, SessionMessage, Visibility,
@@ -175,6 +175,9 @@ struct Probe {
 
 /// Run one probe [`REPEATS`] times and keep the fastest.
 ///
+/// Each repeat is a single non-retrying request, so a sample either is one
+/// clean request or is discarded — never the sum of a failure and its retry.
+///
 /// # Errors
 ///
 /// Returns the backend's error text if every attempt failed. A probe that
@@ -184,15 +187,15 @@ fn best_of(config: &crate::http::HttpConfig, model: &str, prompt: &str) -> Resul
     let mut best: Option<Probe> = None;
     let mut failure: Option<String> = None;
     for _ in 0..REPEATS {
-        let handle: UsageHandle = UsageHandle::default();
         let started = Instant::now();
-        match ask(config, model, prompt, &handle) {
-            Ok(_) => {
+        // `ask_once`, not `ask`: a retried attempt would hand this loop two
+        // requests' tokens over two requests' duration as though they were
+        // one, skewing every constant fitted from it. A failed probe is
+        // dropped and the next repeat stands in for it.
+        match ask_once(config, model, prompt) {
+            Ok(usage) => {
                 let ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
-                let probe = Probe {
-                    usage: usage_of(&handle),
-                    ms,
-                };
+                let probe = Probe { usage, ms };
                 if best.as_ref().is_none_or(|held| probe.ms < held.ms) {
                     best = Some(probe);
                 }
