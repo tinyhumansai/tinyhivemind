@@ -271,11 +271,20 @@ pub enum HiveStep {
     /// desks were spending their entire budget asking each other questions
     /// exhausted with *empty* standings on every desk, and it took a source
     /// reading rather than a step result to find that out.
+    ///
+    /// `visibility` reports the other silent failure. Under `blind_round` the
+    /// room sees itself only once every member has authored a live row, so a
+    /// desk with more members than `turn_budget` stays [`Visibility::Blind`]
+    /// for its entire episode and never deliberates — it takes turns and
+    /// nothing more. [`Visibility::Blind`] here says that happened.
+    /// [`EpisodePolicy::for_room`] derives a budget that cannot produce it.
     Exhausted {
         /// Turns taken.
         spent: u32,
         /// Where every advocated topic stood when the budget ran out.
         standings: Vec<TopicStanding>,
+        /// How much of itself the room could see when the budget ran out.
+        visibility: Visibility,
     },
     /// Nobody's urge cleared their threshold.
     Idle,
