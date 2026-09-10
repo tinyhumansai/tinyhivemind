@@ -128,11 +128,23 @@ fine as long as it is visible and movable.
 
 **A finding that survives only at one setting of these constants is a finding
 about this file.** Before believing an ordering that turns on speed or tokens,
-move the constant it turns on and see whether the ordering holds. The cheapest
-version of that check is halving and doubling `--decode-rate`, which is the
-constant the arms differ most sharply under: it scales the decode half of every
-turn's latency while leaving `--ttft` alone, so it moves deep arms much more
-than wide ones.
+move the constant it turns on and see whether the ordering holds.
+
+It is worth knowing which constants *can* move an ordering, because two of them
+cannot. Every turn in this model is the same length, so `--ttft` and
+`--decode-rate` scale every arm's per-round latency by the same factor: they
+change how many seconds are on the **speed** and **thru** columns, and they
+cannot reorder the arms on them. What they do change is the *trade* — how many
+tokens a point of quality costs — because tokens do not scale with them.
+
+The pair that can genuinely reorder is `--tokens-per-row` against
+`--prompt-base`. Arms differ sharply in how much transcript their turns read: a
+one-turn `ladder` reads one row, and the last turn of a long deliberation reads
+everything before it. Raise the per-row cost and the deep arms get relatively
+more expensive; raise the base and the *many-turn* arms do, deep and wide
+alike. An ordering on **tok/ep** or **tok/s** that flips between those two
+settings is a claim about this file rather than about the protocols, and the
+honest report is to say so.
 
 Refusals are deliberate. A cost constant that will not parse stops the run
 rather than defaulting to zero, because free tokens or an instant answer,
