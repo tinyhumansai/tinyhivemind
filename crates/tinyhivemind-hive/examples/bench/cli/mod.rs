@@ -10,6 +10,7 @@
 mod flags;
 
 use crate::context::{Compaction, ContextBudget, FOLD_FIDELITY};
+use crate::cost::CostModel;
 use crate::http::{Thinking, Wire};
 use crate::policy::tuned_policy;
 use crate::sim::Expertise;
@@ -57,6 +58,12 @@ const HIDDEN_NOISE: u32 = 50;
 // field, not a state machine with exclusive states.
 #[allow(clippy::struct_excessive_bools)]
 pub(crate) struct Options {
+    /// What a turn costs in tokens and how long a host waits for one.
+    ///
+    /// Every table's headline columns are computed against this, and every
+    /// run prints it, so a reader sees the point the numbers were taken at
+    /// rather than inheriting it. See [`crate::cost`].
+    pub(crate) cost_model: CostModel,
     /// Rooms to simulate.
     pub(crate) episodes: u32,
     /// Members per room.
@@ -285,6 +292,7 @@ impl Options {
     /// is therefore useless to a test.
     pub(crate) fn defaults() -> Self {
         Self {
+            cost_model: CostModel::DEFAULT,
             episodes: 500,
             agents: 5,
             topics: 4,
