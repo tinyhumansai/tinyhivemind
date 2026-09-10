@@ -62,7 +62,9 @@ use std::time::Instant;
 
 use tinyhivemind_hive::{EpisodePolicy, EpisodeState, HiveStep, step};
 
-use super::board::{Board, PlannedTurn, SpokenTurn, fill_turn};
+use super::board::{
+    Board, PlannedAnswer, PlannedTurn, SpokenAnswer, SpokenTurn, fill_answer, fill_turn,
+};
 use super::{Channel, DeskOutcome, Ending, SwarmMember, member};
 use crate::parallel;
 
@@ -159,16 +161,18 @@ pub(super) fn concurrent_pass(
     let mut progressed = false;
 
     // Phase one, sequential and cheap: settle what every desk owes before
-    // anybody speaks. A pending answer and an off-floor question are both
-    // desk-local and both rare next to turns.
+    // anybody speaks. Nothing here calls a model on a live desk — a pending
+    // answer is *planned* rather than answered, and `publish` and `ask` are
+    // both `None` for every live seat by default. Answering is a model call
+    // and belongs in phase three with the turns.
+    let mut answers: Vec<PlannedAnswer> = Vec::new();
     for (desk, outcome) in finished.iter().enumerate() {
         if outcome.is_some() {
             board.strand(desk);
             continue;
         }
         if let Some(incoming) = board.pop_pending(desk) {
-            board.deliver(members, desk, &incoming)?;
-            progressed = true;
+            answers.push(board.plan_answer(members, desk, &incoming)?);
             continue;
         }
         if board.publish_digest(members, desk)? {
@@ -179,13 +183,19 @@ pub(super) fn concurrent_pass(
             progressed = true;
         }
     }
+    // A desk that owes an answer does not also take a turn this pass, so the
+    // two never contend for the same seats.
+    let mut answering: Vec<bool> = vec![false; count];
+    for planned in &answers {
+        answering[planned.desk] = true;
+    }
 
     // Phase two, sequential and cheap: ask the library who speaks next on each
     // desk, and retire the desks that are done.
     let mut planned: Vec<PlannedTurn> = Vec::new();
     let mut committed: Vec<Option<EpisodeState>> = vec![None; count];
     for desk in 0..count {
-        if finished[desk].is_some() || !board.pending_empty(desk) {
+        if finished[desk].is_some() || answering[desk] || !board.pending_empty(desk) {
             continue;
         }
         match decide(board, states, policy, desk)? {
@@ -210,28 +220,35 @@ pub(super) fn concurrent_pass(
     // Phase three, concurrent: every turn of every desk's round is filled at
     // the same time. The width is now two-dimensional — `desks x round_width`
     // model calls in flight — and `--jobs` is what bounds it.
-    let spoken = {
+    // A desk either answers a referral or takes a round, never both, so one
+    // work item per desk covers the whole federation's model calls.
+    let spoken: Vec<Spoken> = {
         // Seats are borrowed per desk, so the work is grouped by desk and each
         // group fills its own round in order. Grouping rather than flattening
         // is not a nicety: two turns of one round need the same `&mut` seats.
-        let mut work: Vec<(Vec<&PlannedTurn>, &mut Vec<&mut dyn SwarmMember>)> = members
+        let mut work: Vec<(Job<'_>, &mut Vec<&mut dyn SwarmMember>)> = members
             .iter_mut()
             .enumerate()
-            .map(|(desk, seats)| {
+            .filter_map(|(desk, seats)| {
+                if let Some(answer) = answers.iter().find(|plan| plan.desk == desk) {
+                    return Some((Job::Answer(answer), seats));
+                }
                 let round: Vec<&PlannedTurn> =
                     planned.iter().filter(|plan| plan.desk == desk).collect();
-                (round, seats)
+                if round.is_empty() {
+                    return None;
+                }
+                Some((Job::Round(round), seats))
             })
-            .filter(|(round, _)| !round.is_empty())
             .collect();
-        let rounds: Vec<Vec<SpokenTurn>> =
-            parallel::map_mut_in_order(&mut work, jobs, |(round, seats)| {
-                round
-                    .iter()
-                    .map(|plan| fill_turn(seats, plan))
-                    .collect::<Result<Vec<SpokenTurn>, String>>()
-            })?;
-        rounds
+        parallel::map_mut_in_order(&mut work, jobs, |(job, seats)| match job {
+            Job::Answer(plan) => fill_answer(seats, plan).map(Spoken::Answer),
+            Job::Round(round) => round
+                .iter()
+                .map(|plan| fill_turn(seats, plan))
+                .collect::<Result<Vec<SpokenTurn>, String>>()
+                .map(Spoken::Round),
+        })?
     };
 
     // Phase four, sequential and in desk order, each desk's round in the order
@@ -239,11 +256,16 @@ pub(super) fn concurrent_pass(
     // row consumes a sequence number, and the quorum window and salience decay
     // read raw sequence distance under `Basis::Sequence`, so landing in
     // completion order would let one seed decide two different things.
-    for round in &spoken {
-        for said in round {
-            board.land_turn(members, said)?;
-            progressed = true;
+    for job in &spoken {
+        match job {
+            Spoken::Answer(answer) => board.land_answer(members, answer)?,
+            Spoken::Round(round) => {
+                for said in round {
+                    board.land_turn(members, said)?;
+                }
+            }
         }
+        progressed = true;
     }
     for (desk, next_state) in committed.into_iter().enumerate() {
         if let Some(next_state) = next_state {
@@ -252,6 +274,27 @@ pub(super) fn concurrent_pass(
     }
 
     Ok(progressed)
+}
+
+/// One desk's model calls for this pass: an answer it owes, or the round it
+/// was authorized.
+///
+/// A desk with a referral waiting does not also take a turn, so this is an
+/// either/or rather than a pair — which is what lets the whole federation's
+/// calls go through one concurrent stage.
+enum Job<'a> {
+    /// A question from another channel, waiting on this desk.
+    Answer(&'a PlannedAnswer),
+    /// The turns this desk's episode authorized.
+    Round(Vec<&'a PlannedTurn>),
+}
+
+/// What one desk's job produced.
+enum Spoken {
+    /// The answer, and the referral it routes back along.
+    Answer(SpokenAnswer),
+    /// The round, in the order the library authorized it.
+    Round(Vec<SpokenTurn>),
 }
 
 /// Ask the library what one desk does next, charging the time to the report.
