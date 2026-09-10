@@ -69,10 +69,7 @@ fn merging_two_samples_equals_pricing_one() {
     // The property that lets the per-room loops spread across `--jobs`
     // threads without moving a printed number, exactly as
     // `metrics::Aggregate::merge` is held to.
-    let left = [
-        RoundShape::uniform(1, 2),
-        RoundShape::uniform(3, 1),
-    ];
+    let left = [RoundShape::uniform(1, 2), RoundShape::uniform(3, 1)];
     let right = [RoundShape::uniform(5, 4)];
 
     let mut folded = MODEL.price(&left);
