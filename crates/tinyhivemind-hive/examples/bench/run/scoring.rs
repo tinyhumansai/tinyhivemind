@@ -10,11 +10,12 @@
 use std::time::Duration;
 
 use tinyhivemind_hive::{
-    BidReason, Directory, HiveTurn, Phase, Sequence, SessionAuthor, SessionMessage,
-    aside::AsidePolicy,
+    BidReason, Directory, DirectoryPolicy, EpisodeState, HiveTurn, Phase, Sequence, SessionAuthor,
+    SessionMessage, aside::AsidePolicy, directory,
     trace::{TopicId, Trace, TraceKind, resolve},
 };
 
+use super::turns::mean_context_rows;
 use crate::metrics::spearman_milli;
 
 /// What one episode cost and what it decided.
