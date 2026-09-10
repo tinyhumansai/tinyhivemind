@@ -416,6 +416,21 @@ fn live_federation(options: &Options, scenario: &Scenario) -> Result<(), String>
     );
     print_usage(options, &usage_seats);
 
+    live_federated_poll(options, scenario)
+}
+
+/// Run the matched-budget control for a live federation and print it.
+///
+/// Split out of [`live_federation`] because it is a whole second experiment
+/// rather than a tail of the first: every member answers the same brief alone,
+/// through the same backend the deliberating arm ran on, and a plurality
+/// decides. The control has to match the arm it is scored against or the
+/// comparison means nothing.
+///
+/// # Errors
+///
+/// Returns a backend failure from any seat's own turn.
+fn live_federated_poll(options: &Options, scenario: &Scenario) -> Result<(), String> {
     let backend = poll_backend(options)?;
     let picks = live::poll(options, scenario, &backend)?;
     for (id, pick) in &picks {
