@@ -501,19 +501,73 @@ impl Options {
         if !unknown.is_empty() {
             return Err(format!("unrecognised flag(s): {}", unknown.join(", ")));
         }
+        let named_axis = args_named_an_axis(&raw);
+        Self::checked(options.mode, named_axis)?;
         Ok(options)
     }
+
+    /// Refuse a run whose selected mode would silently discard a named axis.
+    ///
+    /// Only [`Mode::Grid`] reads [`Options::axes`]; the federation, the sweep
+    /// and every live path build their own rooms and do not know an axis
+    /// exists. Accepting `--swarm --topic hidden` would therefore run a
+    /// federation and throw the topic away, printing it under the heading the
+    /// operator typed -- the same failure an unrecognised flag is refused for.
+    ///
+    /// Split from [`Self::parse`] so it can be tested without a process
+    /// argument list, which is what makes the rule checkable at all.
+    ///
+    /// # Errors
+    ///
+    /// Returns a message naming the mode that would have discarded the axis.
+    pub(crate) fn checked(mode: Mode, named_axis: bool) -> Result<(), String> {
+        if !named_axis || matches!(mode, Mode::Grid) {
+            return Ok(());
+        }
+        let selected = match mode {
+            Mode::Swarm => "--swarm",
+            Mode::Sweep => "--sweep",
+            Mode::Trace => "--trace",
+            Mode::StatsCheck => "--stats-check",
+            Mode::Calibrate => "--calibrate",
+            Mode::ContextSweep => "--context-sweep",
+            Mode::StageSweep => "--stages",
+            Mode::FacetSweep => "--facets",
+            Mode::ScaleSweep => "--scale-sweep",
+            Mode::Live => "--agent-cmd/--api-base/--scenario",
+            Mode::Compare | Mode::Grid => return Ok(()),
+        };
+        Err(format!(
+            "{selected} does not read the grid's axes, so a named \
+             --topic/--scale/--complexity/--concurrency would be discarded; \
+             drop one of the two"
+        ))
+    }
+}
+
+/// Whether any grid axis was named on the command line.
+///
+/// Read off the raw arguments rather than tracked through the parse loop,
+/// because an axis flag that *failed* to parse has already stopped the run and
+/// one that succeeded may have been given before or after the mode flag.
+fn args_named_an_axis(raw: &[String]) -> bool {
+    raw.iter().any(|argument| {
+        matches!(
+            argument.as_str(),
+            "--topic" | "--scale" | "--complexity" | "--concurrency"
+        )
+    })
 }
 
 /// Promote the parser's default mode to [`Mode::Grid`] when an axis flag is
 /// given, without overwriting a mode the operator already chose explicitly.
 ///
 /// Naming an axis (`--topic`, `--scale`, `--complexity`, `--concurrency`)
-/// alone selects the grid, so it is never silently ignored -- but
-/// `--swarm --topic hidden` must keep running the federation `--swarm` asked
-/// for rather than switching to a grid because the axis flag happened to
-/// come second. Only [`Mode::Compare`], the parser's own default, is safe to
-/// promote.
+/// alone selects the grid, so it is never silently ignored. It does not
+/// *overwrite* an explicit mode, because the two orderings would otherwise
+/// disagree -- and a combination that names both is refused outright by
+/// [`Options::checked`] rather than resolved in one direction, since no mode
+/// but the grid reads the axes at all.
 fn select_grid_axis(options: &mut Options) {
     if matches!(options.mode, Mode::Compare) {
         options.mode = Mode::Grid;

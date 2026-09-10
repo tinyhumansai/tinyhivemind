@@ -151,3 +151,25 @@ fn a_grid_axis_flag_still_selects_the_grid_from_the_default_mode() {
     select_grid_axis(&mut options);
     assert!(matches!(options.mode, Mode::Grid));
 }
+
+#[test]
+fn refuses_an_axis_the_selected_mode_would_discard() {
+    // `--swarm` never reads `Options::axes` -- the federation path builds its
+    // own desks and does not know a topic axis exists -- so accepting
+    // `--swarm --topic hidden` would run a federation and silently throw the
+    // named topic away, reporting it under the heading the operator typed.
+    // That is the failure an unrecognised flag is already refused for.
+    let refused = Options::checked(Mode::Swarm, true);
+    assert!(refused.is_err(), "an ignored axis must stop the run");
+    let message = refused.unwrap_err();
+    assert!(
+        message.contains("--swarm"),
+        "the refusal must name the mode that would discard the axis: {message}"
+    );
+
+    // Naming an axis with no competing mode flag is the ordinary grid, and
+    // a mode flag with no axis named is untouched by this check.
+    assert!(Options::checked(Mode::Grid, true).is_ok());
+    assert!(Options::checked(Mode::Swarm, false).is_ok());
+    assert!(Options::checked(Mode::Compare, false).is_ok());
+}
