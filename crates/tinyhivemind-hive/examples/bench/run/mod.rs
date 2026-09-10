@@ -17,11 +17,11 @@
 use std::time::{Duration, Instant};
 
 use tinyhivemind_hive::{
-    Conversation, DirectoryPolicy, EpisodePolicy, EpisodeState, ExchangePolicy, ExchangeState,
-    HiveStep, HiveTurn, Sequence, SessionAuthor, SessionMessage,
+    Conversation, EpisodePolicy, EpisodeState, ExchangePolicy, ExchangeState, HiveStep, HiveTurn,
+    Sequence, SessionAuthor, SessionMessage,
     aside::Audience,
     desk::{Desk, DeskSet, ResponderMode},
-    directory, project_for,
+    project_for,
     roster::{Roster, RosterMember},
     step,
 };
