@@ -6,24 +6,26 @@
 //! The formatting helpers that turn an [`Aggregate`] into the printed and
 //! `--json` tables live in [`format`]; the small numeric statistics
 //! ([`stats::lossy`], the bootstrap percentile, and the rank-tie arithmetic
-//! behind [`spearman_milli`]) live in [`stats`]. Both submodules are private:
-//! everything a caller outside this module needs is re-exported here.
+//! behind [`spearman_milli`]) live in [`stats`]; the tables themselves — the
+//! headline arm comparison, the library/detail pair, the paired-comparison
+//! lines and the `--json` object — live in [`tables`]. All three submodules
+//! are private: everything a caller outside this module needs is re-exported
+//! here.
 
 mod format;
 mod stats;
+mod tables;
 
-use std::fmt::Write as _;
 use std::time::Duration;
 
-use format::{
-    count, dash_unless, dash_unless_2, deliberates, duration, json_f64, json_f64_if, row,
-};
-use stats::lossy;
-
 // Re-exported so `compare.rs`, `main.rs` and the sweeps keep importing the
-// benchmark's statistics from `metrics`, where they are used, rather than
-// having to know which file inside it they now live in.
+// benchmark's statistics and tables from `metrics`, where they are used,
+// rather than having to know which file inside it they now live in.
 pub(crate) use stats::{paired_bootstrap, spearman_milli, wilson};
+pub(crate) use tables::{
+    arm_header, arm_row, detail_header, detail_row, json_line, library_header, library_row,
+    paired_against, paired_diff_line, ratio,
+};
 
 use crate::arms::ArmReport;
 use crate::run::{Ending, EpisodeReport};
