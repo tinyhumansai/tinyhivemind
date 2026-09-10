@@ -29,6 +29,7 @@ use tinyhivemind_hive::{
     trace::TopicId,
 };
 
+use crate::cost::RoundShape;
 use crate::federation::Federation;
 use crate::rng::{Rng, mix};
 use crate::run::{Host, Participant, drive};
@@ -62,6 +63,28 @@ pub(crate) struct ArmReport {
     pub(crate) routed_right: Option<bool>,
     /// Time spent inside the library.
     pub(crate) library_time: Duration,
+    /// The shape the arm ran in, for [`crate::cost::CostModel::price`].
+    ///
+    /// A control arm states its own shape rather than having one derived from
+    /// [`Self::turns`] and [`Self::rounds`], because the derivation that is
+    /// right for `vote` — one round of independent answers, every one reading
+    /// only the brief — is wrong for `merged`, which deliberates and whose
+    /// later rounds read everything the earlier ones wrote.
+    pub(crate) shape: Vec<RoundShape>,
+}
+
+/// The shape of a control arm whose members each answer from their own
+/// private evaluation alone, having seen nothing but the brief.
+///
+/// One round, `turns` wide, every turn reading the single operator row. This
+/// is what makes `vote` cheap in wall clock and expensive in tokens at once —
+/// the comparison a `turns/ep` column could not express, because it charged a
+/// poll of fifteen the same depth as a deliberation of fifteen.
+fn blind_shape(turns: u32) -> Vec<RoundShape> {
+    if turns == 0 {
+        return Vec::new();
+    }
+    vec![RoundShape::uniform(1, turns)]
 }
 
 /// Route one message through the real responder ladder and take that
@@ -246,9 +269,15 @@ fn route(
     }
     .map_err(|error| error.to_string())?;
 
+    // Whether the ladder had to *ask* who should answer. On the `Select` rung
+    // a host puts the candidate list to a router, which is a model call like
+    // any other and has to be paid for; on `Decided` the ladder answered from
+    // the roster alone and nothing was spent.
+    let mut routed = false;
     let responder = match plan {
         ResponderPlan::Decided { decision } => decision.responder_id,
         ResponderPlan::Select { request, fallback } => {
+            routed = true;
             let named = select(&request.candidates);
             accept_selection(&named, &request.candidates).unwrap_or(fallback.responder_id)
         }
@@ -269,7 +298,43 @@ fn route(
         cost_units: u64::from(room.cost_of(&responder)),
         routed_right: room.deciding_expert().map(|held| held == responder),
         library_time,
+        shape: routed_shape(routed, candidates.len()),
     })
+}
+
+/// What the ladder costs: the responder's own turn, preceded by the router's
+/// call when the ladder took the `Select` rung.
+///
+/// Two rounds rather than one wide round, because the two are *sequential* --
+/// nobody can answer until the router has said who answers -- so a host waits
+/// for both in series. Pricing the selection as free understated the arm on
+/// every column that matters: a routed ladder is twice the latency and roughly
+/// twice the tokens of the one-turn arm it was being reported as.
+///
+/// The router's round is charged `candidates` rows, not one. A real selector
+/// serializes every candidate -- id, label, role, description -- into its
+/// prompt, so the request grows with the room, and charging a flat row left
+/// the ladder's token cost identical from a two-member room to a
+/// thousand-member one. That is exactly the axis `--scale` exists to walk, so
+/// a flat charge would have made the ladder look free at the scales where it
+/// is least so. A candidate line is shorter than a transcript row, so pricing
+/// them at one row each still overstates nothing that matters and keeps a
+/// single unit across the whole harness.
+///
+/// `turns` and `rounds` on the report stay at `1`. Those two count what the
+/// *room* spent deliberating, which is what every recorded number before the
+/// cost model was priced in, and a router call is not a deliberation turn.
+fn routed_shape(routed: bool, candidates: usize) -> Vec<RoundShape> {
+    if routed {
+        let listed = u32::try_from(candidates).unwrap_or(u32::MAX);
+        return vec![
+            // The router reads the brief and the candidate list.
+            RoundShape::uniform(listed.saturating_add(1), 1),
+            // The responder reads the brief. There is no transcript yet.
+            RoundShape::uniform(1, 1),
+        ];
+    }
+    blind_shape(1)
 }
 
 /// Spend a matched budget on independent answers and take the plurality.
@@ -289,6 +354,7 @@ pub(crate) fn run_vote(room: &Room, budget: u32) -> ArmReport {
             cost_units: 0,
             routed_right: None,
             library_time: Duration::ZERO,
+            shape: Vec::new(),
         };
     }
     let mut spent = 0_u32;
@@ -321,6 +387,7 @@ pub(crate) fn run_vote(room: &Room, budget: u32) -> ArmReport {
         cost_units,
         routed_right: None,
         library_time: Duration::ZERO,
+        shape: blind_shape(spent),
     }
 }
 
@@ -352,6 +419,7 @@ pub(crate) fn run_federated_vote(federation: &Federation) -> ArmReport {
         cost_units: u64::from(turns),
         routed_right: None,
         library_time: Duration::ZERO,
+        shape: blind_shape(turns),
     }
 }
 
@@ -391,6 +459,7 @@ pub(crate) fn run_merged(
         cost_units: report.cost_units,
         routed_right: None,
         library_time: report.library_time,
+        shape: report.shape,
     })
 }
 
@@ -404,3 +473,6 @@ fn plurality(tally: &[(&TopicId, u32)]) -> Option<TopicId> {
     }
     Some(leader.0.clone())
 }
+
+#[cfg(test)]
+mod test;

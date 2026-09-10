@@ -6,22 +6,26 @@
 //! The formatting helpers that turn an [`Aggregate`] into the printed and
 //! `--json` tables live in [`format`]; the small numeric statistics
 //! ([`stats::lossy`], the bootstrap percentile, and the rank-tie arithmetic
-//! behind [`spearman_milli`]) live in [`stats`]. Both submodules are private:
-//! everything a caller outside this module needs is re-exported here.
+//! behind [`spearman_milli`]) live in [`stats`]; the tables themselves — the
+//! headline arm comparison, the library/detail pair, the paired-comparison
+//! lines and the `--json` object — live in [`tables`]. All three submodules
+//! are private: everything a caller outside this module needs is re-exported
+//! here.
 
 mod format;
 mod stats;
+mod tables;
 
-use std::fmt::Write as _;
 use std::time::Duration;
 
-use format::{dash_unless, dash_unless_2, deliberates, json_f64, json_f64_if, row};
-use stats::lossy;
-
 // Re-exported so `compare.rs`, `main.rs` and the sweeps keep importing the
-// benchmark's statistics from `metrics`, where they are used, rather than
-// having to know which file inside it they now live in.
+// benchmark's statistics and tables from `metrics`, where they are used,
+// rather than having to know which file inside it they now live in.
 pub(crate) use stats::{paired_bootstrap, spearman_milli, wilson};
+pub(crate) use tables::{
+    arm_header, arm_row, detail_header, detail_row, json_line, library_header, library_row,
+    paired_against, paired_diff_line, ratio,
+};
 
 use crate::arms::ArmReport;
 use crate::run::{Ending, EpisodeReport};
@@ -29,6 +33,17 @@ use crate::run::{Ending, EpisodeReport};
 /// Running totals over a sample of episodes.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Aggregate {
+    /// The model every episode folded in here was priced against.
+    ///
+    /// Held per-aggregate rather than passed to [`Aggregate::add`] because an
+    /// arm's totals and the constants they were priced under are one fact: a
+    /// row of the table reporting tokens computed at one point and a wall
+    /// clock computed at another would be a number nothing produced. Every
+    /// aggregate in one run carries the same model, which [`Aggregate::merge`]
+    /// asserts in debug builds.
+    pub(crate) model: crate::cost::CostModel,
+    /// What the sample cost in tokens and wall clock, priced by [`Self::model`].
+    pub(crate) cost: crate::cost::Cost,
     /// Episodes in the sample.
     pub(crate) episodes: u32,
     /// Episodes that ended in a recorded decision.
@@ -163,6 +178,17 @@ impl Aggregate {
         self.rank_rho_milli = self.rank_rho_milli.saturating_add(other.rank_rho_milli);
         self.rank_rho_count = self.rank_rho_count.saturating_add(other.rank_rho_count);
         self.correct_flags.extend_from_slice(&other.correct_flags);
+        // Two halves of one sample, priced apart and folded together, must
+        // have been priced the same way or the sum is meaningless. Every
+        // aggregate in a run is built from the same `Options`, so a mismatch
+        // is a harness bug rather than an operator's mistake -- hence a debug
+        // assertion rather than a `Result` the callers would all have to
+        // thread.
+        debug_assert_eq!(
+            self.model, other.model,
+            "folded two samples priced against different cost models"
+        );
+        self.cost.merge(other.cost);
     }
 
     /// Fold one episode in.
@@ -207,6 +233,7 @@ impl Aggregate {
             self.rank_rho_milli = self.rank_rho_milli.saturating_add(rho);
             self.rank_rho_count = self.rank_rho_count.saturating_add(1);
         }
+        self.cost.merge(self.model.price(&report.shape));
     }
 
     /// Fold one control-arm result in.
@@ -236,6 +263,44 @@ impl Aggregate {
                 self.routed_right = self.routed_right.saturating_add(1);
             }
         }
+        self.cost.merge(self.model.price(&report.shape));
+    }
+
+    /// An empty sample that will be priced against `model`.
+    ///
+    /// Every aggregate in one run is built through this so that the whole
+    /// table reports at one point of the cost model, and the header that
+    /// prints the model describes every row under it.
+    pub(crate) fn priced_at(model: crate::cost::CostModel) -> Self {
+        Self {
+            model,
+            ..Self::default()
+        }
+    }
+
+    /// Mean milliseconds a host waited for one episode: the arm's **speed**.
+    pub(crate) fn latency_ms(&self) -> f64 {
+        self.cost.mean_ms(self.episodes)
+    }
+
+    /// Episodes one seat pool finishes per hour: the arm's **throughput**.
+    pub(crate) fn episodes_per_hour(&self) -> f64 {
+        self.cost.episodes_per_hour(self.episodes)
+    }
+
+    /// Mean turns in flight: the arm's **concurrency**.
+    pub(crate) fn concurrency(&self) -> f64 {
+        self.cost.concurrency()
+    }
+
+    /// Mean tokens one episode spent.
+    pub(crate) fn tokens_per_episode(&self) -> f64 {
+        self.cost.mean_tokens(self.episodes)
+    }
+
+    /// Tokens the arm turns over per second of wall clock.
+    pub(crate) fn tokens_per_second(&self) -> f64 {
+        self.cost.tokens_per_second()
     }
 
     /// Share of episodes that decided on the best option.
@@ -362,222 +427,6 @@ impl Aggregate {
         let sum = i32::try_from(self.rank_rho_milli).unwrap_or(i32::MAX);
         f64::from(sum) / f64::from(self.rank_rho_count)
     }
-}
-
-/// A safe ratio that never divides by zero.
-pub(crate) fn ratio(numerator: u64, denominator: u64) -> f64 {
-    if denominator == 0 {
-        return 0.0;
-    }
-    let numerator = u32::try_from(numerator).map_or_else(|_| lossy(numerator), f64::from);
-    let denominator = u32::try_from(denominator).map_or_else(|_| lossy(denominator), f64::from);
-    numerator / denominator
-}
-
-/// The header for the arm comparison table.
-pub(crate) fn arm_header() -> String {
-    format!(
-        "{:<8}{:>10}{:>10}{:>12}{:>12}{:>14}{:>14}",
-        "arm", "turns/ep", "rounds/ep", "decided %", "correct %", "ns/step", "episodes/s"
-    )
-}
-
-/// One row of the arm comparison table.
-pub(crate) fn arm_row(name: &str, totals: &Aggregate) -> String {
-    let rest = format!(
-        "{:>10.2}{:>10.2}{:>12.1}{:>12.1}{:>14.0}{:>14.0}",
-        totals.turns_per_episode(),
-        totals.rounds_per_episode(),
-        totals.decision_rate(),
-        totals.accuracy(),
-        totals.nanos_per_step(),
-        totals.episodes_per_second(),
-    );
-    row(name, &rest)
-}
-
-/// The header for the statistics table: accuracy with its confidence
-/// interval, the expert-delegation and cost columns, and the
-/// directory-circularity proxy.
-pub(crate) fn detail_header() -> String {
-    format!(
-        "{:<8}{:>11}{:>16}{:>8}{:>9}{:>9}{:>11}{:>9}{:>9}{:>10}{:>7}",
-        "arm",
-        "correct %",
-        "95% CI",
-        "fact %",
-        "to-fact",
-        "knows %",
-        "defers/ep",
-        "route %",
-        "cost/ep",
-        "calls/ep",
-        "rho",
-    )
-}
-
-/// One row of the statistics table.
-///
-/// `—` stands in for a column that does not apply to this arm at all: the
-/// expert and rho columns for a control arm that never deliberates, and the
-/// route column for every arm but a `ladder` one, which is the only kind
-/// that ever consults the responder ladder.
-pub(crate) fn detail_row(name: &str, totals: &Aggregate) -> String {
-    let (low, high) = wilson(totals.correct, totals.episodes);
-    let ci = format!("{low:.1}–{high:.1}");
-    let hive_like = deliberates(name);
-    let fact_pct = dash_unless(hive_like && totals.expert_of > 0, || totals.fact_reach());
-    let to_fact = dash_unless(hive_like && totals.fact_deposited > 0, || {
-        totals.fact_latency()
-    });
-    let knows_pct = dash_unless(hive_like, || totals.knows_rate());
-    let defers = dash_unless(hive_like, || totals.defers_per_episode());
-    // Only a ladder arm consults the responder ladder at all, and only a
-    // room that names an expert on the deciding topic gives it something to
-    // be right or wrong about -- so a uniform room prints `—` rather than a
-    // `0.0` that would read as "the ladder always missed".
-    let route_pct = dash_unless(totals.routed_of > 0, || totals.routing_precision());
-    // Two decimals, not one: the number is folded in thousandths and every
-    // deliberating arm lands in the same tenth, so a single decimal printed
-    // `0.7` for every arm of every run and read as a constant the harness had
-    // hard-coded.
-    let rho = dash_unless_2(hive_like && totals.rank_rho_count > 0, || {
-        totals.mean_rho() / 1000.0
-    });
-    let rest = format!(
-        "{:>11.1}{:>16}{:>8}{:>9}{:>9}{:>11}{:>9}{:>9.2}{:>10}{:>7}",
-        totals.accuracy(),
-        ci,
-        fact_pct,
-        to_fact,
-        knows_pct,
-        defers,
-        route_pct,
-        totals.cost_per_episode(),
-        // `—` rather than `0.0` for an arm that runs no exchange at all: the
-        // column is about a mechanism most arms do not have, not a count they
-        // scored zero on.
-        dash_unless(totals.contacts > 0, || totals.contacts_per_episode()),
-        rho,
-    );
-    row(name, &rest)
-}
-
-/// A paired-bootstrap comparison line for one deliberating arm against the
-/// `vote` control, e.g. `hive+ − vote: +3.6 [+2.1, +5.0]`.
-///
-/// Returns `None` when the two arms were not run over the same number of
-/// episodes, which is the one precondition [`paired_bootstrap`] needs to
-/// treat the two flag vectors as paired samples over the same rooms.
-pub(crate) fn paired_diff_line(
-    name: &str,
-    treatment: &Aggregate,
-    control: &Aggregate,
-    seed: u64,
-    resamples: u32,
-) -> Option<String> {
-    if treatment.correct_flags.is_empty()
-        || treatment.correct_flags.len() != control.correct_flags.len()
-    {
-        return None;
-    }
-    let diff = treatment.accuracy() - control.accuracy();
-    let (low, high) = paired_bootstrap(
-        &treatment.correct_flags,
-        &control.correct_flags,
-        seed,
-        resamples,
-    );
-    Some(format!("{name} − vote: {diff:+.1} [{low:+.1}, {high:+.1}]"))
-}
-
-/// The same paired bootstrap, against a named control other than `vote`.
-///
-/// `vote` is the right control for the published table — it answers "is a room
-/// worth more than a matched-budget poll". It is the wrong control for a
-/// mechanism *inside* a room, where the question is whether the mechanism
-/// changed anything against the same room without it.
-pub(crate) fn paired_against(
-    name: &str,
-    control_name: &str,
-    treatment: &Aggregate,
-    control: &Aggregate,
-    seed: u64,
-    resamples: u32,
-) -> Option<String> {
-    if treatment.correct_flags.is_empty()
-        || treatment.correct_flags.len() != control.correct_flags.len()
-    {
-        return None;
-    }
-    let diff = treatment.accuracy() - control.accuracy();
-    let (low, high) = paired_bootstrap(
-        &treatment.correct_flags,
-        &control.correct_flags,
-        seed,
-        resamples,
-    );
-    Some(format!(
-        "{name} − {control_name}: {diff:+.1} [{low:+.1}, {high:+.1}]"
-    ))
-}
-
-/// One flat JSON object for `name`, covering every column of both tables.
-///
-/// Hand-written with [`write!`] rather than a serialization crate: the
-/// workspace does not depend on `serde_json` here and one flat object with a
-/// dozen known fields does not need one. A value that is not finite --
-/// [`Aggregate::episodes_per_second`] when no library time was spent, chiefly
-/// -- is written as JSON `null` rather than `inf`, which is not valid JSON.
-pub(crate) fn json_line(name: &str, totals: &Aggregate) -> String {
-    let (low, high) = wilson(totals.correct, totals.episodes);
-    let hive_like = deliberates(name);
-    let mut line = String::new();
-    // `write!` into a `String` never fails, so the result is discarded
-    // rather than propagated.
-    let _ = write!(
-        line,
-        "{{\"arm\":\"{name}\",\"turns_per_episode\":{},\"rounds_per_episode\":{},\"decision_rate\":{},\
-         \"correct_pct\":{},\"ci_low\":{},\"ci_high\":{},\"ns_per_step\":{},\
-         \"episodes_per_second\":{},\"fact_pct\":{},\"to_fact\":{},\
-         \"knows_pct\":{},\"defers_per_episode\":{},\
-         \"expert_led\":{},\"route_pct\":{},\"cost_per_episode\":{},\
-         \"accuracy_per_kilo_unit\":{},\"rho\":{},\"exchange_calls_per_episode\":{}}}",
-        json_f64(totals.turns_per_episode()),
-        json_f64(totals.rounds_per_episode()),
-        json_f64(totals.decision_rate()),
-        json_f64(totals.accuracy()),
-        json_f64(low),
-        json_f64(high),
-        json_f64(totals.nanos_per_step()),
-        json_f64(totals.episodes_per_second()),
-        json_f64_if(hive_like && totals.expert_of > 0, totals.fact_reach()),
-        json_f64_if(
-            hive_like && totals.fact_deposited > 0,
-            totals.fact_latency()
-        ),
-        json_f64_if(hive_like, totals.knows_rate()),
-        json_f64_if(hive_like, totals.defers_per_episode()),
-        json_f64_if(hive_like && totals.expert_of > 0, totals.expert_led()),
-        json_f64_if(totals.routed_of > 0, totals.routing_precision()),
-        json_f64(totals.cost_per_episode()),
-        json_f64(totals.accuracy_per_kilo_unit()),
-        json_f64_if(
-            hive_like && totals.rank_rho_count > 0,
-            totals.mean_rho() / 1000.0
-        ),
-        // Model calls made in off-floor exchange rounds, per episode -- the
-        // same figure the `calls/ep` column reports, dashed there when no arm
-        // in the run made any. Members *asked*, not rows written: a member
-        // that declines costs the same call as one that answers, so counting
-        // rows would report a price below the one paid. `0.0` here rather
-        // than `null` when nothing was spent, matching `cost_per_episode`'s
-        // zero rather than every other `hive_like`-gated field's `null`,
-        // since this is a total rather than a rate only a hive-like arm can
-        // attempt.
-        json_f64(totals.contacts_per_episode()),
-    );
-    line
 }
 
 #[cfg(test)]

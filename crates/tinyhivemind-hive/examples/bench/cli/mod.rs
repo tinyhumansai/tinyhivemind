@@ -10,10 +10,15 @@
 mod flags;
 
 use crate::context::{Compaction, ContextBudget, FOLD_FIDELITY};
+use crate::cost::CostModel;
+use crate::grid::Axes;
 use crate::http::{Thinking, Wire};
 use crate::policy::tuned_policy;
 use crate::sim::Expertise;
-use flags::{apply_expertise_flag, apply_live_flag, apply_scale_flag, flag_number, next_number};
+use flags::{
+    apply_expertise_flag, apply_live_flag, apply_mode_flag, apply_scale_flag, flag_number,
+    next_number, set_live_floor,
+};
 use tinyhivemind_hive::EpisodePolicy;
 
 /// How much a desk overrates its own decoy, by default.
@@ -57,6 +62,18 @@ const HIDDEN_NOISE: u32 = 50;
 // field, not a state machine with exclusive states.
 #[allow(clippy::struct_excessive_bools)]
 pub(crate) struct Options {
+    /// The cross product of axes a `--grid` run walks.
+    ///
+    /// Defaults to a single point reproducing the single-room comparison, so a
+    /// bare `--grid` prints one small table and each axis is widened by naming
+    /// it. See [`crate::grid`].
+    pub(crate) axes: Axes,
+    /// What a turn costs in tokens and how long a host waits for one.
+    ///
+    /// Every table's headline columns are computed against this, and every
+    /// run prints it, so a reader sees the point the numbers were taken at
+    /// rather than inheriting it. See [`crate::cost`].
+    pub(crate) cost_model: CostModel,
     /// Rooms to simulate.
     pub(crate) episodes: u32,
     /// Members per room.
@@ -250,6 +267,7 @@ impl Options {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum Mode {
     /// Compare every arm.
     Compare,
@@ -275,6 +293,12 @@ pub(crate) enum Mode {
     /// Run the hidden self-check over `wilson`, `paired_bootstrap` and
     /// `spearman_milli` and exit.
     StatsCheck,
+    /// Walk the cross product of topic, scale, complexity and concurrency,
+    /// reporting the same six columns in every cell.
+    Grid,
+    /// Measure the cost model's constants against a live endpoint and print
+    /// the flags that reproduce them.
+    Calibrate,
 }
 
 impl Options {
@@ -285,6 +309,8 @@ impl Options {
     /// is therefore useless to a test.
     pub(crate) fn defaults() -> Self {
         Self {
+            axes: Axes::point(),
+            cost_model: CostModel::DEFAULT,
             episodes: 500,
             agents: 5,
             topics: 4,
@@ -355,7 +381,8 @@ impl Options {
         // The policy is rebuilt once the room size is known, then any explicit
         // policy flag is applied over it, so `--agents` moves the quorum
         // threshold with the desk while `--quorum` still overrides it.
-        let args: Vec<String> = std::env::args().skip(1).collect();
+        let raw: Vec<String> = std::env::args().skip(1).collect();
+        let args = raw.clone();
         // The federation has its own noise default. A desk is only a
         // correlation boundary if its shared bias is legible *through* each
         // member's individual error: at the single-room default of ±90 the
@@ -425,37 +452,41 @@ impl Options {
                     options.bias = i32::try_from(next_number(&mut args).unwrap_or(SWARM_BIAS_U32))
                         .unwrap_or(SWARM_BIAS);
                 }
-                "--swarm" => options.mode = Mode::Swarm,
-                "--trace" => {
-                    options.trace = true;
-                    // `--swarm --trace` prints a federation transcript rather
-                    // than a single room's, so the swarm mode keeps the floor.
-                    if !matches!(options.mode, Mode::Swarm) {
-                        options.mode = Mode::Trace;
-                    }
-                }
-                "--sweep" => options.mode = Mode::Sweep,
                 "--agent-cmd" => {
                     if let Some(command) = args.next() {
                         options.agent = Some(command);
-                        // `--swarm --agent-cmd` drives a federation rather than
-                        // one room, so the swarm mode keeps the floor.
-                        if !matches!(options.mode, Mode::Swarm) {
-                            options.mode = Mode::Live;
-                        }
+                        // `--swarm --agent-cmd` drives a federation rather
+                        // than one room, so the swarm mode keeps the floor;
+                        // `set_live_floor` only promotes the parser's own
+                        // default, so every other explicit mode does too.
+                        set_live_floor(&mut options);
                     }
                 }
                 "--scenario" => options.scenario = args.next(),
                 "--repeat" => options.repeat = next_number(&mut args).unwrap_or(1).max(1),
                 "--json" => options.json = true,
-                "--stats-check" => options.mode = Mode::StatsCheck,
                 // Everything below is either the expertise surface or the
                 // live-backend one: a CLI or HTTP seat, per-seat overrides,
                 // and the usage table. Split into their own functions so
                 // `parse` itself stays under the line budget clippy holds
                 // every function to.
                 _ => {
-                    let known = apply_scale_flag(&mut options, &flag, &mut args)?
+                    // Naming an axis selects the grid, so `--topic hidden`
+                    // alone does what it plainly says rather than being
+                    // silently ignored by whichever mode happened to be
+                    // selected -- the same reason an unrecognised flag is
+                    // refused below. But it must not *overwrite* a mode the
+                    // operator already chose explicitly: `--swarm --topic
+                    // hidden` runs a federation over the named topic, not a
+                    // grid, regardless of which flag came first. Only the
+                    // parser's own default is safe to promote.
+                    if options.axes.set(&flag, &mut args)? {
+                        select_grid_axis(&mut options);
+                        continue;
+                    }
+                    let known = apply_mode_flag(&mut options, &flag)
+                        || options.cost_model.set(&flag, &mut args)?
+                        || apply_scale_flag(&mut options, &flag, &mut args)?
                         || apply_expertise_flag(&mut options, &flag, &mut args)
                         || apply_live_flag(&mut options, &flag, &mut args);
                     // An unrecognised flag used to be discarded in silence, so
@@ -472,7 +503,76 @@ impl Options {
         if !unknown.is_empty() {
             return Err(format!("unrecognised flag(s): {}", unknown.join(", ")));
         }
+        let named_axis = args_named_an_axis(&raw);
+        Self::checked(options.mode, named_axis)?;
         Ok(options)
+    }
+
+    /// Refuse a run whose selected mode would silently discard a named axis.
+    ///
+    /// Only [`Mode::Grid`] reads [`Options::axes`]; the federation, the sweep
+    /// and every live path build their own rooms and do not know an axis
+    /// exists. Accepting `--swarm --topic hidden` would therefore run a
+    /// federation and throw the topic away, printing it under the heading the
+    /// operator typed -- the same failure an unrecognised flag is refused for.
+    ///
+    /// Split from [`Self::parse`] so it can be tested without a process
+    /// argument list, which is what makes the rule checkable at all.
+    ///
+    /// # Errors
+    ///
+    /// Returns a message naming the mode that would have discarded the axis.
+    pub(crate) fn checked(mode: Mode, named_axis: bool) -> Result<(), String> {
+        if !named_axis || matches!(mode, Mode::Grid) {
+            return Ok(());
+        }
+        let selected = match mode {
+            Mode::Swarm => "--swarm",
+            Mode::Sweep => "--sweep",
+            Mode::Trace => "--trace",
+            Mode::StatsCheck => "--stats-check",
+            Mode::Calibrate => "--calibrate",
+            Mode::ContextSweep => "--context-sweep",
+            Mode::StageSweep => "--stages",
+            Mode::FacetSweep => "--facets",
+            Mode::ScaleSweep => "--scale-sweep",
+            Mode::Live => "--agent-cmd/--api-base/--scenario",
+            Mode::Compare | Mode::Grid => return Ok(()),
+        };
+        Err(format!(
+            "{selected} does not read the grid's axes, so a named \
+             --topic/--scale/--complexity/--concurrency would be discarded; \
+             drop one of the two"
+        ))
+    }
+}
+
+/// Whether any grid axis was named on the command line.
+///
+/// Read off the raw arguments rather than tracked through the parse loop,
+/// because an axis flag that *failed* to parse has already stopped the run and
+/// one that succeeded may have been given before or after the mode flag.
+fn args_named_an_axis(raw: &[String]) -> bool {
+    raw.iter().any(|argument| {
+        matches!(
+            argument.as_str(),
+            "--topic" | "--scale" | "--complexity" | "--concurrency"
+        )
+    })
+}
+
+/// Promote the parser's default mode to [`Mode::Grid`] when an axis flag is
+/// given, without overwriting a mode the operator already chose explicitly.
+///
+/// Naming an axis (`--topic`, `--scale`, `--complexity`, `--concurrency`)
+/// alone selects the grid, so it is never silently ignored. It does not
+/// *overwrite* an explicit mode, because the two orderings would otherwise
+/// disagree -- and a combination that names both is refused outright by
+/// [`Options::checked`] rather than resolved in one direction, since no mode
+/// but the grid reads the axes at all.
+fn select_grid_axis(options: &mut Options) {
+    if matches!(options.mode, Mode::Compare) {
+        options.mode = Mode::Grid;
     }
 }
 

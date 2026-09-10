@@ -5,8 +5,13 @@
 //! table cell, a dash for a column an arm structurally cannot have data for,
 //! or a JSON number (or `null`).
 
-/// Width of the arm-name column in both tables.
-const NAME_WIDTH: usize = 8;
+/// Width of the arm-name column in every table.
+///
+/// Wide enough for the longest arm name the comparison prints
+/// (`hive+dir+defer`), so no row has to fall back on [`row`]'s
+/// whitespace-eating. That fallback is still there, and still guards the next
+/// name somebody adds.
+const NAME_WIDTH: usize = 16;
 
 /// Join an arm's name to an already-formatted row of columns.
 ///
@@ -78,4 +83,42 @@ pub(super) fn json_f64_if(available: bool, value: f64) -> String {
     } else {
         "null".to_owned()
     }
+}
+
+/// Render a mean latency in milliseconds as a human duration.
+///
+/// Milliseconds below a second, then seconds, then minutes. A deliberation and
+/// a single routed turn differ by two orders of magnitude on this column, and
+/// a table printing both as bare milliseconds makes the reader count digits to
+/// see it.
+pub(super) fn duration(ms: f64) -> String {
+    if !ms.is_finite() || ms <= 0.0 {
+        return "—".to_owned();
+    }
+    if ms < 1_000.0 {
+        return format!("{ms:.0}ms");
+    }
+    let secs = ms / 1_000.0;
+    if secs < 90.0 {
+        return format!("{secs:.1}s");
+    }
+    format!("{:.1}m", secs / 60.0)
+}
+
+/// Render a rate or a count with a thousands suffix.
+///
+/// Same argument as [`duration`]: `tok/ep` spans a single routed turn's few
+/// hundred and a wide federation's hundreds of thousands, and a column of raw
+/// integers at both ends is read by counting digits rather than by looking.
+pub(super) fn count(value: f64) -> String {
+    if !value.is_finite() || value <= 0.0 {
+        return "—".to_owned();
+    }
+    if value < 1_000.0 {
+        return format!("{value:.0}");
+    }
+    if value < 1_000_000.0 {
+        return format!("{:.1}k", value / 1_000.0);
+    }
+    format!("{:.1}M", value / 1_000_000.0)
 }

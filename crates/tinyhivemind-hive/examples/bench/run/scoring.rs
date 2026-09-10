@@ -10,11 +10,14 @@
 use std::time::Duration;
 
 use tinyhivemind_hive::{
-    BidReason, Directory, HiveTurn, Phase, Sequence, SessionAuthor, SessionMessage,
+    BidReason, Directory, DirectoryPolicy, EpisodeState, HiveTurn, Phase, Sequence, SessionAuthor,
+    SessionMessage,
     aside::AsidePolicy,
+    directory,
     trace::{TopicId, Trace, TraceKind, resolve},
 };
 
+use super::turns::mean_context_rows;
 use crate::metrics::spearman_milli;
 
 /// What one episode cost and what it decided.
@@ -44,6 +47,17 @@ pub(crate) struct EpisodeReport {
     /// arm can be cheap in turns and ruinous in rows, and until this field
     /// existed the benchmark could only see the first.
     pub(crate) context_rows: f64,
+    /// Every round the episode ran, in order, with the transcript rows its
+    /// turns could read and how many of them it authorized.
+    ///
+    /// Recorded as the episode runs rather than reconstructed from
+    /// [`Self::turns`] and [`Self::rounds`] afterwards. Those two say the
+    /// sample was, say, seven turns over four rounds; they cannot say whether
+    /// that was `4,1,1,1` reading a growing transcript or `1,1,1,4` reading a
+    /// short one, and the two price very differently in
+    /// [`crate::cost::CostModel::price`]. Off-floor exchange rounds appear
+    /// here too, since a host waits for those as well.
+    pub(crate) shape: Vec<crate::cost::RoundShape>,
     /// Calls into [`tinyhivemind_hive::step`], including the terminal one.
     pub(crate) step_calls: u32,
     /// Time spent inside the library, excluding the simulated agents.
@@ -297,4 +311,101 @@ pub(super) fn proposer_of(journal: &[SessionMessage], topic: &TopicId) -> Option
         .flat_map(|message| resolve(&message.content, None, &message.author, message.sequence))
         .find(|trace| trace.kind == TraceKind::Propose && trace.topic.as_ref() == Some(topic))
         .and_then(|trace| trace.agent_id().map(str::to_owned))
+}
+
+/// What `drive_with`'s loop recorded, as one value.
+///
+/// Genuinely one thing — everything the loop wrote down as it ran, as against
+/// everything [`finished`] folds back out of the journal afterwards — and
+/// grouping it is what lets that terminal scoring live in a function of its
+/// own rather than inside the loop that produced it.
+#[derive(Default)]
+pub(super) struct Recorded {
+    /// Time spent inside the library, exchange rounds included.
+    pub(super) library_time: Duration,
+    /// Time spent inside `step` calls alone.
+    pub(super) step_time: Duration,
+    /// Calls into `step`, including the terminal one.
+    pub(super) step_calls: u32,
+    /// Turns taken.
+    pub(super) turns: u32,
+    /// Rounds taken.
+    pub(super) rounds: u32,
+    /// Off-floor model calls made in exchange rounds.
+    pub(super) contacts: u32,
+    /// Every round's width and the rows it read, for `cost::CostModel::price`.
+    pub(super) shape: Vec<crate::cost::RoundShape>,
+    /// One line per turn, for the trace view. Empty unless asked for.
+    pub(super) trace: Vec<String>,
+}
+
+/// Score a finished episode and assemble its report.
+///
+/// Split out of [`drive_with`] because it answers a different question from
+/// the loop above it: the loop decides who speaks next, and this reads back
+/// what the whole thing came to once nobody does. Everything here is a fold
+/// over the finished journal rather than a step of the protocol, and none of
+/// it is charged to `library_time` -- scoring is not stepping.
+///
+/// # Errors
+///
+/// Returns the library's own error text if the finished journal will not fold
+/// into a directory.
+pub(super) fn finished(
+    host: &super::Host,
+    agents: &mut [&mut dyn super::Participant],
+    state: &EpisodeState,
+    outcome: (super::Ending, Option<tinyhivemind_hive::trace::TopicId>),
+    tally: Tally,
+    recorded: &mut Recorded,
+) -> Result<EpisodeReport, String> {
+    let (ending, decided) = outcome;
+    // Read back out of the journal the same way any participant would, rather
+    // than tracked as the loop ran: the topic this resolves against is only
+    // known once the episode has already decided one.
+    let proposer = decided
+        .as_ref()
+        .and_then(|topic| proposer_of(&host.journal, topic));
+
+    // Folded once, after the episode has ended, and deliberately outside the
+    // `library_time` the loop accumulated: `ns/step` is what a host pays to
+    // run the state machine, and this is scoring rather than stepping.
+    let traces = journal_traces(&host.journal);
+    let folded = directory(
+        &traces,
+        host.watermark(),
+        &DirectoryPolicy::DEFAULT,
+        &state.thresholds,
+    )
+    .map_err(|error| error.to_string())?;
+    let rho_milli = circularity(&folded, &tally.speech);
+
+    Ok(EpisodeReport {
+        ending,
+        decided,
+        correct: false,
+        turns: recorded.turns,
+        rounds: recorded.rounds,
+        shape: std::mem::take(&mut recorded.shape),
+        context_rows: mean_context_rows(agents),
+        step_calls: recorded.step_calls,
+        library_time: recorded.library_time,
+        step_time: recorded.step_time,
+        trace: std::mem::take(&mut recorded.trace),
+        proposer,
+        has_expert: false,
+        decisive: None,
+        fact_deposited: false,
+        fact_at: None,
+        defers: tally.defers,
+        knows_turns: tally.knows_turns,
+        speech: tally.speech,
+        cost_units: tally.cost_units,
+        contacts: recorded.contacts,
+        first_deposit: tally.first_deposit,
+        commit_at: tally.commit_at,
+        first_spoke: tally.first_spoke,
+        traces,
+        rho_milli,
+    })
 }

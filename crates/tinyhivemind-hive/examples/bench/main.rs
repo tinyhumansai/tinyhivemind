@@ -1,6 +1,7 @@
 //! Simulate and benchmark bounded group deliberation.
 //!
 //! ```sh
+//! cargo run --release -p tinyhivemind-hive --example bench -- --grid  # the matrix
 //! cargo run --release -p tinyhivemind-hive --example bench            # compare arms
 //! cargo run --release -p tinyhivemind-hive --example bench -- --trace # one episode
 //! cargo run --release -p tinyhivemind-hive --example bench -- --sweep # tune the policy
@@ -32,6 +33,24 @@
 //! - `ladder+dir` — the responder ladder again, this time given a directory
 //!   the room earned over `--history` prior episodes of `hive+`.
 //!
+//! # The six columns
+//!
+//! Every arm reports the same six, and each is a quantity somebody pays or
+//! receives: **quality** (share deciding the best option), **speed** (mean
+//! wall clock, a sum over rounds), **thru** (episodes per hour at that
+//! latency), **conc** (mean turns in flight), **tok/ep** and **tok/s**.
+//!
+//! Five of the six come from [`cost::CostModel`], which is a *model* — its
+//! constants are flags, every run prints the point it used, and `--calibrate`
+//! measures them against a live endpoint. See `COST.md`.
+//!
+//! # The grid
+//!
+//! `--grid` walks the cross product of four axes — `--topic`, `--scale`,
+//! `--complexity`, `--concurrency` — running five systems in every cell and
+//! reporting the same six columns for each. A bare `--grid` is one cell;
+//! naming any axis widens it and selects the mode. See `README.md`.
+//!
 //! # What the numbers mean
 //!
 //! **correct %** is a claim about this protocol on this synthetic task and
@@ -41,7 +60,10 @@
 //! the question a host actually has to answer when it configures a room.
 //!
 //! **ns/step** is a claim about this library — what a host pays to run the
-//! state machine once, with the agents' own time excluded.
+//! state machine once, with the agents' own time excluded. It is printed under
+//! a heading of its own rather than beside the token and latency columns,
+//! because `vote`'s `ns/step 0` there read as "this arm is free" rather than
+//! "this arm never calls the library", which is what it means.
 //!
 //! # Command line
 //!
@@ -54,6 +76,10 @@
 //! | `--seed N` | room generator seed (default 1) |
 //! | `--budget N`, `--quorum N`, `--window N` | episode policy |
 //! | `--dominance N`, `--repetition N`, `--no-blind` | episode policy |
+//! | `--grid` | walk the cross product of the four axes; a bare `--grid` is one cell |
+//! | `--topic`, `--scale`, `--complexity`, `--concurrency` | the grid's axes; naming one selects `--grid` |
+//! | `--tokens-per-row`, `--tokens-per-turn`, `--prompt-base`, `--ttft`, `--decode-rate` | the cost model's constants |
+//! | `--calibrate` | measure those four against `--api-base` and print the flags that pin them |
 //! | `--trace` | print one episode turn by turn |
 //! | `--sweep` | score the policy grid |
 //! | `--swarm` | several desks messaging across channels |
@@ -85,10 +111,13 @@
 mod arms;
 mod backend;
 mod budget;
+mod calibrate;
 mod cli;
 mod compare;
 mod context;
+mod cost;
 mod federation;
+mod grid;
 mod horizon;
 mod http;
 mod live;
@@ -229,6 +258,17 @@ fn run(options: &Options) -> Result<(), String> {
     if matches!(options.mode, Mode::Swarm) {
         return swarm_compare(options);
     }
+    if matches!(options.mode, Mode::Calibrate) {
+        // Its own requests against a live endpoint, and no rooms at all: it
+        // measures what a turn costs rather than what a protocol decides.
+        return calibrate::run(options);
+    }
+    if matches!(options.mode, Mode::Grid) {
+        // Its own rooms, one set per cell, at that cell's own size and
+        // difficulty -- so nothing here generates a room at the single
+        // `--agents` size that every cell would then ignore.
+        return grid::run(options);
+    }
     let rooms: Vec<Room> = (0..options.episodes)
         .map(|index| {
             // Mixed rather than xor-ed: `seed ^ index` over a range of
@@ -257,9 +297,13 @@ fn run(options: &Options) -> Result<(), String> {
     match &options.mode {
         // Handled above, each before the rooms this arm of the match would
         // have needed were generated.
-        Mode::Swarm | Mode::StatsCheck | Mode::ScaleSweep | Mode::StageSweep | Mode::FacetSweep => {
-            Ok(())
-        }
+        Mode::Swarm
+        | Mode::StatsCheck
+        | Mode::ScaleSweep
+        | Mode::StageSweep
+        | Mode::FacetSweep
+        | Mode::Grid
+        | Mode::Calibrate => Ok(()),
         Mode::Compare => compare(options, &rooms),
         Mode::Trace => trace(&rooms, &options.policy),
         Mode::Sweep => sweep_policies(options, &rooms),

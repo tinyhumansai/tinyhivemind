@@ -419,6 +419,31 @@ struct Failed {
 /// without disturbing the JSON body on stdout.
 const STATUS_PREFIX: &str = "http-status: ";
 
+/// Put one request and take whatever comes back, with **no retry**.
+///
+/// [`ask`] is what a seat uses: it retries a retryable failure, and folds both
+/// attempts' tokens into the seat's usage, because a benchmark run wants the
+/// turn to happen and wants to be told what it really cost.
+///
+/// A *calibration* probe wants the opposite. It is timing one request and
+/// dividing by that request's own tokens, and a retried attempt hands it the
+/// sum of two requests' tokens over the duration of two requests as though
+/// they were one — which skews the fitted row cost, decode rate and TTFT in
+/// whichever direction the failure happened to fall. Rate limits and transient
+/// 5xx are exactly what a calibration run provokes, so this is the common case
+/// rather than the exotic one. Discarding the sample is the honest reading,
+/// and not retrying is how the sample stays discardable.
+///
+/// # Errors
+///
+/// Returns the attempt's own failure text.
+pub(crate) fn ask_once(config: &HttpConfig, model: &str, prompt: &str) -> Result<Usage, String> {
+    let reply = attempt(config, model, prompt).map_err(|failed| failed.message)?;
+    let mut usage = Usage::default();
+    usage.add(reply.input, reply.output);
+    Ok(usage)
+}
+
 fn attempt(config: &HttpConfig, model: &str, prompt: &str) -> Result<Reply, Failed> {
     let (url, body) = request(config, model, prompt);
     let script = config_script(config, &url, &body);

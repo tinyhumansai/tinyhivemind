@@ -101,3 +101,78 @@ fn a_valid_fact_noise_value_is_parsed_and_enables_evidence() {
     assert_eq!(options.fact_noise, 250);
     assert!(options.evidence, "--fact-noise implies --evidence");
 }
+
+/// `--calibrate --api-base <url>` is the documented argument order, and
+/// `--api-base`'s handler used to promote every non-swarm mode straight to
+/// `Mode::Live`, which ran a live episode instead of calibrating. It must
+/// leave an explicitly chosen `Calibrate` alone.
+#[test]
+fn api_base_does_not_override_an_explicit_calibrate_mode() {
+    let mut options = Options::defaults();
+    apply_mode_flag(&mut options, "--calibrate");
+    let mut args = ["http://localhost:8080".to_owned()].into_iter();
+    apply_live_flag(&mut options, "--api-base", &mut args);
+    assert!(
+        matches!(options.mode, Mode::Calibrate),
+        "--api-base must not overwrite an explicitly chosen --calibrate mode",
+    );
+}
+
+/// The reverse order is the common case and must keep working: a bare
+/// `--api-base` still promotes the parser's own default to `Mode::Live`.
+#[test]
+fn api_base_still_promotes_the_default_mode_to_live() {
+    let mut options = Options::defaults();
+    let mut args = ["http://localhost:8080".to_owned()].into_iter();
+    apply_live_flag(&mut options, "--api-base", &mut args);
+    assert!(matches!(options.mode, Mode::Live));
+}
+
+/// Naming a grid axis used to set `options.mode` to `Mode::Grid`
+/// unconditionally, so `--swarm --topic hidden` silently ran a grid instead
+/// of the federation the operator asked for. An axis flag may only promote
+/// the parser's own default mode, never overwrite an explicit one.
+#[test]
+fn a_grid_axis_flag_does_not_override_an_explicit_swarm_mode() {
+    let mut options = Options::defaults();
+    apply_mode_flag(&mut options, "--swarm");
+    select_grid_axis(&mut options);
+    assert!(
+        matches!(options.mode, Mode::Swarm),
+        "naming an axis after --swarm must not overwrite the explicit swarm mode",
+    );
+}
+
+/// The common case, order-independent: naming an axis alone still selects
+/// the grid from the parser's default mode.
+#[test]
+fn a_grid_axis_flag_still_selects_the_grid_from_the_default_mode() {
+    let mut options = Options::defaults();
+    select_grid_axis(&mut options);
+    assert!(matches!(options.mode, Mode::Grid));
+}
+
+#[test]
+fn refuses_an_axis_the_selected_mode_would_discard() {
+    // `--swarm` never reads `Options::axes` -- the federation path builds its
+    // own desks and does not know a topic axis exists -- so accepting
+    // `--swarm --topic hidden` would run a federation and silently throw the
+    // named topic away, reporting it under the heading the operator typed.
+    // That is the failure an unrecognised flag is already refused for.
+    let refused = Options::checked(Mode::Swarm, true);
+    assert!(refused.is_err(), "an ignored axis must stop the run");
+    // The refusal has to name the offending mode, or an operator cannot tell
+    // which of the two flags they typed is the one to drop.
+    assert!(
+        refused
+            .err()
+            .is_some_and(|message| message.contains("--swarm")),
+        "the refusal must name the mode that would discard the axis"
+    );
+
+    // Naming an axis with no competing mode flag is the ordinary grid, and
+    // a mode flag with no axis named is untouched by this check.
+    assert!(Options::checked(Mode::Grid, true).is_ok());
+    assert!(Options::checked(Mode::Swarm, false).is_ok());
+    assert!(Options::checked(Mode::Compare, false).is_ok());
+}

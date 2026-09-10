@@ -14,6 +14,24 @@ use crate::sim::Expertise;
 use tinyhivemind_hive::Basis;
 use tinyhivemind_hive::DirectoryPolicy;
 
+/// Promote the parser's default mode to [`Mode::Live`] when a live-backend
+/// flag is given, without clobbering a mode the operator already chose
+/// explicitly.
+///
+/// `--swarm`, `--grid`, `--calibrate` and the sweep family are all terminal
+/// selections: `main.rs`'s dispatch never reaches [`Mode::Live`] for them, so
+/// unconditionally overwriting one with `Live` would silently run a single
+/// episode instead of the mode the earlier flag asked for -- exactly what
+/// happened to `--calibrate --api-base <url>` before this existed. Only
+/// [`Mode::Compare`], the parser's own default, is safe to promote, and
+/// [`Mode::Live`] itself, so a second live flag is a no-op rather than a
+/// regression.
+pub(super) fn set_live_floor(options: &mut Options) {
+    if matches!(options.mode, Mode::Compare | Mode::Live) {
+        options.mode = Mode::Live;
+    }
+}
+
 /// Apply one of the scale flags (`--jobs`, `--ask-cap`, `--digest`,
 /// `--distance`, `--evidence`) to `options`.
 ///
@@ -39,9 +57,7 @@ pub(super) fn apply_scale_flag(
         }
         "--scenario-dir" => {
             options.scenario_dir = args.next();
-            if !matches!(options.mode, Mode::Swarm) {
-                options.mode = Mode::Live;
-            }
+            set_live_floor(options);
         }
         "--ask-cap" => {
             options.ask_cap = usize::try_from(next_number(args).unwrap_or(2)).unwrap_or(2);
@@ -228,11 +244,12 @@ pub(super) fn apply_live_flag(
         "--api-base" => {
             if let Some(base) = args.next() {
                 options.api_base = Some(base);
-                // `--swarm --api-base` drives a federation rather than one
-                // room, so the swarm mode keeps the floor.
-                if !matches!(options.mode, Mode::Swarm) {
-                    options.mode = Mode::Live;
-                }
+                // `--swarm --api-base` drives a federation, and
+                // `--calibrate --api-base` measures the cost model, rather
+                // than either running one room -- `set_live_floor` only
+                // promotes the parser's own default, so both modes keep the
+                // floor regardless of argument order.
+                set_live_floor(options);
             }
         }
         "--api-key-env" => {
@@ -300,4 +317,35 @@ pub(super) fn next_number(args: &mut impl Iterator<Item = String>) -> Option<u32
 pub(super) fn flag_number(args: &[String], flag: &str) -> Option<u32> {
     let at = args.iter().position(|argument| argument == flag)?;
     args.get(at + 1)?.parse().ok()
+}
+
+/// Apply one of the flags that select what the run *does* rather than how it
+/// is configured.
+///
+/// Returns whether `flag` was one of them, on the same contract as
+/// [`apply_expertise_flag`]. Grouped here because they are the one family of
+/// flags that are mutually exclusive in effect but not in spelling: several of
+/// them are commonly given together (`--swarm --trace`), and the precedence
+/// between them is a rule rather than a last-one-wins accident. Keeping that
+/// rule in one function is what makes it reviewable.
+///
+/// The rule: `--swarm` selects a federation and keeps the floor against
+/// `--trace`, which then prints a federation transcript rather than a single
+/// room's. Everything else is last-one-wins.
+pub(super) fn apply_mode_flag(options: &mut Options, flag: &str) -> bool {
+    match flag {
+        "--swarm" => options.mode = Mode::Swarm,
+        "--sweep" => options.mode = Mode::Sweep,
+        "--stats-check" => options.mode = Mode::StatsCheck,
+        "--grid" => options.mode = Mode::Grid,
+        "--calibrate" => options.mode = Mode::Calibrate,
+        "--trace" => {
+            options.trace = true;
+            if !matches!(options.mode, Mode::Swarm) {
+                options.mode = Mode::Trace;
+            }
+        }
+        _ => return false,
+    }
+    true
 }

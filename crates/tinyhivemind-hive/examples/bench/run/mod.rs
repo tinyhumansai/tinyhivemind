@@ -17,11 +17,11 @@
 use std::time::{Duration, Instant};
 
 use tinyhivemind_hive::{
-    Conversation, DirectoryPolicy, EpisodePolicy, EpisodeState, ExchangePolicy, ExchangeState,
-    HiveStep, HiveTurn, Sequence, SessionAuthor, SessionMessage,
+    Conversation, EpisodePolicy, EpisodeState, ExchangePolicy, ExchangeState, HiveStep, HiveTurn,
+    Sequence, SessionAuthor, SessionMessage,
     aside::Audience,
     desk::{Desk, DeskSet, ResponderMode},
-    directory, project_for,
+    project_for,
     roster::{Roster, RosterMember},
     step,
 };
@@ -32,8 +32,8 @@ mod scoring;
 mod turns;
 
 pub(crate) use scoring::EpisodeReport;
-use scoring::{Tally, circularity, journal_traces, proposer_of};
-use turns::{append_turn, exchange_policy, mean_context_rows, one_exchange, scored, trace_line};
+use scoring::{Recorded, Tally, finished};
+use turns::{append_turn, exchange_policy, one_exchange, scored, trace_line};
 
 /// The marker a participant writes to ask one peer for its reading.
 ///
@@ -504,6 +504,13 @@ struct RoundLog<'a> {
     tally: &'a mut Tally,
     /// Turns spent so far, across every round.
     turns: &'a mut u32,
+    /// Rows each turn in this round actually read, filled as the round runs.
+    ///
+    /// Taken from the turn's own projection rather than from the journal's
+    /// length: a turn cannot see a private aside addressed to somebody else,
+    /// and cannot see a peer's row authored after the round was authorized.
+    /// Charging it for rows it never received would overstate its prompt.
+    rows: &'a mut Vec<u32>,
 }
 
 /// Compose and append every turn in one round, returning the last of them.
@@ -534,6 +541,8 @@ fn run_round(
         let Some(agent) = agents.iter_mut().find(|agent| agent.id() == turn.agent_id) else {
             return Err(format!("no agent named {}", turn.agent_id));
         };
+        log.rows
+            .push(u32::try_from(visible.len()).unwrap_or(u32::MAX));
         let content = agent.speak(turn, &visible)?;
         // An alongside aside is asked for over the same projection the floor
         // move was composed from, before either row is appended, so the
@@ -573,6 +582,7 @@ pub(crate) fn drive_with(
     host.operator(task);
 
     let mut state = EpisodeState::opened(host.conversation(), host.watermark());
+    let mut recorded = Recorded::default();
     let mut library_time = Duration::ZERO;
     let mut step_time = Duration::ZERO;
     let mut step_calls = 0_u32;
@@ -583,6 +593,12 @@ pub(crate) fn drive_with(
     // them. `turns` stays beside it because it is what the budget bounds and
     // what every recorded number before ADR 0014 was priced in.
     let mut rounds = 0_u32;
+    // The shape every round actually ran in, for `cost::CostModel::price`.
+    // Recorded here rather than reconstructed from `turns` and `rounds`,
+    // because those two cannot say which rounds were the wide ones and the
+    // price depends on it: a wide round early reads a short transcript and a
+    // wide round late reads a long one.
+    let mut shape: Vec<crate::cost::RoundShape> = Vec::new();
     // Calls made in exchange rounds, and the round count carried across them.
     // The count is the host's because a round nobody wrote in leaves no row to
     // fold it back out of, and that round still cost its calls.
@@ -608,6 +624,10 @@ pub(crate) fn drive_with(
                 turns: round,
                 next_state,
             } => {
+                // Filled by `run_round` from each turn's own projection, so a
+                // turn is charged for the rows it actually received rather
+                // than for every row the journal happened to hold.
+                let mut rows = Vec::new();
                 let last = run_round(
                     &mut host,
                     agents,
@@ -616,12 +636,14 @@ pub(crate) fn drive_with(
                         trace: keep_trace.then_some(&mut trace),
                         tally: &mut tally,
                         turns: &mut turns,
+                        rows: &mut rows,
                     },
                     aside_mode,
                     member_ids.len(),
                 )?;
                 state = *next_state;
                 rounds = rounds.saturating_add(1);
+                shape.push(crate::cost::RoundShape { rows });
 
                 // An exchange round, between rounds and never during one. The
                 // library says whether one is open and who it names; the
@@ -634,6 +656,20 @@ pub(crate) fn drive_with(
                     contacts = contacts.saturating_add(ran.calls);
                     opened = ran.next;
                     library_time += spent;
+                    // An exchange round is a round the host waits for like any
+                    // other: its calls run concurrently with each other and
+                    // with nothing else. Charged at the journal as it now
+                    // stands, which is what `one_exchange` hands its members.
+                    // Each asked member's own projected row count, recorded by
+                    // `exchange_round` as it went. Not the journal's length,
+                    // and not a uniform count either: private exchange rows
+                    // have audiences, so once any exist the callers in one
+                    // round stop reading the same thing as each other.
+                    if !ran.rows_read.is_empty() {
+                        shape.push(crate::cost::RoundShape {
+                            rows: ran.rows_read.clone(),
+                        });
+                    }
                 }
                 continue;
             }
@@ -643,52 +679,21 @@ pub(crate) fn drive_with(
             HiveStep::Idle => (Ending::Idle, None),
         };
 
-        // Read back out of the journal the same way any participant would,
-        // rather than tracked as the loop ran: the topic this resolves
-        // against is only known once the episode has already decided one.
-        let proposer = decided
-            .as_ref()
-            .and_then(|topic| proposer_of(&host.journal, topic));
-
-        // Folded once, after the episode has ended, and deliberately outside
-        // the `library_time` accumulator above: `ns/step` is what a host pays
-        // to run the state machine, and this is scoring rather than stepping.
-        let traces = journal_traces(&host.journal);
-        let folded = directory(
-            &traces,
-            host.watermark(),
-            &DirectoryPolicy::DEFAULT,
-            &state.thresholds,
-        )
-        .map_err(|error| error.to_string())?;
-        let rho_milli = circularity(&folded, &tally.speech);
-
-        return Ok(EpisodeReport {
-            ending,
-            decided,
-            correct: false,
-            turns,
-            rounds,
-            context_rows: mean_context_rows(agents),
-            step_calls,
-            library_time,
-            step_time,
-            trace,
-            proposer,
-            has_expert: false,
-            decisive: None,
-            fact_deposited: false,
-            fact_at: None,
-            defers: tally.defers,
-            knows_turns: tally.knows_turns,
-            speech: tally.speech,
-            cost_units: tally.cost_units,
-            contacts,
-            first_deposit: tally.first_deposit,
-            commit_at: tally.commit_at,
-            first_spoke: tally.first_spoke,
-            traces,
-            rho_milli,
-        });
+        recorded.library_time = library_time;
+        recorded.step_time = step_time;
+        recorded.step_calls = step_calls;
+        recorded.turns = turns;
+        recorded.rounds = rounds;
+        recorded.contacts = contacts;
+        recorded.shape = shape;
+        recorded.trace = trace;
+        return finished(
+            &host,
+            agents,
+            &state,
+            (ending, decided),
+            tally,
+            &mut recorded,
+        );
     }
 }

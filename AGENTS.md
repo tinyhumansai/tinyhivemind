@@ -190,14 +190,26 @@ Supporting commands:
   or `--agent-cmd`; documented in
   `crates/tinyhivemind/examples/crosstalk/README.md`.
 - `cargo run -p tinyhivemind-hive --example hive` — print one deliberation episode.
-- `cargo run --release -p tinyhivemind-hive --example bench` — simulate and
-  benchmark deliberation against the responder ladder and a matched-budget
-  vote; `-- --sweep` tunes the episode policy, `-- --trace` prints one episode,
-  `-- --swarm` runs a federation of desks that can only reach each other by a
-  referral, and `-- --agent-cmd "opencode run"` drives one through a real agent
-  CLI. The harness is documented in
-  `crates/tinyhivemind-hive/examples/bench/README.md` and its findings on the
-  wiki's `Benchmarks` page (`wiki/Benchmarks.md`).
+- `cargo run --release -p tinyhivemind-hive --example bench -- --grid` — walk
+  the benchmark matrix: the cross product of `--topic`, `--scale`,
+  `--complexity` and `--concurrency`, reporting the same six columns —
+  quality, speed, throughput, concurrency, tokens per episode, tokens per
+  second — for every system in every cell. A bare `--grid` is one cell.
+- `cargo run --release -p tinyhivemind-hive --example bench` — the same six
+  columns for every mechanism probe, at one point of that grid: the responder
+  ladder, a matched-budget vote, and each deliberation variant. `-- --sweep`
+  tunes the episode policy, `-- --trace` prints one episode, `-- --swarm` runs
+  a federation of desks that can only reach each other by a referral, and
+  `-- --agent-cmd "opencode run"` drives one through a real agent CLI.
+- `cargo run --release -p tinyhivemind-hive --example bench -- --calibrate
+  --api-base <url>` — measure the cost model's four constants against a live
+  endpoint and print the flags that pin a run to them. Five of the six columns
+  are computed from those constants; `crates/tinyhivemind-hive/examples/bench/COST.md`
+  says what they do and do not claim.
+
+  The harness is documented in `crates/tinyhivemind-hive/examples/bench/README.md`,
+  its accepted behaviour in `docs/specs/benchmark-matrix.md`, and its findings
+  on the wiki's `Benchmarks` page (`wiki/Benchmarks.md`).
 - `.github/scripts/assert-pure.sh` — assert the pure crates took on no
   runtime, transport, or web-framework dependency.
 - `cargo doc --no-deps --all-features` — build the rustdoc CI also builds with
