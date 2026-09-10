@@ -643,12 +643,25 @@ pub(crate) fn json_line(name: &str, totals: &Aggregate) -> String {
     // rather than propagated.
     let _ = write!(
         line,
-        "{{\"arm\":\"{name}\",\"turns_per_episode\":{},\"rounds_per_episode\":{},\"decision_rate\":{},\
+        "{{\"arm\":\"{name}\",\
+         \"latency_ms\":{},\"episodes_per_hour\":{},\"concurrency\":{},\
+         \"tokens_per_episode\":{},\"tokens_per_second\":{},\
+         \"turns_per_episode\":{},\"rounds_per_episode\":{},\"decision_rate\":{},\
          \"correct_pct\":{},\"ci_low\":{},\"ci_high\":{},\"ns_per_step\":{},\
          \"episodes_per_second\":{},\"fact_pct\":{},\"to_fact\":{},\
          \"knows_pct\":{},\"defers_per_episode\":{},\
          \"expert_led\":{},\"route_pct\":{},\"cost_per_episode\":{},\
          \"accuracy_per_kilo_unit\":{},\"rho\":{},\"exchange_calls_per_episode\":{}}}",
+        // The six headline `arm_row` columns -- quality (`correct_pct`,
+        // below), speed, throughput, concurrency, and the two token rates --
+        // so a `--json` consumer can read every column the table prints
+        // rather than only the library/detail fields this line covered
+        // before the headline table existed.
+        json_f64(totals.latency_ms()),
+        json_f64(totals.episodes_per_hour()),
+        json_f64(totals.concurrency()),
+        json_f64(totals.tokens_per_episode()),
+        json_f64(totals.tokens_per_second()),
         json_f64(totals.turns_per_episode()),
         json_f64(totals.rounds_per_episode()),
         json_f64(totals.decision_rate()),
