@@ -58,7 +58,7 @@ fn context<'a>(
         standings: &fixture.standings,
         members,
         thresholds,
-        at: fixture.at,
+        at: fixture.at.into(),
         weights,
         dominance_cap: 50,
         repetition_cap: 3,
