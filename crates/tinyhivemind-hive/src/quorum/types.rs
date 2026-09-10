@@ -68,6 +68,49 @@ impl QuorumPolicy {
         refutation_cap: None,
         require_evidential: false,
     };
+
+    /// The policy a desk of `members` should carry.
+    ///
+    /// [`Self::DEFAULT`] is an absolute count and an absolute window, and both
+    /// stop meaning what they say as the desk grows: two supporters carry a
+    /// room of a thousand, and thirty sequences is a fraction of an episode
+    /// that runs for three thousand turns. Neither failure announces itself —
+    /// the room decides, or fails to, and nothing says the policy was the
+    /// reason.
+    ///
+    /// The threshold is bounded on both sides, and the benchmark found both
+    /// bounds rather than reasoning them out. *Above half the desk* is what
+    /// removes deadlock: any two options that both clear the line are
+    /// deadlocked by definition, and no further support resolves it, so a
+    /// majority makes the state unreachable and the measured deadlock rate
+    /// falls to zero. *Below the whole desk* is what keeps a decision
+    /// reachable: cross-inhibition removes a silenced advocate and never puts
+    /// them back, so at unanimity one grounded `!object` ends the episode's
+    /// chance of quorum. Between the two, the smallest majority that still
+    /// leaves a member to spare.
+    ///
+    /// The window is the episode: support deposited in the opening round has
+    /// to still count when the room settles, and an absolute window silently
+    /// stops covering the episode somewhere above thirty turns. Pass the
+    /// budget from [`EpisodePolicy::for_room`], which is what that constructor
+    /// does.
+    ///
+    /// [`EpisodePolicy::for_room`]: crate::episode::EpisodePolicy::for_room
+    #[must_use]
+    pub const fn for_room(members: u32, window: u32) -> Self {
+        let majority = members / 2 + 1;
+        let capped = if majority > members.saturating_sub(1) {
+            members.saturating_sub(1)
+        } else {
+            majority
+        };
+        let threshold = if capped < 2 { 2 } else { capped };
+        Self {
+            threshold,
+            window: if window == 0 { 1 } else { window },
+            ..Self::DEFAULT
+        }
+    }
 }
 
 impl Default for QuorumPolicy {
