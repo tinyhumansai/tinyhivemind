@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    horizon::Horizon,
     directory::{Directory, DirectoryPolicy},
     quorum::{QuorumPolicy, TopicStanding},
     salience::SalienceWeights,
@@ -136,8 +137,11 @@ pub struct BidContext<'a> {
     pub members: &'a [&'a str],
     /// Per-member thresholds and affinities.
     pub thresholds: &'a [AgentThreshold],
-    /// The sequence the room is deciding at.
-    pub at: Sequence,
+    /// Where the room is deciding from, and the ruler it measures back with.
+    ///
+    /// Takes a bare [`Sequence`] for raw sequence distance, or a
+    /// [`Horizon::over`] the folded rows to measure in rows the fold read.
+    pub at: Horizon<'a>,
     /// Salience weights.
     pub weights: &'a SalienceWeights,
     /// Percent of grounded share above which a member is damped.

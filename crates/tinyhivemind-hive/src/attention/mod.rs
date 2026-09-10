@@ -188,14 +188,10 @@ fn index_thresholds(thresholds: &[AgentThreshold]) -> Result<BTreeMap<&str, &Age
 /// the price of one, so counting those would reward exactly the behaviour the
 /// equality guard exists to damp.
 fn grounded_shares<'a>(context: &BidContext<'a>, live: &[&'a Trace]) -> BTreeMap<&'a str, u32> {
-    let floor = context
-        .at
-        .0
-        .saturating_sub(u64::from(context.quorum.window));
     let mut shares: BTreeMap<&str, u32> =
         context.members.iter().map(|member| (*member, 0)).collect();
     for trace in live {
-        if trace.sequence.0 < floor || !trace.grounded() {
+        if !context.at.within(trace.sequence, context.quorum.window) || !trace.grounded() {
             continue;
         }
         let Some(agent) = trace.agent_id() else {
@@ -251,14 +247,10 @@ fn exceeds(share: u32, total: u32, cap: u32) -> bool {
 /// by first-advocated order.
 fn contested_topic<'a>(context: &BidContext<'a>, live: &[&'a Trace]) -> Option<&'a TopicId> {
     context.directory?;
-    let floor = context
-        .at
-        .0
-        .saturating_sub(u64::from(context.quorum.window));
     let deferrals: Vec<&&Trace> = live
         .iter()
         .filter(|trace| trace.kind == TraceKind::Defer)
-        .filter(|trace| trace.sequence.0 >= floor && trace.sequence <= context.at)
+        .filter(|trace| context.at.within(trace.sequence, context.quorum.window))
         .collect();
     let under_cap = context
         .defer_cap
