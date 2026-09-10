@@ -34,10 +34,12 @@ const SPEAK_COST: i64 = 500;
 ///
 /// Evaluation order is fixed, and each rung is checked before the next:
 ///
-/// 1. the roster, desk snapshots and policy are validated;
-/// 2. a spent budget returns [`HiveStep::Exhausted`];
-/// 3. traces, standings and — when `policy.directory` is set — the directory
-///    are folded from the transcript, all at the same sequence;
+/// 1. the roster, desk snapshots and policy are validated, including that the
+///    quorum threshold is reachable on a desk this size;
+/// 2. traces and standings are folded from the transcript;
+/// 3. a spent budget returns [`HiveStep::Exhausted`], carrying those
+///    standings, and — when `policy.directory` is set — the directory is
+///    folded at the same sequence;
 /// 4. quorum in [`Phase::Commit`] returns [`HiveStep::Converged`];
 /// 5. quorum in [`Phase::Deliberate`] flips the phase and emits one commit turn;
 /// 6. a deadlock nobody can break returns [`HiveStep::Deadlocked`];
@@ -51,6 +53,8 @@ const SPEAK_COST: i64 = 500;
 ///
 /// Returns [`Error::Core`] for a malformed roster or desk snapshot,
 /// [`Error::UnknownThresholdMember`] for a threshold naming a non-member,
+/// [`Error::UnreachableQuorum`] for a quorum threshold above the number of
+/// active members,
 /// [`Error::ZeroDeferCap`] for `defer_cap: Some(0)`, or a policy error from the
 /// quorum, salience and directory folds.
 pub fn step(
@@ -69,13 +73,28 @@ pub fn step(
         validate_directory_policy(directory_policy)?;
     }
     let members = active_members(roster, desks, state)?;
-
-    if state.spent >= policy.turn_budget {
-        return Ok(HiveStep::Exhausted { spent: state.spent });
+    let seated = u32::try_from(members.len()).unwrap_or(u32::MAX);
+    if policy.quorum.threshold > seated {
+        return Err(Error::UnreachableQuorum {
+            threshold: policy.quorum.threshold,
+            members: seated,
+        });
     }
 
+    // Folded before the budget check rather than after it, so an exhausted
+    // episode can say what the budget bought. It costs one fold on the step
+    // that ends the episode and buys the difference between "spent thirty
+    // turns and nearly carried two options" and "spent thirty turns and
+    // deposited nothing", which are the same report without it.
     let (live, traces, at) = live_traces(transcript, state, &members);
     let standings = standings(&traces, at, &policy.quorum)?;
+
+    if state.spent >= policy.turn_budget {
+        return Ok(HiveStep::Exhausted {
+            spent: state.spent,
+            standings,
+        });
+    }
 
     let consensus = consensus(&standings, &policy.quorum);
     match &consensus {

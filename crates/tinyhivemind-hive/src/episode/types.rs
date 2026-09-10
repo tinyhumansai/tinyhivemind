@@ -262,9 +262,20 @@ pub enum HiveStep {
         topics: Vec<TopicId>,
     },
     /// The turn budget is spent.
+    ///
+    /// The standings the budget bought are carried with it. Without them
+    /// exhaustion is undiagnosable: a room that spent thirty turns arguing two
+    /// options to within one supporter of quorum and a room that spent thirty
+    /// turns depositing nothing at all return the same thing, and the second
+    /// is a protocol failure the host needs to know about. A federation whose
+    /// desks were spending their entire budget asking each other questions
+    /// exhausted with *empty* standings on every desk, and it took a source
+    /// reading rather than a step result to find that out.
     Exhausted {
         /// Turns taken.
         spent: u32,
+        /// Where every advocated topic stood when the budget ran out.
+        standings: Vec<TopicStanding>,
     },
     /// Nobody's urge cleared their threshold.
     Idle,
