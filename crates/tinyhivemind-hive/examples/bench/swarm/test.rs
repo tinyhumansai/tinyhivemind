@@ -3,10 +3,10 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+use super::member::SwarmSim;
 use super::*;
 use crate::federation::Federation;
 use crate::policy::tuned_policy;
-use super::member::SwarmSim;
 
 /// A small federation with distinct decoys, deliberate rather than clamped.
 fn federation() -> Federation {
