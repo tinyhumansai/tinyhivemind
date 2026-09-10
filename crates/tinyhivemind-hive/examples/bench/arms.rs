@@ -30,6 +30,7 @@ use tinyhivemind_hive::{
 };
 
 use crate::federation::Federation;
+use crate::cost::RoundShape;
 use crate::rng::{Rng, mix};
 use crate::run::{Host, Participant, drive};
 use crate::sim::Room;
@@ -62,6 +63,28 @@ pub(crate) struct ArmReport {
     pub(crate) routed_right: Option<bool>,
     /// Time spent inside the library.
     pub(crate) library_time: Duration,
+    /// The shape the arm ran in, for [`crate::cost::CostModel::price`].
+    ///
+    /// A control arm states its own shape rather than having one derived from
+    /// [`Self::turns`] and [`Self::rounds`], because the derivation that is
+    /// right for `vote` — one round of independent answers, every one reading
+    /// only the brief — is wrong for `merged`, which deliberates and whose
+    /// later rounds read everything the earlier ones wrote.
+    pub(crate) shape: Vec<RoundShape>,
+}
+
+/// The shape of a control arm whose members each answer from their own
+/// private evaluation alone, having seen nothing but the brief.
+///
+/// One round, `turns` wide, every turn reading the single operator row. This
+/// is what makes `vote` cheap in wall clock and expensive in tokens at once —
+/// the comparison a `turns/ep` column could not express, because it charged a
+/// poll of fifteen the same depth as a deliberation of fifteen.
+fn blind_shape(turns: u32) -> Vec<RoundShape> {
+    if turns == 0 {
+        return Vec::new();
+    }
+    vec![RoundShape { rows: 1, turns }]
 }
 
 /// Route one message through the real responder ladder and take that
@@ -269,6 +292,7 @@ fn route(
         cost_units: u64::from(room.cost_of(&responder)),
         routed_right: room.deciding_expert().map(|held| held == responder),
         library_time,
+        shape: blind_shape(1),
     })
 }
 
@@ -289,6 +313,7 @@ pub(crate) fn run_vote(room: &Room, budget: u32) -> ArmReport {
             cost_units: 0,
             routed_right: None,
             library_time: Duration::ZERO,
+            shape: Vec::new(),
         };
     }
     let mut spent = 0_u32;
@@ -321,6 +346,7 @@ pub(crate) fn run_vote(room: &Room, budget: u32) -> ArmReport {
         cost_units,
         routed_right: None,
         library_time: Duration::ZERO,
+        shape: blind_shape(spent),
     }
 }
 
@@ -352,6 +378,7 @@ pub(crate) fn run_federated_vote(federation: &Federation) -> ArmReport {
         cost_units: u64::from(turns),
         routed_right: None,
         library_time: Duration::ZERO,
+        shape: blind_shape(turns),
     }
 }
 
@@ -391,6 +418,7 @@ pub(crate) fn run_merged(
         cost_units: report.cost_units,
         routed_right: None,
         library_time: report.library_time,
+        shape: report.shape,
     })
 }
 
