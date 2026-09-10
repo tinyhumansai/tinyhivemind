@@ -35,6 +35,7 @@
 //! the calibration reports what the probes actually produced so the operator
 //! can set it from a real run rather than from here.
 
+use std::fmt::Write as _;
 use std::time::Instant;
 
 use crate::backend::http_config;
@@ -203,15 +204,20 @@ fn probe_prompt(rows: usize, completion: u32) -> String {
          Below is the desk transcript so far.\n\n",
     );
     for row in 0..rows {
-        prompt.push_str(&format!(
+        // `write!` into a `String` cannot fail, and the harness may not
+        // `unwrap` -- so the result is dropped explicitly rather than
+        // silently, which is also what the lint asks for.
+        let _ = write!(
+            prompt,
             "[{row}] alex: !propose stage — the staged rollout limits blast radius \
              and we can halt it at any ring.\n"
-        ));
+        );
     }
-    prompt.push_str(&format!(
+    let _ = write!(
+        prompt,
         "\nWrite approximately {completion} tokens of plain prose summarising the \
          state of the discussion. Do not use lists."
-    ));
+    );
     prompt
 }
 

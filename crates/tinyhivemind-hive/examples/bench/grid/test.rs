@@ -1,5 +1,6 @@
 //! Unit tests for the grid: what the axes parse to, what they refuse, and
 //! that a cell is reproducible from its own label.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use super::axes::{Axes, Complexity, Topic};
 use super::{ARMS, cell_seed, ratio};

@@ -3,6 +3,7 @@
 //! The probes themselves need an endpoint and are therefore not tested here —
 //! the arithmetic that turns two probes into four constants is, because that
 //! is where a calibration goes quietly wrong rather than loudly.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use super::{PROBE_COMPLETION, PROBE_ROWS, div_round, probe_prompt};
 
