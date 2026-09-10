@@ -21,7 +21,7 @@ use tinyhivemind_hive::{
     },
 };
 
-use super::work::{PlannedAnswer, PlannedTurn, SpokenAnswer, SpokenTurn};
+use super::work::{PlannedAnswer, PlannedTurn, SpokenAnswer, SpokenTurn, fill_answer};
 use super::{Channel, SwarmHost, SwarmMember, SwarmReport, format};
 
 /// The scheduler's own state: the journals, what is in flight, and the tally.
