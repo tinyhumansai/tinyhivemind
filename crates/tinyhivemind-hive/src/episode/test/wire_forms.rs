@@ -2,6 +2,7 @@
 //! `HiveStep` variants, plus the shipping default's budget.
 
 use super::super::*;
+use crate::quorum::TopicStanding;
 use super::support::state;
 
 #[test]
