@@ -9,7 +9,15 @@ resolves it to `sim/mod.rs` transparently.
 | file | what it holds |
 | --- | --- |
 | `main.rs` | the crate doc, the `mod` declarations, and top-level dispatch: `main`, `stats_check`, `run`, `trace`, and the `sweep_*` entry points |
+| `cost.rs` | the token and wall-clock model five of the six headline columns are computed from: `CostModel`, its four flags, `RoundShape`, and the `Cost` a priced episode folds into |
+| `cost/test.rs` | that a wider round costs more tokens and no more wall clock, that a sample's cost folds the same however the threads split it, and that an unparsable constant stops the run |
+| `grid/mod.rs` | the cross product: the five systems a cell runs, the per-cell rooms and their seeding, the one table shape, and the across-cells summary |
+| `grid/axes.rs` | the four axes and what a point on each one means: `Topic`, `Complexity`, `Cell`, `Axes` and their parsing |
+| `grid/test.rs` | what the axes parse to, what they refuse, and that a cell is reproducible from its own label |
+| `calibrate.rs` | fitting `CostModel`'s four constants to a live endpoint, as two two-point fits |
+| `calibrate/test.rs` | the fit arithmetic, and that the probes differ in one thing each |
 | `cli/mod.rs` | `Options`, `Mode`, and command-line parsing |
+| `cli/flags.rs` | the per-family flag handlers `Options::parse` delegates to, including `apply_mode_flag` and the precedence between the flags that select what a run does |
 | `cli/test.rs` | unit tests for CLI flag parsing |
 | `policy.rs` | `default_policy`, `tuned_policy`, and the delegation-arm policy variants built from it |
 | `compare.rs` | the simulated multi-arm comparison engine: `compare`, `Totals`, `run_arms`, `endings`, and the cost table |
@@ -59,3 +67,6 @@ resolves it to `sim/mod.rs` transparently.
 | `SCALE.md` | running the harness at a thousand agents: `--jobs`, the size ceilings, `--ask-cap`, `--digest` and `--distance` |
 | `CONTEXT.md` | the context-budget window model, and what a bounded prompt does and does not change about the arms above |
 | `rng.rs` | a seeded `SplitMix64`, so every run reproduces |
+| `COST.md` | the cost model: what it assumes, what it refuses to claim, and how to calibrate it |
+| `SWARM.md` | several channels: what a crossing costs and how a member decides to make one |
+| `EVIDENCE.md` | the evidence-first opening, and why a deposit is not a position |
