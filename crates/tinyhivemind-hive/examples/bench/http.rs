@@ -121,6 +121,11 @@ impl std::fmt::Debug for HttpConfig {
     }
 }
 
+mod usage;
+
+pub(crate) use usage::{Usage, UsageHandle, usage_of};
+use usage::with_usage;
+
 /// A participant driven directly over HTTP rather than through a CLI.
 pub(crate) struct HttpAgent {
     prompt: AgentPrompt,
