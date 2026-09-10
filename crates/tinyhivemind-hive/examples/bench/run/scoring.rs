@@ -309,6 +309,7 @@ pub(super) fn proposer_of(journal: &[SessionMessage], topic: &TopicId) -> Option
         .find(|trace| trace.kind == TraceKind::Propose && trace.topic.as_ref() == Some(topic))
         .and_then(|trace| trace.agent_id().map(str::to_owned))
 }
+
 /// What `drive_with`'s loop recorded, as one value.
 ///
 /// Genuinely one thing — everything the loop wrote down as it ran, as against
