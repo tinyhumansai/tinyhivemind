@@ -47,8 +47,15 @@
 //!
 //! **Across desks**, the host decides, and that is what this module is. Every
 //! desk is a separate episode with its own journal, its own state and its own
-//! budget, so overlapping them overlaps only the *waiting*. `--jobs` bounds
-//! the product: `desks x round_width` model calls may be in flight.
+//! budget, so overlapping them overlaps only the *waiting*.
+//!
+//! `--jobs` bounds **desks in flight, not calls**. Each worker takes one
+//! desk's whole job — its round, or the answer it owes — and fills it with a
+//! sequential iterator, so at most `jobs` model calls are outstanding at once.
+//! `desks x round_width` is the number of calls a pass makes, which is a
+//! different quantity and not the concurrency width. Widening a round shortens
+//! the *pass* — fewer passes to hear everybody — rather than putting more
+//! calls in the air at a time.
 //!
 //! What is preserved either way is that no member reads a row written beside
 //! it. Rows are landed in **desk order**, and within a desk in the order the

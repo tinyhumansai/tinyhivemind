@@ -267,9 +267,14 @@ is what says the round may run at once — members writing simultaneously cannot
 read each other, so a concurrent round is a blind round. **Across desks** the
 host decides, and that is what `--jobs` is: every desk is a separate episode
 with its own journal, state and budget, so overlapping them overlaps only the
-waiting. `--jobs` bounds the product, `desks x round_width` calls in flight.
-Rows land in desk order, and within a desk in the order the library authorized
-them, however the calls return — so a run is reproducible at a given `--jobs`.
+waiting.
+
+`--jobs` bounds **desks in flight, not calls**. A worker takes one desk's whole
+job — its round, or the answer it owes another channel — and fills it in order,
+so at most `--jobs` model calls are outstanding at once. Widening a round makes
+a pass shorter rather than putting more calls in the air. Rows land in desk
+order, and within a desk in the order the library authorized them, however the
+calls return — so a run is reproducible at a given `--jobs`.
 
 **Asking has its own budget.** `--ask-cap` (default 2) bounds how many other
 channels one desk may ask, off the floor. Set it to `0` and asking goes back on
