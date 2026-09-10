@@ -237,6 +237,14 @@ impl Totals {
         for arm in totals.arms_mut() {
             arm.model = model;
         }
+        // `ladder_directed` sits outside `arms_mut`'s array for the same
+        // reason `merge` handles it explicitly (see below), but it is priced
+        // like every other row: left out here, it would keep
+        // `Aggregate::default()`'s model -- `CostModel::DEFAULT` -- instead
+        // of the model a `--tokens-per-*`, `--ttft` or `--decode-rate` flag
+        // asked for, and its row would silently report tokens computed at
+        // the wrong point while the header above it claimed the flag's.
+        totals.ladder_directed.model = model;
         totals
     }
 
