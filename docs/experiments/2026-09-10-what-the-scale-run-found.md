@@ -188,9 +188,13 @@ Turns are within 1% throughout, so what is bought is not paid for in floor time.
 
 It does not reach `pooled`, and the gap is the point. `pooled` hands over every
 member's *private facts*; a digest hands over a desk's *scored reading*, and
-averaging correlated readings imports the correlation. Where every desk's blind
-spot is its own, the bounded ask already holds 100% and the digest only adds
-cost.
+averaging correlated readings imports the correlation.
+
+**Where blind spots are distinct it is a straight loss**, and measured rather
+than assumed: at twenty-five desks with 128 options, `swarm° 100.0` against
+`swarm◦ 55.0` over twenty federations. Publishing everybody's reading to
+everybody is not a free improvement on asking one peer — it is the right move
+only when the peer you would have asked is no better informed than you are.
 
 **What it costs is rows, not calls.** One model call per desk, but `D - 1` row
 appends each, every one carrying the whole slate — so the transcript grows as
