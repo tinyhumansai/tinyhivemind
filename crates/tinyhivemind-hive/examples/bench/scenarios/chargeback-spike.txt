@@ -1,0 +1,54 @@
+# A hidden profile in payments fraud.
+#
+# The decoy the brief plants, #bin, is the standard first move against a
+# chargeback spike and is ruled out by a fact about legitimate volume that only
+# the revenue analyst holds. Three separate members each rule out one of the
+# remaining wrong answers, and the truth, #keys, needs two facts nobody holds
+# together: that a partner credential leaked, and that the disputed charges
+# come from a server rather than from cardholder devices.
+#
+# Note what makes this hard for a room rather than for a member: every wrong
+# answer is individually plausible and each is refuted by exactly one member,
+# so a room that does not pool refutations lands on whichever wrong answer was
+# argued first.
+
+task: Chargebacks on the marketplace have gone from roughly forty a day to two hundred and sixty since Tuesday. Every disputed transaction so far shares a card BIN range issued by one bank, and the fraud channel has spent the morning arguing for blocking it. Ship exactly one control today, and say which.
+
+truth: keys
+
+[option bin]
+Block the BIN range the disputed cards share.
+
+[option threeds]
+Require step-up 3-D Secure on every transaction in that market.
+
+[option keys]
+Rotate and re-scope the partner API credentials.
+
+[option velocity]
+Add a per-card velocity throttle.
+
+[agent planner]
+role: risk engineer, who owns the authorisation rules
+knows: Every disputed transaction carries a valid, bank-issued 3-D Secure attestation. They were authenticated, so a step-up requirement would have let all of them through unchanged.
+knows: The disputes are all card-not-present and all settled successfully at authorisation; nothing was declined and later retried.
+
+[agent critic]
+role: revenue analyst, who owns what the market is worth
+knows: That BIN range is the largest issuer in the market and carries about forty percent of legitimate volume there. Blocking it costs more in refused good transactions per day than the entire chargeback exposure.
+knows: The disputed transactions are under two percent of the volume on that BIN, so the range itself is not predominantly fraudulent.
+
+[agent archivist]
+role: platform security, who owns credentials
+knows: A partner integration key with charge-creation scope was committed to a public repository on Monday evening and was still live as of this morning.
+knows: That key's scope was never narrowed after the pilot: it can create charges against any saved payment method in the vault, not only the partner's own customers.
+
+[agent scout]
+role: data analyst, who owns the transaction logs
+knows: Velocity per card is one. No card in the disputed set was charged twice, so a per-card throttle would see nothing to throttle.
+knows: The disputed charges are spread across nine thousand distinct cards, which is far more cards than any single compromised merchant terminal would touch.
+
+[agent auditor]
+role: fraud operations, who owns the disputes themselves
+knows: Every disputed charge originates from a single hosting-provider ASN, not from consumer ISPs, and carries no device fingerprint from the cardholder's own session.
+knows: Cardholders report they did not make the purchases but do still hold the cards, so the credentials were not skimmed physically and the cards were never lost.
