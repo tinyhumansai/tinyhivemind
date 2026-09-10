@@ -276,7 +276,14 @@ fn summarise(every: &[(Cell, Vec<CellRow>)]) {
         // where a zero can only mean the sample was empty -- and an arm that
         // never ran is not the fast one.
         best(rows, &mut led, 0, |row| row.totals.accuracy(), true, true);
-        best(rows, &mut led, 1, |row| row.totals.latency_ms(), false, false);
+        best(
+            rows,
+            &mut led,
+            1,
+            |row| row.totals.latency_ms(),
+            false,
+            false,
+        );
         best(
             rows,
             &mut led,
@@ -359,7 +366,11 @@ fn best(
         // real measurement -- every arm missing on a hard cell -- and on such
         // a cell they are all tied leaders. Filtering it unconditionally
         // credited nobody, which is the one reading that is certainly wrong.
-        let empty = if zero_is_a_sample { false } else { value <= 0.0 };
+        let empty = if zero_is_a_sample {
+            false
+        } else {
+            value <= 0.0
+        };
         if !value.is_finite() || empty {
             continue;
         }
