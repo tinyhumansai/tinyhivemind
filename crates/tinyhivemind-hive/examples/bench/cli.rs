@@ -134,6 +134,17 @@ pub(crate) struct Options {
     /// that collapses above roughly eight desks. Above `0` a desk asks without
     /// taking a turn, at most this many times, however many peers it has.
     pub(crate) ask_cap: usize,
+    /// Readings one desk publishes to **every** other channel, off the floor.
+    ///
+    /// A different mechanism from `ask_cap`, not more of it. An ask is a
+    /// question to one peer and costs a question and an answer; a digest is
+    /// this desk's reading of the whole slate written once and appended to
+    /// every peer's transcript, so it costs one model call however large the
+    /// federation is. It exists because a bounded ask cannot recover an error
+    /// every desk shares — the peer you would have asked has it too.
+    ///
+    /// `0` is off, and off is what every recorded number was taken against.
+    pub(crate) digest: usize,
     /// Threads the per-room loops are spread across.
     ///
     /// A wall-clock knob and nothing else: rooms are independent and results
@@ -226,6 +237,9 @@ impl Options {
             // exists because the right width depends on what a question costs
             // the host.
             ask_cap: 2,
+            // Off. It is a new mechanism and the convention here is that a
+            // new mechanism ships off until an arm has scored it.
+            digest: 0,
             jobs: crate::parallel::default_jobs(),
             timeout: 180,
             api_base: None,
@@ -373,7 +387,8 @@ impl Options {
     }
 }
 
-/// Apply one of the scale flags (`--jobs`, `--ask-cap`) to `options`.
+/// Apply one of the scale flags (`--jobs`, `--ask-cap`, `--digest`) to
+/// `options`.
 ///
 /// Returns whether the flag was one of them, on the same contract as
 /// [`apply_expertise_flag`]. These two are together because they are the two
@@ -398,6 +413,9 @@ fn apply_scale_flag(
         }
         "--ask-cap" => {
             options.ask_cap = usize::try_from(next_number(args).unwrap_or(2)).unwrap_or(2);
+        }
+        "--digest" => {
+            options.digest = usize::try_from(next_number(args).unwrap_or(1)).unwrap_or(1);
         }
         _ => return false,
     }
