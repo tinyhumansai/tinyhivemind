@@ -163,13 +163,11 @@ in place and restored:
 members      before      after
 64          63.1 µs    56.6 µs    -10%
 128        198.4 µs   156.8 µs    -21%
-256        901.5 µs   516.0 µs    -43%
+256        934.5 µs   552.1 µs    -41%
 ```
 
 The gap widens with the room, which is what a quadratic term being removed looks
-like. The first two rows are measured against the merged tree; the 256 row is
-the same comparison run before merging `main`'s concurrent-rounds change, which
-touches `charged` but not the shape of any of the four loops. It does not change the conclusion the previous write-up reached — at 256
+like. It does not change the conclusion the previous write-up reached — at 256
 members the library is 3% of wall clock, and a hundred desks of ten is a better
 shape than one room of a thousand whatever the constant is.
 
