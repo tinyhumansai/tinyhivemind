@@ -452,9 +452,9 @@ numbers and why the sweep reports an ordering rather than a value.
 | `--trace` | print one episode turn by turn |
 | `--sweep` | score the policy grid, swept relative to the desk size |
 | `--swarm` | run a federation of desks instead of one room |
-| `--desks N` | channels in the federation, 2–64 (default 3) |
-| `--per-desk N` | members on each channel, 2–256 (default 4) |
+| `--desks N` `--per-desk N` | channels in the federation, 2–64 (default 3); members on each channel, 2–256 (default 4) |
 | `--bias N` | how much a desk overrates its own decoy (default 110) |
+| `--evidence` `--fact-noise N` | plant disqualifying facts, each on a desk other than the one that needs it, and carry them alongside readings; `--fact-noise N` also names `N` per mille of them wrong (0–1000), naming the truth instead of the decoy — see [`SCALE.md`](SCALE.md#--evidence-what-a-channel-carries-not-how-wide-it-is) |
 | `--agent-cmd CMD` | drive one episode through a real agent CLI |
 | `--scenario PATH` | give the live room a real problem with private facts |
 | `--repeat N` | run a live scenario N times and count both arms |
