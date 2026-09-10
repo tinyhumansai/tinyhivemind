@@ -53,6 +53,9 @@ pub(crate) use board::{AskChannel, Exchange};
 use board::Board;
 use member::SwarmSim;
 
+#[cfg(test)]
+mod test;
+
 mod board;
 mod format;
 mod member;
