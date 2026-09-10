@@ -29,7 +29,9 @@ use crate::policy::{quorum_threshold, turn_budget};
 use crate::rng::mix;
 use crate::run;
 use crate::scenario::Scenario;
-use crate::swarm::{self, AskChannel, Channel, SwarmMember, SwarmReport, pooled, run_swarm};
+use crate::swarm::{
+    self, AskChannel, Channel, Exchange, SwarmMember, SwarmReport, pooled, run_swarm,
+};
 
 /// What every arm decided about one federation.
 ///
