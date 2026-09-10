@@ -62,6 +62,42 @@ fn adjacent_cells_differ_in_one_axis() {
 }
 
 #[test]
+fn adjacent_cells_differ_in_one_axis_even_when_two_axes_wrap_together() {
+    // A plain nested-loop product changes two coordinates the moment the
+    // fastest axis wraps and the next one up advances -- e.g.
+    // complexity=1,concurrency=4 followed by complexity=2,concurrency=1. The
+    // single-axis case above cannot catch that; this widens both axes at
+    // once so a wrap in the fast one lines up with a step in the slow one.
+    let mut axes = Axes::point();
+    assert_eq!(axes.set("--complexity", &mut args(&["1,2,5"])), Ok(true));
+    assert_eq!(axes.set("--concurrency", &mut args(&["1,2,4"])), Ok(true));
+    let cells = axes.cells();
+    assert_eq!(cells.len(), 3 * 3);
+    let mut changed_axes = Vec::new();
+    for pair in cells.windows(2) {
+        let (left, right) = (pair[0], pair[1]);
+        let mut count = 0;
+        if left.topic != right.topic {
+            count += 1;
+        }
+        if left.scale != right.scale {
+            count += 1;
+        }
+        if left.complexity != right.complexity {
+            count += 1;
+        }
+        if left.concurrency != right.concurrency {
+            count += 1;
+        }
+        changed_axes.push(count);
+        assert_eq!(
+            count, 1,
+            "adjacent cells {left:?} -> {right:?} must differ in exactly one axis",
+        );
+    }
+}
+
+#[test]
 fn all_takes_every_point_an_axis_defines() {
     let mut axes = Axes::point();
     assert_eq!(axes.set("--topic", &mut args(&["all"])), Ok(true));
