@@ -21,7 +21,7 @@ pub(crate) struct Usage {
 }
 
 impl Usage {
-    fn add(&mut self, input: u64, output: u64) {
+    pub(super) fn add(&mut self, input: u64, output: u64) {
         self.input = self.input.saturating_add(input);
         self.output = self.output.saturating_add(output);
         self.calls = self.calls.saturating_add(1);
@@ -33,7 +33,7 @@ impl Usage {
     /// turn, and the retry that follows counts itself. The tokens are real
     /// spend whether or not the reply was usable, so dropping them would
     /// under-report what the run cost.
-    fn spent(&mut self, input: u64, output: u64) {
+    pub(super) fn spent(&mut self, input: u64, output: u64) {
         self.input = self.input.saturating_add(input);
         self.output = self.output.saturating_add(output);
     }
@@ -89,7 +89,7 @@ pub(crate) fn usage_of(handle: &UsageHandle) -> Usage {
 /// than a benchmark outcome. The usage table is diagnostic, so the honest
 /// response is to keep the run going and let the totals be short rather than
 /// to take the whole federation down over a spent-token count.
-fn with_usage(handle: &UsageHandle, update: impl FnOnce(&mut Usage)) {
+pub(super) fn with_usage(handle: &UsageHandle, update: impl FnOnce(&mut Usage)) {
     // Recovered rather than dropped, for the reason `usage_of` gives: a lost
     // update is an undercounted spend column.
     let mut usage = handle
