@@ -15,6 +15,8 @@ use std::time::Instant;
 
 use tinyhivemind_hive::EpisodePolicy;
 
+use tinyhivemind_hive::referral::ReferralPolicy;
+
 use super::swarm_referrals;
 use crate::TASK;
 use crate::arms;
@@ -62,7 +64,7 @@ struct FederatedTotals {
 /// # Errors
 ///
 /// Returns the library's own error text from any arm.
-fn run_federated_arms(
+pub(super) fn run_federated_arms(
     options: &Options,
     federations: &[Federation],
     desk_policy: &EpisodePolicy,
@@ -245,7 +247,7 @@ impl SwarmTotals {
 }
 
 /// Print the federated comparison table and the totals under it.
-fn tabulate(totals: &FederatedTotals, wall: std::time::Duration, federations: usize) {
+pub(super) fn tabulate(totals: &FederatedTotals, wall: std::time::Duration, federations: usize) {
     let FederatedTotals {
         siloed,
         swarmed,
