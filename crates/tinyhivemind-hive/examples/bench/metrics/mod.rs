@@ -29,6 +29,17 @@ use crate::run::{Ending, EpisodeReport};
 /// Running totals over a sample of episodes.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Aggregate {
+    /// The model every episode folded in here was priced against.
+    ///
+    /// Held per-aggregate rather than passed to [`Aggregate::add`] because an
+    /// arm's totals and the constants they were priced under are one fact: a
+    /// row of the table reporting tokens computed at one point and a wall
+    /// clock computed at another would be a number nothing produced. Every
+    /// aggregate in one run carries the same model, which [`Aggregate::merge`]
+    /// asserts in debug builds.
+    pub(crate) model: crate::cost::CostModel,
+    /// What the sample cost in tokens and wall clock, priced by [`Self::model`].
+    pub(crate) cost: crate::cost::Cost,
     /// Episodes in the sample.
     pub(crate) episodes: u32,
     /// Episodes that ended in a recorded decision.
@@ -163,6 +174,17 @@ impl Aggregate {
         self.rank_rho_milli = self.rank_rho_milli.saturating_add(other.rank_rho_milli);
         self.rank_rho_count = self.rank_rho_count.saturating_add(other.rank_rho_count);
         self.correct_flags.extend_from_slice(&other.correct_flags);
+        // Two halves of one sample, priced apart and folded together, must
+        // have been priced the same way or the sum is meaningless. Every
+        // aggregate in a run is built from the same `Options`, so a mismatch
+        // is a harness bug rather than an operator's mistake -- hence a debug
+        // assertion rather than a `Result` the callers would all have to
+        // thread.
+        debug_assert_eq!(
+            self.model, other.model,
+            "folded two samples priced against different cost models"
+        );
+        self.cost.merge(other.cost);
     }
 
     /// Fold one episode in.
@@ -207,6 +229,7 @@ impl Aggregate {
             self.rank_rho_milli = self.rank_rho_milli.saturating_add(rho);
             self.rank_rho_count = self.rank_rho_count.saturating_add(1);
         }
+        self.cost.merge(self.model.price(&report.shape));
     }
 
     /// Fold one control-arm result in.
@@ -236,6 +259,44 @@ impl Aggregate {
                 self.routed_right = self.routed_right.saturating_add(1);
             }
         }
+        self.cost.merge(self.model.price(&report.shape));
+    }
+
+    /// An empty sample that will be priced against `model`.
+    ///
+    /// Every aggregate in one run is built through this so that the whole
+    /// table reports at one point of the cost model, and the header that
+    /// prints the model describes every row under it.
+    pub(crate) fn priced_at(model: crate::cost::CostModel) -> Self {
+        Self {
+            model,
+            ..Self::default()
+        }
+    }
+
+    /// Mean milliseconds a host waited for one episode: the arm's **speed**.
+    pub(crate) fn latency_ms(&self) -> f64 {
+        self.cost.mean_ms(self.episodes)
+    }
+
+    /// Episodes one seat pool finishes per hour: the arm's **throughput**.
+    pub(crate) fn episodes_per_hour(&self) -> f64 {
+        self.cost.episodes_per_hour(self.episodes)
+    }
+
+    /// Mean turns in flight: the arm's **concurrency**.
+    pub(crate) fn concurrency(&self) -> f64 {
+        self.cost.concurrency()
+    }
+
+    /// Mean tokens one episode spent.
+    pub(crate) fn tokens_per_episode(&self) -> f64 {
+        self.cost.mean_tokens(self.episodes)
+    }
+
+    /// Tokens the arm turns over per second of wall clock.
+    pub(crate) fn tokens_per_second(&self) -> f64 {
+        self.cost.tokens_per_second()
     }
 
     /// Share of episodes that decided on the best option.
