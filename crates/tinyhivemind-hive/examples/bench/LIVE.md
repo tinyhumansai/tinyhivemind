@@ -260,12 +260,16 @@ Neither is wrong and both are schedules a host could write, but **the
 sequential one is the reference every recorded number was taken against**, and
 it is what `--jobs 1` selects. `swarm/schedule.rs` carries the full argument.
 
-One message, one turn is untouched either way: each desk still runs exactly one
-turn per pass, authorized by its own episode. What overlaps is the waiting,
-across episodes that were already independent — which is the arrangement
-[ADR 0002](../../../../docs/adr/0002-hive-episodes-are-sequential.md) points a
-host at. Rows land in desk order however the calls return, so a run is
-reproducible at a given `--jobs`.
+Concurrency here has two widths and they belong to different owners. **Within a
+desk** the library decides: a step authorizes a round of up to `round_width`
+turns, and [ADR 0014](../../../../docs/adr/0014-a-round-authorizes-concurrent-turns.md)
+is what says the round may run at once — members writing simultaneously cannot
+read each other, so a concurrent round is a blind round. **Across desks** the
+host decides, and that is what `--jobs` is: every desk is a separate episode
+with its own journal, state and budget, so overlapping them overlaps only the
+waiting. `--jobs` bounds the product, `desks x round_width` calls in flight.
+Rows land in desk order, and within a desk in the order the library authorized
+them, however the calls return — so a run is reproducible at a given `--jobs`.
 
 **Asking has its own budget.** `--ask-cap` (default 2) bounds how many other
 channels one desk may ask, off the floor. Set it to `0` and asking goes back on

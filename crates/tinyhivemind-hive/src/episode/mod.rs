@@ -12,12 +12,15 @@ mod test;
 
 mod types;
 
-pub use types::{EpisodePolicy, EpisodeState, HiveStep, HiveTurn, Phase, Visibility};
+pub use types::{
+    DEFAULT_REVEALED_WIDTH, DEFAULT_ROUND_WIDTH, EpisodePolicy, EpisodeState, HiveStep, HiveTurn,
+    Phase, Visibility,
+};
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    attention::{AgentThreshold, BidContext, bids, floor_holder},
+    attention::{AgentThreshold, BidContext, bids, floor_round},
     directory::{Directory, directory, validate_policy as validate_directory_policy},
     error::{Error, Result},
     horizon::{Basis, Horizon},
@@ -66,6 +69,9 @@ pub fn step(
     desks.validate()?;
     if policy.defer_cap == Some(0) {
         return Err(Error::ZeroDeferCap);
+    }
+    if policy.round_width == 0 || policy.revealed_width == 0 {
+        return Err(Error::ZeroRoundWidth);
     }
     if let Some(directory_policy) = &policy.directory {
         validate_directory_policy(directory_policy)?;
@@ -142,37 +148,160 @@ pub fn step(
         known.as_ref(),
     );
     let bids = bids(&context)?;
-    let Some(bid) = floor_holder(&bids) else {
-        return Ok(HiveStep::Idle);
-    };
-
     let phase = if matches!(consensus, ConsensusState::Quorum { .. }) {
         Phase::Commit
     } else {
         state.phase
     };
-    let commit_boundary = next_commit_boundary(state, phase, at);
-    // `spent < turn_budget <= u32::MAX` was established above, so this
-    // addition cannot saturate; the saturating form is used only to keep the
-    // arithmetic total without an unreachable error branch.
-    let spent = state.spent.saturating_add(1);
-
-    Ok(HiveStep::Speak {
-        turn: Box::new(HiveTurn {
-            agent_id: bid.agent_id.clone(),
+    Ok(authorized(
+        state,
+        policy,
+        &bids,
+        &members,
+        &Round {
             phase,
+            at,
             visibility: visibility(policy, &live, &members),
+            unheard: unheard(&live, &members),
+        },
+    ))
+}
+
+/// What the round being authorized already knows about itself, before its
+/// members are picked.
+///
+/// Three values [`step`] has computed and [`authorized`] needs, grouped so the
+/// hand-off is one argument rather than three positional ones of the same
+/// shape.
+struct Round<'a> {
+    /// Which class of turn the round is taking.
+    phase: Phase,
+    /// The sequence the round was folded at, and so its boundary.
+    at: tinyhivemind::Sequence,
+    /// How much of the transcript every turn in the round may see.
+    visibility: Visibility,
+    /// Members that have not yet authored a turn this episode. Its length is
+    /// how many turns the blind round still has left to run, and the round
+    /// picks from these identities rather than merely capping at their
+    /// count — a heard member's bid must not crowd out one still owed a turn.
+    unheard: Vec<&'a str>,
+}
+
+/// Pick the round's members and build the state the episode takes after it.
+///
+/// Split out of [`step`] at the seam between *deciding whether the episode
+/// continues* and *authorizing who speaks*: everything above is a termination
+/// check, everything here is a round.
+fn authorized(
+    state: &EpisodeState,
+    policy: &EpisodePolicy,
+    bids: &[crate::attention::Bid],
+    members: &[&str],
+    round: &Round<'_>,
+) -> HiveStep {
+    // The room records one decision, so a commit round is one turn wide
+    // however wide the policy allows. Widening it would let two members record
+    // different decisions for the same episode.
+    //
+    // The rest of the width is bounded three ways at once, and the narrowest
+    // wins: the policy's `round_width`, how many members actually cleared
+    // their threshold, and how much of `turn_budget` is left. The last is what
+    // keeps the budget a bound on *turns* rather than on rounds.
+    let remaining = policy.turn_budget.saturating_sub(state.spent);
+    // Blind and revealed rounds are bounded separately because they cost
+    // different things: a blind member cannot read a peer's row whether or not
+    // the round is concurrent, so widening there is free, while a revealed
+    // member's turn depends on exactly the row a concurrent peer is writing.
+    let cap = match round.visibility {
+        // Never past the end of the blind round. Authorizing more would spend
+        // turns on members already heard and carry the round past the boundary
+        // the blind phase ends at, which is what makes a wide blind round
+        // *free* rather than merely cheap: the same turns, the same
+        // projections, fewer waits.
+        Visibility::Blind => policy
+            .round_width
+            .min(u32::try_from(round.unheard.len()).unwrap_or(u32::MAX))
+            .max(1),
+        Visibility::Full => policy.revealed_width,
+    };
+    let width = if round.phase == Phase::Commit {
+        1
+    } else {
+        cap.min(remaining)
+    };
+    // A *concurrent* blind round is bounded above by how many members are
+    // still unheard, but a bound on *count* alone is not a bound on
+    // *identity*: `floor_round` ranks every bid it is handed, so a heard
+    // member's bid -- sharpened by, say, `ADDRESSED_BONUS` -- can still
+    // outrank an unheard member's and take a seat that round meant for
+    // closing the blind phase, leaving the unheard member to wait for
+    // another round while budget is spent that never advances it. Restrict
+    // the candidates to unheard identities first, so a wide blind round can
+    // only ever spend its seats on the phase it is trying to close.
+    //
+    // This is scoped to `policy.round_width > 1` rather than applied
+    // whenever the room is blind: at `round_width: 1`, `floor_round` must
+    // keep degenerating to exactly what `floor_holder` has always picked --
+    // the single highest bid, heard or not, with the floor's rotation left
+    // entirely to `charged`'s threshold dynamics -- or a round of one would
+    // stop reproducing the sequential episode bit for bit. The identity
+    // filter is what a *round* newly needs, not what a *turn* ever did.
+    //
+    // A commit turn is exempted the same way width already exempts it above:
+    // it announces a decision the room has already reached and is owed to
+    // whoever bids for it, not to whichever member happens to be least
+    // heard, so restricting its candidates to the unheard set would only
+    // misdirect the announcement.
+    let eligible: Vec<crate::attention::Bid>;
+    let candidates: &[crate::attention::Bid] = if round.visibility == Visibility::Blind
+        && policy.round_width > 1
+        && round.phase != Phase::Commit
+    {
+        eligible = bids
+            .iter()
+            .filter(|bid| round.unheard.contains(&bid.agent_id.as_str()))
+            .cloned()
+            .collect();
+        &eligible
+    } else {
+        bids
+    };
+    let speaking = floor_round(candidates, width);
+    if speaking.is_empty() {
+        return HiveStep::Idle;
+    }
+
+    let speakers: Vec<&str> = speaking.iter().map(|bid| bid.agent_id.as_str()).collect();
+    // `speaking.len() <= remaining` by the clamp above, so this cannot exceed
+    // `turn_budget` and cannot saturate; the saturating form keeps the
+    // arithmetic total without an unreachable error branch.
+    let spent = state
+        .spent
+        .saturating_add(u32::try_from(speaking.len()).unwrap_or(u32::MAX));
+
+    let turns = speaking
+        .iter()
+        .map(|bid| HiveTurn {
+            agent_id: bid.agent_id.clone(),
+            phase: round.phase,
+            visibility: round.visibility,
             reason: bid.reason,
-            next_state: EpisodeState {
-                conversation: state.conversation.clone(),
-                spent,
-                phase,
-                thresholds: charged(&state.thresholds, &members, &bid.agent_id),
-                watermark: state.watermark,
-                commit_boundary,
-            },
+            watermark: state.watermark,
+            round_start: round.at,
+        })
+        .collect();
+
+    HiveStep::Speak {
+        turns,
+        next_state: Box::new(EpisodeState {
+            conversation: state.conversation.clone(),
+            spent,
+            phase: round.phase,
+            thresholds: charged(&state.thresholds, members, &speakers),
+            watermark: state.watermark,
+            commit_boundary: next_commit_boundary(state, round.phase, round.at),
         }),
-    })
+    }
 }
 
 /// Resolve the episode's desk to its current, active member ids.
@@ -344,26 +473,57 @@ fn next_commit_boundary(
 /// room, which is the one thing the episode may not do.
 #[must_use]
 pub fn project_for(turn: &HiveTurn, messages: &[SessionMessage]) -> Vec<SessionMessage> {
-    let watermark = turn.next_state.watermark;
     let viewer = Viewer::Agent {
         id: turn.agent_id.clone(),
     };
     let visible: Vec<SessionMessage> = messages
         .iter()
-        .filter(|message| match turn.visibility {
-            Visibility::Full => true,
-            Visibility::Blind => match &message.author {
-                SessionAuthor::Agent { id, .. } => {
-                    id == &turn.agent_id || message.sequence <= watermark
-                }
-                SessionAuthor::Operator
-                | SessionAuthor::Person { .. }
-                | SessionAuthor::System { .. } => true,
-            },
-        })
+        .filter(|message| readable(turn, message))
         .cloned()
         .collect();
     project_as(&visible, &viewer)
+}
+
+/// Whether one message is inside this turn's two time filters.
+///
+/// A peer agent's row is withheld when it was authored after the round was
+/// folded — it is *concurrent* with this turn, so this turn cannot have read
+/// it — and additionally, while the room is blind, when it was authored
+/// anywhere within the episode. The turn-holder's own rows, and everything
+/// that is not a peer agent, pass either way.
+fn readable(turn: &HiveTurn, message: &SessionMessage) -> bool {
+    let SessionAuthor::Agent { id, .. } = &message.author else {
+        return true;
+    };
+    if id == &turn.agent_id {
+        return true;
+    }
+    match turn.visibility {
+        // Concurrent rows, floor or private alike. A round authorizes turns
+        // that must decide exactly as they would arriving one at a time, and
+        // a private row an earlier speaker appends *during* the round is just
+        // as concurrent as a floor row would be — an audience match does not
+        // make it any less written mid-round. So the cutoff applies uniformly
+        // to every peer-authored row rather than exempting private ones; only
+        // audience elision (applied afterward, by `project_as`) tells a
+        // member of the aside from an outsider.
+        //
+        // This does not let a private row move the round boundary itself:
+        // `round_start` is folded from desk rows only (`live_traces`), so
+        // appending an aside cannot shift it, and the addition invariant in
+        // `tests/fuzz_invariants.rs` still holds. It only means a private row
+        // above that boundary is as withheld as a floor row would be.
+        //
+        // At `round_width: 1` nothing is above `round_start` when the turn
+        // composes, so this withholds nothing and a round of one is
+        // bit-identical to the sequential episode.
+        Visibility::Full => message.sequence <= turn.round_start,
+        // The whole episode. `round_start` is the last desk row folded and
+        // every folded row is above the watermark, so the watermark is always
+        // the stricter of the two — a blind turn reads no peer row authored
+        // this episode, concurrent or not.
+        Visibility::Blind => message.sequence <= turn.watermark,
+    }
 }
 
 fn context<'a>(
@@ -398,25 +558,38 @@ fn context<'a>(
 /// only trace authors would keep a room blind forever if any member never
 /// happens to cast a formal vote.
 fn visibility(policy: &EpisodePolicy, live: &[&SessionMessage], members: &[&str]) -> Visibility {
-    if !policy.blind_round {
-        return Visibility::Full;
+    if unheard(live, members).is_empty() || !policy.blind_round {
+        Visibility::Full
+    } else {
+        Visibility::Blind
     }
-    let heard = members
+}
+
+/// Which members have not yet authored a live turn this episode.
+///
+/// The blind round is exactly this many turns long, so its length is also the
+/// width a blind round may usefully take: authorizing more would spend turns
+/// on members that have already been heard, and end the blind round somewhere
+/// past its own boundary. The *identities* returned are what a blind round
+/// must pick from — bounding only the count would still let `floor_round`
+/// reselect a heard member whose bid outranks an unheard one's. "Heard" means
+/// *authored a live turn*, not *deposited a trace* — a member that speaks
+/// plain prose with no `!marker` still took its turn, and counting only trace
+/// authors would keep a room blind forever if any member never happens to
+/// cast a formal vote.
+fn unheard<'a>(live: &[&SessionMessage], members: &[&'a str]) -> Vec<&'a str> {
+    members
         .iter()
+        .copied()
         .filter(|member| {
-            live.iter().any(|message| match &message.author {
-                SessionAuthor::Agent { id, .. } => id == **member,
+            !live.iter().any(|message| match &message.author {
+                SessionAuthor::Agent { id, .. } => id == *member,
                 SessionAuthor::Operator
                 | SessionAuthor::Person { .. }
                 | SessionAuthor::System { .. } => false,
             })
         })
-        .count();
-    if heard < members.len() {
-        Visibility::Blind
-    } else {
-        Visibility::Full
-    }
+        .collect()
 }
 
 /// Raise the speaker's threshold and lower everyone else's.
@@ -428,14 +601,20 @@ fn visibility(policy: &EpisodePolicy, live: &[&SessionMessage], members: &[&str]
 /// per-topic estimate earned from the transcript is
 /// [`directory`](crate::directory::directory), which is folded fresh on every
 /// step rather than carried in state.
-fn charged(thresholds: &[AgentThreshold], members: &[&str], speaker: &str) -> Vec<AgentThreshold> {
-    // Indexed once rather than searched per member: the carried records and
-    // the desk are the same length, so the search form is quadratic in the
-    // room and is paid on every authorized turn.
+fn charged(
+    thresholds: &[AgentThreshold],
+    members: &[&str],
+    speakers: &[&str],
+) -> Vec<AgentThreshold> {
+    // Both sides indexed once rather than searched per member: the carried
+    // records are as long as the desk and the round is as wide as the policy
+    // allows, so the search form is quadratic in the room and is paid on every
+    // authorized round.
     let held: BTreeMap<&str, &AgentThreshold> = thresholds
         .iter()
         .map(|record| (record.agent_id.as_str(), record))
         .collect();
+    let spoke: BTreeSet<&str> = speakers.iter().copied().collect();
     members
         .iter()
         .map(|member| {
@@ -444,7 +623,11 @@ fn charged(thresholds: &[AgentThreshold], members: &[&str], speaker: &str) -> Ve
                 .copied()
                 .cloned()
                 .unwrap_or_else(|| AgentThreshold::new(*member, 0));
-            record.threshold = if *member == speaker {
+            // Every speaker in the round is charged once and everyone silent
+            // through it accrues once, whatever the round's width. Charging
+            // per round rather than per turn would make a wide round cheap and
+            // rotate the floor slower the more concurrent it got.
+            record.threshold = if spoke.contains(*member) {
                 record.threshold.saturating_add(SPEAK_COST)
             } else {
                 record.threshold.saturating_sub(SPEAK_COST / 2)

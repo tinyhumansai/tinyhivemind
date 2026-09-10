@@ -13,6 +13,8 @@ use tinyhivemind_hive::{DirectoryPolicy, EpisodePolicy, QuorumPolicy};
 /// whole episode so the two hive arms differ only in the knobs the sweep moved.
 pub(crate) fn default_policy() -> EpisodePolicy {
     EpisodePolicy {
+        round_width: SEQUENTIAL,
+        revealed_width: SEQUENTIAL,
         quorum: QuorumPolicy {
             window: 100,
             ..QuorumPolicy::DEFAULT
@@ -20,6 +22,16 @@ pub(crate) fn default_policy() -> EpisodePolicy {
         ..EpisodePolicy::DEFAULT
     }
 }
+
+/// The width every published arm runs at.
+///
+/// `EpisodePolicy::DEFAULT` runs wider rounds, because a seat is an async
+/// session. Every number recorded before ADR 0014 was measured at width one,
+/// and an arm that silently changed width would make a comparison against
+/// those numbers meaningless — so the published arms ask for width one and the
+/// concurrency arms ask for what they are testing. `--round-width` overrides
+/// it, and `docs/experiments/` carries what the wider rounds scored.
+pub(crate) const SEQUENTIAL: u32 = 1;
 
 /// The policy `--sweep` picks, scaled to the size of the desk.
 ///
@@ -43,6 +55,8 @@ pub(crate) fn default_policy() -> EpisodePolicy {
 pub(crate) fn tuned_policy(agents: usize) -> EpisodePolicy {
     EpisodePolicy {
         turn_budget: turn_budget(agents),
+        round_width: SEQUENTIAL,
+        revealed_width: SEQUENTIAL,
         blind_round: true,
         dominance_cap: 40,
         repetition_cap: 2,
@@ -103,6 +117,47 @@ pub(crate) fn knowing_policy(tuned: &EpisodePolicy) -> EpisodePolicy {
 pub(crate) fn deferring_policy(tuned: &EpisodePolicy, cap: u32) -> EpisodePolicy {
     EpisodePolicy {
         defer_cap: Some(cap.max(1)),
+        ..*tuned
+    }
+}
+
+/// The tuned policy widened, so a round authorizes several turns at once.
+///
+/// This is the arm ADR 0014 has to earn its place against, and it can lose.
+/// The prediction it tests is that a wider round buys **depth** — a host with
+/// async seats waits once for the whole round — without buying correlated
+/// error, because members writing at the same time cannot read each other and
+/// so a concurrent round is a blind round. If accuracy falls, the loss is the
+/// price of the depth and the table says so.
+///
+/// A width of `0` returns the tuned policy unchanged, which makes the arm
+/// bit-identical to `hive+` — the discipline `set_aside_cap` and
+/// `--exchange-cap` already follow.
+pub(crate) fn widened_policy(tuned: &EpisodePolicy, width: u32) -> EpisodePolicy {
+    if width == 0 {
+        return *tuned;
+    }
+    EpisodePolicy {
+        round_width: width,
+        revealed_width: width,
+        ..*tuned
+    }
+}
+
+/// The tuned policy widened **only while the room is blind**.
+///
+/// The free half of concurrency, on its own. A blind member cannot read a
+/// peer's row whether or not it runs concurrently with that peer, so this arm
+/// should score exactly what `hive+` scores while waiting fewer times. It is
+/// the control that separates the depth a round buys from the information a
+/// wide *revealed* round spends.
+pub(crate) fn blind_wide_policy(tuned: &EpisodePolicy, width: u32) -> EpisodePolicy {
+    if width == 0 {
+        return *tuned;
+    }
+    EpisodePolicy {
+        round_width: width,
+        revealed_width: SEQUENTIAL,
         ..*tuned
     }
 }

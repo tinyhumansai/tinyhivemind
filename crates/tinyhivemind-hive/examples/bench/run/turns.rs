@@ -278,6 +278,20 @@ pub(super) fn one_exchange(
     opened: ExchangeState,
     members: usize,
 ) -> Result<(Round, Duration), String> {
+    // The exchange happens *after* the round that authorized `last`, so it
+    // reads the journal as it now stands rather than as that round was folded
+    // against: its boundary advances to the newest row. Handing `last` through
+    // unchanged would withhold from the exchange the very floor rows the round
+    // just wrote, which is a boundary for a moment that has passed.
+    let last = &HiveTurn {
+        round_start: host
+            .journal
+            .iter()
+            .map(|message| message.sequence)
+            .max()
+            .unwrap_or(last.round_start),
+        ..last.clone()
+    };
     let started = Instant::now();
     let round = {
         let roster = host.roster();
@@ -308,6 +322,14 @@ pub(super) fn one_exchange(
 /// blind phase still cannot show a member its peers' desk rows, and ADR 0005's
 /// blind round is worth exactly what it was worth before. An audience the
 /// `aside` fold will not make private is dropped rather than published.
+///
+/// A private row is never withheld by a floor round's boundary — that clause is
+/// scoped to desk rows, because a floor round writes floor rows — so this loop
+/// behaves exactly as it did before ADR 0014, and every recorded exchange
+/// number reproduces. Whether the members of one *exchange* round should be
+/// able to read each other is a separate question this harness answers by
+/// running them in order; `ExchangeRound::Open` names them all at once, so a
+/// host that fanned them out would answer it differently.
 fn exchange_round(
     host: &mut Host,
     agents: &mut [&mut dyn Participant],

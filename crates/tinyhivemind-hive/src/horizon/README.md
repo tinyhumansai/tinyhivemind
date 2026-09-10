@@ -58,4 +58,4 @@ writes `.into()`.
   binding.
 
 The decision and its alternatives are
-[ADR 0014](../../../../docs/adr/0014-distance-is-measured-in-the-rows-a-fold-reads.md).
+[ADR 0016](../../../../docs/adr/0016-distance-is-measured-in-the-rows-a-fold-reads.md).

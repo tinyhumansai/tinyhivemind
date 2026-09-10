@@ -5,9 +5,12 @@
 //! the entomology sides. Each member computes an urge from the salience field
 //! and its own affinity; [`floor_holder`] takes the argmax.
 //!
-//! Taking the argmax rather than everyone above threshold is precisely what
-//! enforces *one message, one turn*. The bound is not checked after the fact;
-//! there is no way to express two winners.
+//! [`floor_round`] generalizes that argmax to the `width` highest bids, which
+//! is what an episode actually authorizes: seats are async sessions, and a
+//! round of them writing at once is a round none of them can read. The bound is
+//! `round_width` and it is a property of the policy rather than of the type, so
+//! a host cannot widen a round by accident — see ADR 0014. At width one
+//! [`floor_round`] returns exactly what [`floor_holder`] returns, tie included.
 //!
 //! Three corrections fold into the bid rather than sitting beside it:
 //!
@@ -150,6 +153,43 @@ pub fn bids(context: &BidContext<'_>) -> Result<Vec<Bid>> {
 pub fn floor_holder(bids: &[Bid]) -> Option<&Bid> {
     bids.iter()
         .reduce(|held, next| if next.urge > held.urge { next } else { held })
+}
+
+/// The `width` highest bids, in descending urge, ties broken by desk order.
+///
+/// The round generalizes [`floor_holder`]: at `width` one it returns exactly
+/// that bid, because the sort is *stable* and `bids` arrives in desk order, so
+/// a tie resolves to the earlier member exactly as `floor_holder`'s strict `>`
+/// does. That identity is what lets a round of one reproduce a sequential
+/// episode bit for bit rather than merely equivalently.
+///
+/// Width is a bound rather than a quota. Fewer bids than `width` returns fewer
+/// turns, and an empty slice returns an empty round — the caller reads that as
+/// [`HiveStep::Idle`], the same way it reads `None` from [`floor_holder`].
+///
+/// The returned bids are re-sorted into desk order before they are handed back,
+/// because a round is a *set* of authorized turns and nothing downstream should
+/// be able to read a precedence into their order that the round does not have.
+///
+/// [`HiveStep::Idle`]: crate::episode::HiveStep::Idle
+#[must_use]
+pub fn floor_round(bids: &[Bid], width: u32) -> Vec<&Bid> {
+    let width = width as usize;
+    if width == 0 || bids.is_empty() {
+        return Vec::new();
+    }
+    let mut ranked: Vec<(usize, &Bid)> = bids.iter().enumerate().collect();
+    // Descending urge; the index keeps the sort total and resolves a tie to the
+    // member earlier in desk order, which is what `floor_holder` does.
+    ranked.sort_by(|(left_at, left), (right_at, right)| {
+        right
+            .urge
+            .cmp(&left.urge)
+            .then_with(|| left_at.cmp(right_at))
+    });
+    ranked.truncate(width);
+    ranked.sort_by_key(|(at, _)| *at);
+    ranked.into_iter().map(|(_, bid)| bid).collect()
 }
 
 /// The traces, sorted and deduplicated by `(sequence, offset)`.

@@ -133,36 +133,40 @@ fn run(
             }
         };
 
-        let HiveStep::Speak { turn } = decision else {
+        let HiveStep::Speak { turns, next_state } = decision else {
             report(&decision);
             return;
         };
-        let turn = *turn;
 
-        let visible = project_for(&turn, &journal);
-        let content = scripts
-            .iter_mut()
-            .find(|(id, _)| *id == turn.agent_id)
-            .and_then(|(_, script)| script.pop_front())
-            .map_or_else(|| out_of_script_utterance(&turn, &visible), str::to_owned);
+        // One round. Every member in it was authorized against the same
+        // journal and none of them can read another's row from it, which the
+        // `saw` column shows: the count does not grow within a round.
+        for turn in &turns {
+            let visible = project_for(turn, &journal);
+            let content = scripts
+                .iter_mut()
+                .find(|(id, _)| *id == turn.agent_id)
+                .and_then(|(_, script)| script.pop_front())
+                .map_or_else(|| out_of_script_utterance(turn, &visible), str::to_owned);
 
-        println!(
-            "  {:>9}  {:<9} {:<5} saw {}/{}  {content}",
-            turn.agent_id,
-            format!("{:?}", turn.reason).to_lowercase(),
-            match turn.visibility {
-                Visibility::Blind => "blind",
-                Visibility::Full => "full",
-            },
-            visible.len(),
-            journal.len(),
-        );
+            println!(
+                "  {:>9}  {:<9} {:<5} saw {}/{}  {content}",
+                turn.agent_id,
+                format!("{:?}", turn.reason).to_lowercase(),
+                match turn.visibility {
+                    Visibility::Blind => "blind",
+                    Visibility::Full => "full",
+                },
+                visible.len(),
+                journal.len(),
+            );
 
-        let next = u64::try_from(journal.len())
-            .unwrap_or(u64::MAX)
-            .saturating_add(1);
-        journal.push(speech(next, &turn.agent_id, &content));
-        state = turn.next_state;
+            let next = u64::try_from(journal.len())
+                .unwrap_or(u64::MAX)
+                .saturating_add(1);
+            journal.push(speech(next, &turn.agent_id, &content));
+        }
+        state = *next_state;
     }
 }
 

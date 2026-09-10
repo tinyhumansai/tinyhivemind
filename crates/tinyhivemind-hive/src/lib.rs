@@ -7,21 +7,58 @@
 //! crate lets a room of agents put proposals side by side, accumulate support,
 //! register a grounded objection, and terminate for a reason it can name.
 //!
-//! # An episode is a sequence of single turns
+//! # One task, one agent. Two or more facets, one seat each
+//!
+//! The benchmark in this repository is specific about when a room is worth its
+//! price, and the answer is **not** "when the task is long". On a task that
+//! merely gets longer, a single agent compacting by a superseding account beat
+//! a room of five at every horizon and every window, at a seventh of the
+//! depth. On a task that gets *wider* — several independent sub-decisions at
+//! once, each wanting different attention — the ordering flips, with the
+//! crossover at two facets:
+//!
+//! ```text
+//! all-facets %       F=1      F=2      F=4      F=8
+//! one agent         78.7     56.9     28.1      7.8
+//! one seat each     78.7     61.1     35.9     13.0
+//! ```
+//!
+//! [`divide`] is that shape, and [`DivisionPolicy::DEFAULT`] is **on** —
+//! the only default in this crate that is, because it is the only mechanism
+//! here that was measured beating the best single agent the benchmark could
+//! build. A task of one facet divides into one seat answering alone, which is
+//! the rule falling out of the general case rather than a branch beside it.
+//!
+//! See `docs/adr/0015-the-division-of-labour-is-the-default-shape.md`.
+//!
+//! # An episode is a sequence of bounded rounds
+//!
+//! [`step`] is what decides one *facet* when its owner cannot decide it alone.
+//! It is not deprecated by the division and is kept as the arm the division was
+//! measured against.
 //!
 //! A hive mind is normally built as fan-out — publish a task, wake N agents,
-//! gather the replies. This crate deliberately does not. [`HiveStep::Speak`]
-//! carries exactly one [`HiveTurn`], so the charter's *one message, one turn*
-//! rule is a type invariant rather than a convention.
+//! gather the replies — and the failure of that shape is that nothing bounds
+//! it. [`HiveStep::Speak`] carries a **round**: the [`HiveTurn`]s authorized to
+//! run concurrently, at most [`EpisodePolicy::round_width`] of them while the
+//! round is blind or [`EpisodePolicy::revealed_width`] of them once it is
+//! revealed, plus the one [`EpisodeState`] the episode takes once all of them
+//! are appended. The bound is the invariant; the serialization it replaced
+//! never was.
 //!
-//! That is not only a safety constraint. Sparse communication topologies match
-//! or beat fully connected ones in multi-agent debate at much lower cost;
-//! conformity rises with interaction time, so convergence is a warning signal
-//! as much as a success signal; and parallel fan-out wins only on genuinely
-//! decomposable work. The one thing fan-out really buys is *independence*, and
-//! this crate buys that as [`Visibility`] — a filter on what one turn sees —
-//! rather than as concurrency. See
-//! `docs/adr/0002-hive-episodes-are-sequential.md`.
+//! Independence is still bought as [`Visibility`] rather than hoped for, and a
+//! round strengthens it rather than threatening it: members writing at the same
+//! time cannot read each other, so **a concurrent round is a blind round**.
+//! That matters because conformity in a group of models rises with interaction
+//! time and with sight of a peer's position — this repository measures the
+//! blind opening at 24 points — so a wide round is *less* correlated than the
+//! same turns taken in series, not more.
+//!
+//! `round_width: 1` is the sequential episode and reproduces every number
+//! recorded before rounds existed, bit for bit. See
+//! `docs/specs/concurrent-rounds.md` and
+//! `docs/adr/0014-a-round-authorizes-concurrent-turns.md`, which supersedes
+//! `docs/adr/0002-hive-episodes-are-sequential.md` on the terms that ADR set.
 //!
 //! # Sizing a policy to the room
 //!
@@ -60,6 +97,8 @@
 //!   sources a turn carries.
 //! - [`mod@directory`] — who knows what, folded from grounded deposits and the
 //!   citations they drew.
+//! - [`division`] — a task's facets, split across the seats that own them, and
+//!   what each owner reads. The one mechanism here whose default is *on*.
 //! - [`episode`] — the pure state machine, and the visibility filter.
 //! - [`error`] — typed failures from malformed inputs.
 //! - [`horizon`] — where a fold is measured to, and whether distance counts
@@ -140,6 +179,7 @@
 
 pub mod attention;
 pub mod directory;
+pub mod division;
 pub mod episode;
 pub mod error;
 pub mod exchange;
@@ -150,11 +190,13 @@ pub mod trace;
 
 pub use attention::{
     AgentThreshold, Bid, BidReason, BudgetPolicy, BudgetRequest, BudgetShare, BudgetVerdict,
-    allocate_chars, bids, floor_holder,
+    allocate_chars, bids, floor_holder, floor_round,
 };
 pub use directory::{Directory, DirectoryEntry, DirectoryPolicy, WEIGHT_CEILING, directory};
+pub use division::{Assignment, Division, DivisionPolicy, OwnerReason, divide};
 pub use episode::{
-    EpisodePolicy, EpisodeState, HiveStep, HiveTurn, Phase, Visibility, project_for, step,
+    DEFAULT_REVEALED_WIDTH, DEFAULT_ROUND_WIDTH, EpisodePolicy, EpisodeState, HiveStep, HiveTurn,
+    Phase, Visibility, project_for, step,
 };
 pub use error::{Error, Result};
 pub use exchange::{ExchangePolicy, ExchangeRound, ExchangeState, NoExchangeReason, exchange};

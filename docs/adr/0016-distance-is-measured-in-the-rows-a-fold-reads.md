@@ -1,4 +1,4 @@
-# 14. Distance is measured in the rows a fold reads
+# 16. Distance is measured in the rows a fold reads
 
 - **Status:** Proposed
 - **Date:** 2026-09-10

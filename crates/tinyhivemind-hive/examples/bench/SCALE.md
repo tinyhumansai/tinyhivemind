@@ -56,6 +56,23 @@ deduplicated rather than run twice under two labels. An unrecognised flag is
 refused rather than ignored: `--scale-sweeps` used to run the default
 comparison and report it under the heading you thought you had asked for.
 
+## `--distance`: what a window counts
+
+| value | the window and the decay count |
+| --- | --- |
+| `sequence` | every row the host wrote, folded or not (the default) |
+| `live` | only the rows this episode folds |
+
+A sequence numbers a row in the host's transcript, not a row in the episode. An
+aside, an off-floor question, a row from a retired agent and a reading published
+from another channel all consume one, and under `sequence` all of them count
+against `QuorumPolicy::window` and against salience decay — so a desk that is
+merely busy has a shorter window than an idle one on the same policy.
+
+The two are identical on a journal the episode owns end to end, which is what
+this harness mostly builds and why no recorded number moves. See
+[ADR 0016](../../../../docs/adr/0016-distance-is-measured-in-the-rows-a-fold-reads.md).
+
 ## A federation is the shape that scales
 
 A thousand agents in one room and a thousand across a hundred desks are not the

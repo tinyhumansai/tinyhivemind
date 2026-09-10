@@ -60,6 +60,25 @@ pub enum Error {
     /// configuration error rather than a quieter way of saying the same thing.
     #[error("defer cap must not be zero")]
     ZeroDeferCap,
+    /// A round width of zero would authorize nobody to speak, ever.
+    ///
+    /// `1` is how a host runs a sequential episode; `0` would cap the round
+    /// before anyone could be in one, which is a configuration error rather
+    /// than a quieter way of saying the same thing. The precedent is
+    /// [`Self::ZeroDeferCap`].
+    #[error("round width must not be zero")]
+    ZeroRoundWidth,
+    /// A division was asked for on a desk with no active member to own a
+    /// facet.
+    ///
+    /// Distinct from an empty task, which divides into nothing and is not an
+    /// error: a task with no facets has nobody to disappoint, and a task with
+    /// facets and no seats cannot be answered at all.
+    #[error("desk `{desk_id}` has no active member to own a facet")]
+    NoSeats {
+        /// The desk that came back with no active member.
+        desk_id: String,
+    },
 }
 
 impl From<tinyhivemind_core::error::Error> for Error {

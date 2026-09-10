@@ -157,8 +157,8 @@ impl HiveHarness {
             let decision = tinyhivemind_hive::step(&state, &self.journal, &members, &desks, policy)
                 .map_err(|error| error.to_string())?;
 
-            let turn = match decision {
-                HiveStep::Speak { turn } => *turn,
+            let (turns, next_state) = match decision {
+                HiveStep::Speak { turns, next_state } => (turns, *next_state),
                 HiveStep::Converged { topic, standing } => {
                     return Ok((
                         Outcome::Converged {
@@ -177,26 +177,33 @@ impl HiveHarness {
                 HiveStep::Idle => return Ok((Outcome::Idle, steps)),
             };
 
-            let visible = project_for(&turn, &self.journal);
-            let agent = agents
-                .iter_mut()
-                .find(|agent| agent.id() == turn.agent_id)
-                .ok_or_else(|| format!("no agent named {}", turn.agent_id))?;
-            let content = agent.speak(&turn, &visible)?;
+            // Every turn in the round is composed and appended before the
+            // round's state is committed, which is the ordering the library's
+            // `next_state` contract requires. Appending as we go is safe even
+            // though the round is notionally concurrent: a row written now
+            // carries a sequence above `round_start`, and `project_for`
+            // withholds exactly those from the rest of the round. That is the
+            // property, asserted rather than arranged.
+            for turn in &turns {
+                let visible = project_for(turn, &self.journal);
+                let agent = agents
+                    .iter_mut()
+                    .find(|agent| agent.id() == turn.agent_id)
+                    .ok_or_else(|| format!("no agent named {}", turn.agent_id))?;
+                let content = agent.speak(turn, &visible)?;
 
-            steps.push(Step {
-                agent_id: turn.agent_id.clone(),
-                reason: turn.reason,
-                visibility: turn.visibility,
-                phase: turn.phase,
-                saw: visible.len(),
-                content: content.clone(),
-            });
+                steps.push(Step {
+                    agent_id: turn.agent_id.clone(),
+                    reason: turn.reason,
+                    visibility: turn.visibility,
+                    phase: turn.phase,
+                    saw: visible.len(),
+                    content: content.clone(),
+                });
 
-            // The turn is durably appended before its state is committed, which
-            // is the ordering the library's `next_state` contract requires.
-            self.agent(&turn.agent_id, &content);
-            state = turn.next_state;
+                self.agent(&turn.agent_id, &content);
+            }
+            state = next_state;
         }
     }
 }

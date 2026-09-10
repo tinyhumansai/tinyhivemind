@@ -43,6 +43,14 @@ pub(crate) struct Aggregate {
     pub(crate) correct: u32,
     /// Turns taken across the sample.
     pub(crate) turns: u64,
+    /// Rounds taken across the sample: the sample's **depth**.
+    ///
+    /// A round's turns are authorized against the same transcript and cannot
+    /// read each other, so a host with async seats waits once for all of them.
+    /// `turns/ep` is width and this is depth; the two were one number until
+    /// ADR 0014, which is why `vote` — one round of `budget` independent
+    /// answers — was charged the same as a deliberation of `budget` rounds.
+    pub(crate) rounds: u64,
     /// Calls into the library across the sample.
     pub(crate) step_calls: u64,
     /// Time spent inside the library, including an off-floor exchange
@@ -138,6 +146,7 @@ impl Aggregate {
         self.idle = self.idle.saturating_add(other.idle);
         self.correct = self.correct.saturating_add(other.correct);
         self.turns = self.turns.saturating_add(other.turns);
+        self.rounds = self.rounds.saturating_add(other.rounds);
         self.step_calls = self.step_calls.saturating_add(other.step_calls);
         self.library_time = self.library_time.saturating_add(other.library_time);
         self.step_time = self.step_time.saturating_add(other.step_time);
@@ -169,6 +178,7 @@ impl Aggregate {
             self.correct = self.correct.saturating_add(1);
         }
         self.turns = self.turns.saturating_add(u64::from(report.turns));
+        self.rounds = self.rounds.saturating_add(u64::from(report.rounds));
         self.step_calls = self.step_calls.saturating_add(u64::from(report.step_calls));
         self.library_time += report.library_time;
         self.step_time += report.step_time;
@@ -209,6 +219,7 @@ impl Aggregate {
             self.correct = self.correct.saturating_add(1);
         }
         self.turns = self.turns.saturating_add(u64::from(report.turns));
+        self.rounds = self.rounds.saturating_add(u64::from(report.rounds));
         self.step_calls = self.step_calls.saturating_add(1);
         self.library_time += report.library_time;
         // A control arm never opens an exchange round, so all of its library
@@ -237,9 +248,16 @@ impl Aggregate {
         ratio(self.converged.into(), self.episodes.into()) * 100.0
     }
 
-    /// Mean turns per episode.
+    /// Mean turns per episode: what the arm cost in **width**, and what the
+    /// turn budget bounds.
     pub(crate) fn turns_per_episode(&self) -> f64 {
         ratio(self.turns, self.episodes.into())
+    }
+
+    /// Mean rounds per episode: what the arm cost in **depth**, and what a
+    /// host with async seats actually waits for.
+    pub(crate) fn rounds_per_episode(&self) -> f64 {
+        ratio(self.rounds, self.episodes.into())
     }
 
     /// Mean time inside the library per call to the state machine.
@@ -359,16 +377,17 @@ pub(crate) fn ratio(numerator: u64, denominator: u64) -> f64 {
 /// The header for the arm comparison table.
 pub(crate) fn arm_header() -> String {
     format!(
-        "{:<8}{:>10}{:>12}{:>12}{:>14}{:>14}",
-        "arm", "turns/ep", "decided %", "correct %", "ns/step", "episodes/s"
+        "{:<8}{:>10}{:>10}{:>12}{:>12}{:>14}{:>14}",
+        "arm", "turns/ep", "rounds/ep", "decided %", "correct %", "ns/step", "episodes/s"
     )
 }
 
 /// One row of the arm comparison table.
 pub(crate) fn arm_row(name: &str, totals: &Aggregate) -> String {
     let rest = format!(
-        "{:>10.2}{:>12.1}{:>12.1}{:>14.0}{:>14.0}",
+        "{:>10.2}{:>10.2}{:>12.1}{:>12.1}{:>14.0}{:>14.0}",
         totals.turns_per_episode(),
+        totals.rounds_per_episode(),
         totals.decision_rate(),
         totals.accuracy(),
         totals.nanos_per_step(),
@@ -518,13 +537,14 @@ pub(crate) fn json_line(name: &str, totals: &Aggregate) -> String {
     // rather than propagated.
     let _ = write!(
         line,
-        "{{\"arm\":\"{name}\",\"turns_per_episode\":{},\"decision_rate\":{},\
+        "{{\"arm\":\"{name}\",\"turns_per_episode\":{},\"rounds_per_episode\":{},\"decision_rate\":{},\
          \"correct_pct\":{},\"ci_low\":{},\"ci_high\":{},\"ns_per_step\":{},\
          \"episodes_per_second\":{},\"fact_pct\":{},\"to_fact\":{},\
          \"knows_pct\":{},\"defers_per_episode\":{},\
          \"expert_led\":{},\"route_pct\":{},\"cost_per_episode\":{},\
          \"accuracy_per_kilo_unit\":{},\"rho\":{},\"exchange_calls_per_episode\":{}}}",
         json_f64(totals.turns_per_episode()),
+        json_f64(totals.rounds_per_episode()),
         json_f64(totals.decision_rate()),
         json_f64(totals.accuracy()),
         json_f64(low),

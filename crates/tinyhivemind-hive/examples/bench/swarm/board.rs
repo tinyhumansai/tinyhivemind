@@ -54,6 +54,14 @@ pub(super) struct SpokenTurn {
     pub(super) content: String,
     /// Whether the seat spent the turn asking another channel.
     pub(super) offered: bool,
+    /// Whether this desk was still allowed to route a question when the turn
+    /// was planned.
+    ///
+    /// Carried on the spoken turn rather than looked up beside it: the
+    /// concurrent scheduler lands turns from several desks' rounds in one
+    /// pass, and pairing them with their plans by position is a correctness
+    /// bug waiting for the first time the two lists drift.
+    pub(super) budget: bool,
 }
 
 /// Fill one planned turn, with no access to the board at all.
@@ -87,6 +95,7 @@ pub(super) fn fill_turn(
         agent_id: planned.turn.agent_id.clone(),
         content,
         offered,
+        budget: planned.budget,
     })
 }
 
@@ -373,9 +382,9 @@ impl<'a> Board<'a> {
         &mut self,
         members: &mut [Vec<&mut dyn SwarmMember>],
         spoken: &SpokenTurn,
-        budget: bool,
     ) -> Result<(), String> {
         let desk = spoken.desk;
+        let budget = spoken.budget;
         let sequence = self.commit(members, desk, &spoken.agent_id, &spoken.content);
         let routed =
             budget && self.route(desk, &spoken.agent_id, &spoken.content, sequence, 0, None)?;

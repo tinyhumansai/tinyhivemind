@@ -34,27 +34,35 @@
 //! desks each authorizing exactly one speaker is a hundred calls that need not
 //! wait on each other.
 //!
-//! # What concurrency does not relax
+//! # Two widths, and neither is this module's to widen
 //!
-//! One message, one turn is untouched. Each desk still runs exactly one turn
-//! per pass, authorized by its own episode's `step`; what overlaps is the
-//! *waiting*, across episodes that were already independent. That is precisely
-//! the arrangement [ADR 0002][adr] carves out — "a host that needs parallel
-//! speculative work must express it as separate episodes and reconcile them
-//! itself" — and every desk here is a separate episode with its own journal,
-//! its own state and its own budget.
+//! Concurrency here is now two-dimensional, and the two halves belong to
+//! different owners.
 //!
-//! Rows are landed in **desk order** whatever order the calls return, so the
+//! **Within a desk**, the library decides. [`HiveStep::Speak`] carries a round
+//! of up to `policy.round_width` turns, and [ADR 0014][round] is what says a
+//! round may run concurrently: members writing simultaneously cannot read each
+//! other, so a concurrent round *is* a blind round. This module runs the round
+//! it is handed and never widens one.
+//!
+//! **Across desks**, the host decides, and that is what this module is. Every
+//! desk is a separate episode with its own journal, its own state and its own
+//! budget, so overlapping them overlaps only the *waiting*. `--jobs` bounds
+//! the product: `desks x round_width` model calls may be in flight.
+//!
+//! What is preserved either way is that no member reads a row written beside
+//! it. Rows are landed in **desk order**, and within a desk in the order the
+//! library authorized the round, whatever order the calls return — so the
 //! schedule is deterministic: the same seed and the same `--jobs` produce the
 //! same transcript.
 //!
-//! [adr]: https://github.com/tinyhumansai/tinyhivemind/blob/main/docs/adr/0002-hive-episodes-are-sequential.md
+//! [round]: https://github.com/tinyhumansai/tinyhivemind/blob/main/docs/adr/0014-a-round-authorizes-concurrent-turns.md
 
 use std::time::Instant;
 
 use tinyhivemind_hive::{EpisodePolicy, EpisodeState, HiveStep, step};
 
-use super::board::{Board, PlannedTurn, fill_turn};
+use super::board::{Board, PlannedTurn, SpokenTurn, fill_turn};
 use super::{Channel, DeskOutcome, Ending, SwarmMember, member};
 use crate::parallel;
 
@@ -105,14 +113,22 @@ pub(super) fn sequential_pass(
 
         let decision = decide(board, states, policy, desk)?;
         match decision {
-            HiveStep::Speak { turn } => {
-                let planned = board.plan_turn(members, desk, &turn)?;
-                let said = {
-                    let seats = &mut members[desk];
-                    fill_turn(seats, &planned)?
-                };
-                board.land_turn(members, &said, planned.budget)?;
-                states[desk] = turn.next_state;
+            HiveStep::Speak { turns, next_state } => {
+                // A desk takes its whole round before the scheduler moves on,
+                // so one desk's round interleaves with another desk's round
+                // rather than with its turns. Each turn is landed before the
+                // next is planned, which is what a `Visibility::Full` round
+                // needs and what a blind one is indifferent to — `project_for`
+                // withholds the peer rows either way.
+                for turn in &turns {
+                    let planned = board.plan_turn(members, desk, turn)?;
+                    let said = {
+                        let seats = &mut members[desk];
+                        fill_turn(seats, &planned)?
+                    };
+                    board.land_turn(members, &said)?;
+                }
+                states[desk] = *next_state;
             }
             ended => retire(channels, finished, desk, ended),
         }
@@ -167,12 +183,23 @@ pub(super) fn concurrent_pass(
     // Phase two, sequential and cheap: ask the library who speaks next on each
     // desk, and retire the desks that are done.
     let mut planned: Vec<PlannedTurn> = Vec::new();
+    let mut committed: Vec<Option<EpisodeState>> = vec![None; count];
     for desk in 0..count {
         if finished[desk].is_some() || !board.pending_empty(desk) {
             continue;
         }
         match decide(board, states, policy, desk)? {
-            HiveStep::Speak { turn } => planned.push(board.plan_turn(members, desk, &turn)?),
+            HiveStep::Speak { turns, next_state } => {
+                // Every turn of the round is planned against the journal as it
+                // stands *before* the round, which is what makes the round
+                // concurrent. That is the library's own reading of a round —
+                // members writing simultaneously cannot read each other — and
+                // it is why a wide round is a blind round.
+                for turn in &turns {
+                    planned.push(board.plan_turn(members, desk, turn)?);
+                }
+                committed[desk] = Some(*next_state);
+            }
             ended => {
                 retire(channels, finished, desk, ended);
                 progressed = true;
@@ -180,48 +207,48 @@ pub(super) fn concurrent_pass(
         }
     }
 
-    // An index from desk to its planned turn, so the seats and the plans can
-    // be walked together in one pass. Built rather than searched: at a hundred
-    // desks a scan per desk is a hundred scans, for a lookup that is a
-    // subscript.
-    let mut plan_at: Vec<Option<usize>> = vec![None; count];
-    for (index, plan) in planned.iter().enumerate() {
-        plan_at[plan.desk] = Some(index);
-    }
-
-    // Phase three, concurrent: every desk fills its one authorized turn at the
-    // same time.
+    // Phase three, concurrent: every turn of every desk's round is filled at
+    // the same time. The width is now two-dimensional — `desks x round_width`
+    // model calls in flight — and `--jobs` is what bounds it.
     let spoken = {
-        let mut work: Vec<(&PlannedTurn, &mut Vec<&mut dyn SwarmMember>)> = members
+        // Seats are borrowed per desk, so the work is grouped by desk and each
+        // group fills its own round in order. Grouping rather than flattening
+        // is not a nicety: two turns of one round need the same `&mut` seats.
+        let mut work: Vec<(Vec<&PlannedTurn>, &mut Vec<&mut dyn SwarmMember>)> = members
             .iter_mut()
             .enumerate()
-            .filter_map(|(desk, seats)| {
-                plan_at
-                    .get(desk)
-                    .copied()
-                    .flatten()
-                    .map(|index| (&planned[index], seats))
+            .map(|(desk, seats)| {
+                let round: Vec<&PlannedTurn> =
+                    planned.iter().filter(|plan| plan.desk == desk).collect();
+                (round, seats)
             })
+            .filter(|(round, _)| !round.is_empty())
             .collect();
-        parallel::map_mut_in_order(&mut work, jobs, |(plan, seats)| fill_turn(seats, plan))?
+        let rounds: Vec<Vec<SpokenTurn>> =
+            parallel::map_mut_in_order(&mut work, jobs, |(round, seats)| {
+                round
+                    .iter()
+                    .map(|plan| fill_turn(seats, plan))
+                    .collect::<Result<Vec<SpokenTurn>, String>>()
+            })?;
+        rounds
     };
 
-    // Phase four, sequential and in desk order. The order is load-bearing
-    // rather than tidy: a row consumes a sequence number, and the quorum
-    // window and salience decay read raw sequence distance, so landing in
+    // Phase four, sequential and in desk order, each desk's round in the order
+    // the library authorized it. The order is load-bearing rather than tidy: a
+    // row consumes a sequence number, and the quorum window and salience decay
+    // read raw sequence distance under `Basis::Sequence`, so landing in
     // completion order would let one seed decide two different things.
-    for said in &spoken {
-        let Some(plan) = plan_at
-            .get(said.desk)
-            .copied()
-            .flatten()
-            .and_then(|index| planned.get(index))
-        else {
-            continue;
-        };
-        board.land_turn(members, said, plan.budget)?;
-        states[said.desk] = plan.turn.next_state.clone();
-        progressed = true;
+    for round in &spoken {
+        for said in round {
+            board.land_turn(members, said)?;
+            progressed = true;
+        }
+    }
+    for (desk, next_state) in committed.into_iter().enumerate() {
+        if let Some(next_state) = next_state {
+            states[desk] = next_state;
+        }
     }
 
     Ok(progressed)

@@ -79,12 +79,52 @@ pub(crate) enum EntryKind {
     Stub,
 }
 
+/// What happens to a row the window has no space for.
+///
+/// Two different events with two different costs, and a benchmark that
+/// modelled only the first would be measuring a soloist at its worst rather
+/// than at its best.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum Compaction {
+    /// It is **dropped**. What is gone is gone.
+    ///
+    /// The default, and what every arm ran under before `--stages` existed.
+    /// It is the pessimistic-but-documented reading of what a sliding window
+    /// does to a transcript nobody curated.
+    #[default]
+    Evict,
+    /// It is **summarised**: it gives up its position in the window and still
+    /// contributes, at [`FOLD_FIDELITY`].
+    ///
+    /// A deliberately *generous* model of compaction. The point of the arm
+    /// that uses it is to make a single agent as strong as it can honestly be
+    /// made, so that a room beating it is beating something real. A summary
+    /// that loses two thirds of a fact's force but never loses the fact is
+    /// better than any compaction this workspace has actually measured.
+    Fold,
+}
+
+/// What a summarised row is still worth, against the 1.0 of a row in the
+/// window.
+///
+/// Not measured, and it is a parameter rather than a constant for that reason:
+/// `--fidelity` sweeps it, and a finding that only holds at one setting is a
+/// finding about this file. See [`ContextBudget::fidelity`].
+pub(crate) const FOLD_FIDELITY: f64 = 0.35;
+
 /// A member's window: how much it can hold, and how badly the middle of it
 /// degrades.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct ContextBudget {
     /// Rows the window holds. `0` disables the whole model.
     pub(crate) capacity: usize,
+    /// What becomes of a row past [`Self::capacity`].
+    pub(crate) compaction: Compaction,
+    /// What a summarised row is worth under [`Compaction::Fold`].
+    ///
+    /// Ignored under [`Compaction::Evict`], where an overflowing row is worth
+    /// nothing whatever this says.
+    pub(crate) fidelity: f64,
     /// How strongly the middle of the window is discounted, in `0.0..=1.0`.
     ///
     /// `0.0` is a flat window: every retained row is worth full value, and the
@@ -100,8 +140,31 @@ impl ContextBudget {
     /// No window at all: what every arm ran under before this module.
     pub(crate) const UNBOUNDED: Self = Self {
         capacity: 0,
+        compaction: Compaction::Evict,
+        fidelity: FOLD_FIDELITY,
         rot: 0.0,
     };
+
+    /// What a row at `index` is worth, given the rows the window retained.
+    ///
+    /// One function for both halves of the model, because the two are one
+    /// question — *how much of this row can still be read* — and answering it
+    /// in two places is how a caller ends up charging an evicted row a
+    /// positional discount it was never in a position to earn.
+    ///
+    /// A retained row is worth its position's weight. A row that did not
+    /// survive is worth nothing under [`Compaction::Evict`] and
+    /// [`Self::fidelity`] under [`Compaction::Fold`] — a summary keeps no
+    /// position, so it takes no positional discount either.
+    pub(crate) fn worth(&self, index: usize, kept: &[usize]) -> f64 {
+        match kept.iter().position(|held| *held == index) {
+            Some(position) => self.weight(position, kept.len()),
+            None => match self.compaction {
+                Compaction::Evict => 0.0,
+                Compaction::Fold => self.fidelity,
+            },
+        }
+    }
 
     /// Whether this budget models anything.
     pub(crate) const fn is_unbounded(&self) -> bool {
@@ -192,6 +255,7 @@ mod test {
         let budget = ContextBudget {
             capacity: 4,
             rot: 0.0,
+            ..ContextBudget::UNBOUNDED
         };
         assert_eq!(budget.retained(4), vec![0, 1, 2, 3]);
         // Six rows into four: the middle two go.
@@ -210,6 +274,7 @@ mod test {
         let budget = ContextBudget {
             capacity: 16,
             rot: 1.0,
+            ..ContextBudget::UNBOUNDED
         };
         let held = 5;
         assert!(
@@ -234,10 +299,12 @@ mod test {
         let strong = ContextBudget {
             capacity: 16,
             rot: 1.0,
+            ..ContextBudget::UNBOUNDED
         };
         let half = ContextBudget {
             capacity: 16,
             rot: 0.5,
+            ..ContextBudget::UNBOUNDED
         };
         assert!(close(strong.weight(2, 5), 0.0));
         assert!(close(half.weight(2, 5), 0.5));
@@ -249,6 +316,7 @@ mod test {
         let budget = ContextBudget {
             capacity: 8,
             rot: 1.0,
+            ..ContextBudget::UNBOUNDED
         };
         assert!(close(budget.weight(0, 1), 1.0));
     }
@@ -271,6 +339,7 @@ mod test {
         let budget = ContextBudget {
             capacity: 64,
             rot: 1.0,
+            ..ContextBudget::UNBOUNDED
         };
         // Rows worth less than half their face value. Counted rather than
         // divided: the claim is about a share, and comparing two shares as a
@@ -299,6 +368,7 @@ mod test {
         let budget = ContextBudget {
             capacity: 6,
             rot: 0.0,
+            ..ContextBudget::UNBOUNDED
         };
         let kept = budget.retained(17);
         assert_eq!(kept.len(), 6, "the window holds what it holds");
@@ -316,11 +386,92 @@ mod test {
         let budget = ContextBudget {
             capacity: 5,
             rot: 0.0,
+            ..ContextBudget::UNBOUNDED
         };
         let kept = budget.retained(11);
         assert_eq!(kept.len(), 5);
         assert!(kept.contains(&0), "the head survives");
         assert!(kept.contains(&10), "and so does the newest row");
         assert!(!kept.contains(&5), "the exact centre does not");
+    }
+}
+
+#[cfg(test)]
+mod fold_test {
+    use super::*;
+
+    /// Eviction is the default, and it is what every arm ran under before
+    /// folding existed.
+    #[test]
+    fn an_evicted_row_is_worth_nothing_and_a_folded_one_is_not() {
+        let evicting = ContextBudget {
+            capacity: 4,
+            rot: 0.0,
+            ..ContextBudget::UNBOUNDED
+        };
+        assert_eq!(evicting.compaction, Compaction::Evict);
+        let kept = evicting.retained(10);
+        // Row 5 is in the middle of ten and did not survive four.
+        assert!(!kept.contains(&5));
+        assert!((evicting.worth(5, &kept) - 0.0).abs() < 1e-9);
+
+        let folding = ContextBudget {
+            compaction: Compaction::Fold,
+            ..evicting
+        };
+        assert!((folding.worth(5, &kept) - FOLD_FIDELITY).abs() < 1e-9);
+    }
+
+    /// A row that *did* survive is worth its position either way: folding
+    /// changes what happens to the overflow, never what happens to the window.
+    #[test]
+    fn folding_does_not_change_what_a_retained_row_is_worth() {
+        let evicting = ContextBudget {
+            capacity: 8,
+            rot: 1.0,
+            ..ContextBudget::UNBOUNDED
+        };
+        let folding = ContextBudget {
+            compaction: Compaction::Fold,
+            ..evicting
+        };
+        let kept = evicting.retained(20);
+        for index in &kept {
+            assert!((evicting.worth(*index, &kept) - folding.worth(*index, &kept)).abs() < 1e-9);
+        }
+    }
+
+    /// A summary keeps no position, so it takes no positional discount — which
+    /// is the whole reason a folded row can be worth more than a retained one
+    /// that landed in the middle of a crowded window.
+    #[test]
+    fn a_summary_can_beat_the_middle_of_a_full_window() {
+        let folding = ContextBudget {
+            capacity: 9,
+            compaction: Compaction::Fold,
+            fidelity: FOLD_FIDELITY,
+            rot: 1.0,
+        };
+        let kept = folding.retained(30);
+        let centre = kept.len() / 2;
+        let buried = kept[centre];
+        assert!(
+            folding.worth(buried, &kept) < folding.worth(15, &kept),
+            "a row summarised out of the window beats one buried in its middle"
+        );
+    }
+
+    /// An unbounded window retains everything, so nothing is ever summarised
+    /// and the mode cannot change a number.
+    #[test]
+    fn an_unbounded_window_folds_nothing() {
+        let folding = ContextBudget {
+            compaction: Compaction::Fold,
+            ..ContextBudget::UNBOUNDED
+        };
+        let kept = folding.retained(50);
+        for index in 0..50 {
+            assert!((folding.worth(index, &kept) - 1.0).abs() < 1e-9);
+        }
     }
 }

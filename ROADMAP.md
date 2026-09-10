@@ -32,8 +32,12 @@ dependency direction is enforced by construction.
 | P18 | The utterance surface: a seat speaks by calling a tool rather than emitting a fence — the tool descriptions, the validation and the utterance-to-row fold live in `tinyhivemind::speech`, and a refused aside reaches its author inside the turn | **done** — see [`docs/specs/the-utterance-surface.md`](docs/specs/the-utterance-surface.md) |
 | P19 | Folding by size: the standing account triggers on the characters of foldable content as well as its row count, stated by a host as a token budget, and the fold is told which messages the room pinned so it cannot drop one | **done** — see [`docs/specs/folding-by-size.md`](docs/specs/folding-by-size.md) |
 | P20 | A real provider layer for the `desk` example: `tinyinference` behind the `Digester` and wrap-up paths in place of a `curl` subprocess, with classified provider failures, and `tinytools` rendering the room's tool surface — both example-only dev-dependencies, no library crate touched | **done** — see [ADR 0013](docs/adr/0013-a-vendored-crate-is-an-example-dependency.md) |
-| P21 | Scale: the harness runs a thousand agents across a hundred desks, the sample loops spread across cores, and a cross-channel question is asked **off the floor** so a large federation still decides something. Host-side only — no library crate touched | **done** — see [the write-up](docs/experiments/2026-09-10-hive-at-scale.md) |
-| P22 | What the scale run found, fixed in the library: `EpisodePolicy::for_room` scales the three bounds `DEFAULT` states absolutely, `HiveStep::Exhausted` reports the standings and visibility it ended at, distance is measurable in the rows a fold reads, the room-size hot loops stop being quadratic, and the harness gains a federation-wide digest for desks that share a blind spot | **done** — see [the write-up](docs/experiments/2026-09-10-what-the-scale-run-found.md) and [ADR 0014](docs/adr/0014-distance-is-measured-in-the-rows-a-fold-reads.md) |
+| P21 | Concurrent rounds: a step authorizes a bounded *round* of turns rather than one, `next_state` moves onto the round, and a peer row written in the same round is invisible to it — depth becomes rounds rather than turns | **done** — see [`docs/specs/concurrent-rounds.md`](docs/specs/concurrent-rounds.md) and [ADR 0014](docs/adr/0014-a-round-authorizes-concurrent-turns.md) |
+| P22 | A task with a horizon: `--stages` runs a chain of decisions on one accumulating window, against a soloist handed the whole brief that compacts by eviction or by a superseding account | **done** — see [`docs/specs/long-horizon-tasks.md`](docs/specs/long-horizon-tasks.md) and [the experiment](docs/experiments/2026-09-09-the-long-horizon.md) |
+| P23 | A task with variety: `--facets` runs several independent sub-decisions belonging to one task, each with an owner, against the soloist that won the horizon — and the room wins from two facets on | **done** — see [`docs/specs/task-variety.md`](docs/specs/task-variety.md) and [the experiment](docs/experiments/2026-09-09-variety-and-roles.md) |
+| P24 | The seat-per-facet shape as the default: `division` folds a task's facets across the seats that own them, `Division::scoped` gives each owner its own facet and none of the others, and `DivisionPolicy::DEFAULT` is the one default in this crate that is **on** | **done** — see [ADR 0015](docs/adr/0015-the-division-of-labour-is-the-default-shape.md); the benchmark's `hive+fold` now calls the library and reproduces every cell bit-for-bit |
+| P25 | Scale: the harness runs a thousand agents across a hundred desks, the sample loops spread across cores, and a cross-channel question is asked **off the floor** so a large federation still decides something. Host-side only — no library crate touched | **done** — see [the write-up](docs/experiments/2026-09-10-hive-at-scale.md) |
+| P26 | What the scale run found, fixed in the library: `EpisodePolicy::for_room` scales the three bounds `DEFAULT` states absolutely, `HiveStep::Exhausted` reports the standings and visibility it ended at, distance is measurable in the rows a fold reads, the room-size hot loops stop being quadratic, and the harness gains a federation-wide digest for desks that share a blind spot | **done** — see [the write-up](docs/experiments/2026-09-10-what-the-scale-run-found.md) and [ADR 0016](docs/adr/0016-distance-is-measured-in-the-rows-a-fold-reads.md) |
 
 P15 is also out of order, and for a related reason: it is not a wire-format
 change either, and it answers a pressure none of P11 through P13 address. Every
@@ -246,8 +250,10 @@ consecutive turns in one thread. P5 replaces that gate with a watermark.
   host owns (reactions, board cards, run rows), so a second log cannot be made
   consistent with the first.
 - **A web framework, or HTTP handlers.** Routes stay with the host.
-- **Fan-out.** One message triggers exactly one turn. `@everyone` is a list, not
-  a broadcast — see P7. P8's deliberation episodes do not relax this: an episode
-  is a bounded *sequence* of single turns, and `HiveStep::Speak` cannot
-  represent two. Independence between participants is bought as a visibility
-  filter on the projection, never as concurrency.
+- **Unbounded fan-out.** A step may authorize a *round* of concurrent turns, but
+  never more than `round_width` of them and never without an approval in sight —
+  the bound is the invariant, and the serialization never was. Independence is
+  still a visibility filter: members writing simultaneously cannot read each
+  other, so a concurrent round is a blind round. See
+  [ADR 0014](docs/adr/0014-a-round-authorizes-concurrent-turns.md), which
+  supersedes ADR 0002 on the terms ADR 0002 itself set, and P21 below.

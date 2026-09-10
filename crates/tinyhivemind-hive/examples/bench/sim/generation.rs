@@ -58,6 +58,14 @@ pub(super) fn draw_expertise(
                 expert_of[topic] = Some(member);
             }
         }
+        Expertise::Roles { owner } => {
+            // Every topic, one owner. Nothing is drawn from the stream, so a
+            // room built this way is a pure function of its seed and its
+            // owner index — which is what lets `--facets` say who is
+            // responsible for what without asking the weather.
+            let owner = owner.min(agent_count.saturating_sub(1));
+            expert_of.fill(Some(owner));
+        }
         Expertise::HiddenProfile => {
             let candidates: Vec<usize> = (0..topic_count)
                 .filter(|index| *index != truth_index)
@@ -112,6 +120,67 @@ pub(super) fn specialist_agent(
             };
             let half_width = match expert_of[topic_index] {
                 Some(expert) if expert == index => draw.noise / EXPERT_NOISE_DIVISOR,
+                Some(_) => draw.noise.saturating_mul(LAY_NOISE_PERCENT) / 100,
+                None => draw.noise,
+            };
+            (topic.clone(), base + draws.centered(half_width))
+        })
+        .collect();
+    let mut agent = SimAgent::assembled(id, role, draw.seed, index, evals);
+    agent.specialty = expert_of
+        .iter()
+        .position(|holder| *holder == Some(index))
+        .and_then(|topic_index| draw.names.get(topic_index).cloned());
+    agent.expert_elsewhere = expert_of
+        .iter()
+        .enumerate()
+        .filter_map(|(topic_index, holder)| match holder {
+            Some(holder) if *holder != index => draw.names.get(topic_index).cloned(),
+            _ => None,
+        })
+        .collect();
+    if cost_tiers && agent.specialty.is_some() {
+        agent.cost_unit = SPECIALIST_COST_UNIT;
+    }
+    agent
+}
+
+/// Build one member under `Expertise::Roles`.
+///
+/// The owner of a facet is *better informed*, not oracular. It reads every
+/// option at the room's base noise — exactly what a member of a uniform room
+/// reads at — and everybody else reads at [`LAY_NOISE_PERCENT`] of it, the
+/// same widening a lay member takes on somebody else's specialty.
+///
+/// Deliberately weaker than [`specialist_agent`], which divides the owner's
+/// noise by [`EXPERT_NOISE_DIVISOR`] as well. At the noise this harness runs
+/// at that division puts an expert's error far inside the sixty-point gap
+/// between the true option and a decoy, so an owner would answer its own facet
+/// correctly essentially always and `--facets` would measure the constant
+/// rather than the room. Information is redistributed here, never created: the
+/// owner's read is unchanged from a uniform room's and only the room around it
+/// widens.
+pub(super) fn roles_agent(
+    id: &str,
+    role: Role,
+    index: usize,
+    draw: &MemberDraw<'_>,
+    expert_of: &[Option<usize>],
+    cost_tiers: bool,
+) -> SimAgent {
+    let mut draws = Rng::seeded(mix(draw.seed, index as u64));
+    let evals: Vec<(TopicId, i32)> = draw
+        .names
+        .iter()
+        .enumerate()
+        .map(|(topic_index, topic)| {
+            let base = if topic == draw.truth {
+                TRUE_QUALITY
+            } else {
+                DECOY_QUALITY
+            };
+            let half_width = match expert_of[topic_index] {
+                Some(owner) if owner == index => draw.noise,
                 Some(_) => draw.noise.saturating_mul(LAY_NOISE_PERCENT) / 100,
                 None => draw.noise,
             };

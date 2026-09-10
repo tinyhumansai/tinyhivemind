@@ -89,7 +89,7 @@ another channel: all of it shortened the window of a desk that was merely busy.
 `src/exchange/README.md` had stated this limit exactly and asked for the fix by
 name: "Measuring decay and window in desk-visible rows instead of raw sequences
 would remove the caveat, and is a change to the quorum and salience folds with
-its own ADR." That is [ADR 0014](../adr/0014-distance-is-measured-in-the-rows-a-fold-reads.md).
+its own ADR." That is [ADR 0016](../adr/0016-distance-is-measured-in-the-rows-a-fold-reads.md).
 
 `Horizon` now carries both the sequence a fold is measured to and the ruler it
 measures with, and `EpisodePolicy::distance` selects `Basis::Sequence` (raw, the
@@ -111,6 +111,17 @@ decides differently — `swarm 78.0` against `swarm 67.0`. The reason is that a
 routed referral is *delivered* one pass later, which is a genuinely different
 transcript order, not a numbering artifact. No choice of ruler fixes it, and the
 two schedulers remain two schedules.
+
+Concurrency in this repository now has two widths, and it is worth being exact
+about which one this is. **Within a desk** the library decides: since
+[ADR 0014](../adr/0014-a-round-authorizes-concurrent-turns.md) a step authorizes
+a bounded *round* of turns that may run at once, on the argument that members
+writing simultaneously cannot read each other — so a concurrent round is a blind
+round. **Across desks** the host decides, and that is what the scheduler here
+and `--jobs` are: separate episodes, separate journals, separate budgets, and
+only the waiting overlapped. The two multiply — `desks x round_width` calls in
+flight — and neither one is the other's business. What this work did *not* do is
+widen a round; what ADR 0014 did *not* do is make two host schedules agree.
 
 ## 4. The room-size hot loops were quadratic
 

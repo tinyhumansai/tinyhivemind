@@ -55,111 +55,32 @@ use crate::context::ContextBudget;
 use crate::rng::{Rng, mix};
 
 mod agent;
+mod chain;
+mod facet;
 mod generation;
+mod naming;
 mod view;
 
 use agent::Holdings;
 use generation::{
-    MemberDraw, draw_expertise, hidden_profile_agent, selfcheck_uniform, specialist_agent,
+    MemberDraw, draw_expertise, hidden_profile_agent, roles_agent, selfcheck_uniform,
+    specialist_agent,
 };
 
 pub(crate) use agent::{CheckStyle, SimAgent};
+use naming::MAX_MEMBERS_U32;
+pub(crate) use naming::{MAX_MEMBERS, MAX_TOPICS, MEMBER_ROLES, Role, member_at, topic_at};
 pub(crate) use view::check_selfcheck;
 
-/// Names drawn on, in order, for a room's first eight options.
+/// How far a stage decided wrongly lifts the next stage's decoy.
 ///
-/// Beyond them [`topic_at`] generates, for the same reason [`member_at`]
-/// does: a fixed table is a cap on the slate dressed as a convenience.
-pub(crate) const TOPIC_NAMES: [&str; 8] = [
-    "stage", "ship", "revert", "shadow", "canary", "freeze", "split", "pilot",
-];
-
-/// The largest slate this harness will put on the floor.
-///
-/// The same kind of bound as [`MAX_MEMBERS`]: a limit on what a benchmark
-/// will spend, not a property of the library, which places no ceiling on how
-/// many topics a transcript may carry.
-pub(crate) const MAX_TOPICS: usize = 256;
-
-/// The id of option `index`, for a slate of any size.
-///
-/// The first eight keep the names every recorded number was written against,
-/// so those numbers reproduce exactly rather than approximately. Past them the
-/// ids are generated, which is what lets the slate grow with the room: a
-/// thousand members choosing between four options is a task a plurality solves
-/// by itself, and a benchmark run there measures the law of large numbers
-/// rather than the library.
-pub(crate) fn topic_at(index: usize) -> TopicId {
-    TOPIC_NAMES.get(index).map_or_else(
-        || TopicId::from(format!("topic{index}")),
-        |name| TopicId::from(*name),
-    )
-}
-
-/// The largest room this harness will build, as a `u32`.
-///
-/// Declared first and widened into [`MAX_MEMBERS`] rather than the other way
-/// round, so the refutation cap below is a plain constant rather than a cast
-/// that has to argue it cannot truncate.
-const MAX_MEMBERS_U32: u32 = 1024;
-
-/// The largest room this harness will build.
-///
-/// Not a property of the library, which has no room-size limit — a bound on
-/// what a *benchmark* will spend. Every arm decides the same rooms, so one
-/// swept size costs every arm at once, and a swept size of a thousand costs
-/// minutes rather than seconds even with the per-room loop spread across
-/// every core.
-///
-/// It was 256 while the recorded tables stopped at 64. A thousand is where the
-/// question this harness is now asked stops: what the mechanics do at the
-/// scale a real hive mind would run at.
-pub(crate) const MAX_MEMBERS: usize = MAX_MEMBERS_U32 as usize;
-
-/// Names and roles drawn on, in order, for a room's first eight members.
-///
-/// Beyond them [`member_at`] generates, because a fixed table is a cap on room
-/// size dressed as a convenience: `--agents` clamped to 8 for no reason other
-/// than that this array ends there.
-pub(crate) const MEMBER_ROLES: [(&str, Role); 8] = [
-    ("planner", Role::Proposer),
-    ("critic", Role::Critic),
-    ("archivist", Role::Archivist),
-    ("scout", Role::Proposer),
-    ("auditor", Role::Critic),
-    ("historian", Role::Archivist),
-    ("builder", Role::Proposer),
-    ("reviewer", Role::Critic),
-];
-
-/// The name and role of member `index`, for a room of any size.
-///
-/// The first eight keep the names the recorded benchmarks were written
-/// against, so every number at those sizes is reproduced exactly rather than
-/// approximately. Past them the roles cycle in the same order — a room of
-/// thirty-two is four of the same rotation, which keeps the mix of proposers,
-/// critics and archivists flat as the room grows instead of letting one role
-/// dominate a large desk by accident.
-pub(crate) fn member_at(index: usize) -> (String, Role) {
-    MEMBER_ROLES.get(index).map_or_else(
-        || {
-            let (_, role) = MEMBER_ROLES[index % MEMBER_ROLES.len()];
-            (format!("seat{index}"), role)
-        },
-        |(name, role)| ((*name).to_string(), *role),
-    )
-}
-
-/// How a participant fills a turn it has no strong move for.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum Role {
-    /// Puts its own best option on the floor early.
-    Proposer,
-    /// Objects to a leading option it privately rates poorly.
-    Critic,
-    /// Supplies grounds without taking a side.
-    Archivist,
-}
+/// Bounded on both sides, like `HIDDEN_LIFT` and `GROUNDS_WEIGHT` before it.
+/// *Below* the 60-point gap between the true option and a decoy, so a poisoned
+/// room can still recover — a chain in which one wrong answer made every later
+/// one unwinnable would measure nothing after the first mistake. *Above* zero
+/// by enough to matter against the noise, or a chain would merely be a repeat
+/// with extra steps. Forty is three quarters of the way to unrecoverable.
+pub(crate) const POISON_LIFT: i32 = 40;
 
 /// Evaluation of the genuinely best option, before noise.
 const TRUE_QUALITY: i32 = 100;
@@ -338,6 +259,22 @@ pub(crate) enum Expertise {
     /// One decoy is planted above every member's own argmax except one, who
     /// alone holds the fact that rules it out.
     HiddenProfile,
+    /// One member owns the whole question: it reads every option far more
+    /// tightly than anybody else, and everybody else's read of every option
+    /// widens to match.
+    ///
+    /// [`Specialists`] scatters expertise across the room at random, one
+    /// topic each. This concentrates it, by construction rather than by
+    /// draw — which is what a *role* is. It exists for `--facets`, where a
+    /// task is several sub-questions at once and each is somebody's job: the
+    /// owner is `facet % members`, known to the harness before any member
+    /// reads anything, so no arm learns who it is from scoring data.
+    ///
+    /// [`Specialists`]: Expertise::Specialists
+    Roles {
+        /// Index of the member whose question this is.
+        owner: usize,
+    },
 }
 
 /// One simulated room: the options, which is best, and who is in it.
@@ -454,6 +391,9 @@ impl Room {
                     }
                     Expertise::HiddenProfile => {
                         hidden_profile_agent(&id, role, index, &draw, decisive_index, planted_index)
+                    }
+                    Expertise::Roles { .. } => {
+                        roles_agent(&id, role, index, &draw, &expert_of, cost_tiers)
                     }
                 }
             })
@@ -670,7 +610,6 @@ impl Room {
         room
     }
 
-    /// What one member's own turn costs, by id.
     ///
     /// A convenience for a caller that only holds an id and not a
     /// [`Participant`](crate::run::Participant) reference -- the vote arm

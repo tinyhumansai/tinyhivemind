@@ -12,17 +12,12 @@ cargo run --release -p tinyhivemind-hive --example bench -- --swarm # several de
 cargo run --release -p tinyhivemind-hive --example bench -- \
   --scale-sweep --hidden-profile          # room size against channel topology
 cargo run --release -p tinyhivemind-hive --example bench -- \
-  --swarm --desks 100 --per-desk 10 --topics 128   # a thousand agents
-cargo run --release -p tinyhivemind-hive --example bench -- \
   --agent-cmd "opencode run --pure -m openrouter/~openai/gpt-mini-latest"
 ```
 
-Running at a thousand agents — `--jobs`, the size ceilings, the `--ask-cap` and
-`--digest` knobs that decide whether a large federation decides anything, and
-what a big room actually costs — is [`SCALE.md`](SCALE.md).
-
-This file documents the harness. The findings it produces, and what they do and
-do not claim, are in [the benchmark write-up](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks).
+This file documents the harness and [`SCALE.md`](SCALE.md) documents running it
+at scale; the findings, and what they do and do not claim, are in
+[the benchmark write-up](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks).
 
 ## The task
 
@@ -62,8 +57,7 @@ Every arm decides the same rooms from the same private evaluations.
 | `hive+rounds` | The same continuous exchange run **off the floor**, in rounds between turns: nobody takes the floor for it, so its volume is set by `--exchange-cap` rather than by how many turns the room takes. Priced in the `calls/ep` column. See [ADR 0012](../../../../docs/adr/0012-an-exchange-round-spends-model-calls-not-turns.md). |
 | `hive+quiet` | `hive+rounds` with the answers **discarded**: the same rounds, the same rows, the same sequence numbers consumed, and no information transferred. The control that separates what an off-floor exchange *says* from what merely writing its rows does to salience decay. |
 | `hive+fact°` | The same bounded exchange as `hive+fact`, held **off the floor** — before the episode opens, spending no turn the room could have deliberated with. Its peer is chosen from private room state rather than the transcript, so it bounds what the exchange is worth off the floor rather than isolating scheduling alone. |
-| `swarm°` | Only under `--swarm`: the same federation and the same referral policy as `swarm`, with the question asked **off the floor** and bounded by `--ask-cap` instead of spending the authorized turn. It is what keeps a federation above eight desks deciding anything at all — see [`SCALE.md`](SCALE.md). |
-| `swarm◦` | Only under `--swarm`: `swarm°` plus `--digest N`, where each desk publishes its reading of the whole slate to **every** channel — one model call per desk rather than one per peer. The only bounded arm that still decides anything in a federation whose desks share blind spots; below fifty desks it costs accuracy against `swarm°`. See [`SCALE.md`](SCALE.md#correlated-desks-and---digest). |
+| `hive+wide` / `hive+blind` | The tuned policy run in concurrent rounds — every round, then only while the room is blind. What concurrency costs, and which half of it is free. See [`DEPTH.md`](DEPTH.md). |
 | `hive+pooled` | The **ceiling for equal-weight pooling**: every private reading and every fact already in every member's hands, free, averaged with no regard for whose reading it is. No amount of pairwise exchange beats it on the rooms this benchmark measures (uniform and hidden-profile, where every peer's reading is equally reliable) — under `--specialists`, where readings genuinely differ in reliability, a protocol that could tell them apart could in principle beat indiscriminate averaging. |
 | `ladder+dir` | The responder ladder again, with a directory the room *earned* over `--history` prior episodes of `hive+` on the same room. The selector's candidates carry that directory's per-agent lines as their `description`, the request names the topic the call turns on, and a router that reads the descriptions picks the heaviest holder of it. Validated through the real `accept_selection`. |
 | `all-reasoning` | Only under `--cost-tiers`, in the cost table: `hive+dir+defer` (the delegating room) against a policy that puts every seat on the expensive tier. |
@@ -127,16 +121,14 @@ recovers much of what a room is for.
 
 ## What the participants do
 
-The simulated participants are mechanical, which is the point — a language
-model would make the numbers unreproducible and would confound protocol quality
-with model quality. On its turn a participant, seeing exactly what
-`project_for` allowed it to see:
+The simulated participants are mechanical, which is the point: a language model
+would make the numbers unreproducible and confound protocol quality with model
+quality. On its turn a participant, seeing exactly what `project_for` allowed:
 
 1. **breaks a deadlock** — if two options both carry, it objects to a message
    advocating the one it rates lower. Adding support cannot resolve that state,
-   because both options stay above the threshold no matter how much weight one
-   gains; silencing an advocate can, which is why the objection names a
-   *message* rather than a topic;
+   because both stay above the threshold however much weight one gains;
+   silencing an advocate can, which is why an objection names a *message*;
 2. **commits** — in `Phase::Commit`, records what the room actually carried;
 3. **supports** — backs the option on the floor it rates highest once each
    independent peer backing it is weighed against its own private signal. This
@@ -179,34 +171,45 @@ so the benchmark measures the protocol rather than a formatter.
 5000 rooms, 5 agents, 4 options, `--noise 90`, on one core:
 
 ```text
-arm       turns/ep   decided %   correct %       ns/step    episodes/s
-ladder        1.00       100.0        57.6          1109        901660
-vote         15.00       100.0        78.5             0           inf
-hive          6.16        89.7        73.3          2231         62637
-hive+         6.75        99.4        82.1          2278         56641
-hive+ref      8.99        88.6        75.0          2827         35398
-hive+ev      10.29        60.8        55.9          2971         29816
-hive+dir      6.75        99.4        82.1          2134         60458
-hive+defer    6.75        99.4        82.1          1942         66456
-hive+dir+defer 6.75        99.4        82.1          1995         64680
-ladder+dir    1.00       100.0        49.5           735       1359856
+arm       turns/ep rounds/ep   decided %   correct %
+ladder        1.00      1.00       100.0        57.6
+vote         15.00      1.00       100.0        78.5
+hive          6.16      6.16        89.7        73.3
+hive+         6.75      6.75        99.4        82.1
+hive+ref      8.99      8.99        88.6        75.0
+hive+ev      10.29     10.29        60.8        55.9
+hive+dir      6.75      6.75        99.4        82.1
+hive+defer    6.75      6.75        99.4        82.1
+hive+dir+defer 6.75      6.75        99.4        82.1
+ladder+dir    1.00      1.00       100.0        49.5
+hive+pooled   6.06      6.06       100.0        91.5
+hive+blind    6.75      3.75        99.4        82.1
 ```
 
-The three delegation arms score exactly what `hive+` scores, which is what the
+The three delegation arms score exactly what `hive+` scores, as the
 specification predicted for a room of uniform expertise: with nothing to route
 on, a directory routes nowhere. `ladder+dir` is eight points *worse* than the
-uninformed ladder. [`DELEGATION.md`](DELEGATION.md) says why.
+uninformed ladder; [`DELEGATION.md`](DELEGATION.md) says why.
 
 The tuned deliberation beats the matched-budget control at half the budget, and
 one responder off the ladder reaches 57.6%. The quorum threshold and the turn
-budget are the two settings that decide this, the blind round is worth 24
-points of accuracy on its own, and the state machine costs about 2.3 µs per
-step.
+budget decide this, the blind round is worth 24 points on its own, and the state
+machine costs about 2.3 µs per step. Those turns are *width*: priced in depth,
+`vote` is one round and `hive+` is 6.75 — see [`DEPTH.md`](DEPTH.md).
 
 The two refutation arms lose, which is why both knobs are off in
 `QuorumPolicy::DEFAULT`. `hive+ref` falls below even the vote control, and
 `hive+ev` starves the room — it fails to decide two episodes in five. [The benchmark write-up](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks)
 has the tables behind each of those, across desk sizes, plus what the benchmark does not show.
+
+## A horizon, and a spread
+
+`--stages` runs a **chain** of decisions rather than one, and adds the control
+the library's claim is about — one agent working a long task, compacting as it
+goes. A room beats an *evicting* soloist once the window is tight and never a
+*summarising* one: [`HORIZON.md`](HORIZON.md). `--facets` runs a task that is
+several questions **at once** instead, one owner each, and there the room wins —
+flat accuracy in width where the soloist decays: [`VARIETY.md`](VARIETY.md).
 
 ## Statistics
 
@@ -344,7 +347,7 @@ heard every other. Outside that window the experiment measures nothing, which
 | arm | what it is |
 | --- | --- |
 | `siloed` | The same desks, members and budgets, with referrals off. A desk can only talk to itself. |
-| `swarm` | The same, with referrals on: two hops, desk mentions and returns. |
+| `swarm` / `swarm°` / `swarm◦` | The same, with referrals on: two hops, desk mentions and returns. `swarm°` asks **off the floor** under `--ask-cap` rather than spending the authorized turn — what keeps a federation above eight desks deciding at all — and `swarm◦` also publishes each desk's reading to every channel under `--digest`, the only bounded arm left standing once desks share blind spots. See [`SCALE.md`](SCALE.md#correlated-desks-and---digest). |
 | `pooled` | The ceiling control. Every desk is handed every other desk's readings *for free* — no turn, no referral, no channel crossed — and then deliberates siloed. |
 | `merged` | Every member of every desk on one desk, given the whole federation's budget. The control that removes the boundary rather than crossing it. |
 | `vote` | One independent answer per member, decided by plurality. |
@@ -406,18 +409,15 @@ rather than a failure of the harness.
 
 ## The context budget
 
-Every arm above moves information for free, and that is a misleading
-*engineering* ceiling once a participant is a language model with a bounded
-window. `--context-sweep` charges for it: each arm runs across a ladder of
-window capacities that evicts rows from the middle and discounts survivors by
-a U-curve. `hive+pooled` — the arm that looks unbeatable — loses a third of
-its lead once its window matches its own payload; `hive+` and `hive+along`
-barely notice, because they barely use the window. No squeeze makes the
-deliberating room the better choice on this task, so the honest reading is
-narrower than "context economy vindicates deliberation": fix the protocol
-first. The full numbers, the two things this experiment did and did not find,
-and why the sweep reports an ordering rather than a value are in
-[`CONTEXT.md`](CONTEXT.md).
+Every arm above moves information for free, which is a misleading *engineering*
+ceiling once a participant is a model with a bounded window. `--context-sweep`
+charges for it across a ladder of capacities that evicts from the middle and
+discounts survivors by a U-curve. `hive+pooled` loses a third of its lead once
+its window matches its own payload; `hive+` barely notices, because it barely
+uses the window. No squeeze makes the deliberating room the better choice on
+this task, so the honest reading is narrower than "context economy vindicates
+deliberation": fix the protocol first. [`CONTEXT.md`](CONTEXT.md) has the
+numbers and why the sweep reports an ordering rather than a value.
 
 ## Flags
 
@@ -437,7 +437,11 @@ and why the sweep reports an ordering rather than a value are in
 | `--context N` | rows each member's window holds; `0` (default) disables the window model entirely |
 | `--rot F` | how hard the middle of that window is discounted, `0.0..=1.0` (default `0.0`) |
 | `--context-sweep` | run the window ladder instead of comparing arms once |
-| `--aside-cap N` | pairwise checks one member may open (default 1); under `hive+share` it caps distinct peers contacted instead; `0` makes every aside arm bit-identical to `hive+` |
+| `--stages N` | run the chain ladder: N sub-decisions in sequence on one accumulating window; a list sweeps a ladder, a bare number runs one length |
+| `--fidelity F` | what a summarised row is worth under `solo+fold`, `0.0..=1.0` (default `0.35`) |
+| `--facets N` | run the variety ladder: N independent sub-decisions belonging to one task, scored only when every one is right; a list sweeps a ladder, a bare number runs one width |
+| `--roles` | give each facet an owner (`facet % members`) that reads it at the room's base noise while everybody else widens; off by default, so the baseline measures the division of labour alone |
+| `--round-width N` | turns one round may authorize concurrently, read by `hive+wide` and `hive+blind` (default 4); `0` makes both bit-identical to `hive+`. Every baseline arm -- everything but `hive+wide` and `hive+blind` -- runs at width one regardless of this flag, so no recorded number for those arms moves with it |
 | `--aside-cap N` | pairwise checks one member may open (default 1); under `hive+share` it caps distinct peers contacted instead; `0` makes every on-floor and alongside aside arm bit-identical to `hive+` |
 | `--exchange-cap N` | private rows one member may write **off the floor** across an episode, read by `hive+rounds` (default 4); a separate knob because it bounds model calls rather than the room's turns; `0` makes `hive+rounds` bit-identical to `hive+` |
 | `--history N` | prior episodes of `hive+` the `ladder+dir` arm earns its directory from (default 3) |
@@ -455,10 +459,6 @@ and why the sweep reports an ordering rather than a value are in
 | `--scenario PATH` | give the live room a real problem with private facts |
 | `--repeat N` | run a live scenario N times and count both arms |
 | `--json` | print one flat JSON object per arm, ahead of the tables |
-| `--ask-cap N` | questions one desk may put to other channels off the floor; `0` puts asking back on the floor (default 2) |
-| `--digest N` | readings one desk publishes to **every** other channel, off the floor (default 0, off) |
-| `--distance sequence\|live` | whether the quorum window and salience decay count every row the host wrote, or only the rows the episode folds ([ADR 0014](../../../../docs/adr/0014-distance-is-measured-in-the-rows-a-fold-reads.md); default `sequence`) |
-| `--jobs N` | threads the per-sample loops spread across (default one per core) |
 | `--stats-check` | run the statistics module's self-check, and the check arms' own, and exit `0` or `1` |
 | `calls/ep` (column) | model calls made in off-floor exchange rounds per episode — members *asked*, not rows written, so a declined round costs what it actually cost. Kept out of `cost/ep`, which is each speaker's own cost times its turns |
 | `--timeout SECS` | per-turn deadline for a live agent or HTTP request (default 180) |
