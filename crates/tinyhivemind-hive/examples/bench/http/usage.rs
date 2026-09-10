@@ -94,4 +94,3 @@ pub(super) fn with_usage(handle: &UsageHandle, update: impl FnOnce(&mut Usage)) 
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     update(&mut usage);
 }
-
