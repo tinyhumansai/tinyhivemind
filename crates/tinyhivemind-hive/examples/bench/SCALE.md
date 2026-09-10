@@ -1,0 +1,113 @@
+# Running the benchmark at scale
+
+Companion to [`README.md`](README.md): what changes when the room is a thousand
+members or the federation is a hundred desks, and which knobs decide what it
+costs. The findings are in
+[the scale write-up](../../../../docs/experiments/2026-09-10-hive-at-scale.md).
+
+## `--jobs`: spreading the sample across cores
+
+Rooms and federations are independent and individually seeded, so the per-sample
+loops in the comparison, the scale sweep, the context sweep and the federated
+comparison all run across cores. `--jobs` defaults to one thread per core.
+
+```sh
+cargo run --release -p tinyhivemind-hive --example bench -- --episodes 5000
+cargo run --release -p tinyhivemind-hive --example bench -- --episodes 5000 --jobs 1
+```
+
+Those two print the same bytes, and that is the contract rather than an
+aspiration. Results are folded in **sample order** whatever order the threads
+finish in, because `Aggregate::correct_flags` is positional and the paired
+bootstrap under the second table resamples two arms index-for-index — they
+decided the *same* rooms. Fold out of order and the accuracy column stays right
+while every confidence interval goes quietly wrong.
+
+Two columns legitimately move: `ns/step` and `episodes/s`. Both are per-thread
+wall-clock readings summed across threads, so under contention they rise. **Take
+the library's own cost at `--jobs 1`**; at higher job counts they measure the
+machine as much as the code.
+
+Measured on 28 cores: the 5000-room comparison goes from 6.2 s to 0.47 s, and
+`--scale-sweep` over six sizes from 10.6 s to 0.94 s.
+
+## How big a room, and how wide a slate
+
+| knob | ceiling | note |
+| --- | --- | --- |
+| `--agents` | 1024 | a spending limit, not a library one |
+| `--topics` | 256 | ids are generated past the eight named options |
+| `--desks` | 256 | |
+| `--per-desk` | 1024 | |
+
+The first eight member names, desk names and option ids are the ones every
+recorded number was written against, so those numbers reproduce exactly rather
+than approximately; past them all three generate.
+
+**Grow the slate with the room.** A thousand members choosing between four
+options is a task a plurality solves by itself, and a benchmark run there
+measures the law of large numbers rather than the library — which is the same
+warning `scale.rs` opens with. `--topics` was capped at eight by the length of a
+name table until this work; it no longer is, and at large sizes it should move
+with `--agents`.
+
+A size above a ceiling is clamped **and says so**, and repeated sizes are
+deduplicated rather than run twice under two labels. An unrecognised flag is
+refused rather than ignored: `--scale-sweeps` used to run the default
+comparison and report it under the heading you thought you had asked for.
+
+## A federation is the shape that scales
+
+A thousand agents in one room and a thousand across a hundred desks are not the
+same experiment, and only the second is cheap. At 256 members in one room the
+library is 3% of wall clock and the tuned policy asks for a quorum of 129 within
+768 turns, so every episode ends `exhausted`: the size at which one desk stops
+being able to *decide* is well below the size at which it stops being able to
+run.
+
+```sh
+cargo run --release -p tinyhivemind-hive --example bench -- \
+  --swarm --desks 100 --per-desk 10 --topics 128 --episodes 20
+```
+
+## `--ask-cap`: what a question costs the desk that asks it
+
+The knob that decides whether a large federation works at all.
+
+| value | channel | behaviour |
+| --- | --- | --- |
+| `0` | on the floor | a member spends its authorized turn asking, and may ask every peer once |
+| `N > 0` | off the floor | the desk asks without taking a turn, at most `N` times (default 2) |
+
+On the floor, the number of peers grows with the federation while a desk's turn
+budget stays whatever its own size earned. At twenty-five desks of ten a desk
+may spend twenty-four of its thirty turns asking; at fifty it may spend
+forty-nine turns it does not have. Every desk ends `exhausted` and the
+federation decides nothing.
+
+The `swarm°` arm asks off the floor instead, and holds 100% out to a thousand
+agents while spending a fifth of the turns. Asks are priced in their own
+`asks/ep` column rather than folded into `turns`, so the arm cannot look cheap
+by hiding what it spent.
+
+This is a **host** knob and deliberately not a library one: `ReferralPolicy`
+bounds a chain's depth and says in its own documentation that bounding its width
+is the host's job, "because only the host knows what a question costs it".
+`crates/tinyhivemind-core` and `crates/tinyhivemind-hive` are unchanged by any
+of the above.
+
+## Correlated desks
+
+A federation gives each desk a blind spot of its own, which needs more options
+than desks. With fewer, some desks are necessarily wrong about the same option —
+a materially different and much harder task, since pooling across two desks that
+share an error imports it instead of cancelling it. The harness prints a note
+when that is the arrangement it built rather than leaving the invariant quietly
+false, and any number read off such a run should be read as measuring that task.
+
+## Driving it live
+
+`--jobs` also decides how many live desks call a model at once, and there it
+selects a genuinely different scheduler — see
+[`LIVE.md`](LIVE.md#a-federation-of-live-desks-running-at-once), which also
+covers pointing the harness at a lightweight OpenHuman build.
