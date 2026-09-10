@@ -436,7 +436,7 @@ pub(crate) struct SwarmRun<'a> {
     /// Whether a question may cross a channel, and how deep a chain may run.
     pub(crate) referrals: ReferralPolicy,
     /// Where a desk pays for a question, and how many it may ask.
-    pub(crate) asking: AskChannel,
+    pub(crate) exchange: Exchange,
     /// How many desks may be waiting on a model at once. `1` selects the
     /// sequential scheduler, which is the reference — see `schedule.rs`.
     pub(crate) jobs: usize,

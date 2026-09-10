@@ -85,6 +85,15 @@ pub(super) fn sequential_pass(
             progressed = true;
             continue;
         }
+        // Published before anything is asked, and for the same reason the ask
+        // goes out before the desk has backed anything: a reading that lands
+        // after the desk has reached quorum is information it has already
+        // voted past. Bounded by the digest count, so this cannot keep the
+        // loop alive on its own.
+        if board.publish_digest(members, desk)? {
+            progressed = true;
+            continue;
+        }
         // Off the floor, and so before the turn rather than instead of it: the
         // desk puts its bounded question to another channel and still has
         // every turn its own size earned. Bounded by the ask cap, so this
@@ -143,6 +152,10 @@ pub(super) fn concurrent_pass(
         }
         if let Some(incoming) = board.pop_pending(desk) {
             board.deliver(members, desk, &incoming)?;
+            progressed = true;
+            continue;
+        }
+        if board.publish_digest(members, desk)? {
             progressed = true;
             continue;
         }
