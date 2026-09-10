@@ -227,7 +227,7 @@ fn index_priors(priors: &[AgentThreshold]) -> Result<BTreeMap<&str, &AgentThresh
 fn live_traces<'a>(traces: &'a [Trace], at: Horizon<'_>, window: u32) -> Vec<&'a Trace> {
     let mut live: Vec<&Trace> = traces
         .iter()
-        .filter(|trace| trace.sequence.0 >= floor && trace.sequence <= at)
+        .filter(|trace| at.within(trace.sequence, window))
         .collect();
     live.sort_by_key(|trace| (trace.sequence, trace.offset));
     live.dedup_by_key(|trace| (trace.sequence, trace.offset));
