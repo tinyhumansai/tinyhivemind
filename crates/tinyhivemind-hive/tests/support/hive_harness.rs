@@ -171,7 +171,7 @@ impl HiveHarness {
                 HiveStep::Deadlocked { topics } => {
                     return Ok((Outcome::Deadlocked { topics }, steps));
                 }
-                HiveStep::Exhausted { spent } => {
+                HiveStep::Exhausted { spent, .. } => {
                     return Ok((Outcome::Exhausted { spent }, steps));
                 }
                 HiveStep::Idle => return Ok((Outcome::Idle, steps)),
