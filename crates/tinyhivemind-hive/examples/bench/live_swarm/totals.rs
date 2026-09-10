@@ -11,8 +11,6 @@
 //! is shown*. Both halves outgrew one file together, and neither reads the
 //! other's internals.
 
-use std::time::Instant;
-
 use tinyhivemind_hive::EpisodePolicy;
 
 use tinyhivemind_hive::referral::ReferralPolicy;
@@ -42,7 +40,7 @@ struct FederationOutcome {
 }
 
 /// Every federated arm's totals over one sample of federations.
-struct FederatedTotals {
+pub(super) struct FederatedTotals {
     /// Desks that cannot reach each other at all.
     siloed: SwarmTotals,
     /// Desks that reach each other by spending an authorized turn on it.
