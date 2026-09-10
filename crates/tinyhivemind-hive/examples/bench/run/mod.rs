@@ -731,53 +731,52 @@ fn finished(
     trace: Vec<String>,
 ) -> Result<EpisodeReport, String> {
     let (ending, decided) = outcome;
-    // Read back out of the journal the same way any participant would,
-        // rather than tracked as the loop ran: the topic this resolves
-        // against is only known once the episode has already decided one.
-        let proposer = decided
-            .as_ref()
-            .and_then(|topic| proposer_of(&host.journal, topic));
+    // Read back out of the journal the same way any participant would, rather
+    // than tracked as the loop ran: the topic this resolves against is only
+    // known once the episode has already decided one.
+    let proposer = decided
+        .as_ref()
+        .and_then(|topic| proposer_of(&host.journal, topic));
 
-        // Folded once, after the episode has ended, and deliberately outside
-        // the `library_time` accumulator above: `ns/step` is what a host pays
-        // to run the state machine, and this is scoring rather than stepping.
-        let traces = journal_traces(&host.journal);
-        let folded = directory(
-            &traces,
-            host.watermark(),
-            &DirectoryPolicy::DEFAULT,
-            &state.thresholds,
-        )
-        .map_err(|error| error.to_string())?;
-        let rho_milli = circularity(&folded, &tally.speech);
+    // Folded once, after the episode has ended, and deliberately outside the
+    // `library_time` the loop accumulated: `ns/step` is what a host pays to
+    // run the state machine, and this is scoring rather than stepping.
+    let traces = journal_traces(&host.journal);
+    let folded = directory(
+        &traces,
+        host.watermark(),
+        &DirectoryPolicy::DEFAULT,
+        &state.thresholds,
+    )
+    .map_err(|error| error.to_string())?;
+    let rho_milli = circularity(&folded, &tally.speech);
 
-        return Ok(EpisodeReport {
-            ending,
-            decided,
-            correct: false,
-            turns,
-            rounds,
-            shape,
-            context_rows: mean_context_rows(agents),
-            step_calls,
-            library_time,
-            step_time,
-            trace,
-            proposer,
-            has_expert: false,
-            decisive: None,
-            fact_deposited: false,
-            fact_at: None,
-            defers: tally.defers,
-            knows_turns: tally.knows_turns,
-            speech: tally.speech,
-            cost_units: tally.cost_units,
-            contacts,
-            first_deposit: tally.first_deposit,
-            commit_at: tally.commit_at,
-            first_spoke: tally.first_spoke,
-            traces,
-            rho_milli,
-        });
-    }
+    Ok(EpisodeReport {
+        ending,
+        decided,
+        correct: false,
+        turns: counters.turns,
+        rounds: counters.rounds,
+        shape,
+        context_rows: mean_context_rows(agents),
+        step_calls: counters.step_calls,
+        library_time: counters.library_time,
+        step_time: counters.step_time,
+        trace,
+        proposer,
+        has_expert: false,
+        decisive: None,
+        fact_deposited: false,
+        fact_at: None,
+        defers: tally.defers,
+        knows_turns: tally.knows_turns,
+        speech: tally.speech,
+        cost_units: tally.cost_units,
+        contacts: counters.contacts,
+        first_deposit: tally.first_deposit,
+        commit_at: tally.commit_at,
+        first_spoke: tally.first_spoke,
+        traces,
+        rho_milli,
+    })
 }
