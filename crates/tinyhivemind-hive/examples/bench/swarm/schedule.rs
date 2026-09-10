@@ -70,9 +70,7 @@ use std::time::Instant;
 use tinyhivemind_hive::{EpisodePolicy, EpisodeState, HiveStep, step};
 
 use super::board::Board;
-use super::work::{
-    PlannedAnswer, PlannedTurn, SpokenAnswer, SpokenTurn, fill_answer, fill_turn,
-};
+use super::work::{PlannedAnswer, PlannedTurn, SpokenAnswer, SpokenTurn, fill_answer, fill_turn};
 use super::{Channel, DeskOutcome, Ending, SwarmMember, member};
 use crate::parallel;
 

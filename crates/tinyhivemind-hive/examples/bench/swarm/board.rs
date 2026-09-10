@@ -12,7 +12,7 @@ use std::collections::VecDeque;
 use std::time::Duration;
 
 use tinyhivemind_hive::{
-    HiveTurn, Sequence, SessionMessage,
+    HiveTurn, Sequence,
     dispatch::{DispatchConversation, DispatchKey},
     mention::{MentionAuthor, resolve as resolve_mentions},
     project_for,

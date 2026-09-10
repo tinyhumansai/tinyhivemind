@@ -28,6 +28,7 @@ resolves it to `sim/mod.rs` transparently.
 | `federation.rs` | several desks, each with a correlated bias of its own |
 | `swarm/mod.rs` | one journal per channel, the scheduler, and the referral edge: `SwarmMember`, `SwarmHost`, and driving a swarm episode |
 | `swarm/{board,member,format}.rs` | `Board`'s pending queue, seat lookup and `Exchange` — whether a desk pays for a cross-channel question with an authorized turn or off the floor, and whether it publishes a reading to every channel; `SwarmSim`, which can also field a referral and publish; parsing and restating a `Reading` for the wire |
+| `swarm/work.rs` | one unit of work a seat fills — a planned round or a planned answer — and the filling of it, with no access to the board |
 | `swarm/schedule.rs` | the two passes over a federation's desks — one desk at a time, or every desk's round in flight at once — and why they are not equivalent |
 | `swarm/test.rs` | the digest's cost, its bound, and the property that keeps a published reading out of a foreign desk's standings |
 | `run/mod.rs` | the host: a journal, a roster, and the step loop — `Host`, `Ending`, and the episode entry points |
