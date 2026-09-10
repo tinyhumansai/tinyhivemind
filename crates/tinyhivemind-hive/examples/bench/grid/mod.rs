@@ -50,22 +50,27 @@ use crate::sim::Room;
 /// The task every room in the grid is given.
 const TASK: &str = "We must choose one rollout strategy. Decide.";
 
-/// The arms a grid cell runs.
+/// The arms every grid cell runs, in printing order.
 ///
-/// Five systems rather than the comparison's twenty-four. The twenty-four are
-/// mechanism probes — each asks whether one *move* is worth its turns, against
-/// a control that differs from it in one thing — and reproducing that whole
-/// table in every cell of a grid would print two hundred rows to answer a
-/// question about four. These five are the systems a host actually chooses
-/// between, and `--grid-arms all` prints the rest for anyone who wants a
-/// mechanism's behaviour across the axes rather than at one point on them.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum GridArms {
-    /// The five systems a host chooses between.
-    Systems,
-    /// Every arm the single-point comparison runs.
-    All,
-}
+/// Five systems rather than the single-point comparison's twenty-four. The
+/// twenty-four are *mechanism probes* — each asks whether one move is worth
+/// its turns, against a control differing from it in exactly one thing — and
+/// reproducing that table in every cell would print hundreds of rows to answer
+/// a question about four axes. These five are the systems a host actually
+/// chooses between:
+///
+/// - `ladder` — route to one member and take its answer. One turn.
+/// - `vote` — independent answers, plurality, matched budget. One round.
+/// - `hive+` — a deliberation at the tuned policy, strictly sequential.
+/// - `hive+wide` — the same, in rounds of the cell's `concurrency`.
+/// - `hive+pooled` — every member handed every peer's reading for free. Not a
+///   system anybody can deploy; it is the ceiling the other four are read
+///   against, and it is in the table so that a gap to it is visible rather
+///   than assumed away.
+///
+/// Run the default `bench` with no `--grid` for the mechanism probes; they
+/// answer a different question and they answer it at one point.
+const ARMS: [&str; 5] = ["ladder", "vote", "hive+", "hive+wide", "hive+pooled"];
 
 /// One arm's totals in one cell.
 struct CellRow {
@@ -150,7 +155,7 @@ fn run_cell(options: &Options, cell: Cell) -> Result<Vec<CellRow>, String> {
     let per_room: Vec<Vec<Aggregate>> =
         parallel::map_in_order(&indexed, options.jobs, |(index, room)| {
             let (index, room) = (*index, *room);
-            let mut fold: Vec<Aggregate> = names(options.grid_arms)
+            let mut fold: Vec<Aggregate> = ARMS
                 .iter()
                 .map(|_| Aggregate::priced_at(options.cost_model))
                 .collect();
@@ -180,7 +185,7 @@ fn run_cell(options: &Options, cell: Cell) -> Result<Vec<CellRow>, String> {
             Ok(fold)
         })?;
 
-    let mut totals: Vec<Aggregate> = names(options.grid_arms)
+    let mut totals: Vec<Aggregate> = ARMS
         .iter()
         .map(|_| Aggregate::priced_at(options.cost_model))
         .collect();
@@ -189,24 +194,11 @@ fn run_cell(options: &Options, cell: Cell) -> Result<Vec<CellRow>, String> {
             mine.merge(theirs);
         }
     }
-    Ok(names(options.grid_arms)
-        .iter()
+    Ok(ARMS.iter()
         .copied()
         .zip(totals)
         .map(|(name, totals)| CellRow { name, totals })
         .collect())
-}
-
-/// The arms a cell runs, in printing order.
-///
-/// `All` is not yet a wider list than `Systems`: the twenty-four-arm
-/// comparison is reachable at one point of the grid through the default
-/// `bench` invocation, and reproducing it per cell is a separate change with
-/// its own runtime budget. The flag exists so the distinction has a name in
-/// the CLI rather than only in this comment; it currently selects the same
-/// five and says so in `--help`.
-fn names(_arms: GridArms) -> &'static [&'static str] {
-    &["ladder", "vote", "hive+", "hive+wide", "hive+pooled"]
 }
 
 /// A stable seed for one cell, so re-running it alone reproduces the rooms it
@@ -231,8 +223,7 @@ fn summarise(every: &[(Cell, Vec<CellRow>)]) {
         "arm", "quality", "speed", "tok/ep", "thru"
     );
 
-    let arms = names(GridArms::Systems);
-    let mut led: Vec<[u32; 4]> = arms.iter().map(|_| [0; 4]).collect();
+    let mut led: Vec<[u32; 4]> = ARMS.iter().map(|_| [0; 4]).collect();
     for (_, rows) in every {
         // Quality and throughput are won by the largest; speed and tokens by
         // the smallest. An arm that decided nothing is not a fast arm, so a
@@ -242,7 +233,7 @@ fn summarise(every: &[(Cell, Vec<CellRow>)]) {
         best(rows, &mut led, 2, |row| row.totals.tokens_per_episode(), false);
         best(rows, &mut led, 3, |row| row.totals.episodes_per_hour(), true);
     }
-    for (name, counts) in arms.iter().zip(&led) {
+    for (name, counts) in ARMS.iter().zip(&led) {
         println!(
             "{name:<16}{:>10}{:>10}{:>11}{:>10}",
             counts[0], counts[1], counts[2], counts[3]
