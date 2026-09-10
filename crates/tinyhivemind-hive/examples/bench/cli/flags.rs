@@ -57,9 +57,7 @@ pub(super) fn apply_scale_flag(
         }
         "--scenario-dir" => {
             options.scenario_dir = args.next();
-            if !matches!(options.mode, Mode::Swarm) {
-                options.mode = Mode::Live;
-            }
+            set_live_floor(options);
         }
         "--ask-cap" => {
             options.ask_cap = usize::try_from(next_number(args).unwrap_or(2)).unwrap_or(2);
