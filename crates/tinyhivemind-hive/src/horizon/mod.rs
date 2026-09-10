@@ -60,9 +60,11 @@ pub enum Basis {
     Sequence,
     /// Count the rows the fold actually reads.
     ///
-    /// A window of thirty means thirty folded rows however much other traffic
-    /// the desk carried, so the policy means the same thing on a busy desk as
-    /// on a quiet one.
+    /// A window of thirty means thirty folded rows *back from* the horizon —
+    /// so the row at the horizon and the thirty before it, thirty-one in all,
+    /// exactly as a window of thirty sequences admits the sequence at `at` and
+    /// the thirty below it. What changes is the unit, not the arithmetic: the
+    /// policy then means the same thing on a busy desk as on a quiet one.
     Live,
 }
 
@@ -143,6 +145,11 @@ impl<'a> Horizon<'a> {
     }
 
     /// Whether `from` is at or before the horizon and within `window` of it.
+    ///
+    /// `window` is a **distance back**, so the horizon's own row is always in
+    /// and a window of `n` admits `n + 1` rows. That is what a window of
+    /// sequences has always meant here; measuring in folded rows changes the
+    /// unit and leaves the bound alone.
     ///
     /// The two halves are separate questions: a row *after* the horizon is out
     /// of scope however close it is, and a row before it is in scope only

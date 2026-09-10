@@ -41,12 +41,14 @@ const SPEAK_COST: i64 = 500;
 /// 1. the roster, desk snapshots and policy are validated;
 /// 2. traces and standings are folded from the transcript;
 /// 3. a spent budget returns [`HiveStep::Exhausted`], carrying those
-///    standings, and — when `policy.directory` is set — the directory is
-///    folded at the same sequence;
-/// 4. quorum in [`Phase::Commit`] returns [`HiveStep::Converged`];
-/// 5. quorum in [`Phase::Deliberate`] flips the phase and emits one commit turn;
-/// 6. a deadlock nobody can break returns [`HiveStep::Deadlocked`];
-/// 7. otherwise the highest bid takes the floor, or [`HiveStep::Idle`].
+///    standings — and returns *before* the directory is folded, since an
+///    exhausted episode authorizes nobody and so has no bid to route;
+/// 4. when `policy.directory` is set, the directory is folded at the same
+///    sequence as the standings, on every path that reaches a bid;
+/// 5. quorum in [`Phase::Commit`] returns [`HiveStep::Converged`];
+/// 6. quorum in [`Phase::Deliberate`] flips the phase and emits one commit turn;
+/// 7. a deadlock nobody can break returns [`HiveStep::Deadlocked`];
+/// 8. otherwise the highest bid takes the floor, or [`HiveStep::Idle`].
 ///
 /// `transcript` is the projection of the episode's conversation. Messages at or
 /// below `state.watermark` are context and are not folded into traces, so an

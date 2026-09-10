@@ -25,12 +25,12 @@ less well.
 | Item | What it is |
 | --- | --- |
 | `Basis::Sequence` | Subtract raw sequence values. The original behaviour, and what `EpisodePolicy::DEFAULT` carries. |
-| `Basis::Live` | Count the rows the fold reads. A window of thirty means thirty folded rows however much other traffic the desk carried. |
+| `Basis::Live` | Count the rows the fold reads. A window of thirty means thirty folded rows *back from* the horizon — its own row plus the thirty before it — however much other traffic the desk carried. |
 | `Horizon::at` | A horizon over raw sequences. `From<Sequence>` builds one, so an existing caller is unchanged. |
 | `Horizon::over` | A horizon over the ascending rows a fold reads. |
 | `Horizon::sequence` | The sequence being measured to. |
 | `Horizon::distance` | How far back a sequence is, in whichever unit. Zero at or after the horizon. |
-| `Horizon::within` | At or before the horizon **and** inside a window of it. The two are separate questions. |
+| `Horizon::within` | At or before the horizon **and** no further back than `window`. The two are separate questions, and `window` is a distance, so a window of `n` admits `n + 1` rows. |
 
 `quorum::standings`, `salience::salience` and `directory::directory` take
 `impl Into<Horizon<'_>>`, so passing a `Sequence` compiles and behaves exactly as
