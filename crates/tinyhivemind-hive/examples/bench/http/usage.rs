@@ -6,9 +6,6 @@
 //! reaches the table — and nothing in it knows what a request looks like or
 //! how one is put.
 
-use super::{HttpConfig, Wire};
-use serde_json::Value;
-
 /// Tokens spent and calls made by one seat, or one poll, over an HTTP backend.
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct Usage {
