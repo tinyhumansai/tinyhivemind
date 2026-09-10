@@ -453,11 +453,11 @@ impl Options {
                 "--agent-cmd" => {
                     if let Some(command) = args.next() {
                         options.agent = Some(command);
-                        // `--swarm --agent-cmd` drives a federation rather than
-                        // one room, so the swarm mode keeps the floor.
-                        if !matches!(options.mode, Mode::Swarm) {
-                            options.mode = Mode::Live;
-                        }
+                        // `--swarm --agent-cmd` drives a federation rather
+                        // than one room, so the swarm mode keeps the floor;
+                        // `set_live_floor` only promotes the parser's own
+                        // default, so every other explicit mode does too.
+                        set_live_floor(&mut options);
                     }
                 }
                 "--scenario" => options.scenario = args.next(),
