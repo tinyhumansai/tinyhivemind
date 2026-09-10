@@ -298,7 +298,7 @@ fn route(
         cost_units: u64::from(room.cost_of(&responder)),
         routed_right: room.deciding_expert().map(|held| held == responder),
         library_time,
-        shape: routed_shape(routed),
+        shape: routed_shape(routed, candidates.len()),
     })
 }
 
@@ -311,16 +311,28 @@ fn route(
 /// every column that matters: a routed ladder is twice the latency and roughly
 /// twice the tokens of the one-turn arm it was being reported as.
 ///
+/// The router's round is charged `candidates` rows, not one. A real selector
+/// serializes every candidate -- id, label, role, description -- into its
+/// prompt, so the request grows with the room, and charging a flat row left
+/// the ladder's token cost identical from a two-member room to a
+/// thousand-member one. That is exactly the axis `--scale` exists to walk, so
+/// a flat charge would have made the ladder look free at the scales where it
+/// is least so. A candidate line is shorter than a transcript row, so pricing
+/// them at one row each still overstates nothing that matters and keeps a
+/// single unit across the whole harness.
+///
 /// `turns` and `rounds` on the report stay at `1`. Those two count what the
 /// *room* spent deliberating, which is what every recorded number before the
 /// cost model was priced in, and a router call is not a deliberation turn.
-fn routed_shape(routed: bool) -> Vec<RoundShape> {
+fn routed_shape(routed: bool, candidates: usize) -> Vec<RoundShape> {
     if routed {
-        // The router reads the brief and the candidate list; the responder
-        // reads the brief. One row each is the same conservative count
-        // `blind_shape` uses -- neither of them reads a transcript, because
-        // there is not one yet.
-        return vec![RoundShape::uniform(1, 1), RoundShape::uniform(1, 1)];
+        let listed = u32::try_from(candidates).unwrap_or(u32::MAX);
+        return vec![
+            // The router reads the brief and the candidate list.
+            RoundShape::uniform(listed.saturating_add(1), 1),
+            // The responder reads the brief. There is no transcript yet.
+            RoundShape::uniform(1, 1),
+        ];
     }
     blind_shape(1)
 }

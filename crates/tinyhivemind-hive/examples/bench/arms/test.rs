@@ -12,8 +12,8 @@ fn a_ladder_that_had_to_ask_who_answers_pays_for_the_asking() {
     // The `Select` rung puts the candidate list to a router, which is a model
     // call like any other. Charging only the responder's turn reported the
     // routed ladder at half its real latency and roughly half its tokens.
-    let routed = routed_shape(true);
-    let decided = routed_shape(false);
+    let routed = routed_shape(true, 5);
+    let decided = routed_shape(false, 5);
 
     assert_eq!(routed.len(), 2, "the router's call is a round of its own");
     assert_eq!(
@@ -33,7 +33,27 @@ fn a_ladder_that_had_to_ask_who_answers_pays_for_the_asking() {
 fn a_ladder_that_never_asked_is_priced_exactly_as_before() {
     // The `Decided` rung answers from the roster alone and spends nothing, so
     // it must stay bit-identical to the one-turn shape it always had.
-    assert_eq!(routed_shape(false), blind_shape(1));
+    assert_eq!(routed_shape(false, 5), blind_shape(1));
+    assert_eq!(routed_shape(false, 1024), blind_shape(1));
+}
+
+#[test]
+fn the_routers_prompt_grows_with_the_room() {
+    // A real selector serializes every candidate into its prompt, so the
+    // request grows with the room. A flat charge left the ladder's token cost
+    // identical from a two-member room to a thousand-member one -- flattest on
+    // exactly the axis `--scale` exists to walk.
+    let small = routed_shape(true, 2);
+    let large = routed_shape(true, 1024);
+    let router_rows = |shape: &[super::RoundShape]| shape[0].rows[0];
+    assert!(
+        router_rows(&large) > router_rows(&small),
+        "the router's prompt must grow with the candidate list"
+    );
+
+    // The responder's own round does not: it reads the brief, and there is no
+    // transcript yet however large the room is.
+    assert_eq!(small[1].rows[0], large[1].rows[0]);
 }
 
 #[test]
