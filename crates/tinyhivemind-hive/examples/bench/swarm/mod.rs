@@ -53,10 +53,11 @@ use tinyhivemind_hive::aside::Audience;
 
 pub(crate) use board::AskChannel;
 
-use board::{Board, PlannedTurn, fill_turn};
+use board::Board;
 use member::SwarmSim;
 
 mod board;
+mod schedule;
 mod format;
 mod member;
 
@@ -321,129 +322,30 @@ pub(crate) fn drive_swarm(
     let mut finished: Vec<Option<DeskOutcome>> = vec![None; count];
 
     loop {
-        let mut progressed = false;
-        // Phase one, sequential and cheap: settle what every desk owes before
-        // anybody speaks. A pending answer and an off-floor question are both
-        // desk-local and both rare next to turns, so they stay here rather
-        // than joining the concurrent phase below.
-        for desk in 0..count {
-            if finished[desk].is_some() {
-                board.strand(desk);
-                continue;
-            }
-            if let Some(incoming) = board.pop_pending(desk) {
-                board.deliver(members, desk, &incoming)?;
-                progressed = true;
-                continue;
-            }
-            // Off the floor, and so before the turn rather than instead of it:
-            // the desk puts its bounded question to another channel and still
-            // has every turn its own size earned. Bounded by the ask cap, so
-            // this cannot keep the loop alive on its own.
-            if board.ask_off_floor(members, desk)? {
-                progressed = true;
-            }
-        }
-
-        // Phase two, sequential and cheap: ask the library who speaks next on
-        // each desk, and retire the desks that are done.
-        let mut planned: Vec<PlannedTurn> = Vec::new();
-        for desk in 0..count {
-            if finished[desk].is_some() || !board.pending_empty(desk) {
-                continue;
-            }
-            let started = Instant::now();
-            let decision = {
-                let host = board.host();
-                let roster = host.roster();
-                let desk_set = host.desks();
-                step(
-                    &states[desk],
-                    &host.journals[desk],
-                    &roster,
-                    &desk_set,
-                    policy,
-                )
-            };
-            board.add_library_time(started.elapsed());
-
-            match decision.map_err(|error| error.to_string())? {
-                HiveStep::Speak { turn } => {
-                    planned.push(board.plan_turn(members, desk, &turn)?);
-                }
-                HiveStep::Converged { topic, .. } => {
-                    finished[desk] = Some(member::outcome(
-                        channels,
-                        desk,
-                        Ending::Converged,
-                        Some(topic),
-                    ));
-                    progressed = true;
-                }
-                HiveStep::Deadlocked { .. } => {
-                    finished[desk] =
-                        Some(member::outcome(channels, desk, Ending::Deadlocked, None));
-                    progressed = true;
-                }
-                HiveStep::Exhausted { .. } => {
-                    finished[desk] = Some(member::outcome(channels, desk, Ending::Exhausted, None));
-                    progressed = true;
-                }
-                HiveStep::Idle => {
-                    finished[desk] = Some(member::outcome(channels, desk, Ending::Idle, None));
-                    progressed = true;
-                }
-            }
-        }
-
-        // Phase three, concurrent: every desk fills its one authorized turn at
-        // the same time. This is the whole point of the phasing — with real
-        // agents a turn is a model call, and a hundred desks each authorizing
-        // exactly one speaker is a hundred model calls that need not wait on
-        // each other. One message, one turn is untouched: each desk still runs
-        // a single turn, authorized by its own episode.
-        // An index from desk to its planned turn, so the seats and the plans
-        // can be walked together in one pass. Built rather than searched: at a
-        // hundred desks a scan per desk is a hundred scans per pass, for a
-        // lookup that is a subscript.
-        let mut plan_at: Vec<Option<usize>> = vec![None; count];
-        for (index, plan) in planned.iter().enumerate() {
-            plan_at[plan.desk] = Some(index);
-        }
-        let spoken = {
-            let mut work: Vec<(&PlannedTurn, &mut Vec<&mut dyn SwarmMember>)> = members
-                .iter_mut()
-                .enumerate()
-                .filter_map(|(desk, seats)| {
-                    plan_at
-                        .get(desk)
-                        .copied()
-                        .flatten()
-                        .map(|index| (&planned[index], seats))
-                })
-                .collect();
-            parallel::map_mut_in_order(&mut work, jobs, |(plan, seats)| fill_turn(seats, plan))?
+        // Two schedulers, and the choice between them is not a performance
+        // detail. See `schedule.rs`: they interleave a routed referral
+        // differently, so they can decide differently, and the sequential one
+        // is the reference every recorded swarm number was taken against.
+        let progressed = if jobs > 1 {
+            schedule::concurrent_pass(
+                &mut board,
+                members,
+                channels,
+                &mut states,
+                &mut finished,
+                policy,
+                jobs,
+            )?
+        } else {
+            schedule::sequential_pass(
+                &mut board,
+                members,
+                channels,
+                &mut states,
+                &mut finished,
+                policy,
+            )?
         };
-
-        // Phase four, sequential and in desk order: land what was said. The
-        // order is load-bearing rather than tidy — a row consumes a sequence
-        // number, and the quorum window and salience decay read raw sequence
-        // distance, so landing in completion order would let one seed decide
-        // two different things.
-        for said in &spoken {
-            let Some(plan) = plan_at
-                .get(said.desk)
-                .copied()
-                .flatten()
-                .and_then(|index| planned.get(index))
-            else {
-                continue;
-            };
-            board.land_turn(members, said, plan.budget)?;
-            states[said.desk] = plan.turn.next_state.clone();
-            progressed = true;
-        }
-
         if !progressed {
             break;
         }
