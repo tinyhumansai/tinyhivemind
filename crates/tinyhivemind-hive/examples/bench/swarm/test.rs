@@ -278,7 +278,7 @@ fn planting_puts_the_cure_for_a_desk_on_another_desk() {
         let seats: Vec<&crate::sim::SimAgent> = planted
             .agents
             .iter()
-            .filter(|agent| desk.members.iter().any(|member| *member == agent.id))
+            .filter(|agent| desk.members.contains(&agent.id))
             .collect();
         assert!(
             !seats
