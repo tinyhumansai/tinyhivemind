@@ -14,7 +14,6 @@ use crate::sim::Expertise;
 use tinyhivemind_hive::Basis;
 use tinyhivemind_hive::DirectoryPolicy;
 
-
 /// Apply one of the scale flags (`--jobs`, `--ask-cap`, `--digest`,
 /// `--distance`, `--evidence`) to `options`.
 ///
