@@ -64,6 +64,7 @@ Every arm decides the same rooms from the same private evaluations.
 | `hive+quiet` | `hive+rounds` with the answers **discarded**: the same rounds, the same rows, the same sequence numbers consumed, and no information transferred. The control that separates what an off-floor exchange *says* from what merely writing its rows does to salience decay. |
 | `hive+fact°` | The same bounded exchange as `hive+fact`, held **off the floor** — before the episode opens, spending no turn the room could have deliberated with. Its peer is chosen from private room state rather than the transcript, so it bounds what the exchange is worth off the floor rather than isolating scheduling alone. |
 | `swarm°` | Only under `--swarm`: the same federation and the same referral policy as `swarm`, with the question asked **off the floor** and bounded by `--ask-cap` instead of spending the authorized turn. It is what keeps a federation above eight desks deciding anything at all — see [`SCALE.md`](SCALE.md). |
+| `swarm◦` | Only under `--swarm`: `swarm°` plus `--digest N`, where each desk publishes its reading of the whole slate to **every** channel — one model call per desk rather than one per peer. The only bounded arm that still decides anything in a federation whose desks share blind spots; below fifty desks it costs accuracy against `swarm°`. See [`SCALE.md`](SCALE.md#correlated-desks-and---digest). |
 | `hive+pooled` | The **ceiling for equal-weight pooling**: every private reading and every fact already in every member's hands, free, averaged with no regard for whose reading it is. No amount of pairwise exchange beats it on the rooms this benchmark measures (uniform and hidden-profile, where every peer's reading is equally reliable) — under `--specialists`, where readings genuinely differ in reliability, a protocol that could tell them apart could in principle beat indiscriminate averaging. |
 | `ladder+dir` | The responder ladder again, with a directory the room *earned* over `--history` prior episodes of `hive+` on the same room. The selector's candidates carry that directory's per-agent lines as their `description`, the request names the topic the call turns on, and a router that reads the descriptions picks the heaviest holder of it. Validated through the real `accept_selection`. |
 | `all-reasoning` | Only under `--cost-tiers`, in the cost table: `hive+dir+defer` (the delegating room) against a policy that puts every seat on the expensive tier. |
@@ -455,6 +456,10 @@ and why the sweep reports an ordering rather than a value are in
 | `--scenario PATH` | give the live room a real problem with private facts |
 | `--repeat N` | run a live scenario N times and count both arms |
 | `--json` | print one flat JSON object per arm, ahead of the tables |
+| `--ask-cap N` | questions one desk may put to other channels off the floor; `0` puts asking back on the floor (default 2) |
+| `--digest N` | readings one desk publishes to **every** other channel, off the floor (default 0, off) |
+| `--distance sequence\|live` | whether the quorum window and salience decay count every row the host wrote or only the rows the episode folds (default `sequence`) |
+| `--jobs N` | threads the per-sample loops spread across (default one per core) |
 | `--stats-check` | run the statistics module's self-check, and the check arms' own, and exit `0` or `1` |
 | `calls/ep` (column) | model calls made in off-floor exchange rounds per episode — members *asked*, not rows written, so a declined round costs what it actually cost. Kept out of `cost/ep`, which is each speaker's own cost times its turns |
 | `--timeout SECS` | per-turn deadline for a live agent or HTTP request (default 180) |

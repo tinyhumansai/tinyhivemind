@@ -14,7 +14,8 @@ resolves it to `sim/mod.rs` transparently.
 | `compare.rs` | the simulated multi-arm comparison engine: `compare`, `Totals`, `run_arms`, `endings`, and the cost table |
 | `backend.rs` | seat/backend configuration shared by both live drivers: API keys, HTTP config, seat model and command resolution, usage accounting |
 | `live_single.rs` | driving one live desk or episode through a real agent |
-| `live_swarm.rs` | driving a live federation of desks through real agents |
+| `live_swarm/mod.rs` | driving a live federation of desks through real agents |
+| `live_swarm/totals.rs` | what a federated comparison counts, and the table it prints |
 | `sim/mod.rs` | the rooms, the private evaluations, the `Expertise` shapes (`--specialists`, `--hidden-profile`) that redistribute those evaluations, the evidence-first opening (`--blind-evidence`), the tuning constants, `Role`, `Expertise`, and the `Room` type and its generation |
 | `sim/generation.rs` | drawing a room's members and their expertise |
 | `sim/agent/mod.rs` | `SimAgent`, the participant that holds a private, noisy view of every option: its struct, `Payload`, and `CheckStyle` |

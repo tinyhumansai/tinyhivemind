@@ -96,7 +96,7 @@ is the host's job, "because only the host knows what a question costs it".
 `crates/tinyhivemind-core` and `crates/tinyhivemind-hive` are unchanged by any
 of the above.
 
-## Correlated desks
+## Correlated desks, and `--digest`
 
 A federation gives each desk a blind spot of its own, which needs more options
 than desks. With fewer, some desks are necessarily wrong about the same option —
@@ -104,6 +104,50 @@ a materially different and much harder task, since pooling across two desks that
 share an error imports it instead of cancelling it. The harness prints a note
 when that is the arrangement it built rather than leaving the invariant quietly
 false, and any number read off such a run should be read as measuring that task.
+
+**A bounded question has a ceiling here, and it is not a small one.** The peer a
+desk asks is drawn from a federation that shares its blind spot, so the wider
+the federation the likelier the answer confirms the error. Measured at ten
+members a desk and eight options, `swarm°` at `--ask-cap 2` degrades from 95%
+correct at twenty-five desks to 58% at fifty and **0% at a hundred** — where it
+also stops agreeing with itself, deciding only eleven of twenty-four federations.
+
+`--digest N` is the other mechanism. Each desk publishes its reading of the
+whole slate, once, to *every* channel: one model call per desk however large the
+federation, against the `D - 1` questions and `D - 1` answers a desk would spend
+asking everybody. The row lands on each peer authored by a member of the
+publishing desk, and `episode::step` folds a trace only from a current member of
+the desk it is folding — so a digest deposits information into every reader and
+support into nobody's standings, which is the same guarantee a referral's
+`!evidence` carries. It is priced in its own `digests` column.
+
+The `swarm◦` arm is `swarm°` plus `--digest 1`:
+
+```text
+8 options, 10 members a desk        25       50      100  desks
+swarm°  (ask two peers)           95.0     58.3      0.0
+swarm◦  (ask two, publish once)   62.5     62.5     62.5
+vote    (matched budget)          15.0     20.8     12.5
+pooled  (free information)       100.0    100.0    100.0
+turns/ep swarm°                  356.9    683.9   1339.3
+turns/ep swarm◦                  352.6    678.7   1332.3
+digests/ep                        25.0     50.0    100.0
+```
+
+Read it as a **crossover, not a win**. Publishing is flat in the size of the
+federation because every desk hears every desk either way; asking degrades
+because the peer pool degrades. Below fifty desks the bounded ask is better and
+the digest is a real cost in accuracy; from fifty up the digest is the only
+bounded arm still standing. Turns are within 1% of each other throughout, so
+what is being bought is not paid for in floor time.
+
+It does not reach `pooled`, and the gap is the point: `pooled` hands over every
+member's *private facts*, while a digest hands over a desk's *scored reading*.
+Averaging correlated readings imports the correlation. Where every desk's blind
+spot is its own — the `--topics 128` arrangement above — the bounded ask already
+holds 100% and the digest only adds cost.
+
+`--digest` is off by default, and every recorded number was taken with it off.
 
 ## Driving it live
 
