@@ -17,6 +17,7 @@ fn the_policy_and_state_pin_their_wire_forms() {
             "repetition_cap": 3,
             "directory": null,
             "defer_cap": null,
+            "distance": "sequence",
             "quorum": {
                 "threshold": 2,
                 "window": 30,

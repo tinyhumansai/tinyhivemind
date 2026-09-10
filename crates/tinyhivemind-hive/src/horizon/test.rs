@@ -41,12 +41,13 @@ fn a_dense_journal_measures_the_same_either_way() {
 
 #[test]
 fn a_window_admits_a_row_the_raw_ruler_would_have_dropped() {
-    // Thirty sequences of transcript carrying four folded rows. Raw distance
-    // puts the opening row outside a window of two; folded distance is the
-    // question the policy meant to ask.
+    // Thirty sequences of transcript carrying four folded rows. A window of
+    // three admits the whole episode when it is measured in rows and only the
+    // last row when it is measured in sequences, which is the difference a
+    // busy desk sees on an unchanged policy.
     let rows = rows();
-    assert!(!Horizon::from(Sequence(40)).within(Sequence(10), 2));
-    assert!(Horizon::over(Sequence(40), &rows).within(Sequence(10), 2));
+    assert!(!Horizon::from(Sequence(40)).within(Sequence(10), 3));
+    assert!(Horizon::over(Sequence(40), &rows).within(Sequence(10), 3));
 }
 
 #[test]
@@ -61,12 +62,16 @@ fn nothing_after_the_horizon_is_ever_in_window() {
 
 #[test]
 fn a_sequence_the_fold_never_read_lands_where_it_would_have() {
-    // Sequence 25 is not a folded row. It sits between rows 20 and 30, so it
-    // is two rows back from the horizon at 40, the same as 30 is one back.
+    // Sequence 25 is not a folded row. Inserting it would put it where row 30
+    // sits, so it measures as row 30 does: one row back from the horizon. The
+    // point is that it is monotone and has no special case, not that an
+    // unfolded sequence has a meaningful distance of its own.
     let rows = rows();
     let horizon = Horizon::over(Sequence(40), &rows);
-    assert_eq!(horizon.distance(Sequence(25)), 2);
     assert_eq!(horizon.distance(Sequence(30)), 1);
+    assert_eq!(horizon.distance(Sequence(25)), 1);
+    assert_eq!(horizon.distance(Sequence(21)), 1);
+    assert_eq!(horizon.distance(Sequence(20)), 2);
 }
 
 #[test]
