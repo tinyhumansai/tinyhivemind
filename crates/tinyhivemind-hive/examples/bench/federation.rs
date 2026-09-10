@@ -306,12 +306,15 @@ impl Federation {
             // which happens only when every desk in the federation shares
             // the same blind spot, the `decoys_distinct: false` case this
             // module already reports rather than quietly mismeasures.
-            let Some(holder) = (1..count).map(|step| (desk + step) % count).find(|&candidate| {
-                federation
-                    .desks
-                    .get(candidate)
-                    .is_some_and(|held| held.decoy != decoy)
-            }) else {
+            let Some(holder) = (1..count)
+                .map(|step| (desk + step) % count)
+                .find(|&candidate| {
+                    federation
+                        .desks
+                        .get(candidate)
+                        .is_some_and(|held| held.decoy != decoy)
+                })
+            else {
                 continue;
             };
             let Some(seat) = federation
