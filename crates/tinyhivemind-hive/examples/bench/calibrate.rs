@@ -116,12 +116,12 @@ pub(crate) fn run(options: &Options) -> Result<(), String> {
     let brief = best_of(
         &config,
         &model,
-        &probe_prompt(PROBE_ROWS.0, PROBE_COMPLETION.0),
+        &probe_prompt(PROBE_ROWS.0, Some(PROBE_COMPLETION.0)),
     )?;
     let verbose = best_of(
         &config,
         &model,
-        &probe_prompt(PROBE_ROWS.0, PROBE_COMPLETION.1),
+        &probe_prompt(PROBE_ROWS.0, Some(PROBE_COMPLETION.1)),
     )?;
     let more = verbose.usage.output.saturating_sub(brief.usage.output);
     let slower = verbose.ms.saturating_sub(brief.ms);
