@@ -31,8 +31,8 @@ fn the_two_prompt_probes_differ_only_in_how_many_rows_they_carry() {
     // What makes the slope between them the per-row cost and nothing else: if
     // the two probes differed in their instructions as well as their rows, the
     // fit would attribute that difference to the rows.
-    let short = probe_prompt(PROBE_ROWS.0, PROBE_COMPLETION.0);
-    let long = probe_prompt(PROBE_ROWS.1, PROBE_COMPLETION.0);
+    let short = probe_prompt(PROBE_ROWS.0, None);
+    let long = probe_prompt(PROBE_ROWS.1, None);
     assert!(long.len() > short.len());
 
     // Counted on text unique to the filler rows. `!propose` will not do: the
@@ -62,7 +62,7 @@ fn a_probe_is_built_from_the_prompt_a_live_seat_actually_gets() {
     // goes through `AgentPrompt::prompt_with`, so the identity line, the
     // private-facts block and the protocol grammar are all inside the
     // intercept where they belong.
-    let prompt = probe_prompt(PROBE_ROWS.0, PROBE_COMPLETION.0);
+    let prompt = probe_prompt(PROBE_ROWS.0, None);
     assert!(
         prompt.contains("You are @planner"),
         "no identity line: {prompt}"
@@ -77,8 +77,8 @@ fn a_probe_is_built_from_the_prompt_a_live_seat_actually_gets() {
 
 #[test]
 fn the_two_latency_probes_differ_only_in_the_length_they_ask_for() {
-    let brief = probe_prompt(PROBE_ROWS.0, PROBE_COMPLETION.0);
-    let verbose = probe_prompt(PROBE_ROWS.0, PROBE_COMPLETION.1);
+    let brief = probe_prompt(PROBE_ROWS.0, Some(PROBE_COMPLETION.0));
+    let verbose = probe_prompt(PROBE_ROWS.0, Some(PROBE_COMPLETION.1));
     assert_eq!(
         brief.matches("!propose").count(),
         verbose.matches("!propose").count()
@@ -92,7 +92,7 @@ fn every_row_of_a_probe_is_the_same_length() {
     // The quantity being fitted is tokens *per row*. Rows of varying length
     // would fit the mean length of this harness's filler instead of the
     // endpoint's tokenisation of a row.
-    let prompt = probe_prompt(12, PROBE_COMPLETION.0);
+    let prompt = probe_prompt(12, None);
     let lengths: Vec<usize> = prompt
         .lines()
         .filter(|line| line.contains(ROW_MARK))
@@ -105,6 +105,21 @@ fn every_row_of_a_probe_is_the_same_length() {
         lengths.windows(2).all(|pair| pair[0] == pair[1]),
         "probe rows are not uniform: {lengths:?}"
     );
+}
+
+#[test]
+fn a_row_probe_carries_no_instruction_a_live_seat_would_not_get() {
+    // `extra` is a block an ordinary seat does not receive, so anything in it
+    // lands inside the fitted `prompt_base` and overprices every benchmark
+    // turn the constant is applied to. The row probes fit that intercept, so
+    // they carry none of it.
+    let row_probe = probe_prompt(PROBE_ROWS.0, None);
+    assert!(!row_probe.contains("Write approximately"));
+
+    // The latency probes do carry it, and may: they fit from the *difference*
+    // between two lengths, where a block common to both cancels.
+    let latency_probe = probe_prompt(PROBE_ROWS.0, Some(PROBE_COMPLETION.0));
+    assert!(latency_probe.contains("Write approximately"));
 }
 
 #[test]

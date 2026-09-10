@@ -88,8 +88,10 @@ pub(crate) fn run(options: &Options) -> Result<(), String> {
         model
     );
 
-    let short_prompt = probe_prompt(PROBE_ROWS.0, PROBE_COMPLETION.0);
-    let long_prompt = probe_prompt(PROBE_ROWS.1, PROBE_COMPLETION.0);
+    // No length instruction on the row probes: they fit the intercept, and a
+    // block no live seat receives would be baked into it.
+    let short_prompt = probe_prompt(PROBE_ROWS.0, None);
+    let long_prompt = probe_prompt(PROBE_ROWS.1, None);
     let short = best_of(&config, &model, &short_prompt)?;
     let long = best_of(&config, &model, &long_prompt)?;
 
@@ -206,8 +208,8 @@ fn best_of(config: &crate::http::HttpConfig, model: &str, prompt: &str) -> Resul
     best.ok_or_else(|| failure.unwrap_or_else(|| "every calibration probe failed".to_owned()))
 }
 
-/// A probe prompt carrying `rows` of synthetic transcript and asking for
-/// roughly `completion` tokens back.
+/// A probe prompt carrying `rows` of synthetic transcript, asking for roughly
+/// `completion` tokens back when one is given.
 ///
 /// Built through [`AgentPrompt::prompt_with`] — the *real* prompt a live seat
 /// is given — rather than through a synthetic preamble of this module's own.
@@ -220,7 +222,7 @@ fn best_of(config: &crate::http::HttpConfig, model: &str, prompt: &str) -> Resul
 /// The rows are uniform filler because the quantity being fitted is tokens
 /// *per row*: rows of varying length would fit the mean length of this
 /// harness's filler instead of the endpoint's tokenisation of a row.
-fn probe_prompt(rows: usize, completion: u32) -> String {
+fn probe_prompt(rows: usize, completion: Option<u32>) -> String {
     let seat = AgentPrompt::new(
         "planner",
         "planner",
@@ -252,14 +254,19 @@ fn probe_prompt(rows: usize, completion: u32) -> String {
             }
         })
         .collect();
-    seat.prompt_with(
-        &turn,
-        &visible,
-        &format!(
-            "Write approximately {completion} tokens of plain prose summarising \
+    // Empty for a row probe. `extra` is a block an ordinary live seat does not
+    // receive, so anything put here lands inside the fitted `prompt_base` and
+    // overprices every benchmark turn the constant is then applied to. Only
+    // the latency probes need it, and they do not feed the intercept: they
+    // fit `ttft` and `decode_rate` from the *difference* between two lengths,
+    // where a block common to both cancels.
+    let extra = completion.map_or_else(String::new, |tokens| {
+        format!(
+            "Write approximately {tokens} tokens of plain prose summarising \
              the state of the discussion. Do not use lists."
-        ),
-    )
+        )
+    });
+    seat.prompt_with(&turn, &visible, &extra)
 }
 
 /// `numerator / denominator`, rounded to nearest, with a zero denominator
