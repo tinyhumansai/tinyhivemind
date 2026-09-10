@@ -5,6 +5,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use crate::{
     attention::{AgentThreshold, BidReason},
     directory::DirectoryPolicy,
+    horizon::Basis,
     quorum::{QuorumPolicy, TopicStanding},
     salience::SalienceWeights,
     trace::TopicId,
@@ -73,6 +74,19 @@ pub struct EpisodePolicy {
     /// [`Error::ZeroDeferCap`]: crate::error::Error::ZeroDeferCap
     #[serde(deserialize_with = "deserialize_required_defer_cap")]
     pub defer_cap: Option<u32>,
+    /// How the window and the decay measure distance back through the
+    /// transcript.
+    ///
+    /// [`Basis::Sequence`] subtracts raw sequence numbers, so every row the
+    /// host wrote counts against the window whether or not this episode folds
+    /// it — an aside, a row from a retired agent, an off-floor question put to
+    /// another channel. [`Basis::Live`] counts only the rows the fold reads,
+    /// so the policy means the same thing on a busy desk as on a quiet one.
+    ///
+    /// The two are identical on a dense journal the episode owns end to end,
+    /// which is the benchmark's case and the reason its recorded numbers do
+    /// not move. They diverge exactly where a real host differs from it.
+    pub distance: Basis,
     /// When a topic is entitled to carry.
     pub quorum: QuorumPolicy,
     /// Salience weights.
@@ -119,6 +133,7 @@ impl EpisodePolicy {
         repetition_cap: 3,
         directory: None,
         defer_cap: None,
+        distance: Basis::Sequence,
         quorum: QuorumPolicy::DEFAULT,
         weights: SalienceWeights::DEFAULT,
     };

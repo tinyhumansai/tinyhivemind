@@ -18,6 +18,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     attention::{AgentThreshold, BidContext, bids, floor_holder},
+    horizon::{Basis, Horizon},
     directory::{Directory, directory, validate_policy as validate_directory_policy},
     error::{Error, Result},
     quorum::{ConsensusState, consensus, standings},
@@ -76,8 +77,13 @@ pub fn step(
     // that ends the episode and buys the difference between "spent thirty
     // turns and nearly carried two options" and "spent thirty turns and
     // deposited nothing", which are the same report without it.
-    let (live, traces, at) = live_traces(transcript, state, &members);
-    let standings = standings(&traces, at, &policy.quorum)?;
+    let (live, traces, rows) = live_traces(transcript, state, &members);
+    let at = rows.last().copied().unwrap_or(state.watermark);
+    let horizon = match policy.distance {
+        Basis::Sequence => Horizon::at(at),
+        Basis::Live => Horizon::over(at, &rows),
+    };
+    let standings = standings(&traces, horizon, &policy.quorum)?;
 
     if state.spent >= policy.turn_budget {
         return Ok(HiveStep::Exhausted {
@@ -119,7 +125,7 @@ pub fn step(
     // bid reads one consistent view of the transcript rather than two.
     let known = match &policy.directory {
         Some(directory_policy) => {
-            Some(directory(&traces, at, directory_policy, &state.thresholds)?)
+            Some(directory(&traces, horizon, directory_policy, &state.thresholds)?)
         }
         None => None,
     };
@@ -129,7 +135,7 @@ pub fn step(
         &members,
         state,
         policy,
-        at,
+        horizon,
         known.as_ref(),
     );
     let bids = bids(&context)?;
@@ -226,7 +232,7 @@ fn live_traces<'a>(
 ) -> (
     Vec<&'a SessionMessage>,
     Vec<crate::trace::Trace>,
-    tinyhivemind::Sequence,
+    Vec<tinyhivemind::Sequence>,
 ) {
     let live: Vec<&SessionMessage> = transcript
         .iter()
@@ -240,10 +246,15 @@ fn live_traces<'a>(
         })
         .collect();
     let traces = read_borrowed(&live);
-    let at = live
-        .last()
-        .map_or(state.watermark, |message| message.sequence);
-    (live, traces, at)
+    // The sequences of exactly the rows this episode folds, ascending — the
+    // ruler [`Basis::Live`] measures with. Sorted rather than assumed sorted:
+    // the caller hands over a projection, and every other fold in this crate
+    // is order-independent on the same grounds.
+    let mut rows: Vec<tinyhivemind::Sequence> =
+        live.iter().map(|message| message.sequence).collect();
+    rows.sort_unstable();
+    rows.dedup();
+    (live, traces, rows)
 }
 
 /// The standing to converge on, if the commit turn actually recorded it.
@@ -358,7 +369,7 @@ fn context<'a>(
     members: &'a [&'a str],
     state: &'a EpisodeState,
     policy: &'a EpisodePolicy,
-    at: tinyhivemind::Sequence,
+    at: Horizon<'a>,
     known: Option<&'a Directory>,
 ) -> BidContext<'a> {
     BidContext {
