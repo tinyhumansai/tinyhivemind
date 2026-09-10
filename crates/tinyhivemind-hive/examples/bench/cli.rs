@@ -9,6 +9,7 @@
 
 use crate::http::{Thinking, Wire};
 use crate::policy::tuned_policy;
+use tinyhivemind_hive::Basis;
 use crate::sim::Expertise;
 use tinyhivemind_hive::{DirectoryPolicy, EpisodePolicy};
 
@@ -413,6 +414,17 @@ fn apply_scale_flag(
         }
         "--ask-cap" => {
             options.ask_cap = usize::try_from(next_number(args).unwrap_or(2)).unwrap_or(2);
+        }
+        "--distance" => {
+            // The one knob that changes what a *sequence* means to the
+            // library's own folds: `live` counts the rows the episode reads
+            // rather than every row the host wrote. Identical on a journal the
+            // episode owns end to end, which is why every recorded number is
+            // unchanged by leaving it alone.
+            options.policy.distance = match args.next().as_deref() {
+                Some("live") => Basis::Live,
+                _ => Basis::Sequence,
+            };
         }
         "--digest" => {
             options.digest = usize::try_from(next_number(args).unwrap_or(1)).unwrap_or(1);

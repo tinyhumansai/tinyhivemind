@@ -151,7 +151,12 @@ pub(crate) fn sweep(options: &Options) -> Result<(), String> {
     let mut points: Vec<Point> = Vec::new();
 
     for size in &sizes {
-        let tuned = tuned_policy(*size);
+        // The size-scaled policy, carrying whatever `--distance` asked for:
+        // `tuned_policy` knows the room size and nothing about the ruler.
+        let tuned = EpisodePolicy {
+            distance: options.policy.distance,
+            ..tuned_policy(*size)
+        };
         let rooms: Vec<Room> = (0..options.episodes)
             .map(|index| {
                 let mut room = Room::generate_with(
