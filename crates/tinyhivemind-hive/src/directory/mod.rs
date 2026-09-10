@@ -139,9 +139,9 @@ pub(crate) fn validate_policy(policy: &DirectoryPolicy) -> Result<()> {
 /// assert!(folded.knows("archivist", &"pool".into(), &DirectoryPolicy::DEFAULT));
 /// # Ok::<(), tinyhivemind_hive::error::Error>(())
 /// ```
-pub fn directory(
+pub fn directory<'a>(
     traces: &[Trace],
-    at: Horizon<'_>,
+    at: impl Into<Horizon<'a>>,
     policy: &DirectoryPolicy,
     priors: &[AgentThreshold],
 ) -> Result<Directory> {
