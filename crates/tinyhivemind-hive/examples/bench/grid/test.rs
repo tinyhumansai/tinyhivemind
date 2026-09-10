@@ -3,7 +3,9 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use super::axes::{Axes, Complexity, Topic};
-use super::{ARMS, cell_seed, ratio};
+use super::{ARMS, CellRow, best, cell_seed, ratio};
+use crate::cost::CostModel;
+use crate::metrics::Aggregate;
 
 fn args(values: &[&str]) -> impl Iterator<Item = String> + use<> {
     values
