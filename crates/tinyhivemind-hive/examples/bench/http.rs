@@ -177,7 +177,23 @@ impl Usage {
 /// `Send` cannot be handed to a worker. The lock is uncontended in practice —
 /// one seat's usage is touched by one thread, right after that seat's own
 /// request returns.
+///
+/// Read it through [`usage_of`] rather than by locking directly. A poisoned
+/// handle must not be skipped: skipping one is a cost report that silently
+/// undercounts, which is the one thing a spend column may not do.
 pub(crate) type UsageHandle = std::sync::Arc<std::sync::Mutex<Usage>>;
+
+/// Read a seat's usage, recovering a poisoned handle rather than dropping it.
+///
+/// [`Usage`] is four saturating counters with no invariant across them, so a
+/// thread that panicked mid-update leaves a total that is *stale*, never
+/// inconsistent. Recovering it costs at most one call's tokens; skipping the
+/// seat costs its whole run and says nothing about having done so.
+pub(crate) fn usage_of(handle: &UsageHandle) -> Usage {
+    *handle
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
 
 /// Fold one request's tokens into a seat's usage.
 ///
@@ -186,9 +202,12 @@ pub(crate) type UsageHandle = std::sync::Arc<std::sync::Mutex<Usage>>;
 /// response is to keep the run going and let the totals be short rather than
 /// to take the whole federation down over a spent-token count.
 fn with_usage(handle: &UsageHandle, update: impl FnOnce(&mut Usage)) {
-    if let Ok(mut usage) = handle.lock() {
-        update(&mut usage);
-    }
+    // Recovered rather than dropped, for the reason `usage_of` gives: a lost
+    // update is an undercounted spend column.
+    let mut usage = handle
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    update(&mut usage);
 }
 
 /// A participant driven directly over HTTP rather than through a CLI.
