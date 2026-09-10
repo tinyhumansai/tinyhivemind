@@ -203,12 +203,29 @@ impl Default for CostModel {
 /// round in flight at once, has a shape no `(turns, rounds)` pair can express,
 /// and guessing one from the pair is how a benchmark starts reporting a
 /// protocol it never ran.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct RoundShape {
-    /// Transcript rows every turn in this round could read.
-    pub(crate) rows: u32,
-    /// Turns the round authorized, all reading the same `rows`.
-    pub(crate) turns: u32,
+    /// Transcript rows each turn in this round actually read, one entry per
+    /// turn the round authorized.
+    ///
+    /// Not necessarily uniform: a blind turn withholds its peers' rows from
+    /// this same round, so two turns authorized together can read different
+    /// counts, and an exchange round asks members whose own prior history
+    /// differs from each other's. [`RoundShape::uniform`] is the shorthand for
+    /// the common case where every turn does read the same count.
+    pub(crate) rows: Vec<u32>,
+}
+
+impl RoundShape {
+    /// `turns` turns, each reading the same `rows` — the shape every turn in
+    /// a round takes when nothing makes one of them differ from the rest: a
+    /// synthetic one-round arm like [`crate::arms::blind_shape`], or a test
+    /// fixture that is not asking about the non-uniform case.
+    pub(crate) fn uniform(rows: u32, turns: u32) -> Self {
+        Self {
+            rows: vec![rows; usize::try_from(turns).unwrap_or(usize::MAX)],
+        }
+    }
 }
 
 /// What an episode cost, in units a host recognises.
