@@ -330,3 +330,52 @@ fn a_fact_crosses_a_channel_and_a_reading_does_not_carry_it() {
     assert_eq!(carrying.off_floor_asks, quiet.off_floor_asks);
     assert_eq!(carrying.digests, quiet.digests);
 }
+
+#[test]
+fn a_wrong_fact_names_the_truth_and_spreads_the_same_way() {
+    // The adversarial half. A fact does not average, which is why it survives
+    // a shared bias — and why a mistaken one is worse than a mistaken opinion:
+    // it discounts the right answer for every desk it reaches, undiluted.
+    // Planting them all wrong is the extreme, and it must actually reach the
+    // wire or the robustness sweep beside it measures nothing.
+    let federation = federation();
+    let wrong = federation.planted_with(1_000);
+    assert!(wrong.evidence);
+    assert!(
+        wrong
+            .agents
+            .iter()
+            .any(|agent| agent.ruled_out.contains(&federation.truth)),
+        "every planted fact names the truth at a thousand per mille",
+    );
+
+    let report = run_swarm(
+        &wrong,
+        &desk_policy(&federation),
+        referrals(),
+        Exchange::from_caps(2, 1),
+        "Decide.",
+        true,
+    )
+    .expect("runs");
+    let truth = format!("rules out #{}", federation.truth);
+    assert!(
+        report.trace.iter().any(|line| line.contains(&truth)),
+        "a wrong fact crosses exactly as a right one does",
+    );
+}
+
+#[test]
+fn planting_no_wrong_facts_leaves_the_truth_alone() {
+    // The control for the test above: at zero noise nothing disqualifies the
+    // answer, so a difference in the sweep is the noise and not the planting.
+    let federation = federation();
+    let planted = federation.planted_with(0);
+    assert!(
+        !planted
+            .agents
+            .iter()
+            .any(|agent| agent.ruled_out.contains(&federation.truth)),
+        "a true fact never names the truth",
+    );
+}
