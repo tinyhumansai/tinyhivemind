@@ -573,6 +573,7 @@ pub(crate) fn drive_with(
     host.operator(task);
 
     let mut state = EpisodeState::opened(host.conversation(), host.watermark());
+    let mut counters = Counters::default();
     let mut library_time = Duration::ZERO;
     let mut step_time = Duration::ZERO;
     let mut step_calls = 0_u32;
@@ -666,7 +667,71 @@ pub(crate) fn drive_with(
             HiveStep::Idle => (Ending::Idle, None),
         };
 
-        // Read back out of the journal the same way any participant would,
+        counters.library_time = library_time;
+        counters.step_time = step_time;
+        counters.step_calls = step_calls;
+        counters.turns = turns;
+        counters.rounds = rounds;
+        counters.contacts = contacts;
+        return finished(
+            &host,
+            agents,
+            &state,
+            (ending, decided),
+            tally,
+            shape,
+            &counters,
+            trace,
+        );
+    }
+}
+
+/// The running totals `drive_with` carries across its loop.
+///
+/// Grouped so that [`finished`] takes one argument rather than seven. They are
+/// genuinely one thing — what this episode has cost so far — and passing them
+/// as a bundle is what lets the terminal scoring live in a function of its
+/// own rather than inside the loop that produced them.
+#[derive(Default)]
+struct Counters {
+    /// Time spent inside the library, exchange rounds included.
+    library_time: Duration,
+    /// Time spent inside `step` calls alone.
+    step_time: Duration,
+    /// Calls into `step`, including the terminal one.
+    step_calls: u32,
+    /// Turns taken.
+    turns: u32,
+    /// Rounds taken.
+    rounds: u32,
+    /// Off-floor model calls made in exchange rounds.
+    contacts: u32,
+}
+
+/// Score a finished episode and assemble its report.
+///
+/// Split out of [`drive_with`] because it answers a different question from
+/// the loop above it: the loop decides who speaks next, and this reads back
+/// what the whole thing came to once nobody does. Everything here is a fold
+/// over the finished journal rather than a step of the protocol, and none of
+/// it is charged to `library_time` -- scoring is not stepping.
+///
+/// # Errors
+///
+/// Returns the library's own error text if the finished journal will not fold
+/// into a directory.
+fn finished(
+    host: &Host,
+    agents: &mut [&mut dyn Participant],
+    state: &EpisodeState,
+    outcome: (Ending, Option<TopicId>),
+    tally: Tally,
+    shape: Vec<crate::cost::RoundShape>,
+    counters: &Counters,
+    trace: Vec<String>,
+) -> Result<EpisodeReport, String> {
+    let (ending, decided) = outcome;
+    // Read back out of the journal the same way any participant would,
         // rather than tracked as the loop ran: the topic this resolves
         // against is only known once the episode has already decided one.
         let proposer = decided
