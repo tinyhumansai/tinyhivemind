@@ -44,6 +44,51 @@ pub(super) struct PlannedTurn {
     pub(super) turn: HiveTurn,
 }
 
+/// One referral answer, with everything its seat needs to fill it.
+///
+/// The same plan/fill/land split a turn gets, and for the same reason:
+/// answering a referral is a model call of several seconds on a live desk, and
+/// leaving it in the scheduler's sequential phase would serialise every
+/// pending answer in the federation however wide `--jobs` was set.
+pub(super) struct PlannedAnswer {
+    /// The desk that owes the answer.
+    pub(super) desk: usize,
+    /// The seat, within that desk, the referral named.
+    pub(super) seat: usize,
+    /// The question that arrived.
+    pub(super) incoming: Referral,
+    /// The journal as it stood when the answer was planned.
+    pub(super) visible: Vec<SessionMessage>,
+}
+
+/// What a seat answered, once it had answered it.
+pub(super) struct SpokenAnswer {
+    /// The desk it was answered on.
+    pub(super) desk: usize,
+    /// The question it answers, carrying the hop and origin the reply routes
+    /// back along.
+    pub(super) incoming: Referral,
+    /// What the seat said.
+    pub(super) content: String,
+}
+
+/// Fill one planned answer, with no access to the board at all.
+///
+/// # Errors
+///
+/// Returns a host-side failure, such as an agent process that did not answer.
+pub(super) fn fill_answer(
+    seats: &mut [&mut dyn SwarmMember],
+    planned: &PlannedAnswer,
+) -> Result<SpokenAnswer, String> {
+    let content = seats[planned.seat].answer(&planned.incoming, &planned.visible)?;
+    Ok(SpokenAnswer {
+        desk: planned.desk,
+        incoming: planned.incoming.clone(),
+        content,
+    })
+}
+
 /// What a seat actually said, once it had said it.
 pub(super) struct SpokenTurn {
     /// The desk it was said on.
@@ -300,28 +345,66 @@ impl<'a> Board<'a> {
     }
 
     /// Run one turn caused by a message that arrived from another channel.
+    ///
+    /// The sequential composition of [`Self::plan_answer`], [`fill_answer`]
+    /// and [`Self::land_answer`], which is what the reference pass wants: one
+    /// desk finished before the next begins.
     pub(super) fn deliver(
         &mut self,
         members: &mut [Vec<&mut dyn SwarmMember>],
         desk: usize,
         incoming: &Referral,
     ) -> Result<(), String> {
-        let seat = seat_of(&members[desk], &incoming.target_id)?;
-        let content = {
-            let visible = self.host.journals[desk].clone();
-            members[desk][seat].answer(incoming, &visible)?
+        let planned = self.plan_answer(members, desk, incoming)?;
+        let spoken = {
+            let seats = &mut members[desk];
+            fill_answer(seats, &planned)?
         };
-        let sequence = self.commit(members, desk, &incoming.target_id, &content);
+        self.land_answer(members, &spoken)
+    }
+
+    /// What a desk needs to know before it can answer a referral.
+    ///
+    /// # Errors
+    ///
+    /// Returns a host-side failure when the referral names a seat that is not
+    /// on the desk it was routed to.
+    pub(super) fn plan_answer(
+        &self,
+        members: &[Vec<&mut dyn SwarmMember>],
+        desk: usize,
+        incoming: &Referral,
+    ) -> Result<PlannedAnswer, String> {
+        Ok(PlannedAnswer {
+            desk,
+            seat: seat_of(&members[desk], &incoming.target_id)?,
+            incoming: incoming.clone(),
+            visible: self.host.journals[desk].clone(),
+        })
+    }
+
+    /// Append an answer and route whatever it owes back.
+    ///
+    /// # Errors
+    ///
+    /// Returns the library's own error text when routing fails.
+    pub(super) fn land_answer(
+        &mut self,
+        members: &mut [Vec<&mut dyn SwarmMember>],
+        spoken: &SpokenAnswer,
+    ) -> Result<(), String> {
+        let target = &spoken.incoming.target_id;
+        let sequence = self.commit(members, spoken.desk, target, &spoken.content);
         // Consider the back edge. A reply committed under a crossing referral,
         // carrying no mention of its own, is exactly the case `referral`
         // answers with one `Return`.
         self.route(
-            desk,
-            &incoming.target_id,
-            &content,
+            spoken.desk,
+            target,
+            &spoken.content,
             sequence,
-            incoming.child_hop,
-            incoming.origin.clone(),
+            spoken.incoming.child_hop,
+            spoken.incoming.origin.clone(),
         )?;
         Ok(())
     }
