@@ -533,7 +533,7 @@ fn apply_scale_flag(
         }
         "--evidence" => options.evidence = true,
         "--fact-noise" => {
-            options.fact_noise = u32::try_from(next_number(args).unwrap_or(0)).unwrap_or(0);
+            options.fact_noise = next_number(args).unwrap_or(0);
             options.evidence = true;
         }
         _ => return Ok(false),

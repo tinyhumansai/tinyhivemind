@@ -293,7 +293,7 @@ fn planting_puts_the_cure_for_a_desk_on_another_desk() {
         let holds = planted
             .agents
             .iter()
-            .filter(|agent| holder.members.iter().any(|member| *member == agent.id))
+            .filter(|agent| holder.members.contains(&agent.id))
             .filter(|agent| agent.ruled_out.contains(&desk.decoy))
             .count();
         assert_eq!(

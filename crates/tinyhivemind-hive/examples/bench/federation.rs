@@ -247,6 +247,7 @@ impl Federation {
     /// than only a room quietly scoring the option lower. The seat is chosen
     /// by position rather than at random so the same seed plants the same
     /// facts.
+    #[cfg(test)]
     pub(crate) fn planted(&self) -> Self {
         self.planted_with(0)
     }
