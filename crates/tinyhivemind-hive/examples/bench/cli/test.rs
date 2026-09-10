@@ -134,12 +134,9 @@ fn api_base_still_promotes_the_default_mode_to_live() {
 /// the parser's own default mode, never overwrite an explicit one.
 #[test]
 fn a_grid_axis_flag_does_not_override_an_explicit_swarm_mode() {
-    let mut options = Options::parse(vec![
-        "--swarm".to_owned(),
-        "--topic".to_owned(),
-        "hidden".to_owned(),
-    ])
-    .expect("a valid --swarm --topic combination must parse");
+    let mut options = Options::defaults();
+    apply_mode_flag(&mut options, "--swarm");
+    select_grid_axis(&mut options);
     assert!(
         matches!(options.mode, Mode::Swarm),
         "naming an axis after --swarm must not overwrite the explicit swarm mode",
@@ -150,7 +147,7 @@ fn a_grid_axis_flag_does_not_override_an_explicit_swarm_mode() {
 /// the grid from the parser's default mode.
 #[test]
 fn a_grid_axis_flag_still_selects_the_grid_from_the_default_mode() {
-    let options = Options::parse(vec!["--topic".to_owned(), "hidden".to_owned()])
-        .expect("a valid --topic value must parse");
+    let mut options = Options::defaults();
+    select_grid_axis(&mut options);
     assert!(matches!(options.mode, Mode::Grid));
 }
