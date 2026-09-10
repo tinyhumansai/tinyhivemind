@@ -132,10 +132,18 @@ pub(crate) fn run(options: &Options) -> Result<(), String> {
 /// serde dependency, and [`json_line`] already emits the arm half in the exact
 /// shape `--json` consumers read elsewhere -- so the two outputs cannot drift
 /// into disagreeing about a field name.
+///
+/// The concurrency axis is spelled `round_width` here, not `concurrency`.
+/// [`json_line`] already emits a `concurrency` of its own -- the *measured*
+/// mean turns in flight -- and a record carrying the key twice is one most
+/// decoders silently resolve to whichever came last. That would have thrown
+/// the axis coordinate away on exactly the runs that vary it, leaving two
+/// cells of a `--concurrency 1,4` sweep indistinguishable whenever the
+/// measured mean did not move.
 fn cell_json(cell: &Cell, name: &str, totals: &Aggregate) -> String {
     let arm = json_line(name, totals);
     let coordinates = format!(
-        "{{\"topic\":\"{}\",\"scale\":{},\"complexity\":{},\"concurrency\":{},",
+        "{{\"topic\":\"{}\",\"scale\":{},\"complexity\":{},\"round_width\":{},",
         cell.topic.name(),
         cell.scale,
         cell.complexity.0,
@@ -332,12 +340,20 @@ fn best(
     metric: usize,
     of: impl Fn(&CellRow) -> f64,
     largest: bool,
+    zero_is_a_sample: bool,
 ) {
     let mut best_value: Option<f64> = None;
     let mut winners: Vec<usize> = Vec::new();
     for (index, row) in rows.iter().enumerate() {
         let value = of(row);
-        if !value.is_finite() || value <= 0.0 {
+        // A zero is dropped only where it means "no sample": a latency, a
+        // throughput or a token count of zero is an arm that never ran, and
+        // crediting it as the fastest would be a lie. A *quality* of zero is a
+        // real measurement -- every arm missing on a hard cell -- and on such
+        // a cell they are all tied leaders. Filtering it unconditionally
+        // credited nobody, which is the one reading that is certainly wrong.
+        let empty = if zero_is_a_sample { false } else { value <= 0.0 };
+        if !value.is_finite() || empty {
             continue;
         }
         let better =
