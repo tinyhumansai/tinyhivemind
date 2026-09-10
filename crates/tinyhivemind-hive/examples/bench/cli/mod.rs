@@ -463,7 +463,8 @@ impl Options {
                 // `parse` itself stays under the line budget clippy holds
                 // every function to.
                 _ => {
-                    let known = apply_scale_flag(&mut options, &flag, &mut args)?
+                    let known = options.cost_model.set(&flag, &mut args)?
+                        || apply_scale_flag(&mut options, &flag, &mut args)?
                         || apply_expertise_flag(&mut options, &flag, &mut args)
                         || apply_live_flag(&mut options, &flag, &mut args);
                     // An unrecognised flag used to be discarded in silence, so

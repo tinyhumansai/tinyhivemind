@@ -216,6 +216,19 @@ struct Totals {
 }
 
 impl Totals {
+    /// An empty set of totals, every arm priced against `model`.
+    ///
+    /// The whole table reports at one point of the cost model, which is what
+    /// lets the header describe every row under it and what
+    /// [`Aggregate::merge`]'s debug assertion holds the parallel fold to.
+    fn priced_at(model: crate::cost::CostModel) -> Self {
+        let mut totals = Self::default();
+        for arm in totals.arms_mut() {
+            arm.model = model;
+        }
+        totals
+    }
+
     /// Every arm's totals, in one array, so a fold over all of them does not
     /// have to name each one twice.
     fn arms_mut(&mut self) -> [&mut Aggregate; 24] {
