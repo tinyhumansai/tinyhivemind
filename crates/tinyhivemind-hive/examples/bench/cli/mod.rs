@@ -428,7 +428,7 @@ impl Options {
                 // `parse` itself stays under the line budget clippy holds
                 // every function to.
                 _ => {
-                    let known = apply_scale_flag(&mut options, &flag, &mut args)
+                    let known = apply_scale_flag(&mut options, &flag, &mut args)?
                         || apply_expertise_flag(&mut options, &flag, &mut args)
                         || apply_live_flag(&mut options, &flag, &mut args);
                     // An unrecognised flag used to be discarded in silence, so
@@ -456,11 +456,16 @@ impl Options {
 /// [`apply_expertise_flag`]. These two are together because they are the two
 /// knobs that decide what a large run costs: how many cores it spreads over,
 /// and how many questions a desk puts to other channels.
+///
+/// # Errors
+///
+/// Returns a message when `--distance` is given a value that is neither
+/// `sequence` nor `live`.
 fn apply_scale_flag(
     options: &mut Options,
     flag: &str,
     args: &mut impl Iterator<Item = String>,
-) -> bool {
+) -> Result<bool, String> {
     match flag {
         "--jobs" => {
             options.jobs = usize::try_from(next_number(args).unwrap_or(1))
@@ -482,17 +487,28 @@ fn apply_scale_flag(
             // rather than every row the host wrote. Identical on a journal the
             // episode owns end to end, which is why every recorded number is
             // unchanged by leaving it alone.
+            // Named exhaustively rather than defaulted. A typo would
+            // otherwise select `sequence` in silence and run a different
+            // benchmark under the heading the operator asked for — the same
+            // failure an unrecognised *flag* is refused for, one level down,
+            // and a missing value would swallow the next flag as its argument.
             options.policy.distance = match args.next().as_deref() {
+                Some("sequence") => Basis::Sequence,
                 Some("live") => Basis::Live,
-                _ => Basis::Sequence,
+                Some(other) => {
+                    return Err(format!(
+                        "--distance takes `sequence` or `live`, not `{other}`"
+                    ));
+                }
+                None => return Err("--distance takes `sequence` or `live`".to_owned()),
             };
         }
         "--digest" => {
             options.digest = usize::try_from(next_number(args).unwrap_or(1)).unwrap_or(1);
         }
-        _ => return false,
+        _ => return Ok(false),
     }
-    true
+    Ok(true)
 }
 
 /// Apply one of `--specialists`, `--hidden-profile`, `--defer-cap`,
