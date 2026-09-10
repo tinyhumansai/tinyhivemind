@@ -292,6 +292,9 @@ pub(crate) enum Mode {
     /// Walk the cross product of topic, scale, complexity and concurrency,
     /// reporting the same six columns in every cell.
     Grid,
+    /// Measure the cost model's constants against a live endpoint and print
+    /// the flags that reproduce them.
+    Calibrate,
 }
 
 impl Options {
@@ -469,6 +472,7 @@ impl Options {
                 "--json" => options.json = true,
                 "--stats-check" => options.mode = Mode::StatsCheck,
                 "--grid" => options.mode = Mode::Grid,
+                "--calibrate" => options.mode = Mode::Calibrate,
                 // Everything below is either the expertise surface or the
                 // live-backend one: a CLI or HTTP seat, per-seat overrides,
                 // and the usage table. Split into their own functions so

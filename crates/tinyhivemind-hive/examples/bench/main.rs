@@ -85,6 +85,7 @@
 mod arms;
 mod backend;
 mod budget;
+mod calibrate;
 mod cli;
 mod compare;
 mod cost;
@@ -231,6 +232,11 @@ fn run(options: &Options) -> Result<(), String> {
     if matches!(options.mode, Mode::Swarm) {
         return swarm_compare(options);
     }
+    if matches!(options.mode, Mode::Calibrate) {
+        // Its own requests against a live endpoint, and no rooms at all: it
+        // measures what a turn costs rather than what a protocol decides.
+        return calibrate::run(options);
+    }
     if matches!(options.mode, Mode::Grid) {
         // Its own rooms, one set per cell, at that cell's own size and
         // difficulty -- so nothing here generates a room at the single
@@ -270,7 +276,8 @@ fn run(options: &Options) -> Result<(), String> {
         | Mode::ScaleSweep
         | Mode::StageSweep
         | Mode::FacetSweep
-        | Mode::Grid => Ok(()),
+        | Mode::Grid
+        | Mode::Calibrate => Ok(()),
         Mode::Compare => compare(options, &rooms),
         Mode::Trace => trace(&rooms, &options.policy),
         Mode::Sweep => sweep_policies(options, &rooms),
