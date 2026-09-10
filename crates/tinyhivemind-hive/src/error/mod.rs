@@ -54,27 +54,6 @@ pub enum Error {
     /// A directory window of zero would admit no deposit at all.
     #[error("directory window must not be zero")]
     ZeroDirectoryWindow,
-    /// A quorum threshold no desk of this size could ever reach.
-    ///
-    /// The same class of failure as [`Self::ZeroQuorumThreshold`], from the
-    /// other side: a threshold above the number of active members makes
-    /// [`ConsensusState::Quorum`] unreachable for the whole episode, so the
-    /// room can only ever exhaust or deadlock. That is a configuration error
-    /// rather than an outcome, and it is the one that follows from carrying
-    /// [`QuorumPolicy::DEFAULT`]'s absolute threshold onto a desk it was not
-    /// written for. [`EpisodePolicy::for_room`] derives one that cannot
-    /// produce it.
-    ///
-    /// [`ConsensusState::Quorum`]: crate::quorum::ConsensusState::Quorum
-    /// [`QuorumPolicy::DEFAULT`]: crate::quorum::QuorumPolicy::DEFAULT
-    /// [`EpisodePolicy::for_room`]: crate::episode::EpisodePolicy::for_room
-    #[error("quorum threshold {threshold} is unreachable on a desk of {members}")]
-    UnreachableQuorum {
-        /// The threshold the policy asks for.
-        threshold: u32,
-        /// Active members the desk actually has.
-        members: u32,
-    },
     /// A defer cap of zero would cap deferral before anyone could use it.
     ///
     /// `None` is how a host switches deferral promotion off; `Some(0)` is a
