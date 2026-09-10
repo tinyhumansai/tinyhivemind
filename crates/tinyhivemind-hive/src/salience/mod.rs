@@ -18,9 +18,9 @@ pub use types::{Salience, SalienceWeights};
 
 use crate::{
     error::{Error, Result},
+    horizon::Horizon,
     trace::{Trace, TraceKind},
 };
-use tinyhivemind::Sequence;
 
 /// Fixed-point scale: scores and factors are thousandths.
 pub(crate) const SCALE: i64 = 1_000;
@@ -35,14 +35,14 @@ pub(crate) const SCALE: i64 = 1_000;
 ///
 /// Returns [`Error::ZeroHalfLife`] when the weights would make recency
 /// undefined.
-pub fn salience(
+pub fn salience<'a>(
     trace: &Trace,
-    at: Sequence,
+    at: impl Into<Horizon<'a>>,
     weights: &SalienceWeights,
     relevance: u8,
 ) -> Result<Salience> {
     Ok(with_relevance(
-        standing(trace, at, weights)?,
+        standing(trace, at.into(), weights)?,
         weights,
         relevance,
     ))
@@ -57,11 +57,15 @@ pub fn salience(
 ///
 /// Returns [`Error::ZeroHalfLife`] when the weights would make recency
 /// undefined.
-pub(crate) fn standing(trace: &Trace, at: Sequence, weights: &SalienceWeights) -> Result<i64> {
+pub(crate) fn standing(
+    trace: &Trace,
+    at: Horizon<'_>,
+    weights: &SalienceWeights,
+) -> Result<i64> {
     if weights.half_life == 0 {
         return Err(Error::ZeroHalfLife);
     }
-    let distance = at.0.saturating_sub(trace.sequence.0);
+    let distance = at.distance(trace.sequence);
     Ok(
         i64::from(weights.recency) * decay(distance, weights.half_life)
             + i64::from(weights.importance) * importance(trace.kind),
