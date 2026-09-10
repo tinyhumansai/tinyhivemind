@@ -129,6 +129,7 @@ pub mod directory;
 pub mod episode;
 pub mod error;
 pub mod exchange;
+pub mod horizon;
 pub mod quorum;
 pub mod salience;
 pub mod trace;
@@ -142,6 +143,7 @@ pub use episode::{
     EpisodePolicy, EpisodeState, HiveStep, HiveTurn, Phase, Visibility, project_for, step,
 };
 pub use error::{Error, Result};
+pub use horizon::{Basis, Horizon};
 pub use exchange::{ExchangePolicy, ExchangeRound, ExchangeState, NoExchangeReason, exchange};
 pub use quorum::{ConsensusState, QuorumPolicy, TopicStanding, consensus, standings};
 pub use salience::{Salience, SalienceWeights, salience};
