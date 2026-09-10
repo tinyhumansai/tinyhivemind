@@ -203,3 +203,81 @@ A CLI seat's per-turn timeout (`--timeout`, default 180s) runs through
 `gtimeout` comes from Homebrew's `coreutils` — and falls back to no deadline,
 with one printed warning, when neither is found. A seat retries once on a
 non-zero exit, a curl failure or non-2xx status, or an empty answer.
+
+## A federation of live desks, running at once
+
+`--swarm` with a live backend drives several desks of real agents. Each desk
+runs its own episode with its own journal, its own budget and its own
+authorized speaker, so a federation of `N` desks is `N` model calls that need
+not wait on each other. `--jobs` decides how many of them are in flight:
+
+```sh
+LADDER_API_KEY='<key>' \
+cargo run --release -p tinyhivemind-hive --example bench -- --swarm \
+  --scenario crates/tinyhivemind-hive/examples/bench/scenarios/checkout-503-federated.txt \
+  --api-base http://127.0.0.1:6969 --model flash --thinking off --jobs 16
+```
+
+Two things about that are worth stating rather than discovering.
+
+**`--jobs > 1` selects a different scheduler**, and it decides differently. The
+sequential scheduler finishes each desk before starting the next, so a question
+routed from desk 3 to desk 7 is answered by desk 7 in the same pass; the
+concurrent one plans every desk, runs every model call at once, and lands the
+rows afterwards, so that question is answered one pass later. One pass of
+latency moves the sequence number a row lands at, and the quorum window and
+salience decay read raw sequence distance. On the recorded three-desk
+federation that is the difference between `swarm 78.0` and `swarm 67.0`.
+Neither is wrong and both are schedules a host could write, but **the
+sequential one is the reference every recorded number was taken against**, and
+it is what `--jobs 1` selects. `swarm/schedule.rs` carries the full argument.
+
+One message, one turn is untouched either way: each desk still runs exactly one
+turn per pass, authorized by its own episode. What overlaps is the waiting,
+across episodes that were already independent — which is the arrangement
+[ADR 0002](../../../../docs/adr/0002-hive-episodes-are-sequential.md) points a
+host at. Rows land in desk order however the calls return, so a run is
+reproducible at a given `--jobs`.
+
+**Asking has its own budget.** `--ask-cap` (default 2) bounds how many other
+channels one desk may ask, off the floor. Set it to `0` and asking goes back on
+the floor, where a member spends its authorized turn on it — the behaviour every
+recorded live federation used, and the one that collapses above roughly eight
+desks. See
+[the scale write-up](../../../../docs/experiments/2026-09-10-hive-at-scale.md).
+
+## Driving it with a lightweight OpenHuman
+
+Nothing here is specific to a particular endpoint: `--api-base` wants something
+that speaks `/v1/chat/completions`, and a slim [OpenHuman][oh] build serves
+exactly that. Its JSON-RPC server nests an OpenAI-compatible router at `/v1`, so
+a headless core is a drop-in backend for every command above.
+
+```sh
+# In the openhuman checkout. The default feature set carries the desktop
+# shell's dependency tree; this is the headless subset that still serves /v1.
+cargo build --release --no-default-features --features http-server --bin openhuman-core
+./target/release/openhuman-core run --headless-api --port 6969
+```
+
+Then point the harness at it:
+
+```sh
+cargo run --release -p tinyhivemind-hive --example bench -- --swarm \
+  --scenario crates/tinyhivemind-hive/examples/bench/scenarios/checkout-503-federated.txt \
+  --api-base http://127.0.0.1:6969 --model <model> --jobs 16
+```
+
+**No dependency is added to this repository by any of that** — the seam is a
+URL, and the harness still talks to it through `curl` over stdin. That matters
+for more than tidiness: `tinyhivemind-hive` is a pure crate, OpenHuman is
+GPL-3.0 and vendors a large tree, and a dev-dependency on it would put both
+facts inside this workspace for no gain.
+
+The real ceiling on `--jobs` is not the machine. A hundred concurrent seats is a
+hundred concurrent `curl` processes, which any developer machine will run; what
+decides the useful value is how many requests the endpoint behind OpenHuman
+will serve at once, and what they cost. Start small — four desks — confirm the
+wire and the marker grammar, then raise it.
+
+[oh]: https://github.com/tinyhumansai/openhuman
