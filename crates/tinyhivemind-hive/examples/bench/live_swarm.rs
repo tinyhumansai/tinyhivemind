@@ -357,28 +357,29 @@ fn live_federation(options: &Options, scenario: &Scenario) -> Result<(), String>
     }
     let mut members = swarm::group_by_desk(&channels, loose.into_iter());
     let wall = Instant::now();
+    // A live federation asks off the floor too, and for the same reason a
+    // simulated one does: a desk that spends its authorized turns asking has
+    // none left to decide with. `--ask-cap 0` puts it back on the floor, which
+    // is what every recorded live run used.
+    let asking = if options.ask_cap == 0 {
+        AskChannel::OnFloor
+    } else {
+        AskChannel::OffFloor {
+            cap: options.ask_cap,
+        }
+    };
     let report = swarm::drive_swarm(
         &channels,
         &mut members,
         &swarm::SwarmRun {
             policy: &policy,
             referrals: swarm_referrals(),
-            asking:
-        // A live federation asks off the floor too, and for the same reason a
-        // simulated one does: a desk that spends its authorized turns asking
-        // has none left to decide with. `--ask-cap 0` puts it back on the
-        // floor, which is what every recorded live run used.
-        if options.ask_cap == 0 {
-            AskChannel::OnFloor
-        } else {
-            AskChannel::OffFloor {
-                cap: options.ask_cap,
-            }
+            asking,
+            // Live desks, so this is where the concurrency is worth having:
+            // each desk authorizes exactly one speaker, and `--jobs` decides
+            // how many of those model calls are in flight at once.
+            jobs: options.jobs,
         },
-        // Live desks, so this is where the concurrency is worth having: each
-        // desk authorizes exactly one speaker, and `--jobs` decides how many
-        // of those model calls are in flight at once.
-        options.jobs,
         &scenario.brief(),
         true,
     )?;
