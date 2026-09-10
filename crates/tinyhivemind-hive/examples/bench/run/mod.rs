@@ -724,7 +724,7 @@ fn finished(
     host: &Host,
     agents: &mut [&mut dyn Participant],
     state: &EpisodeState,
-    outcome: (Ending, Option<TopicId>),
+    outcome: (Ending, Option<tinyhivemind_hive::trace::TopicId>),
     tally: Tally,
     shape: Vec<crate::cost::RoundShape>,
     counters: &Counters,
