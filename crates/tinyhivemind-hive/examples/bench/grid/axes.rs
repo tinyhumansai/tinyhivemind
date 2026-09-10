@@ -169,9 +169,12 @@ impl Cell {
     }
 
     /// The four axis values as table cells, in axis order.
+    ///
+    /// Trailing gap included, so an arm name appended to this reads as its own
+    /// column rather than running into the concurrency figure beside it.
     pub(crate) fn columns(&self) -> String {
         format!(
-            "{:<9}{:>6}{:>6}{:>6}",
+            "{:<9}{:>6}{:>6}{:>6}  ",
             self.topic.name(),
             self.scale,
             self.complexity.0,
