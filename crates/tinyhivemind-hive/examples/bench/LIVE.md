@@ -274,6 +274,17 @@ recorded live federation used, and the one that collapses above roughly eight
 desks. See
 [the scale write-up](../../../../docs/experiments/2026-09-10-hive-at-scale.md).
 
+**`--digest` has no live implementation.** The simulated federated comparison
+gains a `swarm◦` arm in which every desk publishes its reading to every
+channel, which is the only bounded mechanism that survives a federation whose
+desks share a blind spot — see
+[`SCALE.md`](SCALE.md#correlated-desks-and---digest). Nothing corresponding runs
+live: `SwarmMember::publish` returns `None` by default and every live seat takes
+that default, because publishing a reading is a prompt of its own and no live
+arm has been written for it. `--digest` on a live run is therefore inert, and
+the `digests` column reports the zero calls it actually made rather than
+pretending otherwise.
+
 ## Driving it with a lightweight OpenHuman
 
 Nothing here is specific to a particular endpoint: `--api-base` wants something
