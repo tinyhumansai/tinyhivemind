@@ -346,3 +346,27 @@ impl Axes {
         Ok(true)
     }
 }
+
+/// Pair every point of `outer` with the whole of `inner`, walking `inner`
+/// forward on an even outer index and in reverse on an odd one.
+///
+/// This is the one step of a boustrophedon product, applied once per axis to
+/// build [`Axes::cells`] up from the fastest axis to the slowest. `inner` is
+/// itself already snake-ordered from the layer below (or the flat single-axis
+/// base case), so reversing it wholesale — rather than re-deriving it — is
+/// what keeps every adjacent pair, including the one straddling an outer
+/// step, different in exactly one coordinate: the last row of an even block
+/// and the first row of the odd block after it share every inner coordinate,
+/// because the odd block starts by walking `inner` from the same end the even
+/// block just finished on.
+fn snake<A: Copy, B: Clone>(outer: &[A], inner: &[B]) -> Vec<(A, B)> {
+    let mut out = Vec::with_capacity(outer.len() * inner.len());
+    for (index, value) in outer.iter().enumerate() {
+        if index % 2 == 0 {
+            out.extend(inner.iter().cloned().map(|point| (*value, point)));
+        } else {
+            out.extend(inner.iter().rev().cloned().map(|point| (*value, point)));
+        }
+    }
+    out
+}
