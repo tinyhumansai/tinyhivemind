@@ -16,7 +16,7 @@ use tinyhivemind_hive::{
     trace::TopicId,
 };
 
-use super::format::{Reading, readings, restate};
+use super::format::{Fact, Reading, facts, readings, restate, restate_facts};
 use super::{Channel, DeskOutcome, SwarmMember};
 use crate::federation::Federation;
 use crate::run::Ending;
@@ -57,6 +57,13 @@ impl SwarmSim {
     }
 
     /// How this member reads every option, written the way a member would.
+    ///
+    /// The reading is followed by whatever this member can *disqualify*, when
+    /// the federation planted any. A member that holds a fact ruling an option
+    /// out and says only what it scores things at has withheld the most useful
+    /// thing it has — so the fact rides in the same row, on the same call, at
+    /// the cost of a clause. What it buys is measured in
+    /// `docs/experiments/2026-09-11-evidence-not-opinion.md`.
     fn slate(&self) -> String {
         let mut line = format!("{} reads", self.here);
         for (at, topic) in self.topics.iter().enumerate() {
@@ -64,7 +71,26 @@ impl SwarmSim {
             let _ = write!(line, "{separator} #{topic} at {}", self.agent.score(topic));
         }
         line.push('.');
+        for held in self.held_facts() {
+            let _ = write!(line, " {}", restate_facts(&[held]));
+        }
         line
+    }
+
+    /// What this member can disqualify outright, if the run planted facts.
+    ///
+    /// Empty unless `--evidence` planted them, which is what keeps every
+    /// recorded number taken without it byte-identical: a member with nothing
+    /// to disqualify writes exactly the line it always wrote.
+    fn held_facts(&self) -> Vec<Fact> {
+        self.agent
+            .refutes
+            .iter()
+            .map(|topic| Fact {
+                desk: self.here.clone(),
+                topic: topic.clone(),
+            })
+            .collect()
     }
 
     /// A desk's display name.
@@ -170,6 +196,26 @@ impl SwarmMember for SwarmSim {
             }
             self.agent.import(&reading.topic, reading.value);
         }
+        // A fact from another desk, applied on the same terms a reading is:
+        // it has to name a desk this federation actually has, and this
+        // member's own desk tells it nothing it does not already hold. What
+        // differs is the arithmetic on the far side — `note_fact` discounts
+        // the option outright rather than averaging into it, so a fact cannot
+        // be diluted by peers who disagree and a shared bias cannot reinforce
+        // it. That asymmetry is the whole experiment.
+        for fact in facts(content) {
+            if fact.desk == self.here {
+                continue;
+            }
+            if !self.directory.iter().any(|(_, name)| *name == fact.desk) {
+                continue;
+            }
+            if !self.topics.contains(&fact.topic) {
+                continue;
+            }
+            self.agent.note_fact(&fact.topic);
+        }
+        self.agent.recompute_favourite();
     }
 }
 
