@@ -8,6 +8,8 @@
 //! rendered, and keeping the rendering apart from the accounting is what lets
 //! `super::test` cover the fold without a table's formatting noise.
 
+use std::fmt::Write as _;
+
 use super::Aggregate;
 use super::format::{
     count, dash_unless, dash_unless_2, deliberates, duration, json_f64, json_f64_if, row,
