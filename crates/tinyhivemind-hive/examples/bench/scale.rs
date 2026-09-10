@@ -78,15 +78,15 @@ pub(crate) const DEFAULT_SIZES: [usize; 6] = [3, 5, 8, 16, 32, 64];
 /// other room and the parent can fold the lot in room order. Every field is
 /// the report of the arm named after it in the table.
 struct RoomOutcome {
-    ladder: crate::arms::ArmReport,
-    vote: crate::arms::ArmReport,
-    broadcast: crate::run::EpisodeReport,
-    on_floor: crate::run::EpisodeReport,
-    rounds: crate::run::EpisodeReport,
-    off_floor: crate::run::EpisodeReport,
-    pooled: crate::run::EpisodeReport,
-    wide: crate::run::EpisodeReport,
-    blind_wide: crate::run::EpisodeReport,
+    ladder: Channel,
+    vote: Channel,
+    broadcast: Channel,
+    on_floor: Channel,
+    rounds: Channel,
+    off_floor: Channel,
+    pooled: Channel,
+    wide: Channel,
+    blind_wide: Channel,
 }
 
 /// One arm's score at one room size.
@@ -126,6 +126,17 @@ impl Channel {
         let _ = report;
         self.episodes = self.episodes.saturating_add(1);
         self.totals.add_arm(report);
+    }
+
+    /// Fold another chunk of rooms' totals in.
+    ///
+    /// Called in **room order**, which is the whole contract: see
+    /// [`Aggregate::merge`] for why folding out of order would leave the
+    /// accuracy column right and every confidence interval wrong.
+    fn merge(&mut self, other: &Self) {
+        self.rows += other.rows;
+        self.episodes = self.episodes.saturating_add(other.episodes);
+        self.totals.merge(&other.totals);
     }
 
     fn rows_per_episode(&self) -> f64 {
