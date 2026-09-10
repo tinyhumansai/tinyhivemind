@@ -8,7 +8,7 @@ on `hive-at-scale`, with `--desks N --per-desk 10 --topics 128 --episodes 20`.
 hundred, every arm deciding the same federations. Simulated participants, so
 the numbers reproduce from the seed. The sample shrinks at the largest size
 because the arm being refuted is the expensive one: `swarm` spends 6624 agent
-turns per federation there, against `swarm°`'s 1342.
+turns per federation there, against `swarm°`'s 1343.
 **Machine** 28 cores. Every run at `--jobs 28`; `--jobs` changes wall clock and
 nothing else, which is asserted rather than assumed.
 
@@ -99,7 +99,7 @@ merged           10.0     80.0      0.0      0.0      0.0
 ```text
 turns/ep            3       12       25       50      100  desks
 swarm            47.6    510.2   1868.0   3624.0   6624.0
-swarm°           47.1    186.8    356.8    685.0   1342.5
+swarm°           47.1    186.8    356.8    685.0   1343.1
 asks/ep           6.0     24.0     50.0    100.0    200.0
 ```
 
@@ -112,7 +112,7 @@ information was never lost — `pooled` is at 100% throughout, and `pooled` is
 just "every desk's reading already in every member's hands." What failed was
 only the mechanism for moving it.
 
-**It is cheaper, not more expensive.** At a hundred desks `swarm°` spends 1342
+**It is cheaper, not more expensive.** At a hundred desks `swarm°` spends 1343
 turns against `swarm`'s 6624, and 398 crossings against 5856. Bounding the width
 of the exchange does not trade accuracy for cost; at scale it buys both, because
 the turns the on-floor arm spends asking are turns it needed for deciding.
