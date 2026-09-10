@@ -238,7 +238,7 @@ so the benchmark measures the protocol rather than a formatter.
 
 ```text
 arm                quality     speed       thru    conc    tok/ep     tok/s
-ladder               57.6%     5.1s        701     1.0      1.6k       320
+ladder               57.6%     5.1s        701     1.0      1.9k       361
 vote                 78.5%     2.6s       1.4k    15.0     12.3k      4.8k
 hive                 73.3%    15.8s        228     1.0      5.3k       336
 hive+                82.1%    17.3s        208     1.0      6.0k       345
@@ -247,8 +247,8 @@ hive+ev              55.9%    26.4s        136     1.0     10.4k       393
 hive+dir             82.1%    17.3s        208     1.0      6.0k       345
 hive+defer           82.1%    17.3s        208     1.0      6.0k       345
 hive+dir+defer       82.1%    17.3s        208     1.0      6.0k       345
-ladder+dir           49.5%     5.1s        701     1.0      1.6k       320
-hive+rounds          82.3%    34.3s        105     3.0     39.8k      1.2k
+ladder+dir           49.5%     5.1s        701     1.0      1.9k       361
+hive+rounds          82.3%    34.3s        105     3.0     37.2k      1.1k
 hive+pooled          91.5%    15.6s        231     1.0      5.2k       335
 hive+wide            77.1%     8.7s        415     2.3      6.9k       798
 hive+blind           82.1%     9.6s        374     1.8      6.0k       621
@@ -272,7 +272,7 @@ Two more things fall straight out of the six columns:
 - **Concurrency buys most of the latency back.** `hive+wide` gives up 5 points
   and halves the wall clock; `hive+blind`, which widens only the blind round,
   gives up *nothing* and still saves 45% — see [`DEPTH.md`](DEPTH.md).
-- **`hive+rounds` costs 6.6× the tokens of `hive+` for 0.2 points.** An
+- **`hive+rounds` costs 6.2× the tokens of `hive+` for 0.2 points.** An
   off-floor exchange spends model calls rather than turns, so it never showed
   up in a table that counted turns. Now it does.
 
