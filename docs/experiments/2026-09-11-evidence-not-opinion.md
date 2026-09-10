@@ -83,34 +83,56 @@ A bounded ask does carry a fact usefully while the federation is small enough
 for two peers to be a real fraction of it. At fifty desks it reaches 87.5%; at a
 hundred it reaches nothing, because two of ninety-nine is not a sample.
 
-## The half that could have sunk it
+## The half that could have sunk it, and did
 
 A fact does not average. That is why it survives a shared bias — and why a
-**wrong** one is more dangerous than a wrong opinion: it discounts the right
-answer for every desk it reaches, undiluted. A protocol measured only on true
-facts has measured the value of a channel and nothing about the risk of one.
+**wrong** one is worse than a wrong opinion: it discounts the right answer for
+every desk it reaches, undiluted. A protocol measured only on true facts has
+measured the value of a channel and nothing about the risk of one.
 
 `--fact-noise N` plants `N` per mille of the facts naming the *truth* instead.
-Fifty desks:
+Fifty desks, twenty-four federations a cell:
 
 ```text
 wrong facts (per mille)      0      100      250      500
-swarm°  (ask two)         83.3     83.3     79.2      4.2
-swarm◦  (publish)        100.0    100.0    100.0     75.0
-vote                      37.5     16.7      4.2      0.0
-pooled                   100.0    100.0    100.0    100.0
+swarm°  (ask two)         87.5     41.7      8.3      0.0
+swarm◦  (publish)        100.0     79.2     37.5      4.2
+vote     (no facts)       37.5     16.7      4.2      0.0
+pooled  (free, averaged) 100.0    100.0    100.0     83.3
 ```
 
-**Redundancy is what protects a fact.** Broadcasting is unharmed by a quarter
-of the evidence being wrong and still reaches 75% when *half* of it is, because
-a desk hearing fifty facts can afford several bad ones. The bounded ask hears
-two, so one wrong fact is half of everything it knows — and it collapses from
-83.3% to 4.2%.
+**Evidence exchange is fragile, and broadcasting does not protect it.** One
+wrong fact in ten costs the broadcast arm twenty points; one in four costs it
+sixty-two. The mechanism that makes a fact worth carrying — it applies whole,
+undiluted by peers who disagree — is exactly the mechanism that makes a false
+one spread, and reaching every desk means reaching every desk with the error
+too.
 
-That is the same property read twice. Broadcast makes evidence *arrive*, and
-arriving many times over is also what makes it *safe*. The mechanism that
-carries a fact usefully and the mechanism that survives a false one are not two
-designs; they are one.
+`pooled` is the arm that holds up, and the reason is the one this experiment
+spent its whole first half arguing *against*. It averages every reading in the
+federation, so by the time a wrong fact arrives the bias it would have to
+overturn has already been averaged away. Opinion-averaging plateaus below the
+ceiling and is robust; evidence reaches the ceiling and is brittle. Neither
+dominates, and a protocol that wanted both would have to weigh a fact by how
+much it trusts the desk that sent it — which is a mechanism this benchmark does
+not have.
+
+### The first version of this table was wrong
+
+It read `swarm◦` unharmed at 250 per mille and 75.0 at 500, and concluded that
+"redundancy is what protects a fact". That conclusion was an artifact of two
+defects found in review, both since fixed:
+
+- The fact-noise RNG was seeded from the **desk count alone**, so every episode
+  in a cell marked the *same* desk positions wrong. Twenty-four federations
+  measured one placement twenty-four times rather than sampling the rate.
+- `pooled` never received the symbolic facts at all — it imported numeric
+  slates only — so the control that now degrades to 83.3% was previously immune
+  by construction rather than by averaging.
+
+The headline result above is unaffected: it is measured at zero noise, and the
+arm carrying it reaches peers by digest rather than by referral. The robustness
+conclusion inverted completely.
 
 ## What this does not show
 
@@ -142,3 +164,9 @@ rather than ask.
 That is still not a claim that a room of models reasons better than one. It is a
 claim that the ceiling this benchmark kept measuring was not a ceiling on the
 protocol.
+
+It comes with a price the first draft of this write-up missed. Averaging
+opinions is robust and plateaus; exchanging evidence reaches the ceiling and
+breaks under a tenth of that evidence being wrong. A hive mind that carries
+facts is only as good as the facts it carries, and nothing measured here tells
+it which ones to doubt.
