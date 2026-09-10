@@ -286,56 +286,8 @@ the paired bootstrap and what its intervals do and do not license.
 
 ## The evidence-first opening
 
-`--blind-evidence` changes one thing about the *participants* and nothing about
-the library: while the room is still `Visibility::Blind`, a member's first turn
-deposits `!evidence #topic` — its own reading of the topic it knows best, with
-no citation, because nothing is visible to cite — instead of proposing an
-option. Proposals begin once the room goes to `Visibility::Full`.
-
-The finding it exists to state is short: **without an evidence-first opening, a
-room whose members share a bias reaches quorum inside the blind round, and no
-floor mechanism can act.** A `!propose` counts as a supporter, so four members
-who privately favour the same planted decoy carry it before anybody has read
-anybody; the episode's first non-blind turn is a commit turn, and a fact
-arriving then has nothing left to change. That is not a hypothesis — the live
-rooms recorded it (in every correct episode of the 2026-09-01 run the five
-blind turns were five `!evidence` lines, one per member) and the federation
-reached it from the other side (moving a desk's question to *before* it had
-backed anything was the difference between failing outright and 77.5%).
-
-It is off by default, so every published number that does not ask for it is
-unchanged, and what it buys is measured rather than assumed:
-
-```text
-5000 rooms                        hive+   hive+dir   vote   ladder   ladder+dir
-uniform                            82.1       82.1   78.5     57.6         49.5
-uniform  --blind-evidence          75.3       75.7   78.5     57.6         98.8
---specialists 2                    74.2       74.2   71.1     52.6         45.1
---specialists 2 --blind-evidence   67.6       68.0   71.1     52.6         84.4
---hidden-profile                   15.3       15.3   15.0     35.1         34.6
---hidden-profile --blind-evidence  66.3       65.8   15.0     35.1         64.1
-```
-
-On an ordinary room it **costs** about seven points: five of the fifteen turns
-go on deposits nobody needed, and `hive+` fails to decide 7% of the time rather
-than 0.6%. On the hidden profile it is the difference between 15% and 66%. That
-is the trade, stated rather than tuned away.
-
-Two side effects are worth reading before the numbers are:
-
-- **`ladder+dir` on a uniform room is an artifact, not a result.** The arm
-  tells its router which *topic* the call turns on, and that topic is the
-  correct option. With an evidence-first opening the directory records "who
-  deposited a reading of `#truth`", and a member who deposited on `#truth` is
-  usually a member whose favourite *is* `#truth` — so routing to the heaviest
-  holder returns the right answer 98.8% of the time by construction. The
-  92-point swing from the same arm's 49.5% under the ordinary opening is the
-  size of the leak, not the size of the mechanism. Read the `--specialists`
-  row instead, where the deposit is a specialist's tight reading rather than a
-  vote, and even there read it knowing the topic was named.
-- **The two refutation arms fall further.** `hive+ref` and `hive+ev` lose about
-  twenty-five points under the flag. A blind round spent depositing is a blind
-  round not spent proposing, and both arms already had the tightest budget.
+`--blind-evidence` makes a member's first turn, while the room is still blind,
+a deposit rather than a position. See [`EVIDENCE.md`](EVIDENCE.md).
 
 ## Delegation
 
@@ -390,88 +342,9 @@ what the transcripts show is in
 
 ## Several channels
 
-`--swarm` runs a different experiment on the same machinery: not one room
-deciding, but a **federation** of desks that cannot read each other's
-transcripts and can only reach one another by a `referral`.
-
-The task changes shape to make the boundary cost something. Each desk carries a
-bias of its own — one option every member of that desk overrates, because they
-read the same transcript and are wrong about the same thing. Within a desk that
-bias is invisible: every member confirms every other, and averaging correlated
-error does not cancel it. Across desks the biases are independent and do. So
-the answer is reachable only by pooling across channels, which is the
-multi-channel form of the hidden profile the live scenarios use, written in
-numbers so it can be run ten thousand times.
-
-`--bias` is bounded on both sides, and both bounds matter. Above the 60-point
-gap between the true option and a decoy, a desk's own average points at the
-wrong answer, so no amount of deliberating inside one channel finds the right
-one. Below roughly `60 × desks`, the biases still cancel once every desk has
-heard every other. Outside that window the experiment measures nothing, which
-`--bias 0` and `--bias 160` both demonstrate.
-
-| arm | what it is |
-| --- | --- |
-| `siloed` | The same desks, members and budgets, with referrals off. A desk can only talk to itself. |
-| `swarm` / `swarm°` / `swarm◦` | The same, with referrals on: two hops, desk mentions and returns. `swarm°` asks **off the floor** under `--ask-cap` rather than spending the authorized turn — what keeps a federation above eight desks deciding at all — and `swarm◦` also publishes each desk's reading to every channel under `--digest`, the only bounded arm left standing once desks share blind spots. See [`SCALE.md`](SCALE.md#correlated-desks-and---digest). Under `--evidence` the same arms also carry what a desk can **disqualify**, not only what it scores — which is what closes `swarm◦`'s gap to `pooled`. See [`SCALE.md`](SCALE.md#--evidence-what-a-channel-carries-not-how-wide-it-is). |
-| `pooled` | The ceiling control. Every desk is handed every other desk's readings — and, under `--evidence`, facts — *for free*: no turn, no referral, no channel crossed. Then deliberates siloed. |
-| `merged` | Every member of every desk on one desk, given the whole federation's budget. The control that removes the boundary rather than crossing it. |
-| `vote` | One independent answer per member, decided by plurality. |
-
-`pooled` is the arm that keeps the swarm honest. The swarm's members exchange
-numeric readings, which the siloed members never get a chance to, and a reader
-is entitled to ask how much of the difference is the *protocol* and how much is
-simply having the numbers. Whatever `pooled` scores is what the information is
-worth; whatever `swarm` scores below it is what the channel boundary still
-costs after `referral` has done its work.
-
-Every arm is charged for every agent invocation, including the ones a referral
-causes on the far desk and on the way back. A member that spends its turn
-asking another desk does not also get to argue in its own that turn.
-
-### How a member decides to cross
-
-A simulated member asks one question of each peer channel, before its desk has
-backed anything: *I will not put an option on the floor on the strength of what
-my own desk thinks, when nobody outside it has told me anything about it.*
-
-The timing is the whole ballgame, and an earlier version of this harness got it
-wrong. It asked *after* proposing — which sounds more natural — and every desk
-committed to its own decoy with the correction sitting three lines below the
-decision. A desk whose members share a bias reaches quorum inside its own blind
-opening round, and an answer arriving after that is information the desk has
-already voted past.
-
-Asks are counted **per desk**, not per member. The answer lands in the desk's
-own transcript where every member reads it, so a second member asking the same
-desk the same question spends a turn to learn what it could have read.
-`referral` bounds how deep a chain goes; bounding how wide one desk may go is
-the host's job.
-
-What crosses is **information, never a vote**. The message that lands on the
-far desk is `!evidence`, which adds no supporter to any topic: the members
-there hear another channel's reading, average it into their own, and still have
-to spend their own turns saying so before anything is counted.
-
-### A live federation
-
-```sh
-cargo run --release -p tinyhivemind-hive --example bench -- --swarm \
-  --scenario crates/tinyhivemind-hive/examples/bench/scenarios/checkout-503-federated.txt \
-  --agent-cmd "claude -p --model sonnet"
-```
-
-The scenario file grows `[desk ...]` sections and a `desk:` line per agent.
-`checkout-503-federated.txt` is the single-room hidden profile with its facts
-split across three desks, so the conjunction that makes the answer is not
-merely spread across members — it is spread across *rooms*.
-
-In the live arm the harness writes no mention on anybody's behalf. Each agent
-is told which channels exist and how to address one, and decides for itself
-whether to spend its turn asking. The line it writes is read by the real
-mention grammar and routed by the real `referral` fold, exactly as the
-simulated ask is. A run in which nothing crosses is a finding about the agents
-rather than a failure of the harness.
+A federation of desks that can only reach each other by a referral: what a
+crossing costs, how a member decides to make one, and what a live federation
+prints. See [`SWARM.md`](SWARM.md).
 
 ## The context budget
 
