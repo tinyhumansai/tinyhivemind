@@ -265,7 +265,11 @@ impl Axes {
         let list = args
             .next()
             .ok_or_else(|| format!("{flag} takes a comma-separated list"))?;
-        let parts: Vec<&str> = list.split(',').map(str::trim).filter(|p| !p.is_empty()).collect();
+        let parts: Vec<&str> = list
+            .split(',')
+            .map(str::trim)
+            .filter(|p| !p.is_empty())
+            .collect();
         if parts.is_empty() {
             return Err(format!("{flag} takes a comma-separated list, not {list:?}"));
         }
@@ -328,7 +332,9 @@ impl Axes {
                             .ok()
                             .filter(|width| *width >= 1)
                             .ok_or_else(|| {
-                                format!("--concurrency takes round widths of one or more, not {raw:?}")
+                                format!(
+                                    "--concurrency takes round widths of one or more, not {raw:?}"
+                                )
                             })
                     })
                     .collect::<Result<_, _>>()?;

@@ -34,7 +34,10 @@ fn the_default_cell_reproduces_the_single_room_comparison() {
 #[test]
 fn the_cross_product_is_every_combination() {
     let mut axes = Axes::point();
-    assert_eq!(axes.set("--topic", &mut args(&["uniform,hidden"])), Ok(true));
+    assert_eq!(
+        axes.set("--topic", &mut args(&["uniform,hidden"])),
+        Ok(true)
+    );
     assert_eq!(axes.set("--scale", &mut args(&["3,5,9"])), Ok(true));
     assert_eq!(axes.set("--complexity", &mut args(&["1,5"])), Ok(true));
     assert_eq!(axes.set("--concurrency", &mut args(&["1,2,4"])), Ok(true));
@@ -80,7 +83,10 @@ fn refuses_a_point_that_is_not_on_its_axis() {
     // for and print it under the heading they typed -- the same failure an
     // unrecognised flag is refused for one level up.
     let mut axes = Axes::point();
-    assert!(axes.set("--topic", &mut args(&["uniform,federated"])).is_err());
+    assert!(
+        axes.set("--topic", &mut args(&["uniform,federated"]))
+            .is_err()
+    );
     assert!(axes.set("--complexity", &mut args(&["0"])).is_err());
     assert!(axes.set("--complexity", &mut args(&["6"])).is_err());
     assert!(axes.set("--scale", &mut args(&["1"])).is_err());

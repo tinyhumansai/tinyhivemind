@@ -103,8 +103,16 @@ pub(crate) fn run(options: &Options) -> Result<(), String> {
         .saturating_sub(tokens_per_row.saturating_mul(PROBE_ROWS.0 as u64));
 
     // Latency against completion length: same fit, other pair of constants.
-    let brief = best_of(&config, &model, &probe_prompt(PROBE_ROWS.0, PROBE_COMPLETION.0))?;
-    let verbose = best_of(&config, &model, &probe_prompt(PROBE_ROWS.0, PROBE_COMPLETION.1))?;
+    let brief = best_of(
+        &config,
+        &model,
+        &probe_prompt(PROBE_ROWS.0, PROBE_COMPLETION.0),
+    )?;
+    let verbose = best_of(
+        &config,
+        &model,
+        &probe_prompt(PROBE_ROWS.0, PROBE_COMPLETION.1),
+    )?;
     let more = verbose.usage.output.saturating_sub(brief.usage.output);
     let slower = verbose.ms.saturating_sub(brief.ms);
     if more == 0 || slower == 0 {
@@ -164,11 +172,7 @@ struct Probe {
 /// Returns the backend's error text if every attempt failed. A probe that
 /// succeeded at least once is enough, since the fastest is the one being kept
 /// anyway.
-fn best_of(
-    config: &crate::http::HttpConfig,
-    model: &str,
-    prompt: &str,
-) -> Result<Probe, String> {
+fn best_of(config: &crate::http::HttpConfig, model: &str, prompt: &str) -> Result<Probe, String> {
     let mut best: Option<Probe> = None;
     let mut failure: Option<String> = None;
     for _ in 0..REPEATS {

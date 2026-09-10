@@ -194,7 +194,8 @@ fn run_cell(options: &Options, cell: Cell) -> Result<Vec<CellRow>, String> {
             mine.merge(theirs);
         }
     }
-    Ok(ARMS.iter()
+    Ok(ARMS
+        .iter()
         .copied()
         .zip(totals)
         .map(|(name, totals)| CellRow { name, totals })
@@ -230,8 +231,20 @@ fn summarise(every: &[(Cell, Vec<CellRow>)]) {
         // zero latency -- which only an empty sample produces -- never wins.
         best(rows, &mut led, 0, |row| row.totals.accuracy(), true);
         best(rows, &mut led, 1, |row| row.totals.latency_ms(), false);
-        best(rows, &mut led, 2, |row| row.totals.tokens_per_episode(), false);
-        best(rows, &mut led, 3, |row| row.totals.episodes_per_hour(), true);
+        best(
+            rows,
+            &mut led,
+            2,
+            |row| row.totals.tokens_per_episode(),
+            false,
+        );
+        best(
+            rows,
+            &mut led,
+            3,
+            |row| row.totals.episodes_per_hour(),
+            true,
+        );
     }
     for (name, counts) in ARMS.iter().zip(&led) {
         println!(
@@ -287,7 +300,8 @@ fn best(
         if !value.is_finite() || value <= 0.0 {
             continue;
         }
-        let better = winner.is_none_or(|(_, best)| if largest { value > best } else { value < best });
+        let better =
+            winner.is_none_or(|(_, best)| if largest { value > best } else { value < best });
         if better {
             winner = Some((index, value));
         }

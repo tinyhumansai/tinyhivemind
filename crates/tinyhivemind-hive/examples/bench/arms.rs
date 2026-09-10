@@ -29,8 +29,8 @@ use tinyhivemind_hive::{
     trace::TopicId,
 };
 
-use crate::federation::Federation;
 use crate::cost::RoundShape;
+use crate::federation::Federation;
 use crate::rng::{Rng, mix};
 use crate::run::{Host, Participant, drive};
 use crate::sim::Room;

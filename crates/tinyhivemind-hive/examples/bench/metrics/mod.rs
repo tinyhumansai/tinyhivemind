@@ -15,7 +15,9 @@ mod stats;
 use std::fmt::Write as _;
 use std::time::Duration;
 
-use format::{count, dash_unless, dash_unless_2, deliberates, duration, json_f64, json_f64_if, row};
+use format::{
+    count, dash_unless, dash_unless_2, deliberates, duration, json_f64, json_f64_if, row,
+};
 use stats::lossy;
 
 // Re-exported so `compare.rs`, `main.rs` and the sweeps keep importing the

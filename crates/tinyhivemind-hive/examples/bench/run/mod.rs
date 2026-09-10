@@ -675,7 +675,14 @@ pub(crate) fn drive_with(
         recorded.contacts = contacts;
         recorded.shape = shape;
         recorded.trace = trace;
-        return finished(&host, agents, &state, (ending, decided), tally, &mut recorded);
+        return finished(
+            &host,
+            agents,
+            &state,
+            (ending, decided),
+            tally,
+            &mut recorded,
+        );
     }
 }
 

@@ -18,8 +18,8 @@ use crate::TASK;
 use crate::arms;
 use crate::cli::Options;
 use crate::metrics::{
-    Aggregate, arm_header, arm_row, detail_header, library_header, library_row, detail_row, json_line, paired_against,
-    paired_diff_line,
+    Aggregate, arm_header, arm_row, detail_header, detail_row, json_line, library_header,
+    library_row, paired_against, paired_diff_line,
 };
 use crate::parallel;
 use crate::policy::{
