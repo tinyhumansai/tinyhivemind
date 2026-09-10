@@ -87,6 +87,7 @@ mod backend;
 mod budget;
 mod cli;
 mod compare;
+mod cost;
 mod context;
 mod federation;
 mod horizon;
