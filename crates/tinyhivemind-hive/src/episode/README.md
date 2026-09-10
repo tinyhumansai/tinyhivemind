@@ -106,10 +106,11 @@ That is the whole answer to "but a hive mind needs fan-out". See
 | --- | --- |
 | `step` | The fold. Returns exactly one outcome. |
 | `project_for` | Filters a transcript to what one authorized turn may see. |
-| `EpisodePolicy` | Budget, blind round, dominance and repetition caps, directory, defer cap, quorum, weights. |
+| `EpisodePolicy` | Budget, blind round, dominance and repetition caps, directory, defer cap, distance basis, quorum, weights. |
+| `EpisodePolicy::for_room` | The policy a desk of *N* should carry, with every absolute bound scaled to it. |
 | `EpisodeState` | Conversation, spend, phase, thresholds, watermark, commit boundary. |
 | `HiveTurn` | The authorized turn, and the state to commit after it lands. |
-| `HiveStep` | `Speak` \| `Converged` \| `Deadlocked` \| `Exhausted` \| `Idle`. |
+| `HiveStep` | `Speak` \| `Converged` \| `Deadlocked` \| `Exhausted` \| `Idle`. `Exhausted` carries the standings the budget bought and the visibility it ended at. |
 | `Phase`, `Visibility` | The two one-turn modes. |
 
 ## File layout
@@ -144,6 +145,22 @@ what a test may reach, only where it lives.
 - **`turn_budget` must be finite.** Termination is a property of the machine:
   `spent` strictly increases on every `Speak`, and the budget check runs before
   the increment, so the counter can never overflow.
+- **`EpisodePolicy::DEFAULT` is wrong above about a dozen members, silently.**
+  Three of its numbers are absolute where the quantity they bound scales with
+  the room: `turn_budget: 12` is fewer turns than a room of thirteen has
+  members, and under `blind_round` visibility lifts only once *every* member has
+  authored, so such a room stays `Visibility::Blind` for its whole episode and
+  never deliberates at all; `quorum.threshold: 2` is two supporters whether the
+  desk holds five members or a thousand; `weights.half_life: 20` is twenty rows
+  against an opening round that is `members` rows long. Use
+  `EpisodePolicy::for_room`. `HiveStep::Exhausted` reports the first of the
+  three when it happens, rather than leaving it to be inferred.
+- **Exhaustion is diagnosable.** `Exhausted` carries the standings and the
+  visibility the episode ended at, so "spent thirty turns and nearly carried two
+  options", "spent thirty turns and deposited nothing", and "never saw itself"
+  are three different reports rather than one. They are folded *before* the
+  budget check for that reason, which costs one fold on the step that ends the
+  episode.
 - **Thresholds must name active desk members.** A stale threshold record for a
   retired agent is rejected rather than ignored, so a roster change cannot
   silently alter who gets the floor.
