@@ -24,7 +24,6 @@ use stats::lossy;
 pub(crate) use stats::{paired_bootstrap, spearman_milli, wilson};
 
 use crate::arms::ArmReport;
-use crate::rng::Rng;
 use crate::run::{Ending, EpisodeReport};
 
 /// Running totals over a sample of episodes.
