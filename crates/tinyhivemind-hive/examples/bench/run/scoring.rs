@@ -44,6 +44,17 @@ pub(crate) struct EpisodeReport {
     /// arm can be cheap in turns and ruinous in rows, and until this field
     /// existed the benchmark could only see the first.
     pub(crate) context_rows: f64,
+    /// Every round the episode ran, in order, with the transcript rows its
+    /// turns could read and how many of them it authorized.
+    ///
+    /// Recorded as the episode runs rather than reconstructed from
+    /// [`Self::turns`] and [`Self::rounds`] afterwards. Those two say the
+    /// sample was, say, seven turns over four rounds; they cannot say whether
+    /// that was `4,1,1,1` reading a growing transcript or `1,1,1,4` reading a
+    /// short one, and the two price very differently in
+    /// [`crate::cost::CostModel::price`]. Off-floor exchange rounds appear
+    /// here too, since a host waits for those as well.
+    pub(crate) shape: Vec<crate::cost::RoundShape>,
     /// Calls into [`tinyhivemind_hive::step`], including the terminal one.
     pub(crate) step_calls: u32,
     /// Time spent inside the library, excluding the simulated agents.
