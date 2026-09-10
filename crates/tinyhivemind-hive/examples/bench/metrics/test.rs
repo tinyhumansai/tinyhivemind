@@ -158,3 +158,27 @@ fn merging_an_empty_sample_changes_nothing() {
         "an empty sample adds no time either"
     );
 }
+
+/// `--json` used to cover only the library/detail fields, so a consumer
+/// could not read five of the six columns [`super::arm_row`] prints --
+/// latency, throughput, concurrency, and the two token rates. Each headline
+/// key must be present in the object `json_line` writes.
+#[test]
+fn json_line_covers_every_headline_column() {
+    let totals = Aggregate::priced_at(CostModel::DEFAULT);
+    let line = json_line("hive+", &totals);
+
+    for key in [
+        "\"latency_ms\":",
+        "\"episodes_per_hour\":",
+        "\"concurrency\":",
+        "\"tokens_per_episode\":",
+        "\"tokens_per_second\":",
+        "\"correct_pct\":",
+    ] {
+        assert!(
+            line.contains(key),
+            "json_line must cover the headline column {key}, got {line}",
+        );
+    }
+}
