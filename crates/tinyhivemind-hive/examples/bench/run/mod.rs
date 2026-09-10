@@ -32,8 +32,8 @@ mod scoring;
 mod turns;
 
 pub(crate) use scoring::EpisodeReport;
-use scoring::{Tally, circularity, journal_traces, proposer_of};
-use turns::{append_turn, exchange_policy, mean_context_rows, one_exchange, scored, trace_line};
+use scoring::{Recorded, Tally, finished};
+use turns::{append_turn, exchange_policy, one_exchange, scored, trace_line};
 
 /// The marker a participant writes to ask one peer for its reading.
 ///
