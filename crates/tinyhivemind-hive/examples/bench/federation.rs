@@ -279,7 +279,7 @@ impl Federation {
             // A mistaken fact names the truth: the worst thing a
             // disqualification can say, and the one a real participant that
             // misreads its own evidence would say.
-            let cure = if wrong > 0 && draws.below(wrong) {
+            let cure = if wrong > 0 && draws.below(1_000) < wrong {
                 truth.clone()
             } else {
                 decoy

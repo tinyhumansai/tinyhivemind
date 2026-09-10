@@ -186,6 +186,15 @@ pub(crate) struct Options {
     /// It changes the task rather than only the wire, so every arm is
     /// re-baselined under it and nothing recorded without it moves.
     pub(crate) evidence: bool,
+    /// Per mille of planted facts that name the **truth** rather than the
+    /// decoy they were meant to disqualify.
+    ///
+    /// The adversarial half of `--evidence`. A fact does not average, which is
+    /// why it survives a shared bias and why a wrong one is worse than a wrong
+    /// opinion: it subtracts a flat discount from the right answer for every
+    /// desk it reaches. `0` keeps every planted fact true, which measures the
+    /// value of the channel and nothing about the risk of it.
+    pub(crate) fact_noise: u32,
     /// Threads the per-room loops are spread across.
     ///
     /// A wall-clock knob and nothing else: rooms are independent and results
@@ -317,6 +326,7 @@ impl Options {
             // new mechanism ships off until an arm has scored it.
             digest: 0,
             evidence: false,
+            fact_noise: 0,
             jobs: crate::parallel::default_jobs(),
             timeout: 180,
             api_base: None,
@@ -522,6 +532,10 @@ fn apply_scale_flag(
             options.digest = usize::try_from(next_number(args).unwrap_or(1)).unwrap_or(1);
         }
         "--evidence" => options.evidence = true,
+        "--fact-noise" => {
+            options.fact_noise = u32::try_from(next_number(args).unwrap_or(0)).unwrap_or(0);
+            options.evidence = true;
+        }
         _ => return Ok(false),
     }
     Ok(true)

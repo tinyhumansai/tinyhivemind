@@ -76,7 +76,7 @@ pub(crate) fn swarm_compare(options: &Options) -> Result<(), String> {
             // needs it. Without it there are no facts to exchange and the arms
             // below measure what an exchange of *opinions* is worth.
             if options.evidence {
-                federation.planted()
+                federation.planted_with(options.fact_noise)
             } else {
                 federation
             }
