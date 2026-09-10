@@ -7,6 +7,10 @@
 
 use super::{PROBE_COMPLETION, PROBE_ROWS, div_round, probe_prompt};
 
+/// Text carried by a probe's filler rows and by nothing in the fixed prompt
+/// skeleton, so counting it counts rows and only rows.
+const ROW_MARK: &str = "blast radius";
+
 #[test]
 fn rounds_to_nearest_rather_than_truncating() {
     // A per-row cost of 41.6 truncated to 41 is a 1.4% error on every row of
@@ -31,7 +35,10 @@ fn the_two_prompt_probes_differ_only_in_how_many_rows_they_carry() {
     let long = probe_prompt(PROBE_ROWS.1, PROBE_COMPLETION.0);
     assert!(long.len() > short.len());
 
-    let rows_of = |prompt: &str| prompt.matches("!propose").count();
+    // Counted on text unique to the filler rows. `!propose` will not do: the
+    // protocol grammar block names every marker, so it appears in the fixed
+    // skeleton too and a count of it mixes rows with the intercept.
+    let rows_of = |prompt: &str| prompt.matches(ROW_MARK).count();
     assert_eq!(rows_of(&short), PROBE_ROWS.0);
     assert_eq!(rows_of(&long), PROBE_ROWS.1);
 
@@ -56,7 +63,10 @@ fn a_probe_is_built_from_the_prompt_a_live_seat_actually_gets() {
         prompt.contains("reverted once before"),
         "no private-facts block: {prompt}"
     );
-    assert!(prompt.contains("!propose"), "no protocol grammar: {prompt}");
+    assert!(
+        prompt.contains("!commit"),
+        "no protocol grammar: {prompt}"
+    );
     assert!(prompt.contains("Shared attributed transcript:"));
 }
 
@@ -80,7 +90,7 @@ fn every_row_of_a_probe_is_the_same_length() {
     let prompt = probe_prompt(12, PROBE_COMPLETION.0);
     let lengths: Vec<usize> = prompt
         .lines()
-        .filter(|line| line.contains("!propose"))
+        .filter(|line| line.contains(ROW_MARK))
         // Sequence numbers and any other digits vary by row and are not part
         // of what is being held constant.
         .map(|line| line.chars().filter(|c| !c.is_ascii_digit()).count())
