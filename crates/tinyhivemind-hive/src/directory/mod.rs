@@ -146,6 +146,7 @@ pub fn directory<'a>(
     priors: &[AgentThreshold],
 ) -> Result<Directory> {
     validate_policy(policy)?;
+    let at = at.into();
     let indexed = index_priors(priors)?;
 
     let live = live_traces(traces, at, policy.window);
