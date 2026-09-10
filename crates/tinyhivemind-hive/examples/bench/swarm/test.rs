@@ -58,14 +58,14 @@ fn a_digest_is_off_unless_the_caller_asks_for_it() {
         asking: AskChannel::OffFloor { cap: 2 },
         digest: 0,
     };
-    let report = run_swarm(&federation, &policy, referrals(), quiet, "Decide.", false)
-        .expect("runs");
+    let report =
+        run_swarm(&federation, &policy, referrals(), quiet, "Decide.", false).expect("runs");
     assert_eq!(report.digests, 0);
 
     // ...and the arm it leaves behind is the one every recorded number was
     // taken against: same decision, same turns, same crossings.
-    let recorded = run_swarm(&federation, &policy, referrals(), quiet, "Decide.", false)
-        .expect("runs");
+    let recorded =
+        run_swarm(&federation, &policy, referrals(), quiet, "Decide.", false).expect("runs");
     assert_eq!(report.decided, recorded.decided);
     assert_eq!(report.turns, recorded.turns);
     assert_eq!(report.crossings, recorded.crossings);
