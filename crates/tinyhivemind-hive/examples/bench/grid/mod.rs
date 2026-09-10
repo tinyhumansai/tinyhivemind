@@ -286,7 +286,13 @@ fn summarise(every: &[(Cell, Vec<CellRow>)]) {
     }
 }
 
-/// Credit the arm with the best value of one metric in one cell.
+/// Credit every arm tied for the best value of one metric in one cell.
+///
+/// Exact ties are common here — quality is a finite-sample accuracy and cost
+/// is a deterministic function of a round's shape — so a strict "first one
+/// wins" comparison would silently hand a shared lead to whichever arm
+/// happens to sit first in [`ARMS`]. Every arm within the tie is credited
+/// instead.
 fn best(
     rows: &[CellRow],
     led: &mut [[u32; 4]],
@@ -294,23 +300,29 @@ fn best(
     of: impl Fn(&CellRow) -> f64,
     largest: bool,
 ) {
-    let mut winner: Option<(usize, f64)> = None;
+    let mut best_value: Option<f64> = None;
+    let mut winners: Vec<usize> = Vec::new();
     for (index, row) in rows.iter().enumerate() {
         let value = of(row);
         if !value.is_finite() || value <= 0.0 {
             continue;
         }
         let better =
-            winner.is_none_or(|(_, best)| if largest { value > best } else { value < best });
+            best_value.is_none_or(|best| if largest { value > best } else { value < best });
         if better {
-            winner = Some((index, value));
+            best_value = Some(value);
+            winners.clear();
+            winners.push(index);
+        } else if best_value == Some(value) {
+            winners.push(index);
         }
     }
-    if let Some((index, _)) = winner
-        && let Some(counts) = led.get_mut(index)
-        && let Some(count) = counts.get_mut(metric)
-    {
-        *count = count.saturating_add(1);
+    for index in winners {
+        if let Some(counts) = led.get_mut(index)
+            && let Some(count) = counts.get_mut(metric)
+        {
+            *count = count.saturating_add(1);
+        }
     }
 }
 
