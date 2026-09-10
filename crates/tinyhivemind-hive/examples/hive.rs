@@ -214,12 +214,19 @@ fn report(step: &HiveStep) {
             let names: Vec<String> = topics.iter().map(ToString::to_string).collect();
             println!("\n  deadlocked between #{}", names.join(" and #"));
         }
-        HiveStep::Exhausted { spent, standings } => {
+        HiveStep::Exhausted {
+            spent,
+            standings,
+            visibility,
+        } => {
             println!("\n  budget exhausted after {spent} turns, no decision");
             // What the budget bought, which is the difference between a room
             // that nearly decided and a room that never deliberated at all.
             if standings.is_empty() {
                 println!("  nothing was advocated: the turns went somewhere else");
+            }
+            if visibility == Visibility::Blind {
+                println!("  the room never saw itself: the budget is below the roster");
             }
             for standing in standings {
                 println!(
