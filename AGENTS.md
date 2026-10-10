@@ -49,7 +49,7 @@ is not advisory — do not add an exception to it to land a change.
 
 ## Project Structure
 
-This is a Rust 2024 virtual Cargo workspace with three packages. Core owns all
+This is a Rust 2024 virtual Cargo workspace with five packages. Core owns all
 host-neutral behavior; tools renders native tool definitions and records calls;
 OpenHuman is the only crate that links an agent harness.
 
@@ -66,7 +66,9 @@ crates/
 │       ├── typesafe/      # System One wire and Jev router
 │       └── driver/        # host-neutral completion scheduling
 ├── tinyhivemind-tools/   # native TinyTools specs and episode call record
-└── tinyhivemind-openhuman/ # seat runners and host integration
+├── tinyhivemind-openhuman/ # seat runners and host integration
+├── tinyhivemind-hives/    # durable cross-hive coordinator
+└── tinyhivemind-lang/     # pure hive packages, guarded edits and lineage
 wiki/                    # GitHub wiki submodule
 docs/                    # specs, plans, ADRs, research, experiments
 examples/                # standalone integration proofs

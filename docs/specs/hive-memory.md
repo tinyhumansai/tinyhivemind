@@ -39,6 +39,9 @@ in the window.
   copy of the transcript. The desk remains addressed by sequence in the host's
   log.
 - **Memory across runs.** Each run is its own namespace; trials never share.
+  The opt-in [hive language](hive-language.md) adds explicitly declared
+  persistent identities and requires lineage watermarks; it does not change
+  this adapter’s run-scoped default.
 - **Memory as authority.** Recalled text is evidence another activation wrote,
   never an instruction.
 

@@ -131,7 +131,7 @@ impl HiveTool {
                 submit(coordinator, actor, &text("episode_id"), action).await
             }
             Kind::CreateHive | Kind::CreateAgent | Kind::JoinHive | Kind::LeaveHive => {
-                host.manage(actor, management(self.kind, &args)).await
+                host.manage(actor, management(self.kind, &args)?).await
             }
         }
     }
@@ -164,9 +164,9 @@ fn outbound(kind: Kind, args: &Value) -> Option<SendRequest> {
     })
 }
 /// The management request a management tool's validated arguments describe.
-fn management(kind: Kind, args: &Value) -> ManagementRequest {
+fn management(kind: Kind, args: &Value) -> Result<ManagementRequest> {
     let text = |name: &str| args[name].as_str().unwrap_or_default().to_owned();
-    match kind {
+    Ok(match kind {
         Kind::CreateHive => ManagementRequest::CreateHive(HiveInfo {
             hive_id: text("hive_id"),
             name: text("name"),
@@ -176,6 +176,11 @@ fn management(kind: Kind, args: &Value) -> ManagementRequest {
         Kind::CreateAgent => ManagementRequest::CreateAgent {
             template: text("template"),
             config: args["config"].clone(),
+            memory: args
+                .get("memory")
+                .filter(|v| !v.is_null())
+                .map(|v| serde_json::from_value(v.clone()))
+                .transpose()?,
         },
         Kind::JoinHive => ManagementRequest::JoinHive {
             hive_id: text("hive_id"),
@@ -185,7 +190,7 @@ fn management(kind: Kind, args: &Value) -> ManagementRequest {
             hive_id: text("hive_id"),
             agent_id: text("agent_id"),
         },
-    }
+    })
 }
 #[cfg(test)]
 mod direct_test;

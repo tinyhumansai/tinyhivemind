@@ -356,8 +356,29 @@ impl OpenHumanHost {
                 self.coordinator().create_hive(hive.clone()).await?;
                 Ok(serde_json::to_value(hive)?)
             }
-            ManagementRequest::CreateAgent { template, config } => {
-                let agent = management.factory.create(template, config).await?;
+            ManagementRequest::CreateAgent {
+                template,
+                config,
+                memory,
+            } => {
+                if let Some(memory) = &memory {
+                    crate::language::validate_binding(memory)?;
+                }
+                let agent = management
+                    .factory
+                    .create_with_memory(template, config, memory.as_deref().cloned())
+                    .await?;
+                if let Some(memory) = &memory {
+                    let installed = &agent.config().memory;
+                    if installed.agent_id.as_deref() != Some(memory.agent_id.as_str())
+                        || installed.root.as_deref() != Some(memory.root.as_str())
+                    {
+                        return Err(Error::UnboundSeat {
+                            seat: agent.id().to_owned(),
+                            reason: "factory did not install the requested memory binding".into(),
+                        });
+                    }
+                }
                 let id = agent.id().to_owned();
                 self.register_agent(agent).await?;
                 Ok(serde_json::json!({"agent_id":id}))

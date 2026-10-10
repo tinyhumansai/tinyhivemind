@@ -15,7 +15,7 @@ set -euo pipefail
 # Core owns host-neutral folds and ports, and must stay free of harness,
 # transport, runtime, and `anyhow` dependencies. Tools uses `tinytools::ToolSpec`,
 # whose vocabulary dependency includes `anyhow` and `async-trait`.
-pure_crates=("tinyhivemind-core")
+pure_crates=("tinyhivemind-core" "tinyhivemind-lang")
 tool_crates=("tinyhivemind-tools")
 
 forbidden_pure='tokio|futures|async-trait|axum|hyper|reqwest|ureq|curl|anyhow|rusqlite|git2|openhuman|tinyagents|tinytools'
