@@ -4,6 +4,7 @@
 
 use std::collections::BTreeSet;
 
+use crate::driver::ConductPolicy;
 use crate::runtime::Sequence;
 use crate::runtime::speech::Utterance;
 use serde_json::{Value, json};
@@ -407,6 +408,23 @@ fn a_conductor_snapshot_names_every_field_a_restart_reads_back() {
     let back: crate::driver::ConductorState = serde_json::from_value(wire).expect("deserializes");
     assert_eq!(back.chat, snapshot.chat);
     assert_eq!(back.mid_wave_is_empty(), snapshot.mid_wave_is_empty());
+}
+
+#[test]
+fn conduct_policy_wire_preserves_conversation_and_episode_walls() {
+    let policy = ConductPolicy {
+        child_turn_wall: 5,
+        turn_wall: 40,
+    };
+    let value = serde_json::to_value(policy).unwrap();
+    assert_eq!(
+        value,
+        serde_json::json!({"child_turn_wall":5,"turn_wall":40})
+    );
+    assert_eq!(
+        serde_json::from_value::<ConductPolicy>(value).unwrap(),
+        policy
+    );
 }
 
 #[test]

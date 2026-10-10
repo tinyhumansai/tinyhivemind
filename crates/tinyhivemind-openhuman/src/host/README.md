@@ -46,3 +46,12 @@ failure, proving that the next delivery retains the committed input and assistan
 reply. Finalizer errors return a failed outcome carrying the completed session;
 the coordinator preserves that binding while suppressing delivery acknowledgements
 and staged episode outputs.
+
+Portable hive seats use `language::management_request`. Management creation's
+optional `memory` field preserves older serialized requests. Factories opt in
+through `create_with_memory`: install the binding on the spec before building,
+and enforce the complete retained memory contract or refuse it. Existing
+`create` implementations continue serving unbound requests. The adapter checks
+the returned handle's memory id and root before registration; it cannot retrofit
+an immutable built agent. `language_test.rs` exercises dispatch, refusal and
+installed binding verification.

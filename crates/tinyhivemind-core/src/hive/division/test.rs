@@ -357,6 +357,23 @@ fn the_default_policy_divides() {
 }
 
 #[test]
+fn division_policy_wire_preserves_width_and_directory_choice() {
+    let policy = DivisionPolicy {
+        round_width: 7,
+        follow_directory: false,
+    };
+    let value = serde_json::to_value(policy).unwrap();
+    assert_eq!(
+        value,
+        serde_json::json!({"round_width":7,"follow_directory":false})
+    );
+    assert_eq!(
+        serde_json::from_value::<DivisionPolicy>(value).unwrap(),
+        policy
+    );
+}
+
+#[test]
 fn division_policy_wire_form_and_omitted_defaults_are_stable() {
     let value: DivisionPolicy = serde_json::from_str("{}").unwrap();
     assert_eq!(value, DivisionPolicy::default());

@@ -38,6 +38,8 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["rt", "sync", "time"] }
 # Core bound-handle trait and optional host log.
 tinyhivemind-core.workspace = true
+# Convert portable hive definitions at the host boundary.
+tinyhivemind-lang.workspace = true
 # Durable messaging and cross-hive scheduling.
 tinyhivemind-hives.workspace = true
 # The engine contract and agent memory lifecycle behind hive `Recall`/`Remember`.

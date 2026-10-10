@@ -1,8 +1,9 @@
 //! Host extension points and supplied handle types.
-use crate::Result;
+use crate::{Error, Result};
 use openhuman_embed::Agent;
 use std::{future::Future, path::PathBuf, pin::Pin, sync::Arc, time::Duration};
 use tinyhivemind_hives::{Destination, EpisodeContext, HiveInfo, TurnDisposition, TurnRequest};
+use tinyhivemind_lang::LoweredMemoryBinding;
 /// Default maximum duration of a supplied agent turn.
 pub const TURN_TIMEOUT: Duration = Duration::from_secs(300);
 /// Host factory result future.
@@ -14,6 +15,24 @@ pub type AgentFuture = Pin<Box<dyn Future<Output = Result<Agent>> + Send>>;
 pub trait AgentFactory: Send + Sync {
     /// Create on the shared runtime; host validates template and config.
     fn create(&self, template: String, config: serde_json::Value) -> AgentFuture;
+    /// Create with an explicit memory contract before building the agent.
+    ///
+    /// Override to apply the binding to `AgentSpec` and implement every supplied
+    /// memory setting, including read-only identities, recall, reaches and
+    /// lifecycle. The default refuses bindings and preserves old factories for
+    /// unbound requests. The adapter verifies the resulting agent id and root.
+    fn create_with_memory(
+        &self,
+        template: String,
+        config: serde_json::Value,
+        memory: Option<LoweredMemoryBinding>,
+    ) -> AgentFuture {
+        if memory.is_some() {
+            Box::pin(async { Err(Error::MemoryBindingUnsupported) })
+        } else {
+            self.create(template, config)
+        }
+    }
 }
 /// Explicit opt-in management authorization.
 pub trait ManagementAuthorizer: Send + Sync {
@@ -94,6 +113,9 @@ pub enum ManagementRequest {
         template: String,
         /// Nonsecret host-validated settings.
         config: serde_json::Value,
+        /// Portable memory contract, applied by the factory before registration.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        memory: Option<Box<LoweredMemoryBinding>>,
     },
     /// Join a registered agent to a hive.
     JoinHive {

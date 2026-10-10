@@ -3757,6 +3757,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tinyhivemind-lang"
+version = "0.2.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror",
+ "tinyhivemind-core",
+]
+
+[[package]]
 name = "tinyhivemind-openhuman"
 version = "0.2.1"
 dependencies = [
@@ -3772,6 +3783,7 @@ dependencies = [
  "thiserror",
  "tinyhivemind-core",
  "tinyhivemind-hives",
+ "tinyhivemind-lang",
  "tinymemory-api",
  "tinymemory-tools",
  "tinytools",

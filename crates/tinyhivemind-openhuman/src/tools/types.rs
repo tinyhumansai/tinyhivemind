@@ -120,7 +120,11 @@ impl Kind {
                 ("description", "string", false),
                 ("members", "array", false),
             ],
-            Self::CreateAgent => vec![("template", "string", true), ("config", "object", true)],
+            Self::CreateAgent => vec![
+                ("template", "string", true),
+                ("config", "object", true),
+                ("memory", "object", false),
+            ],
             Self::JoinHive | Self::LeaveHive => {
                 vec![("hive_id", "string", true), ("agent_id", "string", true)]
             }

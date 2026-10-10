@@ -1,14 +1,18 @@
-//! Conduct policy, desk declarations and durable conductor snapshots.
+//! Episode walls, opening inputs and resumable host-owned conductor snapshots.
+
 use super::{
     child::{Child, Concluded},
     wave::Wave,
 };
-use crate::{driver::DriverState, embed::RoutingPlan, runtime::Sequence};
+use crate::{
+    driver::{BoundAgent, CompletionDriver, DriverState, engine::BroadcastRouting},
+    runtime::Sequence,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// The walls a conducted episode runs inside.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ConductPolicy {
     /// Turns a conversation may take before it concludes without an answer.
@@ -50,7 +54,7 @@ pub struct Door {
 /// replays at most the one row whose sequence had not been reported yet.
 /// The only point a snapshot cannot be taken is while the host holds a
 /// commit it has not reported -- the conductor does not know whether that
-/// row landed -- and [`super::Conductor::snapshot`] answers `None` there.
+/// row landed -- and [`Conductor::snapshot`] answers `None` there.
 ///
 /// The driver, the routing and the policy are **not** here. They are the
 /// host's to supply again on resume, exactly as they were on open: a router
@@ -100,22 +104,36 @@ impl ConductorState {
         self.wave.is_idle()
     }
 }
+/// The desk episode, its conversations, and the rules between them.
+pub struct Conductor<'a, A: BoundAgent> {
+    pub(super) driver: &'a CompletionDriver<'a, A>,
+    pub(super) routing: BroadcastRouting<'a>,
+    pub(super) chat: String,
+    pub(super) desk_name: String,
+    pub(super) policy: ConductPolicy,
+    pub(super) state: DriverState,
+    pub(super) children: BTreeMap<Sequence, Child>,
+    pub(super) concluded: Vec<Concluded>,
+    /// How many concluded conversations each seat has been shown.
+    pub(super) shown: BTreeMap<String, usize>,
+    /// The assignment each seat was last nudged for on the desk.
+    pub(super) desk_nudged: BTreeMap<String, Sequence>,
+    /// Seats held on the host, by the thread they parked in (`None` for the
+    /// desk): not nudged, not stalled, not proposed, until released.
+    pub(super) parked: BTreeMap<String, Option<Sequence>>,
+    pub(super) turns: u64,
+    pub(super) waves: u64,
+    pub(super) discharged: u64,
+    pub(super) wave: Wave,
+}
 
-/// Who the door route starts: the plan's seats, or `fallback` when routing
-/// asked for clarification nobody is there to give.
-#[must_use]
-pub fn starters(plan: &RoutingPlan, fallback: &str) -> Vec<String> {
-    match plan {
-        RoutingPlan::One { responder_id, .. } | RoutingPlan::Fallback { responder_id, .. } => {
-            vec![responder_id.clone()]
-        }
-        RoutingPlan::Hive {
-            primary_id,
-            invited_ids,
-            ..
-        } => std::iter::once(primary_id.clone())
-            .chain(invited_ids.iter().cloned())
-            .collect(),
-        RoutingPlan::Clarify { .. } => vec![fallback.to_owned()],
+impl<A: BoundAgent> std::fmt::Debug for Conductor<'_, A> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Conductor")
+            .field("chat", &self.chat)
+            .field("turns", &self.turns)
+            .field("waves", &self.waves)
+            .field("conversations", &self.children.keys().collect::<Vec<_>>())
+            .finish_non_exhaustive()
     }
 }

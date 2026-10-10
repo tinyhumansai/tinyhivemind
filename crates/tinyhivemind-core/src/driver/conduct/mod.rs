@@ -49,48 +49,33 @@ mod wave;
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::embed::RoutingPlan;
 use crate::hive::CompletionEpisodeState;
 use crate::runtime::speech::{ToolCall, Utterance};
 use crate::runtime::{Conversation, Sequence};
 
 use crate::driver::engine::{BroadcastRouting, Channel, ConversationView, EpisodeBrief};
 use crate::driver::{BoundAgent, CompletionDriver, DriverState, Error, Result};
-use child::{Child, Concluded};
 pub use steps::{Commit, Event, Note, Refusal, Step, Turn};
-pub use types::{ConductPolicy, ConductorState, Door, starters};
+pub use types::{ConductPolicy, Conductor, ConductorState, Door};
 use wave::Wave;
 
-/// The desk episode, its conversations, and the rules between them.
-pub struct Conductor<'a, A: BoundAgent> {
-    driver: &'a CompletionDriver<'a, A>,
-    routing: BroadcastRouting<'a>,
-    chat: String,
-    desk_name: String,
-    policy: ConductPolicy,
-    state: DriverState,
-    children: BTreeMap<Sequence, Child>,
-    concluded: Vec<Concluded>,
-    /// How many concluded conversations each seat has been shown.
-    shown: BTreeMap<String, usize>,
-    /// The assignment each seat was last nudged for on the desk.
-    desk_nudged: BTreeMap<String, Sequence>,
-    /// Seats held on the host, by the thread they parked in (`None` for the
-    /// desk): not nudged, not stalled, not proposed, until released.
-    parked: BTreeMap<String, Option<Sequence>>,
-    turns: u64,
-    waves: u64,
-    discharged: u64,
-    wave: Wave,
-}
-
-impl<A: BoundAgent> std::fmt::Debug for Conductor<'_, A> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Conductor")
-            .field("chat", &self.chat)
-            .field("turns", &self.turns)
-            .field("waves", &self.waves)
-            .field("conversations", &self.children.keys().collect::<Vec<_>>())
-            .finish_non_exhaustive()
+/// Who the door route starts: the plan's seats, or `fallback` when routing
+/// asked for clarification nobody is there to give.
+#[must_use]
+pub fn starters(plan: &RoutingPlan, fallback: &str) -> Vec<String> {
+    match plan {
+        RoutingPlan::One { responder_id, .. } | RoutingPlan::Fallback { responder_id, .. } => {
+            vec![responder_id.clone()]
+        }
+        RoutingPlan::Hive {
+            primary_id,
+            invited_ids,
+            ..
+        } => std::iter::once(primary_id.clone())
+            .chain(invited_ids.iter().cloned())
+            .collect(),
+        RoutingPlan::Clarify { .. } => vec![fallback.to_owned()],
     }
 }
 

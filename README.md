@@ -362,6 +362,10 @@ bounded round of concurrent turns: `round_width` limits blind rounds and
 `revealed_width` limits rounds that can read previous peer work. The host
 commits the round's state after all authorized turns are appended.
 
+`tinyhivemind-lang` makes a hive’s definition editable data: roles, goals,
+seats, memory bindings and policies, with guarded patches and an evaluated
+lineage. Read the [language specification](docs/specs/hive-language.md).
+
 `tinyhivemind-tools` renders native `tinytools::ToolSpec` definitions and
 records episode calls. `tinyhivemind-hives` coordinates durable messages and
 serialized turns across dynamic hives with memory, SQLite, or host storage.

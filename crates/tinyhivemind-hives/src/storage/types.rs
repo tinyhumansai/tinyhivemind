@@ -99,7 +99,7 @@ pub struct TranscriptRow {
 ///
 /// The default keeps everything, which is the behaviour before retention
 /// existed. The transcript is never pruned: it is append-only by contract.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct RetentionPolicy {
     /// Most recent finished episodes to keep; `None` keeps all. An episode a

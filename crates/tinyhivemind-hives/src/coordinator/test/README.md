@@ -2,6 +2,7 @@
 
 | File | Responsibility |
 | --- | --- |
+| `options.rs` | Scheduling option defaults, retention settings and strict serialized fields |
 | `mod.rs` | Fixtures, registration, visibility, shared sessions, and child asks |
 | `lifecycle.rs` | Parked release, recovery, cancellation, session adoption, shutdown |
 | `scheduling.rs` | Concurrent agents, membership snapshots, walls and budgets |

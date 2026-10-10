@@ -168,6 +168,7 @@ fn rejects_other_runtime_and_authorizes_before_factory() {
                     "a",
                     ManagementRequest::CreateAgent {
                         template: "x".into(),
+                        memory: None,
                         config: serde_json::json!({})
                     }
                 )
@@ -189,6 +190,7 @@ fn rejects_other_runtime_and_authorizes_before_factory() {
                     "a",
                     ManagementRequest::CreateAgent {
                         template: "x".into(),
+                        memory: None,
                         config: serde_json::json!({})
                     }
                 )
@@ -204,6 +206,7 @@ fn rejects_other_runtime_and_authorizes_before_factory() {
                     "a",
                     ManagementRequest::CreateAgent {
                         template: "configured".into(),
+                        memory: None,
                         config: serde_json::json!({}),
                     },
                 )
@@ -419,6 +422,8 @@ fn failed_registration_cannot_use_tools_and_retries_the_identical_attachment() {
 mod continuity;
 #[path = "hooks_test.rs"]
 mod hooks;
+#[path = "language_test.rs"]
+mod language;
 #[path = "memory_test.rs"]
 mod memory;
 #[path = "replace_test.rs"]

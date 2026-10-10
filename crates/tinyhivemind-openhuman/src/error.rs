@@ -16,6 +16,9 @@ pub enum Error {
     /// Management was not configured by the host.
     #[error("management is disabled")]
     ManagementDisabled,
+    /// The factory has not opted into installing portable memory contracts.
+    #[error("factory does not support explicit memory bindings")]
+    MemoryBindingUnsupported,
     /// Attached services have been dropped.
     #[error("hivemind host is unavailable")]
     Unavailable,

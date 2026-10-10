@@ -32,7 +32,7 @@ impl std::fmt::Debug for AgentRegistration {
     }
 }
 /// Scheduling bounds, matching the existing driver defaults.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct CoordinatorOptions {
     /// Maximum concurrent turns and the per-conductor round width; nonzero.
