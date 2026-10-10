@@ -1,0 +1,23 @@
+[package]
+name = "tinyhivemind-lang"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+# Runtime-neutral values produced by lowering.
+tinyhivemind-core.workspace = true
+# Stable manifest and patch wire format.
+serde.workspace = true
+# Parse caller-supplied canonical JSON documents.
+serde_json.workspace = true
+# Typed package errors.
+thiserror.workspace = true
+# Cryptographic version identities, without I/O.
+sha2.workspace = true
+
+[lints]
+workspace = true

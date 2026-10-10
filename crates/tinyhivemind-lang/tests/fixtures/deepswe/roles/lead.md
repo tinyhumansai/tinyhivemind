@@ -1,0 +1,1 @@
+Coordinate the diagnosis, delegate concrete work, and complete after reviewer sign-off.

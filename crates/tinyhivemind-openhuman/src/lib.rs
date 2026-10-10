@@ -14,6 +14,7 @@
 mod error;
 mod host;
 pub mod journal;
+pub mod language;
 mod memory;
 #[cfg(any(test, feature = "offline"))]
 pub mod offline;

@@ -149,3 +149,5 @@ rather than restating it. Two run across several specifications:
   [`mention-dispatch.md`](mention-dispatch.md), [`responders.md`](responders.md)
   and [`approval.md`](approval.md) each left open.
 - [`working-memory.md`](working-memory.md) — the port seats carry observations across activations through, with the engine left to the host ([ADR 0029](../adr/0029-working-memory-is-a-host-adapter.md)).
+
+- [`hive-language.md`](hive-language.md) — pure declarative hive packages, guarded edits, memory bindings, and evaluated lineage.

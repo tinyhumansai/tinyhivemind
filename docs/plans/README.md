@@ -56,3 +56,5 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a test-first sample
   probabilistic quorum, the native Jev adapter, and paired evaluation.
 - [`jev-first-routing.md`](jev-first-routing.md) — host-neutral conversation
   surfaces, Jev-first desk routing, bounded hive invitations, and fallback.
+
+- [`2026-10-10-hive-language.md`](2026-10-10-hive-language.md) — implement the accepted hive language and adapter conversions.

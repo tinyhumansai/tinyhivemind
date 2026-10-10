@@ -1,6 +1,8 @@
 //! The division of labour: its policy, its assignments, and what a caller
 //! reads off one.
 
+use serde::{Deserialize, Serialize};
+
 use crate::runtime::{SessionAuthor, SessionMessage};
 
 use crate::hive::episode::DEFAULT_ROUND_WIDTH;
@@ -181,7 +183,8 @@ impl Division {
 /// repository measured beating the best single agent it could build, and a
 /// default that made a caller opt into the thing that wins would be the wrong
 /// way round. See `docs/experiments/2026-09-09-variety-and-roles.md`.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct DivisionPolicy {
     /// Assignments one round may authorize concurrently.
     ///

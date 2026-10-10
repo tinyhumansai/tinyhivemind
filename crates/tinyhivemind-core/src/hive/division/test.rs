@@ -355,3 +355,20 @@ fn the_default_policy_divides() {
         crate::hive::episode::DEFAULT_ROUND_WIDTH
     );
 }
+
+#[test]
+fn division_policy_wire_preserves_width_and_directory_choice() {
+    let policy = DivisionPolicy {
+        round_width: 7,
+        follow_directory: false,
+    };
+    let value = serde_json::to_value(policy).unwrap();
+    assert_eq!(
+        value,
+        serde_json::json!({"round_width":7,"follow_directory":false})
+    );
+    assert_eq!(
+        serde_json::from_value::<DivisionPolicy>(value).unwrap(),
+        policy
+    );
+}

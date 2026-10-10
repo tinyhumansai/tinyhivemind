@@ -1,0 +1,310 @@
+{
+  "$schema": "https://tinyhumans.ai/schemas/hive/v1",
+  "version": 1,
+  "id": "pe1006",
+  "name": "pe1006",
+  "roles": [
+    {
+      "id": "theory",
+      "charter": "roles/theory.md"
+    },
+    {
+      "id": "solver",
+      "charter": "roles/solver.md"
+    },
+    {
+      "id": "checker",
+      "charter": "roles/checker.md"
+    },
+    {
+      "id": "lead",
+      "charter": "roles/lead.md"
+    },
+    {
+      "id": "researcher",
+      "charter": "roles/researcher.md"
+    }
+  ],
+  "seats": [
+    {
+      "id": "theory",
+      "label": "theory",
+      "role": "theory",
+      "prompt": "seats/theory.md",
+      "template": "pe1006",
+      "config": {
+        "max_iterations": 12,
+        "temperature": 0.0,
+        "action_dir": "workspace",
+        "runtime_id_suffix": "pe1006",
+        "memory_file": "HIVE_MEMORY.md"
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read",
+          "file_write",
+          "mcp_list_tools",
+          "mcp_call_tool",
+          "shell"
+        ],
+        "deny": [
+          "run_code",
+          "ask_docs"
+        ]
+      },
+      "mcp": [
+        "tinyhive"
+      ],
+      "skills": []
+    },
+    {
+      "id": "solver",
+      "label": "solver",
+      "role": "solver",
+      "prompt": "seats/solver.md",
+      "template": "pe1006",
+      "config": {
+        "max_iterations": 12,
+        "temperature": 0.0,
+        "action_dir": "workspace",
+        "runtime_id_suffix": "pe1006",
+        "memory_file": "HIVE_MEMORY.md"
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read",
+          "file_write",
+          "mcp_list_tools",
+          "mcp_call_tool",
+          "shell"
+        ],
+        "deny": [
+          "run_code",
+          "ask_docs"
+        ]
+      },
+      "mcp": [
+        "tinyhive"
+      ],
+      "skills": []
+    },
+    {
+      "id": "checker",
+      "label": "checker",
+      "role": "checker",
+      "prompt": "seats/checker.md",
+      "template": "pe1006",
+      "config": {
+        "max_iterations": 12,
+        "temperature": 0.0,
+        "action_dir": "workspace",
+        "runtime_id_suffix": "pe1006",
+        "memory_file": "HIVE_MEMORY.md"
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read",
+          "file_write",
+          "mcp_list_tools",
+          "mcp_call_tool",
+          "shell"
+        ],
+        "deny": [
+          "run_code",
+          "ask_docs"
+        ]
+      },
+      "mcp": [
+        "tinyhive"
+      ],
+      "skills": []
+    },
+    {
+      "id": "lead",
+      "label": "lead",
+      "role": "lead",
+      "prompt": "seats/lead.md",
+      "template": "pe1006",
+      "config": {
+        "max_iterations": 12,
+        "temperature": 0.0,
+        "action_dir": "workspace",
+        "runtime_id_suffix": "pe1006",
+        "memory_file": "HIVE_MEMORY.md"
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read",
+          "file_write",
+          "mcp_list_tools",
+          "mcp_call_tool",
+          "shell"
+        ],
+        "deny": [
+          "run_code",
+          "ask_docs"
+        ]
+      },
+      "mcp": [
+        "tinyhive"
+      ],
+      "skills": []
+    },
+    {
+      "id": "researcher",
+      "label": "researcher",
+      "role": "researcher",
+      "prompt": "seats/researcher.md",
+      "template": "pe1006",
+      "config": {
+        "max_iterations": 12,
+        "temperature": 0.0,
+        "action_dir": "workspace",
+        "runtime_id_suffix": "pe1006",
+        "memory_file": "HIVE_MEMORY.md"
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read",
+          "file_write",
+          "mcp_list_tools",
+          "mcp_call_tool",
+          "shell"
+        ],
+        "deny": [
+          "run_code",
+          "ask_docs"
+        ]
+      },
+      "mcp": [
+        "tinyhive"
+      ],
+      "skills": []
+    }
+  ],
+  "desks": [
+    {
+      "id": "pe1006",
+      "name": "PE1006",
+      "description": "derive and independently verify the exact Project Euler 1006 answer",
+      "members": [
+        "theory",
+        "solver",
+        "checker",
+        "lead",
+        "researcher"
+      ],
+      "responder_mode": "auto"
+    }
+  ],
+  "goals": [],
+  "missions": [],
+  "topology": [],
+  "referrals": [],
+  "context": [],
+  "policies": {
+    "episode": {
+      "turn_budget": 12,
+      "round_width": 1,
+      "revealed_width": 1,
+      "blind_round": true,
+      "dominance_cap": 50,
+      "repetition_cap": 3,
+      "distance": "sequence",
+      "quorum": {
+        "threshold": 2,
+        "window": 30,
+        "require_grounded": true
+      },
+      "weights": {
+        "recency": 5,
+        "importance": 30,
+        "relevance": 20,
+        "half_life": 20
+      }
+    },
+    "routing": {
+      "minimum_confidence": 0,
+      "high_impact_minimum_confidence": 0,
+      "clarification_threshold": 1000000,
+      "high_impact_threshold": 1000000,
+      "round_width": 5,
+      "choice_option_limit": 8
+    },
+    "approval": {
+      "enabled": false,
+      "default": "deny",
+      "rules": [],
+      "approver": {
+        "kind": "absent"
+      },
+      "allow_grants": false,
+      "max_grant_ttl": null
+    },
+    "aside": {
+      "enabled": false,
+      "max_members": 0,
+      "max_messages": 0,
+      "must_surface": false,
+      "require_thread": false
+    },
+    "referral": {
+      "enabled": false,
+      "max_hops": 0,
+      "reach": "local",
+      "returns": false
+    },
+    "digest": {
+      "keep_live": 30,
+      "fold_after": 20,
+      "fold_after_chars": 400000,
+      "input_limit": 60,
+      "budget_chars": 4000
+    },
+    "brevity": {
+      "message_chars": 600,
+      "window": 30
+    },
+    "directory": {
+      "half_life": 20,
+      "specialisation": 30,
+      "credibility": 20,
+      "prior": 10,
+      "discredit": 20,
+      "window": 30,
+      "floor": 1000
+    },
+    "exchange": {
+      "enabled": false,
+      "contact_cap": 0,
+      "round_cap": 0
+    },
+    "division": {
+      "round_width": 4,
+      "follow_directory": true
+    },
+    "conduct": {
+      "child_turn_wall": 6,
+      "turn_wall": 60
+    }
+  },
+  "coordinator": {
+    "round_width": 5,
+    "conduct_policy": {
+      "child_turn_wall": 6,
+      "turn_wall": 60
+    },
+    "broadcast_budget": null,
+    "retention": {
+      "settled_episodes": null,
+      "delivered": null,
+      "interrupted": null,
+      "pending_per_agent": null
+    }
+  }
+}

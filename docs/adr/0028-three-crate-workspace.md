@@ -1,6 +1,6 @@
 # 28. Consolidate the workspace into three crates
 
-- **Status:** Accepted
+- **Status:** Accepted; package count superseded by [ADR 0032](0032-hive-language-owns-the-wire-format.md)
 - **Date:** 2026-10-03
 - **Supersedes:** The package boundaries in [ADR 0025](0025-the-driver-names-no-harness.md)
 

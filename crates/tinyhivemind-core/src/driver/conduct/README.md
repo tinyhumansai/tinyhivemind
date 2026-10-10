@@ -6,7 +6,8 @@ that no single fold can hold.
 
 | file | holds |
 | --- | --- |
-| `mod.rs` | `Conductor`, `ConductPolicy`, `Door`, `starters`; opening the desk, beginning a wave, proposing turns, opening a turn with its brief, recording what it called |
+| `mod.rs` | `Conductor`, `starters`; opening the desk, beginning a wave, proposing turns, opening a turn with its brief, recording what it called |
+| `types.rs` | `ConductPolicy`, `Door`, `ConductorState`, conductor state fields: episode walls, opening inputs and resumable snapshots; private snapshot fields remain scoped to the conductor |
 | `wave.rs` | After a wave: the phase machine that hands the host one `Step` at a time -- commits in conversations, silent askees, commits on the desk with their consequences, conclusions, the turn wall |
 | `child.rs` | A conversation: its root, its asker and the seats it asked, its own driver state, its turns, its nudges; and one that concluded |
 | `steps.rs` | `Turn`, `Note`, `Commit`, `Event`, `Refusal`, `Step`: the wire forms a host journals and streams |

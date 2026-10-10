@@ -7,6 +7,7 @@ fn management_request_wire_shape_keeps_host_template_and_identity_fields() {
         (
             ManagementRequest::CreateAgent {
                 template: "research".into(),
+                memory: None,
                 config: json!({"memory_ref":"private-1"}),
             },
             json!({"CreateAgent":{"template":"research","config":{"memory_ref":"private-1"}}}),
@@ -98,4 +99,27 @@ fn turn_scope_names_the_episode_its_thread_and_distinct_senders() {
         TurnScope::from_request(&direct).destination,
         Destination::Agent("a".into())
     );
+}
+
+#[test]
+fn create_agent_binding_wire_is_optional_and_preserves_the_contract()
+-> Result<(), serde_json::Error> {
+    use super::ManagementRequest;
+    let legacy = serde_json::json!({"CreateAgent":{"template":"research","config":{}}});
+    let decoded: ManagementRequest = serde_json::from_value(legacy.clone())?;
+    assert!(matches!(
+        &decoded,
+        ManagementRequest::CreateAgent { memory: None, .. }
+    ));
+    assert_eq!(serde_json::to_value(decoded)?, legacy);
+    let portable = serde_json::json!({
+        "agent_id":"shared", "root":"team:hive", "namespace":"team:hive/agent:shared", "kind":"agent",
+        "identity":{"id":"memory","namespace":"team:hive/agent:shared","kind":"agent","lifecycle":"hive","read_only":true,"fork_parent":null},
+        "settings":{"seat":"scout","identity":"memory","reads":[],"recall_at":["compaction"],"budget_chars":128,"remember":["note"]}
+    });
+    let wire =
+        serde_json::json!({"CreateAgent":{"template":"research","config":{},"memory":portable}});
+    let decoded: ManagementRequest = serde_json::from_value(wire.clone())?;
+    assert_eq!(serde_json::to_value(decoded)?, wire);
+    Ok(())
 }
