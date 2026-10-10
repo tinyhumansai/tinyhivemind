@@ -408,3 +408,13 @@ fn a_conductor_snapshot_names_every_field_a_restart_reads_back() {
     assert_eq!(back.chat, snapshot.chat);
     assert_eq!(back.mid_wave_is_empty(), snapshot.mid_wave_is_empty());
 }
+
+#[test]
+fn conduct_policy_wire_form_and_omitted_defaults_are_stable() {
+    let value: crate::driver::ConductPolicy = serde_json::from_str("{}").unwrap();
+    assert_eq!(value, crate::driver::ConductPolicy::default());
+    assert_eq!(
+        serde_json::to_value(value).unwrap(),
+        serde_json::json!({"child_turn_wall":6,"turn_wall":60})
+    );
+}

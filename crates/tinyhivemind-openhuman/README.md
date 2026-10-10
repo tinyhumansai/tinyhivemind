@@ -95,3 +95,6 @@ Runnable host construction and topology proofs are in
 [`examples/openhuman`](../../examples/openhuman/README.md).
 See the [OpenCompany migration guide](../../docs/opencompany-migration.md) for
 construction, single-runtime dependency unification, and recovery.
+
+The [configuration module](src/config/README.md) parses reusable manifests and
+Markdown profiles before runtime construction.

@@ -181,7 +181,8 @@ impl Division {
 /// repository measured beating the best single agent it could build, and a
 /// default that made a caller opt into the thing that wins would be the wrong
 /// way round. See `docs/experiments/2026-09-09-variety-and-roles.md`.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct DivisionPolicy {
     /// Assignments one round may authorize concurrently.
     ///
