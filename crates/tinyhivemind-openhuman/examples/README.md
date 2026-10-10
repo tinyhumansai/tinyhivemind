@@ -2,6 +2,7 @@
 
 | File | Purpose |
 | --- | --- |
+| `live_language/` | Exact completion and audience evidence, plus offline regressions |
 | `live_language.rs` | Loads a live-evaluated language package, creates two model-backed seats through the management adapter with a shared memory binding, and verifies native completion, private delivery and leave access. |
 
 Run from the repository root, after the language live example has produced its
@@ -17,3 +18,13 @@ Requires `OPENROUTER_API_KEY`; `OPENROUTER_MODEL` optionally overrides
 inference uses OpenRouter. This host supports inert, read-only run memory
 bindings: no recall or store is attached. It verifies identity installation,
 not persistent memory contents or cross-run learning.
+
+The completion check matches the assignment ledger’s exact completion sequence,
+episode and author. Privacy is checked in both directions by task receipt
+sequence. Package seats named `host` are rejected before registration to keep
+model actors distinct from the privileged management principal. Run the offline
+regressions with:
+
+```sh
+cargo test -p tinyhivemind-openhuman --features offline --example live_language
+```

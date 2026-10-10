@@ -65,6 +65,7 @@ impl AgentFactory for Factory {
     }
 }
 
+/// Require live opt-in and boot the host on a suitably sized Tokio stack.
 fn main() -> Result<()> {
     if std::env::args().nth(1).as_deref() != Some("--live") {
         return Err("explicit --live required".into());
@@ -82,8 +83,10 @@ fn main() -> Result<()> {
         .block_on(async { tokio::spawn(run(input, output)).await })??;
     Ok(())
 }
+/// Validate smoke-host actors and bind two seats to inert shared run memory.
 fn host_package(input: &str) -> Result<Package> {
     let mut package: Package = serde_json::from_slice(&std::fs::read(input)?)?;
+    evidence::validate_seat_actors(&package.manifest.seats)?;
     let source = package
         .manifest
         .seats
@@ -123,6 +126,7 @@ fn host_package(input: &str) -> Result<Package> {
     Ok(package)
 }
 
+/// Use a live inference provider with a local incidental backend fixture.
 async fn live_runtime(model: &str, key: String) -> Result<(Runtime, wiremock::MockServer)> {
     let backend = tinyhivemind_openhuman::offline::backend().await;
     let runtime = Box::pin(
@@ -138,6 +142,7 @@ async fn live_runtime(model: &str, key: String) -> Result<(Runtime, wiremock::Mo
     Ok((runtime, backend))
 }
 
+/// Create package-defined agents and verify exact completed assignment rows.
 async fn run(input: String, output: String) -> Result<()> {
     let model =
         std::env::var("OPENROUTER_MODEL").unwrap_or_else(|_| "openai/gpt-oss-120b:nitro".into());
@@ -171,6 +176,7 @@ async fn run(input: String, output: String) -> Result<()> {
         coordinator.join_hive("invoices", &seat.id).await?;
     }
     let mut results = vec![];
+    let mut private_tasks = vec![];
     for (id, task, expected) in [
         (
             "solver",
@@ -194,45 +200,46 @@ async fn run(input: String, output: String) -> Result<()> {
                 starters: vec![],
             })
             .await?;
+        private_tasks.push((id.to_owned(), receipt.sequence));
         let report = coordinator.run_until_idle().await?;
         let state = storage.load().await?;
-        if report.completed == 0
-            || report.failed != 0
-            || !state
-                .episodes
-                .iter()
-                .any(|e| e.opened_at == receipt.sequence && e.finished && e.failure.is_none())
-        {
+        if report.completed == 0 || report.failed != 0 {
             std::fs::write(&output, serde_json::to_vec_pretty(&state)?)?;
             return Err(format!("native episode failed for {id}: {report:?}").into());
         }
         let messages = coordinator.read_hive(id, "invoices", None, None)?;
-        if !messages
-            .iter()
-            .any(|m| m.sequence > receipt.sequence && m.body.trim() == expected)
+        if let Err(error) =
+            evidence::verify_episode(&state, receipt.sequence, &messages, id, expected)
         {
             std::fs::write(&output, serde_json::to_vec_pretty(&state)?)?;
-            return Err(
-                format!("native completion did not contain expected total for {id}").into(),
-            );
+            return Err(error);
         }
         results.push(json!({"seat":id,"expected":expected,"finished":true,"native_completion":true,"memory_agent_id":"ledger","messages":messages}));
         println!("{id}: native completion={expected}; shared memory binding=ledger");
     }
-    finish(&coordinator, &storage, &model, results, &output).await
+    finish(
+        &coordinator,
+        &storage,
+        &model,
+        results,
+        &private_tasks,
+        &output,
+    )
+    .await
 }
 
+/// Check both private audiences and revoke the departing seat before saving evidence.
 async fn finish(
     coordinator: &Coordinator,
     storage: &MemoryStorage,
     model: &str,
     results: Vec<Value>,
+    private_tasks: &[(String, u64)],
     output: &str,
 ) -> Result<()> {
-    let solver = coordinator.read_hive("solver", "invoices", None, None)?;
-    if solver.iter().any(|m| m.body.contains("14")) {
-        return Err("private auditor task leaked to solver".into());
-    }
+    evidence::private_tasks_hidden(private_tasks, |seat| {
+        Ok(coordinator.read_hive(seat, "invoices", None, None)?)
+    })?;
     coordinator.leave_hive("invoices", "auditor").await?;
     if coordinator
         .read_hive("auditor", "invoices", None, None)
@@ -249,3 +256,9 @@ async fn finish(
     println!("privacy and leave-access checks passed");
     Ok(())
 }
+
+#[path = "live_language/evidence.rs"]
+mod evidence;
+#[cfg(test)]
+#[path = "live_language/test.rs"]
+mod test;

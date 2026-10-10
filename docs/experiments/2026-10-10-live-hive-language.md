@@ -113,3 +113,33 @@ the configured walls. The numeric checks above do not assume a single turn.
 The final native report also retains the actual attributed completion messages.
 Final validation passed: formatting, clippy with warnings denied, all-target/all-
 feature build, 1,342 workspace tests including doctests, and the purity assertion.
+
+## Review follow-up, 2026-10-11
+
+The original completion assertion accepted any later matching post; review
+identified that this could mask an incorrect completion body. The revised
+check matches the assignment ledger's exact completion sequence, episode and
+author. Privacy now checks both task receipt identities against the other
+seat's view rather than searching one view for a numeric marker. Offline
+regressions reproduce unrelated-post false positives and both leak directions.
+
+Failed provider calls retain redacted response evidence and bounded stderr
+diagnostics. A package seat named `host` is rejected before registration so
+it cannot collide with the smoke host's management principal. These changes
+strengthen the harness assertions; no library guard or CI check was weakened.
+
+The standalone `examples/openhuman/Cargo.lock` now includes the language
+crate required by the adapter. Its omission caused the hosted locked-build
+failure after the initial PR; the workspace-only validation did not cover
+that separate lockfile.
+
+A fourth native-host run with these stricter checks completed successfully
+against the saved accepted package from run 5. Solver's exact native completion
+was `33`, auditor's was `5`, both private task identities remained hidden from
+the other seat, and the auditor lost read access after leaving. The local
+report is `target/live-language-host-review.json`.
+
+Follow-up validation passed: all four workspace contract commands, the six
+focused example regression tests, both purity/pin checks, and
+`cargo test --locked --manifest-path examples/openhuman/Cargo.toml --target-dir target`
+(63 standalone tests).

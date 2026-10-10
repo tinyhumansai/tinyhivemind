@@ -2,6 +2,7 @@
 
 | File | Purpose |
 | --- | --- |
+| `live_self_edit/` | Provider-failure regression tests and their directory guide |
 | `live_self_edit.rs` | Opt-in OpenRouter proposal, exact-match held-out evaluation, negative control and telemetry/contamination guard checks |
 | `self_edit.rs` | Propose a prompt delta, guard the candidate, supply a host evaluation, and archive accepted and rejected designs |
 
@@ -44,3 +45,7 @@ integration smoke test, not evidence of general self-improvement on SWE tasks.
 Use the resulting `accepted-package.json` with the adapter's
 [live language example](../../tinyhivemind-openhuman/examples/README.md) to
 exercise native tool completion and registration from the lowered package.
+
+Failed provider calls retain redacted response bodies in `response-N.error`
+and include a bounded, redacted stderr excerpt in the returned error. Run the
+offline regression with `cargo test -p tinyhivemind-lang --example live_self_edit`.
