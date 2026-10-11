@@ -153,6 +153,7 @@ openhuman = { path = "vendor/openhuman/crates/openhuman-core" }
 [patch."https://github.com/tinyhumansai/tinytools"]
 tinytools = { path = "vendor/openhuman/vendor/tinyagents/vendor/tinytools/crates/tinytools" }
 tinytools-agent = { path = "vendor/openhuman/vendor/tinyagents/vendor/tinytools/crates/tinytools-agent" }
+tinytools-std = { path = "vendor/openhuman/vendor/tinyagents/vendor/tinytools/crates/tinytools-std" }
 
 # Keep the memory and inference packages on the OpenHuman submodule copies.
 # OpenHuman's workspace patches do not apply when this repository is the Cargo

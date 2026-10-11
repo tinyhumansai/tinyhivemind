@@ -1983,7 +1983,7 @@ dependencies = [
  "tinystoragedrivers",
  "tinytools",
  "tinytools-agent",
- "tinytools-std 0.5.0",
+ "tinytools-std",
  "tokio",
  "tokio-tungstenite",
  "tokio-util",
@@ -3173,7 +3173,7 @@ dependencies = [
  "tinystoragedrivers-core",
  "tinytools",
  "tinytools-agent",
- "tinytools-std 0.5.0",
+ "tinytools-std",
  "tokio",
  "tracing",
  "uuid",
@@ -3650,7 +3650,7 @@ dependencies = [
  "thiserror",
  "tinymcp-bus",
  "tinytools",
- "tinytools-std 0.5.0 (git+https://github.com/tinyhumansai/tinytools?rev=360721bc3c7a26221b61f6629f5f0415cfccb568)",
+ "tinytools-std",
  "tokio",
  "tracing",
  "url",
@@ -3831,31 +3831,6 @@ dependencies = [
 [[package]]
 name = "tinytools-std"
 version = "0.5.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "base64 0.23.1",
- "fs2",
- "futures-util",
- "glob",
- "libc",
- "log",
- "parking_lot",
- "regex",
- "reqwest",
- "rustix",
- "serde_json",
- "sha2 0.11.0",
- "tinytools",
- "tokio",
- "tracing",
- "walkdir",
-]
-
-[[package]]
-name = "tinytools-std"
-version = "0.5.0"
-source = "git+https://github.com/tinyhumansai/tinytools?rev=360721bc3c7a26221b61f6629f5f0415cfccb568#360721bc3c7a26221b61f6629f5f0415cfccb568"
 dependencies = [
  "anyhow",
  "async-trait",

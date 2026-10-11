@@ -62,6 +62,7 @@ openhuman = { path = "../../vendor/openhuman/crates/openhuman-core" }
 [patch."https://github.com/tinyhumansai/tinytools"]
 tinytools = { path = "../../vendor/openhuman/vendor/tinyagents/vendor/tinytools/crates/tinytools" }
 tinytools-agent = { path = "../../vendor/openhuman/vendor/tinyagents/vendor/tinytools/crates/tinytools-agent" }
+tinytools-std = { path = "../../vendor/openhuman/vendor/tinyagents/vendor/tinytools/crates/tinytools-std" }
 
 # OpenHuman's workspace-level patches do not cross this standalone workspace
 # boundary. Keep the newer OpenHuman checkout's vendored memory and inference
