@@ -115,7 +115,7 @@ fn scheduled_mcp_envelope_and_private_children_never_reach_remote_effect() -> an
         let report = deployment.host().coordinator().run_until_idle().await?;
         assert_eq!(report.failed, 0, "{report:?}");
         for row in deployment.host().coordinator().read_transcript(None)? { eprintln!("ROW {row:?}"); }
-        for r in model.received_requests().await.unwrap_or_default() { eprintln!("REQ {}", String::from_utf8_lossy(&r.body).chars().rev().take(1500).collect::<String>().chars().rev().collect::<String>()); }
+        for r in model.received_requests().await.unwrap_or_default() { { let v: Value = serde_json::from_slice(&r.body).unwrap_or_default(); for m in v["messages"].as_array().cloned().unwrap_or_default() { if m["role"] == "tool" || m["tool_calls"].is_array() { eprintln!("MSG {m}"); } } let names: Vec<_> = v["tools"].as_array().cloned().unwrap_or_default().iter().map(|t| t["function"]["name"].to_string()).filter(|n| n.contains("mcp")).collect(); eprintln!("TOOLS {names:?}"); } }
         assert!(
             count.load(Ordering::Relaxed) > 0,
             "interactive MCP call must reach the fixture"
