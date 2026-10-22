@@ -1,7 +1,6 @@
 //! Pure approval integration, tool narrowing and trusted scheduled effects.
 use super::support::*;
 use crate::deploy::*;
-use openhuman_embed::seams::ToolHookDecision;
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
@@ -9,10 +8,10 @@ use std::sync::{
 #[tokio::test]
 async fn tool_allowed_in_a_is_denied_in_b_and_under_scheduled_origin() -> anyhow::Result<()> {
     let engine = permissions(manifest()?, &BuildOptions::default());
-    assert!((engine
+    assert!(!(engine
             .decide("alice", Some(&scope("a")), &context("write"))
-            .await).is_deny() == false);
-    assert!((engine
+            .await).is_deny());
+    assert!(!(engine
             .decide("alice", Some(&scope("b")), &context("write"))
             .await).is_deny());
     let mut scheduled = scope("a");
@@ -24,8 +23,8 @@ async fn tool_allowed_in_a_is_denied_in_b_and_under_scheduled_origin() -> anyhow
     }
     assert!((engine
             .decide("alice", Some(&scheduled), &context("hivemind_complete"))
-            .await).is_deny() == false);
-    assert!((engine
+            .await).is_deny());
+    assert!(!(engine
             .decide("alice", Some(&scope("a")), &context("unrecognized"))
             .await).is_deny());
     let mut forged = context("read");
@@ -112,11 +111,11 @@ async fn readonly_baseline_and_argument_rules_survive_turn_allows() -> anyhow::R
     assert!((engine
             .decide("alice", Some(&scope("a")), &context("write"))
             .await).is_deny());
-    assert!((engine.decide("alice", None, &context("read")).await).is_deny() == false);
+    assert!((engine.decide("alice", None, &context("read")).await).is_deny());
     let mut config = manifest()?;
     config.runtime.tool_rules = Some(tinytools::ToolRules::deny_all());
     let engine = permissions(config, &BuildOptions::default());
-    assert!((engine.decide("alice", None, &context("read")).await).is_deny());
+    assert!(!(engine.decide("alice", None, &context("read")).await).is_deny());
     Ok(())
 }
 #[tokio::test]
@@ -131,7 +130,7 @@ async fn argument_rules_and_unknown_metadata_cannot_be_bypassed() -> anyhow::Res
             .await).is_deny());
     let mut allowed = context("read");
     allowed.arguments = serde_json::json!({"path":"public"});
-    assert!((engine.decide("alice", Some(&scope("a")), &allowed).await).is_deny() == false);
+    assert!((engine.decide("alice", Some(&scope("a")), &allowed).await).is_deny());
     for matcher in [
         serde_json::json!({"family":"private"}),
         serde_json::json!({"tags":"sensitive"}),
@@ -143,7 +142,7 @@ async fn argument_rules_and_unknown_metadata_cannot_be_bypassed() -> anyhow::Res
             serde_json::json!({"rules":[{"effect":"deny","match":matcher}]}),
         )?);
         let engine = permissions(config, &BuildOptions::default());
-        assert!((engine
+        assert!(!(engine
                 .decide("alice", Some(&scope("a")), &context("read"))
                 .await).is_deny());
     }
@@ -160,9 +159,9 @@ async fn isolated_session_never_captures_active_hive_or_episode_authority() -> a
     assert!((engine.decide("alice", None, &context("write")).await).is_deny());
     let mut isolated = context("write");
     isolated.session_id = Some("cron-isolated".into());
-    assert!((engine.decide("alice", None, &isolated).await).is_deny() == false);
-    isolated.tool_name = "hivemind_complete".into();
     assert!((engine.decide("alice", None, &isolated).await).is_deny());
+    isolated.tool_name = "hivemind_complete".into();
+    assert!(!(engine.decide("alice", None, &isolated).await).is_deny());
     Ok(())
 }
 #[tokio::test]
@@ -178,14 +177,14 @@ async fn declared_delegates_are_internal_but_child_rules_still_narrow_effects() 
     let engine = permissions(config, &BuildOptions::default());
     assert!((engine
             .decide("alice", Some(&scope("a")), &context("delegate_helper"))
-            .await).is_deny() == false);
-    assert!((engine
+            .await).is_deny());
+    assert!(!(engine
             .decide("alice", Some(&scope("a")), &context("delegate_unknown"))
             .await).is_deny());
     let mut child = context("write");
     child.agent_id = Some("helper".into());
     assert!((engine.decide("alice", Some(&scope("a")), &child).await).is_deny());
     child.tool_name = "read".into();
-    assert!((engine.decide("alice", Some(&scope("a")), &child).await).is_deny() == false);
+    assert!((engine.decide("alice", Some(&scope("a")), &child).await).is_deny());
     Ok(())
 }
