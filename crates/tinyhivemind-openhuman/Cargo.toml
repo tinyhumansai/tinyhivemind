@@ -25,8 +25,10 @@ offline = ["dep:wiremock"]
 # core with either gate off (the disabled secret backend and the legacy import
 # outcomes reference items only the enabled side defines); both are in
 # OpenHuman's own default set. `testkit` exports `InMemorySessionStores`, the
-# store behind a hive's `session_store = "memory"`.
-openhuman-embed = { workspace = true, features = ["mcp", "skills", "storage-sqlite", "secret-file", "legacy-import", "testkit"] }
+# store behind a hive's `session_store = "memory"`. `modules` is on because
+# OpenHuman serves MCP through its TinyMCP module: without the module host an
+# MCP server is configured but every call answers "module unavailable".
+openhuman-embed = { workspace = true, features = ["mcp", "skills", "storage-sqlite", "secret-file", "legacy-import", "testkit", "modules"] }
 # Host usage and policy types remain OpenHuman's own.
 openhuman.workspace = true
 # Fixed-time validation of workflow cron schedules.
@@ -61,6 +63,9 @@ tinymemory-tools.workspace = true
 wiremock = { workspace = true, optional = true }
 
 [dev-dependencies]
+# The TinyMCP module linked into the test binary, so MCP tests load it from an
+# in-process factory instead of downloading the pinned release.
+tinymcp = { path = "../../vendor/openhuman/vendor/tinymcp/crates/tinymcp", features = ["static-link"] }
 # OpenHuman's agent definition types, to assert what a deployed profile built.
 tinyagents-definition = { path = "../../vendor/openhuman/vendor/tinyagents/crates/tinyagents-definition" }
 tempfile.workspace = true
