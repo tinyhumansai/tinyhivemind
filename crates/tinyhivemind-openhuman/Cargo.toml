@@ -24,10 +24,13 @@ offline = ["dep:wiremock"]
 # `legacy-import` are on because the pinned OpenHuman does not compile its
 # core with either gate off (the disabled secret backend and the legacy import
 # outcomes reference items only the enabled side defines); both are in
-# OpenHuman's own default set.
-openhuman-embed = { workspace = true, features = ["mcp", "skills", "storage-sqlite", "secret-file", "legacy-import"] }
+# OpenHuman's own default set. `testkit` exports `InMemorySessionStores`, the
+# store behind a hive's `session_store = "memory"`.
+openhuman-embed = { workspace = true, features = ["mcp", "skills", "storage-sqlite", "secret-file", "legacy-import", "testkit"] }
 # Host usage and policy types remain OpenHuman's own.
 openhuman.workspace = true
+# Fixed-time validation of workflow cron schedules.
+tinyflows-schedule.workspace = true
 # Native tool trait and results used by permanent attachments.
 tinytools.workspace = true
 # Async native tool methods.
@@ -58,6 +61,8 @@ tinymemory-tools.workspace = true
 wiremock = { workspace = true, optional = true }
 
 [dev-dependencies]
+# OpenHuman's agent definition types, to assert what a deployed profile built.
+tinyagents-definition = { path = "../../vendor/openhuman/vendor/tinyagents/crates/tinyagents-definition" }
 tempfile.workspace = true
 # The routing surfaces, for a test that builds its own hive.
 
