@@ -63,6 +63,7 @@ tinymemory-tools.workspace = true
 wiremock = { workspace = true, optional = true }
 
 [dev-dependencies]
+env_logger = "0.11"
 # The TinyMCP module linked into the test binary, so MCP tests load it from an
 # in-process factory instead of downloading the pinned release.
 tinymcp = { path = "../../vendor/openhuman/vendor/tinymcp/crates/tinymcp", features = ["static-link"] }
