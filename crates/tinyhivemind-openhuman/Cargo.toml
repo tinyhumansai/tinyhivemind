@@ -20,8 +20,12 @@ required-features = ["offline"]
 offline = ["dep:wiremock"]
 
 [dependencies]
-# Supplied handles and their continuing turn API.
-openhuman-embed = { workspace = true, features = ["mcp", "skills", "storage-sqlite"] }
+# Supplied handles and their continuing turn API. `secret-file` and
+# `legacy-import` are on because the pinned OpenHuman does not compile its
+# core with either gate off (the disabled secret backend and the legacy import
+# outcomes reference items only the enabled side defines); both are in
+# OpenHuman's own default set.
+openhuman-embed = { workspace = true, features = ["mcp", "skills", "storage-sqlite", "secret-file", "legacy-import"] }
 # Host usage and policy types remain OpenHuman's own.
 openhuman.workspace = true
 # Native tool trait and results used by permanent attachments.
