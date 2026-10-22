@@ -401,10 +401,11 @@ fn unique_agent_ids(config: &HiveConfig) -> Result<()> {
                 agent_id,
             });
         }
-        let reserved = openhuman_core::agent_registry::host_definition::AgentDefinitionRegistry::builtins_only()
+        let reserved =
+            openhuman_core::agent_registry::host_definition::AgentDefinitionRegistry::builtins_only(
+            )
             .get(&agent_id)
-            .is_some()
-            || config.profiles.iter().any(|profile| profile.id == agent_id);
+            .is_some() || config.profiles.iter().any(|profile| profile.id == agent_id);
         if reserved {
             return Err(ConfigError::ReservedAgentId {
                 seat: seat.id.clone(),

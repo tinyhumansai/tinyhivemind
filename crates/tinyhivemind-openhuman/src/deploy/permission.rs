@@ -282,12 +282,10 @@ fn basic_gate(
     let scheduled = scope.is_some_and(|scope| scope.scheduled_job_id.is_some())
         || matches!(
             openhuman_embed::current_turn_origin(),
-            Some(
-                openhuman_embed::AgentTurnOrigin::TrustedAutomation {
-                    source: openhuman_embed::TrustedAutomationSource::Cron,
-                    ..
-                }
-            )
+            Some(openhuman_embed::AgentTurnOrigin::TrustedAutomation {
+                source: openhuman_embed::TrustedAutomationSource::Cron,
+                ..
+            })
         );
     if scheduled
         && scope.is_none()

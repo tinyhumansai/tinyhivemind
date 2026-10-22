@@ -63,11 +63,9 @@ impl HiveMemory {
                 reason: "the default root shares memory with every unbound agent".into(),
             });
         }
-        tinymemory_tools::validate_root(&root).map_err(|reason| {
-            Error::InvalidMemoryRoot {
-                root: root.clone(),
-                reason,
-            }
+        tinymemory_tools::validate_root(&root).map_err(|reason| Error::InvalidMemoryRoot {
+            root: root.clone(),
+            reason,
         })?;
         Ok(Self {
             root,
