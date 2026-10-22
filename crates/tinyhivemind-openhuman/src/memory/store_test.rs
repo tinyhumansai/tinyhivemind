@@ -4,7 +4,7 @@
 #![allow(clippy::unwrap_used)]
 use super::HiveMemoryStore;
 use crate::{Error, HiveMemory};
-use openhuman_core::memory::{lifecycle::agent_memory_on, scope::MemoryIdentity};
+use openhuman_core::memory::{lifecycle::agent_memory_on, scope::identity_pins};
 use openhuman_embed::RuntimeConfig;
 use std::{num::NonZeroU32, sync::Arc};
 use tinyhivemind_core::runtime::{
@@ -68,7 +68,7 @@ async fn openhuman_logs(
     let mut config = RuntimeConfig::default();
     config.memory.agent_id = Some(seat.into());
     config.memory.root = Some(format!("team:{hive}"));
-    let identity = MemoryIdentity::agent(seat).resolve(&config);
+    let identity = tinymemory_tools::Identity::agent(seat).resolve(&identity_pins(&config));
     let memory = agent_memory_on(engine.clone(), &config, &identity).unwrap();
     memory
         .post_turn(PostTurn::new(thread, 1, text))

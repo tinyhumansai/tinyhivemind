@@ -136,7 +136,7 @@ fn logical_memory_roots_encode_without_collisions_and_reserve_native_agent_depth
         &"a".repeat(384),
     ] {
         let native = native_memory_root(root)?;
-        assert!(openhuman_core::memory::scope::validate_root(&native).is_ok());
+        assert!(tinymemory_tools::validate_root(&native).is_ok());
         assert_ne!(native_memory_root(&native).ok(), Some(native));
     }
     assert_ne!(

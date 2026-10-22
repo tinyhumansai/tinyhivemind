@@ -345,15 +345,14 @@ impl HiveDeployment {
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
         if scheduler.is_none() {
-            let config = self
-                .runtime
-                .core_runtime()
-                .context()
+            let context = self.runtime.core_runtime().context().clone();
+            let config = context
                 .embedder_config()
                 .cloned()
                 .ok_or(DeployError::Runtime)?;
+            let dispatch = openhuman_core::core::runtime::DispatchCtx::new(context);
             *scheduler = Some(tokio::spawn(async move {
-                let _ = Box::pin(openhuman_core::cron::scheduler::run(config)).await;
+                let _ = Box::pin(openhuman_core::cron::scheduler::run(&dispatch, config)).await;
             }));
         }
         Ok(())

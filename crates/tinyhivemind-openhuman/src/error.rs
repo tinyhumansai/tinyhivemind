@@ -63,6 +63,10 @@ pub enum Error {
     /// or the engine's credential is missing).
     #[error(transparent)]
     Memory(#[from] openhuman_core::memory::MemoryError),
+    /// The memory engine `OpenHuman` resolved for the config refused the
+    /// request (memory is off for the engine, or its credential is missing).
+    #[error(transparent)]
+    MemoryEngine(#[from] tinymemory_api::Error),
     /// A turn timeout of zero would fail every turn before it starts.
     #[error("turn timeout must be nonzero")]
     InvalidTurnTimeout,

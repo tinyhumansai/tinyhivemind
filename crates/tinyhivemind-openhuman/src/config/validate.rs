@@ -287,7 +287,7 @@ impl HiveConfig {
         for job in &self.workflows {
             if job.prompt.trim().is_empty()
                 || job.schedule.split_whitespace().count() != 5
-                || openhuman_core::cron::validate_schedule(
+                || tinyflows_schedule::validate_schedule(
                     &openhuman_core::cron::Schedule::Cron {
                         expr: job.schedule.clone(),
                         tz: None,
@@ -401,7 +401,7 @@ fn unique_agent_ids(config: &HiveConfig) -> Result<()> {
                 agent_id,
             });
         }
-        let reserved = openhuman_core::agent::harness::AgentDefinitionRegistry::builtins_only()
+        let reserved = openhuman_core::agent_registry::host_definition::AgentDefinitionRegistry::builtins_only()
             .get(&agent_id)
             .is_some()
             || config.profiles.iter().any(|profile| profile.id == agent_id);
