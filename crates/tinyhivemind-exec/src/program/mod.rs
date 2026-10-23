@@ -2,7 +2,7 @@
 //!
 //! [`ProgramTool`] presents one [`ExecTool`] to a harness: the model sees its
 //! `id`, `description` and `args` schema, the permission gate classifies it
-//! by `side_effects`, and each call goes through [`crate::run`]. A failing
+//! by `side_effects`, and each call goes through [`crate::run()`]. A failing
 //! call is reported to the model as an error result it can read and adapt
 //! to, never raised to the harness.
 use crate::{ExecContext, Secrets, run};

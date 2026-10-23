@@ -21,7 +21,7 @@
 //!
 //! The entry points:
 //!
-//! - [`run`] — one call, returning an [`Output`] or a typed [`Error`];
+//! - [`run()`] — one call, returning an [`Output`] or a typed [`Error`];
 //! - [`ProgramTool`] — a declaration as a native `tinytools::Tool`, whose
 //!   failures reach the model as error results;
 //! - [`HookRunner`] — a seat's `pre_tool_use`, `post_tool_use` and `stop`
@@ -67,7 +67,7 @@ pub mod context;
 pub mod error;
 pub mod hook;
 pub mod program;
-pub mod run;
+mod run;
 
 pub use context::{EnvSecrets, ExecContext, Secrets};
 pub use error::{Error, Result};

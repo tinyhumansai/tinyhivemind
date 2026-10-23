@@ -2,7 +2,7 @@
 //! `post_tool_use` and `stop`.
 //!
 //! [`HookRunner`] holds the hooks of one seat and runs those bound to an
-//! event, in declaration order, each through [`crate::run`] with the event
+//! event, in declaration order, each through [`crate::run()`] with the event
 //! object as its argument object:
 //!
 //! | Event | Argument object | Stdout |
