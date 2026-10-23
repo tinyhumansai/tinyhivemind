@@ -46,7 +46,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "solver-a",
@@ -72,7 +83,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "solver-b",
@@ -98,7 +120,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "checker",
@@ -124,7 +157,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "lead",
@@ -150,7 +194,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     }
   ],
   "desks": [
@@ -272,5 +327,51 @@
       "interrupted": null,
       "pending_per_agent": null
     }
-  }
+  },
+  "runtime": {
+    "deployment_id": null,
+    "workspace": null,
+    "session_store": "memory",
+    "memory_engine": "disabled",
+    "autonomy": "supervised",
+    "sandbox": "none",
+    "concurrency": 4,
+    "max_agents": null,
+    "include_user_skills": false,
+    "start_scheduler": false,
+    "provider": null,
+    "model": null,
+    "permissions": null,
+    "toolpacks": [],
+    "limits": {
+      "timeout_ms": null,
+      "iterations": null,
+      "budget_usd": null
+    }
+  },
+  "providers": [],
+  "models": [],
+  "mcp": [],
+  "skills": [],
+  "tools": [],
+  "toolpacks": [],
+  "permissions": [],
+  "profiles": [],
+  "hooks": [],
+  "session": {
+    "compact_context": null,
+    "max_history_messages": null,
+    "tool_result_budget_bytes": null,
+    "max_tool_iterations": null,
+    "parallel_tools": null,
+    "agents_md": null
+  },
+  "jev": {
+    "ranker": "jev",
+    "route": "auto",
+    "base_url": null,
+    "top_k": 3
+  },
+  "features": {},
+  "workflows": []
 }
