@@ -116,7 +116,13 @@ fn only_research_seats_reach_the_web_and_only_compute_and_verify_run_code() -> R
     let (_, hive) = euler_hive()?;
     for seat in &hive.seats {
         let desk = desk_of(&hive, &seat.id);
-        let allowed: BTreeSet<_> = seat.integration.tools.allow.iter().map(String::as_str).collect();
+        let allowed: BTreeSet<_> = seat
+            .integration
+            .tools
+            .allow
+            .iter()
+            .map(String::as_str)
+            .collect();
         let mut expected: BTreeSet<_> = HIVE_TOOLS.into_iter().collect();
         match desk {
             "research" => {
@@ -131,7 +137,11 @@ fn only_research_seats_reach_the_web_and_only_compute_and_verify_run_code() -> R
         assert_eq!(allowed, expected, "{} allows the wrong tools", seat.id);
         for tool in HOST_TOOLS {
             assert!(
-                seat.integration.tools.deny.iter().any(|denied| denied == tool),
+                seat.integration
+                    .tools
+                    .deny
+                    .iter()
+                    .any(|denied| denied == tool),
                 "{} does not deny {tool}",
                 seat.id
             );
@@ -140,7 +150,11 @@ fn only_research_seats_reach_the_web_and_only_compute_and_verify_run_code() -> R
             for tool in WEB_TOOLS {
                 assert!(!allowed.contains(tool), "{} allows {tool}", seat.id);
                 assert!(
-                    seat.integration.tools.deny.iter().any(|denied| denied == tool),
+                    seat.integration
+                        .tools
+                        .deny
+                        .iter()
+                        .any(|denied| denied == tool),
                     "{} does not deny {tool}",
                     seat.id
                 );
@@ -148,7 +162,11 @@ fn only_research_seats_reach_the_web_and_only_compute_and_verify_run_code() -> R
         }
         if !matches!(desk, "compute" | "verify") {
             assert!(
-                seat.integration.tools.deny.iter().any(|denied| denied == "run_python"),
+                seat.integration
+                    .tools
+                    .deny
+                    .iter()
+                    .any(|denied| denied == "run_python"),
                 "{} does not deny run_python",
                 seat.id
             );

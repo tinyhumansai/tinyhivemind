@@ -91,7 +91,13 @@ pub(super) fn seat(package: &Package, seat: &Seat) -> LoweredSeatIntegration {
     extend(&mut ids.toolpacks, &m.runtime.toolpacks);
     for layer in [
         (&p.toolpacks, &p.mcp, &p.skills, &p.hooks, &p.context),
-        (&seat.toolpacks, &seat.mcp, &seat.skills, &seat.hooks, &seat.context),
+        (
+            &seat.toolpacks,
+            &seat.mcp,
+            &seat.skills,
+            &seat.hooks,
+            &seat.context,
+        ),
     ] {
         extend(&mut ids.toolpacks, layer.0);
         extend(&mut ids.mcp, layer.1);
@@ -115,7 +121,10 @@ pub(super) fn seat(package: &Package, seat: &Seat) -> LoweredSeatIntegration {
         .or(p.model.as_ref())
         .or(m.runtime.model.as_ref());
     let model = model_id.and_then(|id| model(m, id));
-    let model_limits = model.as_ref().map(|lm| lm.model.limits.clone()).unwrap_or_default();
+    let model_limits = model
+        .as_ref()
+        .map(|lm| lm.model.limits.clone())
+        .unwrap_or_default();
     let limits = seat
         .limits
         .or(&p.limits)

@@ -355,7 +355,13 @@ fn no_gallery_seat_may_reach_the_web_outside_euler_hives_research_desk() -> Resu
         for seat in &hive.seats {
             let allowed: Vec<&str> = WEB_TOOLS
                 .into_iter()
-                .filter(|tool| seat.integration.tools.allow.iter().any(|allowed| allowed == tool))
+                .filter(|tool| {
+                    seat.integration
+                        .tools
+                        .allow
+                        .iter()
+                        .any(|allowed| allowed == tool)
+                })
                 .collect();
             if researchers.contains(&seat.id.as_str()) {
                 assert!(
@@ -371,7 +377,11 @@ fn no_gallery_seat_may_reach_the_web_outside_euler_hives_research_desk() -> Resu
                     continue;
                 }
                 assert!(
-                    seat.integration.tools.deny.iter().any(|denied| denied == tool),
+                    seat.integration
+                        .tools
+                        .deny
+                        .iter()
+                        .any(|denied| denied == tool),
                     "{name}/{} does not deny {tool}",
                     seat.id
                 );

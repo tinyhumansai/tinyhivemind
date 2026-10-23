@@ -203,7 +203,10 @@ fn shipped_deepswe_package_parses_and_lowers_without_host_io()
     assert_eq!(lowered.seats.len(), 4);
     for seat in &lowered.seats {
         assert_eq!(seat.template, "deepswe");
-        assert_eq!(seat.integration.tools.allow, ["mcp_list_tools", "mcp_call_tool"]);
+        assert_eq!(
+            seat.integration.tools.allow,
+            ["mcp_list_tools", "mcp_call_tool"]
+        );
         assert_eq!(seat.integration.tools.deny, Vec::<String>::new());
         assert_eq!(mcp_ids(seat), ["deepswe", "tinyhive"]);
         assert_eq!(seat.config["max_iterations"], 16);
@@ -309,5 +312,9 @@ fn shipped_pe1006_package_parses_and_lowers_without_host_io()
 
 /// The ids of the MCP servers a lowered seat connects to.
 fn mcp_ids(seat: &tinyhivemind_lang::LoweredSeat) -> Vec<&str> {
-    seat.integration.mcp.iter().map(|server| server.id.as_str()).collect()
+    seat.integration
+        .mcp
+        .iter()
+        .map(|server| server.id.as_str())
+        .collect()
 }

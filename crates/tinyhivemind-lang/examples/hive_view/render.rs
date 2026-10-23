@@ -50,9 +50,19 @@ pub(crate) fn tree(loaded: &Loaded) -> String {
 }
 
 fn seat_line(seat: &LoweredSeat, role: &str) -> String {
-    let mut line = format!("{} ({role}) tools={}", seat.id, seat.integration.tools.allow.join(","));
-    if !seat.mcp.is_empty() {
-        let _ = write!(line, " mcp={}", seat.mcp.join(","));
+    let mut line = format!(
+        "{} ({role}) tools={}",
+        seat.id,
+        seat.integration.tools.allow.join(",")
+    );
+    if !seat.integration.mcp.is_empty() {
+        let ids: Vec<_> = seat
+            .integration
+            .mcp
+            .iter()
+            .map(|server| server.id.as_str())
+            .collect();
+        let _ = write!(line, " mcp={}", ids.join(","));
     }
     if let Some(memory) = &seat.memory {
         let _ = write!(
