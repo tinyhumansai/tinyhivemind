@@ -21,4 +21,7 @@ Operational constraints:
 - Stdin, stdout and stderr are exchanged concurrently, and both outputs are
   read to the end past their caps, so a chatty program never blocks on a full
   pipe. Stdout keeps its first 1 MiB; stderr keeps its last 4 KiB.
+- Starting a program that is momentarily open for writing ("text file busy",
+  as when this process writes a package script while another thread forks)
+  is retried with a short backoff, 450 ms in all, before it fails the call.
 - Nothing is cached between calls.
