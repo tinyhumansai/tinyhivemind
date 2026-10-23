@@ -175,7 +175,7 @@
       "round_cap": 0
     },
     "division": {
-      "round_width": 4,
+      "round_width": 2,
       "follow_directory": true
     },
     "conduct": {
