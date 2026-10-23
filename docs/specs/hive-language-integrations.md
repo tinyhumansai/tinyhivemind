@@ -61,7 +61,7 @@ so scripts take part in the package's content identity and lineage.
 | `models` | `[{id, provider?, name, temperature?, max_tokens?, limits}]` | `ModelDefaults`, agent model |
 | `mcp` | `[{id, transport, endpoint, args, env, headers, tools?, deny_tools}]` | `McpServer` per agent |
 | `skills` | `[{id}]` | skills root `<package>/skills`, per-agent selection |
-| `tools` | `[ExecTool]` | native tool per seat ([executable tools](executable-tools.md)) |
+| `tools` | `[ExecTool]` | native tool per seat, reached through a toolpack ([executable tools](executable-tools.md)) |
 | `toolpacks` | `[{id, description, tools, mcp, skills, groups}]` | tool set plus `ToolGroups` modes |
 | `permissions` | `[{id, access, sandbox, allow_tools?, deny_tools, send_destinations?, send_operations?, tool_rules?}]` | permission layers |
 | `profiles` | `[{id, …seat integration fields}]` | merged into each seat using it |
@@ -120,7 +120,8 @@ Scalars (`model`, `permissions`) take the most specific value; lists
 (`toolpacks`, `mcp`, `skills`, `hooks`, `context`, `tools.deny`) concatenate
 without duplicates; `limits` merge field by field; `tools.allow` takes the most
 specific non-empty list. A toolpack expands into its tools, MCP servers and
-skills before that merge.
+skills before that merge; it is the only way a seat receives executable
+tools (`tools.allow`/`deny` name tools, they do not grant them).
 
 ### Features
 
