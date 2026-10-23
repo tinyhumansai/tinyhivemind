@@ -110,7 +110,7 @@ fn a_seat_resolves_its_profile_toolpacks_model_and_hooks() {
     assert_eq!(lead.hooks[0].tool.id, "guard_shell");
     assert_eq!(lead.subagents, ["reader"]);
     assert_eq!(lead.limits.timeout_ms, Some(120_000));
-    assert!(lead.permissions.is_empty());
+    assert_eq!(lead.permissions.len(), 0);
 }
 
 #[test]
@@ -131,7 +131,7 @@ fn the_most_specific_setting_wins_and_permissions_layer() {
     // Denials concatenate: the profile's then the seat's.
     assert_eq!(scout.tools.deny[0], "write_file");
     assert!(scout.tools.deny.iter().any(|tool| tool == "web_search"));
-    assert!(scout.hooks.is_empty());
+    assert_eq!(scout.hooks.len(), 0);
     let hive_wide = &hive.integrations;
     assert_eq!(hive_wide.runtime.concurrency, 2);
     assert_eq!(hive_wide.jev.top_k, 5);
@@ -149,12 +149,12 @@ fn a_feature_switched_off_removes_its_integration() {
     let hive = lower(&package).unwrap();
     for seat in &hive.seats {
         let integration = &seat.integration;
-        assert!(integration.mcp.is_empty());
-        assert!(integration.skills.is_empty());
-        assert!(integration.programs.is_empty());
-        assert!(integration.hooks.is_empty());
+        assert_eq!(integration.mcp.len(), 0);
+        assert_eq!(integration.skills.len(), 0);
+        assert_eq!(integration.programs.len(), 0);
+        assert_eq!(integration.hooks.len(), 0);
     }
-    assert!(hive.integrations.skills.is_empty());
+    assert_eq!(hive.integrations.skills.len(), 0);
 }
 
 #[test]
