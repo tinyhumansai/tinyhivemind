@@ -1,4 +1,5 @@
 //! Secret resolution from the process environment.
+#![allow(clippy::expect_used, clippy::panic)] // Tests fail loudly on unexpected results.
 use super::{EnvSecrets, Secrets};
 use crate::Error;
 use tinyhivemind_lang::SecretRef;

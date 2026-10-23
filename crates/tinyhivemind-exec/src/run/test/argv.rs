@@ -35,8 +35,8 @@ fn an_absent_optional_placeholder_is_dropped() {
 #[test]
 fn a_non_string_argument_is_substituted_as_compact_json() {
     let tool = tool(&["tools/a.sh"], &["{count}", "{flags}", "{filter?}"]);
-    let args = json!({"count": 3, "flags": [true, "a b"], "filter": {"k": 1}});
-    let argv = arguments(&tool, &args).expect("argv");
+    let call = json!({"count": 3, "flags": [true, "a b"], "filter": {"k": 1}});
+    let argv = arguments(&tool, &call).expect("argv");
     assert_eq!(argv, ["3", r#"[true,"a b"]"#, r#"{"k":1}"#]);
 }
 

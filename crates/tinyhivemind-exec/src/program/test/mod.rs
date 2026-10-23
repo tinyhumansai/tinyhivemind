@@ -1,5 +1,6 @@
 //! `ProgramTool` as a native tool: its metadata, its permission class, and
 //! that every failure reaches the model as a reported error.
+#![allow(clippy::expect_used, clippy::panic)] // Tests fail loudly on unexpected results.
 use crate::{EnvSecrets, ExecContext, ProgramTool};
 use serde_json::{Value, json};
 use std::path::PathBuf;

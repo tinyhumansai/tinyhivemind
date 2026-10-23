@@ -59,20 +59,17 @@ pub(super) async fn execute(tool: &ExecTool, launch: Launch) -> Result<Finished>
     let group = child.id();
     let exchange = exchange(&mut child, launch.input);
     let deadline = Duration::from_millis(tool.timeout_ms);
-    let outcome = tokio::time::timeout(deadline, exchange).await;
-    match outcome {
-        Ok(finished) => finished.map_err(|source| Error::Io {
+    let Ok(finished) = tokio::time::timeout(deadline, exchange).await else {
+        kill(&mut child, group).await;
+        return Err(Error::Timeout {
             tool: tool.id.clone(),
-            source,
-        }),
-        Err(_) => {
-            kill(&mut child, group).await;
-            Err(Error::Timeout {
-                tool: tool.id.clone(),
-                timeout_ms: tool.timeout_ms,
-            })
-        }
-    }
+            timeout_ms: tool.timeout_ms,
+        });
+    };
+    finished.map_err(|source| Error::Io {
+        tool: tool.id.clone(),
+        source,
+    })
 }
 
 /// Write stdin, read both outputs and wait, all at once so that no pipe
@@ -91,13 +88,13 @@ async fn exchange(child: &mut Child, input: Option<Vec<u8>>) -> std::io::Result<
             written => written,
         }
     };
-    let (fed, stdout, stderr, status) = tokio::join!(
+    let (written, stdout, stderr, status) = tokio::join!(
         feed,
         drain(stdout, STDOUT_LIMIT, Keep::Head),
         drain(stderr, STDERR_TAIL, Keep::Tail),
         child.wait(),
     );
-    fed?;
+    written?;
     let (stdout, truncated) = stdout?;
     Ok(Finished {
         status: status?,
