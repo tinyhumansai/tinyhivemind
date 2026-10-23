@@ -4,17 +4,43 @@
   "id": "integrations",
   "name": "Release desk",
   "roles": [
-    {"id": "lead", "charter": "roles/lead.md"},
-    {"id": "researcher", "charter": "roles/researcher.md"}
+    {
+      "id": "lead",
+      "charter": "roles/lead.md"
+    },
+    {
+      "id": "researcher",
+      "charter": "roles/researcher.md"
+    }
   ],
   "seats": [
     {
       "id": "lead",
+      "label": "lead",
       "role": "lead",
       "prompt": "seats/lead.md",
       "template": "openhuman",
+      "config": {},
+      "model": null,
+      "tools": {
+        "allow": [],
+        "deny": []
+      },
+      "mcp": [],
+      "skills": [],
       "profile": "editor",
-      "hooks": ["no_force_push"]
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [
+        "no_force_push"
+      ],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "scout",
@@ -22,104 +48,428 @@
       "role": "researcher",
       "prompt": "seats/scout.md",
       "template": "openhuman",
-      "profile": "reader",
+      "config": {},
       "model": "fast",
+      "tools": {
+        "allow": [],
+        "deny": []
+      },
+      "mcp": [],
+      "skills": [],
+      "profile": "reader",
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
       "permissions": "read_only",
-      "limits": {"iterations": 6}
+      "limits": {
+        "timeout_ms": null,
+        "iterations": 6,
+        "budget_usd": null
+      },
+      "context": []
     }
   ],
   "desks": [
-    {"id": "release", "name": "Release", "members": ["lead", "scout"]}
+    {
+      "id": "release",
+      "name": "Release",
+      "description": null,
+      "members": [
+        "lead",
+        "scout"
+      ]
+    }
   ],
-  "context": ["context/style.md"],
+  "goals": [],
+  "missions": [],
+  "topology": [],
+  "referrals": [],
+  "context": [
+    "context/style.md"
+  ],
+  "policies": {
+    "episode": {
+      "turn_budget": 12,
+      "round_width": 1,
+      "revealed_width": 1,
+      "blind_round": true,
+      "dominance_cap": 50,
+      "repetition_cap": 3,
+      "distance": "sequence",
+      "quorum": {
+        "threshold": 2,
+        "window": 30,
+        "require_grounded": true
+      },
+      "weights": {
+        "recency": 5,
+        "importance": 30,
+        "relevance": 20,
+        "half_life": 20
+      }
+    },
+    "routing": {
+      "minimum_confidence": 0,
+      "high_impact_minimum_confidence": 0,
+      "clarification_threshold": 0,
+      "high_impact_threshold": 0,
+      "round_width": 1,
+      "choice_option_limit": 8
+    },
+    "approval": {
+      "enabled": false,
+      "default": "deny",
+      "rules": [],
+      "approver": {
+        "kind": "absent"
+      },
+      "allow_grants": false,
+      "max_grant_ttl": null
+    },
+    "aside": {
+      "enabled": false,
+      "max_members": 0,
+      "max_messages": 0,
+      "must_surface": false,
+      "require_thread": false
+    },
+    "referral": {
+      "enabled": false,
+      "max_hops": 0,
+      "reach": "local",
+      "returns": false
+    },
+    "digest": {
+      "keep_live": 30,
+      "fold_after": 20,
+      "fold_after_chars": 400000,
+      "input_limit": 60,
+      "budget_chars": 4000
+    },
+    "brevity": {
+      "message_chars": 600,
+      "window": 30
+    },
+    "directory": {
+      "half_life": 20,
+      "specialisation": 30,
+      "credibility": 20,
+      "prior": 10,
+      "discredit": 20,
+      "window": 30,
+      "floor": 1000
+    },
+    "exchange": {
+      "enabled": false,
+      "contact_cap": 0,
+      "round_cap": 0
+    },
+    "division": {
+      "round_width": 4,
+      "follow_directory": true
+    },
+    "conduct": {
+      "child_turn_wall": 6,
+      "turn_wall": 60
+    }
+  },
+  "coordinator": {
+    "round_width": 1,
+    "conduct_policy": {
+      "child_turn_wall": 6,
+      "turn_wall": 60
+    },
+    "broadcast_budget": null,
+    "retention": {
+      "settled_episodes": null,
+      "delivered": null,
+      "interrupted": null,
+      "pending_per_agent": null
+    }
+  },
   "runtime": {
     "deployment_id": "release-desk",
+    "workspace": null,
     "session_store": "sqlite",
+    "memory_engine": "disabled",
     "autonomy": "supervised",
+    "sandbox": "none",
     "concurrency": 2,
+    "max_agents": null,
+    "include_user_skills": false,
+    "start_scheduler": false,
     "provider": "openrouter",
     "model": "careful",
-    "toolpacks": ["repo"],
-    "limits": {"timeout_ms": 120000, "budget_usd": 0.5}
+    "permissions": null,
+    "toolpacks": [
+      "repo"
+    ],
+    "limits": {
+      "timeout_ms": 120000,
+      "iterations": null,
+      "budget_usd": 0.5
+    }
   },
   "providers": [
-    {"id": "openrouter", "kind": "openrouter", "credential": {"env": "OPENROUTER_API_KEY"}}
+    {
+      "id": "openrouter",
+      "kind": "openrouter",
+      "endpoint": null,
+      "credential": {
+        "env": "OPENROUTER_API_KEY"
+      }
+    }
   ],
   "models": [
-    {"id": "careful", "name": "anthropic/claude-sonnet-4.5", "temperature": 0.2, "max_tokens": 4096},
-    {"id": "fast", "provider": "openrouter", "name": "openai/gpt-5-mini", "limits": {"iterations": 8}}
+    {
+      "id": "careful",
+      "provider": null,
+      "name": "anthropic/claude-sonnet-4.5",
+      "temperature": 0.2,
+      "max_tokens": 4096,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      }
+    },
+    {
+      "id": "fast",
+      "provider": "openrouter",
+      "name": "openai/gpt-5-mini",
+      "temperature": null,
+      "max_tokens": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": 8,
+        "budget_usd": null
+      }
+    }
   ],
   "mcp": [
     {
       "id": "issues",
       "transport": "http",
       "endpoint": "https://mcp.example.com/issues",
-      "headers": {"Authorization": {"env": "ISSUES_TOKEN"}},
-      "tools": ["search_issues", "get_issue"]
+      "args": [],
+      "env": {},
+      "headers": {
+        "Authorization": {
+          "env": "ISSUES_TOKEN"
+        }
+      },
+      "tools": [
+        "search_issues",
+        "get_issue"
+      ],
+      "deny_tools": []
     }
   ],
-  "skills": [{"id": "release-notes"}],
+  "skills": [
+    {
+      "id": "release-notes"
+    }
+  ],
   "tools": [
     {
       "id": "grep_repo",
       "description": "Search the repository for a pattern and print matching lines",
-      "command": ["tools/grep_repo.sh"],
+      "command": [
+        "tools/grep_repo.sh"
+      ],
       "args": {
-        "type": "object",
         "properties": {
-          "pattern": {"type": "string", "description": "Extended regular expression"},
-          "path": {"type": "string", "description": "Directory to search, default ."}
+          "path": {
+            "description": "Directory to search, default .",
+            "type": "string"
+          },
+          "pattern": {
+            "description": "Extended regular expression",
+            "type": "string"
+          }
         },
-        "required": ["pattern"]
+        "required": [
+          "pattern"
+        ],
+        "type": "object"
       },
-      "argv": ["{pattern}", "{path?}"],
+      "argv": [
+        "{pattern}",
+        "{path?}"
+      ],
       "stdin": "none",
+      "output": "text",
+      "timeout_ms": 20000,
+      "env": {},
       "side_effects": "read",
-      "timeout_ms": 20000
+      "cwd": "workspace"
     },
     {
       "id": "word_count",
       "description": "Count the words, lines and characters of a text",
-      "command": ["python3", "tools/word_count.py"],
+      "command": [
+        "python3",
+        "tools/word_count.py"
+      ],
       "args": {
-        "type": "object",
-        "properties": {"text": {"type": "string"}},
-        "required": ["text"]
+        "properties": {
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "type": "object"
       },
+      "argv": [],
+      "stdin": "json",
       "output": "json",
+      "timeout_ms": 60000,
+      "env": {},
       "side_effects": "read",
       "cwd": "package"
     },
     {
       "id": "guard_shell",
       "description": "Refuse destructive git commands",
-      "command": ["tools/guard_shell.sh"],
-      "side_effects": "read"
+      "command": [
+        "tools/guard_shell.sh"
+      ],
+      "args": {
+        "type": "object"
+      },
+      "argv": [],
+      "stdin": "json",
+      "output": "text",
+      "timeout_ms": 60000,
+      "env": {},
+      "side_effects": "read",
+      "cwd": "workspace"
     }
   ],
   "toolpacks": [
     {
       "id": "repo",
       "description": "Read the repository and its issues",
-      "tools": ["grep_repo", "word_count"],
-      "mcp": ["issues"],
-      "groups": {"web": "off"}
+      "tools": [
+        "grep_repo",
+        "word_count"
+      ],
+      "mcp": [
+        "issues"
+      ],
+      "skills": [],
+      "groups": {
+        "web": "off"
+      }
     }
   ],
   "permissions": [
-    {"id": "read_only", "access": "read_only", "sandbox": "read_only", "deny_tools": ["shell"]}
+    {
+      "id": "read_only",
+      "access": "read_only",
+      "sandbox": "read_only",
+      "allow_tools": null,
+      "deny_tools": [
+        "shell"
+      ],
+      "send_destinations": null,
+      "send_operations": null,
+      "tool_rules": null
+    }
   ],
   "profiles": [
-    {"id": "editor", "skills": ["release-notes"], "subagents": ["reader"]},
-    {"id": "reader", "model": "fast", "permissions": "read_only", "tools": {"allow": [], "deny": ["write_file"]}}
+    {
+      "id": "editor",
+      "model": null,
+      "permissions": null,
+      "toolpacks": [],
+      "tools": {
+        "allow": [],
+        "deny": []
+      },
+      "mcp": [],
+      "skills": [
+        "release-notes"
+      ],
+      "hooks": [],
+      "context": [],
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "subagents": [
+        "reader"
+      ],
+      "bare_prompt": false,
+      "definition_base": null
+    },
+    {
+      "id": "reader",
+      "model": "fast",
+      "permissions": "read_only",
+      "toolpacks": [],
+      "tools": {
+        "allow": [],
+        "deny": [
+          "write_file"
+        ]
+      },
+      "mcp": [],
+      "skills": [],
+      "hooks": [],
+      "context": [],
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "subagents": [],
+      "bare_prompt": false,
+      "definition_base": null
+    }
   ],
   "hooks": [
-    {"id": "no_force_push", "event": "pre_tool_use", "matcher": "shell", "run": "guard_shell", "fail_closed": true}
+    {
+      "id": "no_force_push",
+      "event": "pre_tool_use",
+      "matcher": "shell",
+      "run": "guard_shell",
+      "fail_closed": true,
+      "timeout_ms": null
+    }
   ],
-  "session": {"compact_context": true, "max_history_messages": 80, "parallel_tools": true},
-  "jev": {"ranker": "auto", "top_k": 5},
-  "features": {"script_tools": true, "verbose_tools": false},
+  "session": {
+    "compact_context": true,
+    "max_history_messages": 80,
+    "tool_result_budget_bytes": null,
+    "max_tool_iterations": null,
+    "parallel_tools": true,
+    "agents_md": null
+  },
+  "jev": {
+    "ranker": "auto",
+    "route": "auto",
+    "base_url": null,
+    "top_k": 5
+  },
+  "features": {
+    "script_tools": true,
+    "verbose_tools": false
+  },
   "workflows": [
-    {"id": "nightly-digest", "schedule": "0 6 * * *", "target": {"hive": "integrations"}, "prompt": "Summarise what changed since yesterday"}
+    {
+      "id": "nightly-digest",
+      "schedule": "0 6 * * *",
+      "target": {
+        "hive": "integrations"
+      },
+      "prompt": "Summarise what changed since yesterday",
+      "enabled": true,
+      "retries": 0,
+      "single_flight": true
+    }
   ]
 }
