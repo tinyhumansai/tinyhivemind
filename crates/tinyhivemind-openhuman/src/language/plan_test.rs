@@ -37,7 +37,7 @@ fn a_package_lowers_to_a_native_plan_with_every_integration() -> anyhow::Result<
     assert_eq!(lead.mcp[0].id, "issues");
     assert_eq!(lead.mcp[0].transport, "http");
     assert_eq!(lead.groups["web"], lang::GroupMode::Off);
-    assert_eq!(lead.subagents, ["reader"]);
+    assert_eq!(lead.subagents, ["summariser"]);
     let scout = config
         .profiles
         .iter()
@@ -46,7 +46,7 @@ fn a_package_lowers_to_a_native_plan_with_every_integration() -> anyhow::Result<
     assert_eq!(scout.tool_scope, ToolScope::Wildcard);
     assert!(scout.deny_tools.contains(&"write_file".to_owned()));
     // The declared profile becomes a native profile, for delegation.
-    assert!(config.profiles.iter().any(|p| p.id == "reader"));
+    assert!(config.profiles.iter().any(|p| p.id == "summariser"));
     assert_eq!(config.permission_profiles[0].id, "read_only");
     let hive = &config.hives[0];
     assert_eq!(hive.id, "integrations");

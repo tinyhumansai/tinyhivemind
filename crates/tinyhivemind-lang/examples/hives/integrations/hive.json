@@ -411,7 +411,7 @@
         "budget_usd": null
       },
       "subagents": [
-        "reader"
+        "summariser"
       ],
       "bare_prompt": false,
       "definition_base": null
@@ -431,6 +431,32 @@
       "skills": [],
       "hooks": [],
       "context": [],
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "subagents": [],
+      "bare_prompt": false,
+      "definition_base": null
+    },
+    {
+      "id": "summariser",
+      "model": null,
+      "permissions": "read_only",
+      "toolpacks": [],
+      "tools": {
+        "allow": [],
+        "deny": [
+          "write_file"
+        ]
+      },
+      "mcp": [],
+      "skills": [],
+      "hooks": [],
+      "context": [
+        "context/style.md"
+      ],
       "limits": {
         "timeout_ms": null,
         "iterations": null,

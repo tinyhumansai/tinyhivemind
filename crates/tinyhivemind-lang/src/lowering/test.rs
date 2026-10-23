@@ -108,7 +108,7 @@ fn a_seat_resolves_its_profile_toolpacks_model_and_hooks() {
     assert_eq!(ids(&lead.skills, |s| &s.id), ["release-notes"]);
     assert_eq!(lead.hooks.len(), 1);
     assert_eq!(lead.hooks[0].tool.id, "guard_shell");
-    assert_eq!(lead.subagents, ["reader"]);
+    assert_eq!(lead.subagents, ["summariser"]);
     assert_eq!(lead.limits.timeout_ms, Some(120_000));
     assert_eq!(lead.permissions.len(), 0);
 }

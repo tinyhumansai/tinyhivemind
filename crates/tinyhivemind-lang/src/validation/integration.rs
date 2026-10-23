@@ -514,6 +514,7 @@ fn shapes(m: &Manifest, found: &mut Findings) {
     for (i, tool) in m.tools.iter().enumerate() {
         tool_shape(tool, i, found);
     }
+    delegates(m, found);
     for (i, hook) in m.hooks.iter().enumerate() {
         if hook.event == HookEvent::Stop && hook.matcher.is_some() {
             invalid(
@@ -587,4 +588,39 @@ fn tool_shape(tool: &ExecTool, i: usize, found: &mut Findings) {
         &format!("{field}.env"),
         &format!("{at}/env"),
     );
+}
+
+/// A profile another profile delegates to runs inside its parent's agent, so
+/// it cannot bring an agent's own model, connections, skills, hooks,
+/// delegates, timeout or budget.
+fn delegates(m: &Manifest, found: &mut Findings) {
+    let delegated: BTreeSet<&str> = m
+        .profiles
+        .iter()
+        .flat_map(|p| p.subagents.iter().map(String::as_str))
+        .collect();
+    for (i, p) in m.profiles.iter().enumerate() {
+        if !delegated.contains(p.id.as_str()) {
+            continue;
+        }
+        for (set, key) in [
+            (p.model.is_some(), "model"),
+            (!p.mcp.is_empty(), "mcp"),
+            (!p.skills.is_empty(), "skills"),
+            (!p.toolpacks.is_empty(), "toolpacks"),
+            (!p.hooks.is_empty(), "hooks"),
+            (!p.subagents.is_empty(), "subagents"),
+            (p.limits.timeout_ms.is_some(), "limits"),
+            (p.limits.budget_usd.is_some(), "limits"),
+        ] {
+            if set {
+                invalid(
+                    found,
+                    format!("profiles.{}.{key}", p.id),
+                    "a delegated profile runs inside its parent agent and cannot set this",
+                    format!("/profiles/{i}/{key}"),
+                );
+            }
+        }
+    }
 }
