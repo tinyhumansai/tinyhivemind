@@ -6,15 +6,17 @@ One call of an executable tool under the calling convention of
 | File | Holds |
 | --- | --- |
 | `mod.rs` | `run` and `Output`: build the launch, run it, and turn status and stdout into a result |
-| `command.rs` | The program path, the substituted arguments, the scrubbed environment, and the working directory |
+| `command.rs` | The program path, the substituted arguments, package-relative `tools/…` paths in the fixed arguments, the scrubbed environment, and the working directory |
 | `process.rs` | Spawning in a process group, the stdin/stdout/stderr exchange, the caps, and the deadline |
 | [`test/`](test/README.md) | The convention end to end against fixture scripts |
 
 Operational constraints:
 
-- A `tools/…` program is joined to the absolute package root, so it means the
-  same file whatever the working directory; any other program is found on the
-  `PATH` the program itself receives.
+- A `tools/…` program, and every fixed `tools/…` element of `command` after
+  it (`["python3", "tools/count.py"]`), is joined to the absolute package root
+  (`command::package_paths`), so it means the same file whatever the working
+  directory; any other program is found on the `PATH` the program itself
+  receives. Arguments substituted from `argv` placeholders are never rewritten.
 - The program leads a new process group. On timeout the whole group gets
   `SIGKILL` (through the system `kill`), so a backgrounded grandchild dies
   with it, and the program is then reaped.

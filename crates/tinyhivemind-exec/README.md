@@ -18,6 +18,11 @@ The convention is specified in
 declarations come from [`tinyhivemind-lang`](../tinyhivemind-lang/README.md).
 The repository [README](../../README.md) says how this fits the rest.
 
+This crate runs processes, so it sits beside the OpenHuman adapter and outside
+the pure crates `.github/scripts/assert-pure.sh` guards. A stop hook only
+observes a finished reply; it cannot start another turn (see the spec's
+[hooks section](../../docs/specs/executable-tools.md#hooks)).
+
 | Path | Purpose |
 | --- | --- |
 | [`src/`](src/README.md) | The crate's modules. |

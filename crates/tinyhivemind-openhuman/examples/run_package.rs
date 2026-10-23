@@ -12,7 +12,7 @@
 //! `pre_tool_use` hooks first, then the program — without starting a model
 //! or the harness, so editing a script and calling it again is the whole
 //! iteration loop. `--live` needs the package's provider credential.
-use std::{path::PathBuf, sync::Arc};
+use std::{fmt::Write as _, path::PathBuf, sync::Arc};
 use tinyhivemind_exec::{EnvSecrets, ExecContext, HookRunner, Verdict};
 use tinyhivemind_openhuman::language::PackageSource;
 
@@ -69,8 +69,9 @@ fn summary(source: &PackageSource) -> String {
                 items.join(",")
             }
         };
-        out.push_str(&format!(
-            "  {} model={} tools={} hooks={} mcp={} skills={} permissions={}\n",
+        let _ = writeln!(
+            out,
+            "  {} model={} tools={} hooks={} mcp={} skills={} permissions={}",
             seat.id,
             i.model.as_ref().map_or("-", |m| m.model.name.as_str()),
             ids(i.programs.iter().map(|t| t.id.as_str()).collect()),
@@ -78,7 +79,7 @@ fn summary(source: &PackageSource) -> String {
             ids(i.mcp.iter().map(|s| s.id.as_str()).collect()),
             ids(i.skills.iter().map(|s| s.id.as_str()).collect()),
             ids(i.permissions.iter().map(|p| p.id.as_str()).collect()),
-        ));
+        );
     }
     out
 }
