@@ -246,6 +246,8 @@ pub struct Profile {
     pub memory: Option<Memory>,
     /// Turn limits.
     pub limits: Limits,
+    /// Harness tool group modes, by group id.
+    pub groups: BTreeMap<String, tinyhivemind_lang::GroupMode>,
 }
 /// Typed dynamic or configured seat overrides; credential fields are absent.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

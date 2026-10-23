@@ -1,4 +1,11 @@
 //! Explicit conversions of portable definitions at the `OpenHuman` boundary.
+//!
+//! [`PackageSource`] reads and checks a hive package from disk; `plan.rs`
+//! lowers checked packages into the deployment plan
+//! [`crate::deploy::HiveDeployment::from_packages`] builds.
+mod package;
+pub(crate) mod plan;
+pub use package::PackageSource;
 use crate::{Error, ManagementRequest, Result};
 use openhuman_embed::MemoryBinding;
 use tinyhivemind_hives::{CoordinatorOptions, RetentionPolicy};
@@ -52,17 +59,25 @@ pub(crate) fn validate_binding(binding: &LoweredMemoryBinding) -> Result<()> {
 /// Carry a lowered seat and its full memory contract to a host factory.
 ///
 /// `config` retains the original nonsecret settings under `config`, alongside
-/// the seat id, prompt, model, tools, MCP and skills. Factories consuming hive
-/// definitions should validate and honor this portable envelope.
+/// the seat id, prompt, and the resolved model name, tool access, MCP server
+/// ids, skill ids and executable tool ids. Factories consuming hive
+/// definitions should validate and honor this portable envelope;
+/// [`crate::deploy::HiveDeployment::from_packages`] honors all of it natively.
 #[must_use]
 pub fn management_request(seat: &LoweredSeat) -> ManagementRequest {
+    let integration = &seat.integration;
+    let ids = |items: Vec<&str>| serde_json::json!(items);
     ManagementRequest::CreateAgent {
         template: seat.template.clone(),
         coordinator_id: Some(seat.id.clone()),
         config: serde_json::json!({
             "id": seat.id, "label": seat.label, "config": seat.config,
-            "prompt": seat.prompt, "model": seat.model, "tools": seat.tools,
-            "mcp": seat.mcp, "skills": seat.skills,
+            "prompt": seat.prompt,
+            "model": integration.model.as_ref().map(|model| &model.model.name),
+            "tools": integration.tools,
+            "mcp": ids(integration.mcp.iter().map(|s| s.id.as_str()).collect()),
+            "skills": ids(integration.skills.iter().map(|s| s.id.as_str()).collect()),
+            "programs": ids(integration.programs.iter().map(|t| t.id.as_str()).collect()),
         }),
         memory: seat.memory.clone().map(Box::new),
     }

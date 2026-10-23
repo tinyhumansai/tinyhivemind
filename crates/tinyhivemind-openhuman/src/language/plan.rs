@@ -257,14 +257,15 @@ fn subagent(package: &lang::Package, declared: &lang::Profile) -> config::Profil
 }
 
 /// Insert `value` under `id`, or require the one already there to equal it.
-fn agree<T: PartialEq>(
+fn agree<T: serde::Serialize>(
     map: &mut BTreeMap<String, T>,
     section: &str,
     id: &str,
     value: T,
 ) -> Result<(), ConfigError> {
+    let same = |a: &T, b: &T| serde_json::to_value(a).ok() == serde_json::to_value(b).ok();
     match map.get(id) {
-        Some(existing) if existing != &value => Err(ConfigError::ConflictingDeclaration {
+        Some(existing) if !same(existing, &value) => Err(ConfigError::ConflictingDeclaration {
             section: section.into(),
             id: id.into(),
         }),
