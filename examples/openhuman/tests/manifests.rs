@@ -27,7 +27,10 @@ fn every_package_checks_and_its_canonical_files_are_complete() {
         assert!(tinyhivemind_lang::diagnose(&package).is_empty(), "{name}");
         for (file, canonical) in [
             ("hive.json", serde_json::to_string_pretty(&package.manifest)),
-            ("constitution.json", serde_json::to_string_pretty(&package.constitution)),
+            (
+                "constitution.json",
+                serde_json::to_string_pretty(&package.constitution),
+            ),
             ("memory.json", serde_json::to_string_pretty(&package.memory)),
         ] {
             let written = std::fs::read_to_string(root.join(file)).unwrap();
@@ -54,7 +57,10 @@ fn basic_preserves_two_readonly_seats_and_ephemeral_workspace() {
 #[test]
 fn deepswe_preserves_roles_mcp_iterations_sampling_and_width() {
     let (package, hive) = load("deepswe_hive");
-    assert_eq!(seat_ids(&hive), ["lead", "implementer", "tester", "reviewer"]);
+    assert_eq!(
+        seat_ids(&hive),
+        ["lead", "implementer", "tester", "reviewer"]
+    );
     assert_eq!(hive.policies.episode.round_width, 4);
     assert_eq!(hive.coordinator.round_width, 4);
     assert_eq!(package.manifest.runtime.concurrency, 4);
@@ -74,7 +80,10 @@ fn deepswe_preserves_roles_mcp_iterations_sampling_and_width() {
             integration.mcp[1].tools.as_ref().unwrap(),
             &["broadcast", "complete_episode"]
         );
-        assert!(seat.prompt.contains(&format!("server tinyhive-{},", seat.id)));
+        assert!(
+            seat.prompt
+                .contains(&format!("server tinyhive-{},", seat.id))
+        );
     }
 }
 
