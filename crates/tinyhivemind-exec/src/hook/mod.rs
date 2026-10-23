@@ -114,9 +114,10 @@ impl HookRunner {
         }
     }
 
-    /// Tell the `stop` hooks the turn ended with `reply`, and return the first
-    /// follow-up prompt one asks for. Failures are ignored.
-    pub async fn stop(&self, reply: &str) -> Option<String> {
+    /// Tell every `stop` hook the turn ended with `reply`. A stop hook only
+    /// observes: it cannot start another turn, so its stdout is ignored, as
+    /// are its failures.
+    pub async fn stop(&self, reply: &str) {
         let event = json!({
             "event": "stop",
             "reply": reply,
@@ -124,13 +125,8 @@ impl HookRunner {
             "hive": self.context.hive,
         });
         for hook in self.bound(HookEvent::Stop, None) {
-            if let Ok(Some(answer)) = self.call(hook, &event).await
-                && let Some(followup) = answer["followup"].as_str()
-            {
-                return Some(followup.to_owned());
-            }
+            let _ = self.call(hook, &event).await;
         }
-        None
     }
 
     /// The hooks bound to `event` whose matcher names `tool`, in order.

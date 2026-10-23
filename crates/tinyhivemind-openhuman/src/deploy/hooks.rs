@@ -213,7 +213,7 @@ impl TurnHooks for Hooks {
             Some(stop) => Box::pin(async move {
                 let outcome = turn.await;
                 if let Ok(done) = &outcome {
-                    let _ = stop.stop(&done.reply).await;
+                    stop.stop(&done.reply).await;
                 }
                 outcome
             }),

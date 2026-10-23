@@ -43,35 +43,24 @@ async fn post_tool_use_runs_its_hooks_with_the_result() {
 }
 
 #[tokio::test]
-async fn stop_returns_the_first_followup() {
+async fn every_stop_hook_observes_the_reply_and_none_can_continue_the_turn() {
     let dir = tempfile::tempdir().expect("tempdir");
     let hooks = runner(
         vec![
-            hook("audit", "stop", "record", json!({})),
-            hook("broken", "stop", "fail", json!({"fail_closed": true})),
             hook("nag", "stop", "followup", json!({})),
+            hook("broken", "stop", "fail", json!({"fail_closed": true})),
+            hook("audit", "stop", "record", json!({})),
+            hook("guard", "pre_tool_use", "record", json!({})),
         ],
         dir.path(),
     );
-    let followup = hooks.stop("all done").await;
-    assert_eq!(followup.as_deref(), Some("run the tests before stopping"));
+    // A follow-up request and a failure stop neither the later stop hooks
+    // nor the call: `stop` returns nothing to act on.
+    let () = hooks.stop("all done").await;
     assert_eq!(
         recorded(dir.path()),
         [json!({"event": "stop", "reply": "all done", "seat": "critic", "hive": "acme"})]
     );
-}
-
-#[tokio::test]
-async fn stop_without_a_followup_ends_the_turn() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let hooks = runner(
-        vec![
-            hook("quiet", "stop", "allow", json!({})),
-            hook("guard", "pre_tool_use", "followup", json!({})),
-        ],
-        dir.path(),
-    );
-    assert_eq!(hooks.stop("all done").await, None);
 }
 
 #[test]
