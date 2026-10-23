@@ -183,15 +183,10 @@ fn profile(
     skills: Option<String>,
 ) -> config::Profile {
     let integration = &seat.integration;
-    let mut prompt = seat.prompt.clone();
-    for body in hive
-        .context
-        .values()
-        .chain(integration.context.iter().map(|(_, body)| body))
-    {
-        prompt.push_str("\n\n");
-        prompt.push_str(body);
-    }
+    // Context is per hive: it reaches a turn through the seat's membership,
+    // so a seat several hives share sees each hive's own documents.
+    let _ = hive;
+    let prompt = seat.prompt.clone();
     let mut named = integration.tools.allow.clone();
     if !named.is_empty() {
         named.extend(integration.programs.iter().map(|tool| tool.id.clone()));
