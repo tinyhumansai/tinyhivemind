@@ -106,8 +106,28 @@ Runnable host construction and topology proofs are in
 See the [OpenCompany migration guide](../../docs/opencompany-migration.md) for
 construction, single-runtime dependency unification, and recovery.
 
-The [configuration module](src/config/README.md) parses reusable manifests and
-Markdown profiles before runtime construction.
+## Deploying hive packages
+
+A hive is defined once, as a `tinyhivemind-lang` package; the former
+`HiveConfig` JSON/Markdown manifests are gone as an input
+([ADR 0034](../../docs/adr/0034-the-hive-language-defines-the-deployment.md)).
+`PackageSource::load` reads and checks a package directory, and
+`HiveDeployment::from_packages` builds one runtime from one or more, attaching
+the packages' executable tools and script hooks (run by
+[`tinyhivemind-exec`](../tinyhivemind-exec/README.md)), skills, MCP servers,
+permissions and workflows.
+
+```rust,ignore
+let package = PackageSource::load("hives/release-desk")?;
+let deployment = HiveDeployment::from_packages(
+    vec![package], Arc::new(EnvironmentSecrets), BuildOptions::default(),
+).await?;
+```
+
+The [`run_package` example](examples/run_package/README.md) checks a package,
+calls its tools without a model, or deploys it. The
+[deployment plan](src/config/README.md) the packages lower into is
+crate-internal.
 
 For a model-backed package registration check, see the
 [live language example](examples/README.md).

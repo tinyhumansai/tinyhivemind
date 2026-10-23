@@ -1,150 +1,212 @@
 {
   "$schema": "https://tinyhumans.ai/schemas/hive/v1",
-  "context": [],
-  "coordinator": {
-    "broadcast_budget": null,
-    "conduct_policy": {
-      "child_turn_wall": 6,
-      "turn_wall": 60
+  "version": 1,
+  "id": "deepswe",
+  "name": "deepswe",
+  "roles": [
+    {
+      "id": "lead",
+      "charter": "roles/lead.md"
     },
-    "retention": {
-      "delivered": null,
-      "interrupted": null,
-      "pending_per_agent": null,
-      "settled_episodes": null
+    {
+      "id": "implementer",
+      "charter": "roles/implementer.md"
     },
-    "round_width": 4
-  },
+    {
+      "id": "tester",
+      "charter": "roles/tester.md"
+    },
+    {
+      "id": "reviewer",
+      "charter": "roles/reviewer.md"
+    }
+  ],
+  "seats": [
+    {
+      "id": "lead",
+      "label": "lead",
+      "role": "lead",
+      "prompt": "seats/lead.md",
+      "template": "openhuman",
+      "config": {},
+      "model": null,
+      "tools": {
+        "allow": [
+          "mcp_list_tools",
+          "mcp_call_tool"
+        ],
+        "deny": []
+      },
+      "mcp": [
+        "deepswe",
+        "tinyhive-lead"
+      ],
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": 16,
+        "budget_usd": null
+      },
+      "context": []
+    },
+    {
+      "id": "implementer",
+      "label": "implementer",
+      "role": "implementer",
+      "prompt": "seats/implementer.md",
+      "template": "openhuman",
+      "config": {},
+      "model": null,
+      "tools": {
+        "allow": [
+          "mcp_list_tools",
+          "mcp_call_tool"
+        ],
+        "deny": []
+      },
+      "mcp": [
+        "deepswe",
+        "tinyhive-implementer"
+      ],
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": 16,
+        "budget_usd": null
+      },
+      "context": []
+    },
+    {
+      "id": "tester",
+      "label": "tester",
+      "role": "tester",
+      "prompt": "seats/tester.md",
+      "template": "openhuman",
+      "config": {},
+      "model": null,
+      "tools": {
+        "allow": [
+          "mcp_list_tools",
+          "mcp_call_tool"
+        ],
+        "deny": []
+      },
+      "mcp": [
+        "deepswe",
+        "tinyhive-tester"
+      ],
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": 16,
+        "budget_usd": null
+      },
+      "context": []
+    },
+    {
+      "id": "reviewer",
+      "label": "reviewer",
+      "role": "reviewer",
+      "prompt": "seats/reviewer.md",
+      "template": "openhuman",
+      "config": {},
+      "model": null,
+      "tools": {
+        "allow": [
+          "mcp_list_tools",
+          "mcp_call_tool"
+        ],
+        "deny": []
+      },
+      "mcp": [
+        "deepswe",
+        "tinyhive-reviewer"
+      ],
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": 16,
+        "budget_usd": null
+      },
+      "context": []
+    }
+  ],
   "desks": [
     {
-      "description": null,
       "id": "deepswe",
+      "name": "deepswe",
+      "description": null,
       "members": [
         "lead",
         "implementer",
         "tester",
         "reviewer"
-      ],
-      "name": "deepswe"
+      ]
     }
   ],
-  "features": {},
   "goals": [],
-  "hooks": [],
-  "id": "deepswe",
-  "jev": {
-    "base_url": null,
-    "ranker": "jev",
-    "route": "auto",
-    "top_k": 3
-  },
-  "mcp": [
-    {
-      "args": [
-        "--mcp-workspace"
-      ],
-      "deny_tools": [],
-      "endpoint": "deepswe_hive",
-      "env": {},
-      "headers": {},
-      "id": "deepswe",
-      "tools": [
-        "file_read",
-        "file_write",
-        "file_edit",
-        "shell",
-        "test"
-      ],
-      "transport": "stdio"
-    },
-    {
-      "args": [
-        "--mcp-hive"
-      ],
-      "deny_tools": [],
-      "endpoint": "deepswe_hive",
-      "env": {},
-      "headers": {},
-      "id": "tinyhive-lead",
-      "tools": [
-        "broadcast",
-        "complete_episode"
-      ],
-      "transport": "stdio"
-    },
-    {
-      "args": [
-        "--mcp-hive"
-      ],
-      "deny_tools": [],
-      "endpoint": "deepswe_hive",
-      "env": {},
-      "headers": {},
-      "id": "tinyhive-implementer",
-      "tools": [
-        "broadcast",
-        "complete_episode"
-      ],
-      "transport": "stdio"
-    },
-    {
-      "args": [
-        "--mcp-hive"
-      ],
-      "deny_tools": [],
-      "endpoint": "deepswe_hive",
-      "env": {},
-      "headers": {},
-      "id": "tinyhive-tester",
-      "tools": [
-        "broadcast",
-        "complete_episode"
-      ],
-      "transport": "stdio"
-    },
-    {
-      "args": [
-        "--mcp-hive"
-      ],
-      "deny_tools": [],
-      "endpoint": "deepswe_hive",
-      "env": {},
-      "headers": {},
-      "id": "tinyhive-reviewer",
-      "tools": [
-        "broadcast",
-        "complete_episode"
-      ],
-      "transport": "stdio"
-    }
-  ],
   "missions": [],
-  "models": [
-    {
-      "id": "default",
-      "limits": {
-        "budget_usd": null,
-        "iterations": null,
-        "timeout_ms": null
-      },
-      "max_tokens": null,
-      "name": "openai/gpt-oss-120b:nitro",
-      "provider": null,
-      "temperature": 0.0
-    }
-  ],
-  "name": "deepswe",
-  "permissions": [],
+  "topology": [],
+  "referrals": [],
+  "context": [],
   "policies": {
+    "episode": {
+      "turn_budget": 12,
+      "round_width": 4,
+      "revealed_width": 4,
+      "blind_round": true,
+      "dominance_cap": 50,
+      "repetition_cap": 3,
+      "distance": "sequence",
+      "quorum": {
+        "threshold": 2,
+        "window": 30,
+        "require_grounded": true
+      },
+      "weights": {
+        "recency": 5,
+        "importance": 30,
+        "relevance": 20,
+        "half_life": 20
+      }
+    },
+    "routing": {
+      "minimum_confidence": 0,
+      "high_impact_minimum_confidence": 0,
+      "clarification_threshold": 1000000,
+      "high_impact_threshold": 1000000,
+      "round_width": 4,
+      "choice_option_limit": 4
+    },
     "approval": {
-      "allow_grants": false,
+      "enabled": false,
+      "default": "deny",
+      "rules": [],
       "approver": {
         "kind": "absent"
       },
-      "default": "deny",
-      "enabled": false,
-      "max_grant_ttl": null,
-      "rules": []
+      "allow_grants": false,
+      "max_grant_ttl": null
     },
     "aside": {
       "enabled": false,
@@ -153,258 +215,196 @@
       "must_surface": false,
       "require_thread": false
     },
-    "brevity": {
-      "message_chars": 600,
-      "window": 30
-    },
-    "conduct": {
-      "child_turn_wall": 6,
-      "turn_wall": 60
-    },
-    "digest": {
-      "budget_chars": 4000,
-      "fold_after": 20,
-      "fold_after_chars": 400000,
-      "input_limit": 60,
-      "keep_live": 30
-    },
-    "directory": {
-      "credibility": 20,
-      "discredit": 20,
-      "floor": 1000,
-      "half_life": 20,
-      "prior": 10,
-      "specialisation": 30,
-      "window": 30
-    },
-    "division": {
-      "follow_directory": true,
-      "round_width": 4
-    },
-    "episode": {
-      "blind_round": true,
-      "distance": "sequence",
-      "dominance_cap": 50,
-      "quorum": {
-        "require_grounded": true,
-        "threshold": 2,
-        "window": 30
-      },
-      "repetition_cap": 3,
-      "revealed_width": 4,
-      "round_width": 4,
-      "turn_budget": 12,
-      "weights": {
-        "half_life": 20,
-        "importance": 30,
-        "recency": 5,
-        "relevance": 20
-      }
-    },
-    "exchange": {
-      "contact_cap": 0,
-      "enabled": false,
-      "round_cap": 0
-    },
     "referral": {
       "enabled": false,
       "max_hops": 0,
       "reach": "local",
       "returns": false
     },
-    "routing": {
-      "choice_option_limit": 4,
-      "clarification_threshold": 1000000,
-      "high_impact_minimum_confidence": 0,
-      "high_impact_threshold": 1000000,
-      "minimum_confidence": 0,
-      "round_width": 4
+    "digest": {
+      "keep_live": 30,
+      "fold_after": 20,
+      "fold_after_chars": 400000,
+      "input_limit": 60,
+      "budget_chars": 4000
+    },
+    "brevity": {
+      "message_chars": 600,
+      "window": 30
+    },
+    "directory": {
+      "half_life": 20,
+      "specialisation": 30,
+      "credibility": 20,
+      "prior": 10,
+      "discredit": 20,
+      "window": 30,
+      "floor": 1000
+    },
+    "exchange": {
+      "enabled": false,
+      "contact_cap": 0,
+      "round_cap": 0
+    },
+    "division": {
+      "round_width": 4,
+      "follow_directory": true
+    },
+    "conduct": {
+      "child_turn_wall": 6,
+      "turn_wall": 60
     }
   },
-  "profiles": [],
-  "providers": [],
-  "referrals": [],
-  "roles": [
-    {
-      "charter": "roles/lead.md",
-      "id": "lead"
+  "coordinator": {
+    "round_width": 4,
+    "conduct_policy": {
+      "child_turn_wall": 6,
+      "turn_wall": 60
     },
-    {
-      "charter": "roles/implementer.md",
-      "id": "implementer"
-    },
-    {
-      "charter": "roles/tester.md",
-      "id": "tester"
-    },
-    {
-      "charter": "roles/reviewer.md",
-      "id": "reviewer"
+    "broadcast_budget": null,
+    "retention": {
+      "settled_episodes": null,
+      "delivered": null,
+      "interrupted": null,
+      "pending_per_agent": null
     }
-  ],
+  },
   "runtime": {
-    "autonomy": "autonomous",
-    "concurrency": 4,
     "deployment_id": "default",
-    "include_user_skills": false,
-    "limits": {
-      "budget_usd": null,
-      "iterations": null,
-      "timeout_ms": null
-    },
-    "max_agents": null,
+    "workspace": null,
+    "session_store": "memory",
     "memory_engine": "disabled",
+    "autonomy": "autonomous",
+    "sandbox": "none",
+    "concurrency": 4,
+    "max_agents": null,
+    "include_user_skills": false,
+    "start_scheduler": false,
+    "provider": null,
     "model": "default",
     "permissions": null,
-    "provider": null,
-    "sandbox": "none",
-    "session_store": "memory",
-    "start_scheduler": false,
     "toolpacks": [],
-    "workspace": null
+    "limits": {
+      "timeout_ms": null,
+      "iterations": null,
+      "budget_usd": null
+    }
   },
-  "seats": [
+  "providers": [],
+  "models": [
     {
-      "agent_id": null,
-      "config": {},
-      "context": [],
-      "hooks": [],
-      "id": "lead",
-      "label": "lead",
+      "id": "default",
+      "provider": null,
+      "name": "openai/gpt-oss-120b:nitro",
+      "temperature": 0.0,
+      "max_tokens": null,
       "limits": {
-        "budget_usd": null,
-        "iterations": 16,
-        "timeout_ms": null
-      },
-      "mcp": [
-        "deepswe",
-        "tinyhive-lead"
-      ],
-      "model": null,
-      "permissions": null,
-      "profile": null,
-      "prompt": "seats/lead.md",
-      "role": "lead",
-      "skills": [],
-      "template": "openhuman",
-      "toolpacks": [],
-      "tools": {
-        "allow": [
-          "mcp_list_tools",
-          "mcp_call_tool"
-        ],
-        "deny": []
-      }
-    },
-    {
-      "agent_id": null,
-      "config": {},
-      "context": [],
-      "hooks": [],
-      "id": "implementer",
-      "label": "implementer",
-      "limits": {
-        "budget_usd": null,
-        "iterations": 16,
-        "timeout_ms": null
-      },
-      "mcp": [
-        "deepswe",
-        "tinyhive-implementer"
-      ],
-      "model": null,
-      "permissions": null,
-      "profile": null,
-      "prompt": "seats/implementer.md",
-      "role": "implementer",
-      "skills": [],
-      "template": "openhuman",
-      "toolpacks": [],
-      "tools": {
-        "allow": [
-          "mcp_list_tools",
-          "mcp_call_tool"
-        ],
-        "deny": []
-      }
-    },
-    {
-      "agent_id": null,
-      "config": {},
-      "context": [],
-      "hooks": [],
-      "id": "tester",
-      "label": "tester",
-      "limits": {
-        "budget_usd": null,
-        "iterations": 16,
-        "timeout_ms": null
-      },
-      "mcp": [
-        "deepswe",
-        "tinyhive-tester"
-      ],
-      "model": null,
-      "permissions": null,
-      "profile": null,
-      "prompt": "seats/tester.md",
-      "role": "tester",
-      "skills": [],
-      "template": "openhuman",
-      "toolpacks": [],
-      "tools": {
-        "allow": [
-          "mcp_list_tools",
-          "mcp_call_tool"
-        ],
-        "deny": []
-      }
-    },
-    {
-      "agent_id": null,
-      "config": {},
-      "context": [],
-      "hooks": [],
-      "id": "reviewer",
-      "label": "reviewer",
-      "limits": {
-        "budget_usd": null,
-        "iterations": 16,
-        "timeout_ms": null
-      },
-      "mcp": [
-        "deepswe",
-        "tinyhive-reviewer"
-      ],
-      "model": null,
-      "permissions": null,
-      "profile": null,
-      "prompt": "seats/reviewer.md",
-      "role": "reviewer",
-      "skills": [],
-      "template": "openhuman",
-      "toolpacks": [],
-      "tools": {
-        "allow": [
-          "mcp_list_tools",
-          "mcp_call_tool"
-        ],
-        "deny": []
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
       }
     }
   ],
+  "mcp": [
+    {
+      "id": "deepswe",
+      "transport": "stdio",
+      "endpoint": "deepswe_hive",
+      "args": [
+        "--mcp-workspace"
+      ],
+      "env": {},
+      "headers": {},
+      "tools": [
+        "file_read",
+        "file_write",
+        "file_edit",
+        "shell",
+        "test"
+      ],
+      "deny_tools": []
+    },
+    {
+      "id": "tinyhive-lead",
+      "transport": "stdio",
+      "endpoint": "deepswe_hive",
+      "args": [
+        "--mcp-hive"
+      ],
+      "env": {},
+      "headers": {},
+      "tools": [
+        "broadcast",
+        "complete_episode"
+      ],
+      "deny_tools": []
+    },
+    {
+      "id": "tinyhive-implementer",
+      "transport": "stdio",
+      "endpoint": "deepswe_hive",
+      "args": [
+        "--mcp-hive"
+      ],
+      "env": {},
+      "headers": {},
+      "tools": [
+        "broadcast",
+        "complete_episode"
+      ],
+      "deny_tools": []
+    },
+    {
+      "id": "tinyhive-tester",
+      "transport": "stdio",
+      "endpoint": "deepswe_hive",
+      "args": [
+        "--mcp-hive"
+      ],
+      "env": {},
+      "headers": {},
+      "tools": [
+        "broadcast",
+        "complete_episode"
+      ],
+      "deny_tools": []
+    },
+    {
+      "id": "tinyhive-reviewer",
+      "transport": "stdio",
+      "endpoint": "deepswe_hive",
+      "args": [
+        "--mcp-hive"
+      ],
+      "env": {},
+      "headers": {},
+      "tools": [
+        "broadcast",
+        "complete_episode"
+      ],
+      "deny_tools": []
+    }
+  ],
+  "skills": [],
+  "tools": [],
+  "toolpacks": [],
+  "permissions": [],
+  "profiles": [],
+  "hooks": [],
   "session": {
-    "agents_md": null,
     "compact_context": null,
     "max_history_messages": null,
+    "tool_result_budget_bytes": null,
     "max_tool_iterations": null,
     "parallel_tools": null,
-    "tool_result_budget_bytes": null
+    "agents_md": null
   },
-  "skills": [],
-  "toolpacks": [],
-  "tools": [],
-  "topology": [],
-  "version": 1,
+  "jev": {
+    "ranker": "jev",
+    "route": "auto",
+    "base_url": null,
+    "top_k": 3
+  },
+  "features": {},
   "workflows": []
 }

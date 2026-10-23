@@ -1,12 +1,12 @@
 {
-  "acceptance": null,
-  "contamination_canaries": [],
-  "evaluation": null,
   "hard_constraints": [],
   "max_turns": 60,
   "max_width": 8,
   "permitted_edits": [],
-  "protected_namespaces": [],
   "read_only_memories": [],
+  "protected_namespaces": [],
+  "contamination_canaries": [],
+  "evaluation": null,
+  "acceptance": null,
   "telemetry": null
 }

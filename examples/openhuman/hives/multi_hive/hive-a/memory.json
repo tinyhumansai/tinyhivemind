@@ -1,5 +1,5 @@
 {
-  "bindings": [],
+  "root": "team:a",
   "identities": [],
-  "root": "team:a"
+  "bindings": []
 }

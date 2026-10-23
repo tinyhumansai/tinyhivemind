@@ -72,13 +72,13 @@ fn only_research_seats_get_web_search_and_only_compute_and_verify_get_python() {
 fn a_seat_allowing_an_unserved_or_denied_tool_is_refused() {
     let (_, hive) = lowered();
     let mut seat = hive.seats[0].clone();
-    seat.tools.allow.push("shell".into());
+    seat.integration.tools.allow.push("shell".into());
     assert!(package::seat_tools(&seat).is_err());
     let mut seat = hive.seats[0].clone();
-    seat.tools.deny.push("hive_complete".into());
+    seat.integration.tools.deny.push("hive_complete".into());
     assert!(package::seat_tools(&seat).is_err());
     let mut seat = hive.seats[0].clone();
-    seat.tools.allow.retain(|tool| tool != "hive_complete");
+    seat.integration.tools.allow.retain(|tool| tool != "hive_complete");
     assert!(package::seat_tools(&seat).is_err());
 }
 

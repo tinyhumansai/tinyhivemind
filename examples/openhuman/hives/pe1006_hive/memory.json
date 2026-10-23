@@ -1,5 +1,5 @@
 {
-  "bindings": [],
+  "root": "team:pe1006",
   "identities": [],
-  "root": "team:pe1006"
+  "bindings": []
 }

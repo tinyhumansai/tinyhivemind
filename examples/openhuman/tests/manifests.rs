@@ -25,13 +25,13 @@ fn every_package_checks_and_its_canonical_files_are_complete() {
         let root = tinyhivemind_openhuman_example::root(name);
         let package = tinyhivemind_openhuman_example::manifest(name).unwrap();
         assert!(tinyhivemind_lang::diagnose(&package).is_empty(), "{name}");
-        for (file, value) in [
-            ("hive.json", serde_json::to_value(&package.manifest)),
-            ("constitution.json", serde_json::to_value(&package.constitution)),
-            ("memory.json", serde_json::to_value(&package.memory)),
+        for (file, canonical) in [
+            ("hive.json", serde_json::to_string_pretty(&package.manifest)),
+            ("constitution.json", serde_json::to_string_pretty(&package.constitution)),
+            ("memory.json", serde_json::to_string_pretty(&package.memory)),
         ] {
             let written = std::fs::read_to_string(root.join(file)).unwrap();
-            let canonical = serde_json::to_string_pretty(&value.unwrap()).unwrap() + "\n";
+            let canonical = canonical.unwrap() + "\n";
             assert_eq!(written, canonical, "{name}/{file} is not canonical");
         }
     }
@@ -238,7 +238,7 @@ fn all_packages_lower_into_one_native_runtime_with_the_declared_seats_and_limits
                         );
                     }
                 }
-                for (hive, package) in expected.iter().zip(*names) {
+                for (hive, package) in expected.iter().zip(names.iter()) {
                     let declared = tinyhivemind_openhuman_example::manifest(package)?;
                     let settings = deployment
                         .host()

@@ -18,6 +18,7 @@ share the host tests' process lock; approval folds need no native runtime.
 | `delegation.rs` | Real native delegates preserve referenced-child effect restrictions |
 | `sends.rs` | All four sends enforce membership, destinations and authenticated sessions |
 | `runtime.rs` | Provider credentials, diagnostic redaction and native bound mappings |
+| `packages.rs` | End-to-end offline package deployment: a shell tool and a Python tool called in a turn, a script hook refusing a call, and an edited script taking effect on the next call |
 | `profile.rs` | Native inherited definitions, memory-safe tool surfaces, skills and MCP configuration |
 
 `timeout.rs` verifies inherited deadlines and host-hook narrowing.

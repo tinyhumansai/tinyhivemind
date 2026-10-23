@@ -1,5 +1,5 @@
 {
-  "bindings": [],
+  "root": "team:release",
   "identities": [],
-  "root": "team:release"
+  "bindings": []
 }
