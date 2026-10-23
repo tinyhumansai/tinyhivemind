@@ -86,6 +86,7 @@ impl Respond for ScriptedHive {
         state.calls = state.calls.saturating_add(1);
 
         if last_role == "tool" {
+            eprintln!("DEBUGTOOL {seat}: {}", messages.last().unwrap());
             if seat == "lead"
                 && let Some(ContinuationFailure::Http(status)) = self.lead_continuation_failure
             {
