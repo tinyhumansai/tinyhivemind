@@ -100,6 +100,8 @@ fn a_package_seat_runs_its_python_tool_and_a_script_hook_refuses_a_call() -> any
             })
             .await?;
         let report = deployment.host().coordinator().run_until_idle().await?;
+        eprintln!("DBG requests={} seen={:?}", model.received_requests().await.unwrap_or_default().len(), results(&model).await);
+        for row in deployment.host().coordinator().read_transcript(None)? { eprintln!("DBG ROW {row:?}"); }
         assert_eq!(report.failed, 0, "{report:?}");
         let seen = results(&model).await;
         let counts: Vec<_> = seen
