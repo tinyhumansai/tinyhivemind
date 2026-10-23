@@ -24,7 +24,15 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a complete sample.
 
 ## Current specifications
 
-- [`openhuman-hive-config.md`](openhuman-hive-config.md) — accepted: one OpenHuman runtime, reusable profiles, persistent seats across hives, permission narrowing and configured workflows.
+- [`hive-language-integrations.md`](hive-language-integrations.md) — accepted:
+  the hive package defines what its agents run with (runtime, providers,
+  models, MCP, skills, executable tools, toolpacks, permissions, profiles,
+  hooks, session, Jev, features, workflows) and OpenHuman deploys it.
+- [`executable-tools.md`](executable-tools.md) — accepted: tools and hooks as
+  executables in any language, and the calling convention.
+- [`openhuman-hive-config.md`](openhuman-hive-config.md) — superseded by
+  [ADR 0034](../adr/0034-the-hive-language-defines-the-deployment.md): its
+  authority rules hold, its manifest format is retired.
 
 - [`dynamic-hives.md`](dynamic-hives.md) — implemented: supplied agents on one
   runtime, permanent tools, dynamic membership, durable coordination, and

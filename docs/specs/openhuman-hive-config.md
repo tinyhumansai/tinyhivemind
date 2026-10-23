@@ -1,6 +1,6 @@
 # Configurable OpenHuman hives
 
-Status: Accepted. Owner: the OpenHuman adapter. Implements
+Status: Superseded by [ADR 0034](../adr/0034-the-hive-language-defines-the-deployment.md) and [hive language integrations](hive-language-integrations.md). The authority, MCP and workflow rules below still hold in the deployment; the `HiveConfig` manifest and directory format are retired.
 [#113](https://github.com/tinyhumansai/tinyhivemind/issues/113), stages
 [#114](https://github.com/tinyhumansai/tinyhivemind/issues/114)–
 [#118](https://github.com/tinyhumansai/tinyhivemind/issues/118).
