@@ -66,6 +66,7 @@ impl HiveDeployment {
         Box::pin(Self::build_plan(validated, secrets, options, extras)).await
     }
     /// Build using in-process stores and no optional host ports.
+    #[cfg(test)]
     /// # Errors
     /// Unsupported settings, missing credentials or refused runtime/coordinator operations.
     pub(crate) async fn build(
@@ -75,6 +76,7 @@ impl HiveDeployment {
         Box::pin(Self::build_with(config, secrets, BuildOptions::default())).await
     }
     /// Lower the manifest with injected native host ports, validating compatibility before boot.
+    #[cfg(test)]
     /// # Errors
     /// Unsupported settings, missing credentials or refused runtime/coordinator operations.
     pub(crate) async fn build_with(

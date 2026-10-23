@@ -2,6 +2,7 @@
 use super::{ConfigError, HiveConfig, Result};
 use serde_json::Value;
 
+#[cfg(test)]
 impl HiveConfig {
     /// Parse canonical JSON without resolving credentials or opening files.
     ///
@@ -96,6 +97,7 @@ fn endpoint_has_secret(endpoint: &str) -> bool {
 
 // Existing native policies intentionally accept unknown fields outside manifests.
 // Compare the raw structure to its fully typed wire form at this boundary.
+#[cfg(test)]
 fn reject_unknown(raw: &Value, canonical: &Value) -> Result<()> {
     match (raw, canonical) {
         (Value::Object(raw), Value::Object(typed)) => {

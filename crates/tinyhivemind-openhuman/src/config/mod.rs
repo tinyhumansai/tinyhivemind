@@ -6,9 +6,9 @@
 mod parse;
 mod types;
 mod validate;
-pub use crate::error::ConfigError;
-pub use types::*;
+pub(crate) use crate::error::ConfigError;
+pub(crate) use types::*;
 /// Manifest parsing and validation result.
-pub type Result<T> = std::result::Result<T, ConfigError>;
+pub(crate) type Result<T> = std::result::Result<T, ConfigError>;
 #[cfg(test)]
 mod test;
