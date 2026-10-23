@@ -92,7 +92,7 @@ permissions, profiles, hooks, session, Jev, features and workflows — as data,
 and lowering resolves it per seat; it names no harness type and starts no
 process. `tinyhivemind-exec` runs those executable tools and hooks
 (`docs/specs/executable-tools.md`) and is not one of the pure crates. The
-OpenHuman adapter depends on core, tools, lang and exec, and deploys packages
+OpenHuman adapter depends on core, hives, lang and exec, and deploys packages
 with `HiveDeployment::from_packages`; its former `HiveConfig` manifest format is
 retired (ADR 0034). The host owns agent sessions, the transcript, durable
 appends, and scheduling.

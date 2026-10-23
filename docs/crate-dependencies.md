@@ -13,7 +13,6 @@ flowchart TD
     openhuman --> lang
     exec["tinyhivemind-exec"] --> lang
     openhuman --> exec
-    openhuman --> tools
 ```
 
 | Crate | Responsibility | External dependency boundary |
