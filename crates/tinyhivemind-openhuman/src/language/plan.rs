@@ -177,15 +177,12 @@ fn runtime(source: &PackageSource) -> RuntimeSection {
 }
 
 /// A native profile for one seat's resolved integration.
-fn profile(
-    hive: &lang::LoweredHive,
-    seat: &lang::LoweredSeat,
-    skills: Option<String>,
-) -> config::Profile {
+///
+/// The prompt is the seat's alone. Context is per hive: it reaches a turn
+/// through the seat's membership, so a seat several hives share sees each
+/// hive's own documents. Skills are staged by the deployment.
+fn profile(seat: &lang::LoweredSeat) -> config::Profile {
     let integration = &seat.integration;
-    // Context is per hive: it reaches a turn through the seat's membership,
-    // so a seat several hives share sees each hive's own documents.
-    let _ = hive;
     let prompt = seat.prompt.clone();
     let mut named = integration.tools.allow.clone();
     if !named.is_empty() {
@@ -207,7 +204,7 @@ fn profile(
         },
         deny_tools: integration.tools.deny.clone(),
         mcp: integration.mcp.iter().map(mcp).collect(),
-        skills: skills.into_iter().collect(),
+        skills: Vec::new(),
         subagents: integration.subagents.clone(),
         memory: None,
         limits: limits(&integration.limits),
@@ -316,7 +313,7 @@ fn seats_of(
             }
             Some(_) => {}
             None => {
-                let mut native = profile(hive, seat, None);
+                let mut native = profile(seat);
                 native.include_user_skills = Some(hive.integrations.runtime.include_user_skills);
                 agree(profiles, "profiles", &native.id.clone(), native)?;
                 seats.insert(seat.id.clone(), (shared, seat.prompt.clone(), extras));
@@ -328,10 +325,23 @@ fn seats_of(
                 });
             }
         }
+        let mut context = Vec::new();
+        for (path, body) in hive.context.iter().chain(
+            seat.integration
+                .context
+                .iter()
+                .map(|(path, body)| (path, body)),
+        ) {
+            let key = format!("{}/{path}", hive.id);
+            config.contexts.insert(key.clone(), body.clone());
+            if !context.contains(&key) {
+                context.push(key);
+            }
+        }
         members.push(Membership {
             seat: seat.id.clone(),
             role: declared.role.clone(),
-            context: Vec::new(),
+            context,
             permission_profile: declared.permissions.clone(),
             mcp: None,
         });
@@ -388,7 +398,7 @@ pub(crate) fn plan(packages: &[PackageSource]) -> Result<Plan, ConfigError> {
             id: hive.id.clone(),
             name: hive.name.clone(),
             members,
-            memory_root: None,
+            memory_root: Some(package.memory.root.clone()),
             episode: policies.episode,
             routing: policies.routing.clone(),
             coordinator: super::coordinator_options(&hive.coordinator),

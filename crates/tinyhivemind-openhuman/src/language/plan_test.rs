@@ -29,7 +29,8 @@ fn a_package_lowers_to_a_native_plan_with_every_integration() -> anyhow::Result<
         .find(|p| p.id == "seat-lead")
         .ok_or_else(|| anyhow::anyhow!("lead profile"))?;
     assert!(lead.system_prompt.starts_with("You lead the release desk"));
-    assert!(lead.system_prompt.contains("one change per line"));
+    // Shared context reaches turns through the membership, per hive.
+    assert!(!lead.system_prompt.contains("one change per line"));
     assert_eq!(
         lead.model.name.as_deref(),
         Some("anthropic/claude-sonnet-4.5")
@@ -50,6 +51,9 @@ fn a_package_lowers_to_a_native_plan_with_every_integration() -> anyhow::Result<
     assert_eq!(config.permission_profiles[0].id, "read_only");
     let hive = &config.hives[0];
     assert_eq!(hive.id, "integrations");
+    assert_eq!(hive.memory_root.as_deref(), Some("team:integrations"));
+    assert_eq!(hive.members[0].context, ["integrations/context/style.md"]);
+    assert!(config.contexts["integrations/context/style.md"].contains("one change per line"));
     assert_eq!(
         hive.members[1].permission_profile.as_deref(),
         Some("read_only")
