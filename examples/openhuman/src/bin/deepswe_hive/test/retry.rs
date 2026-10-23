@@ -243,6 +243,7 @@ async fn two_round_provider() -> (MockServer, Arc<Mutex<ScriptState>>) {
 
 #[test]
 fn a_new_hive_turn_does_not_inherit_a_prior_action_acceptance() {
+    let _ = env_logger::builder().is_test(true).try_init();
     let _guard = retry_test_guard();
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
