@@ -164,38 +164,42 @@ async fn run_prepared_with_mcp_executable(
         })))
         .mount(&backend)
         .await;
-    let mut config = manifest("deepswe_hive")?;
-    config.runtime.deployment_id = if cli.share_memory_across_tasks {
+    let mut package = manifest("deepswe_hive")?;
+    let declared = &mut package.manifest;
+    declared.runtime.deployment_id = Some(if cli.share_memory_across_tasks {
         "deepswe-shared".into()
     } else {
         deployment_id_for_task(&task.instance_id)
-    };
-    config.runtime.workspace = Some(artifacts.runtime.display().to_string());
+    });
+    declared.runtime.workspace = Some(artifacts.runtime.display().to_string());
     let memory_engine = if cli.share_memory_across_tasks {
-        config.runtime.memory_engine = "host".into();
+        declared.runtime.memory_engine = tinyhivemind_lang::MemoryEngine::Host;
         Some(shared_memory_engine().await?)
     } else {
         None
     };
-    config.runtime.mcp[0].endpoint = mcp_executable.display().to_string();
-    config.runtime.mcp[0].args = sandbox.mcp_args();
-    for profile in &mut config.profiles {
-        let mcp = &mut profile.mcp[0];
-        mcp.endpoint = mcp_executable.display().to_string();
-        mcp.args = vec![
-            "--mcp-hive".into(),
-            "--agent".into(),
-            profile.id.clone(),
-            "--outbox".into(),
-            outbox
-                .join(format!("{}.jsonl", profile.id))
-                .display()
-                .to_string(),
-        ];
+    // The declared model name is what each seat runs; the CLI chooses it.
+    for model in &mut declared.models {
+        model.name.clone_from(&cli.model);
     }
-    let routing_policy = config.hives[0].routing.clone();
+    // `deepswe` is the shared workspace server; `tinyhive-<seat>` is each
+    // seat's own hive tool server, attributed to it by `--agent`.
+    for server in &mut declared.mcp {
+        server.endpoint = mcp_executable.display().to_string();
+        server.args = match server.id.strip_prefix("tinyhive-") {
+            Some(seat) => vec![
+                "--mcp-hive".into(),
+                "--agent".into(),
+                seat.into(),
+                "--outbox".into(),
+                outbox.join(format!("{seat}.jsonl")).display().to_string(),
+            ],
+            None => sandbox.mcp_args(),
+        };
+    }
+    let routing_policy = declared.policies.routing.clone();
     let deployment = deploy(
-        config,
+        vec![("deepswe_hive", package)],
         BuildOptions {
             config: Some(offline_config()),
             memory_engine,
@@ -418,7 +422,7 @@ async fn run_seat(
     for attempt in 1..=MAX_SEAT_ATTEMPTS {
         let retry_instruction = retry_reason.as_deref().map(|reason| {
             format!(
-                "Your prior attempt was invalid because {reason}. This is retry {attempt} of {MAX_SEAT_ATTEMPTS}. Invoke exactly one native mcp_call_tool call on server tinyhive using broadcast or complete_episode, wait for its result to say `accepted from @{id}`, and do no other work or prose."
+                "Your prior attempt was invalid because {reason}. This is retry {attempt} of {MAX_SEAT_ATTEMPTS}. Invoke exactly one native mcp_call_tool call on server tinyhive-{id} using broadcast or complete_episode, wait for its result to say `accepted from @{id}`, and do no other work or prose."
             )
         });
         let prompt = seat_prompt(&task, &id, &delta, retry_instruction.as_deref());
