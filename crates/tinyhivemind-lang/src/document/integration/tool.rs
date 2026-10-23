@@ -105,7 +105,10 @@ impl ExecTool {
     /// placeholder is optional (`{name?}`).
     #[must_use]
     pub fn placeholders(&self) -> Vec<(&str, bool)> {
-        self.argv.iter().filter_map(|part| placeholder(part)).collect()
+        self.argv
+            .iter()
+            .filter_map(|part| placeholder(part))
+            .collect()
     }
 }
 

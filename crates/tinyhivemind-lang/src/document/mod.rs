@@ -11,8 +11,8 @@ use crate::{
     Diagnostic, Error, Result,
     diagnostic::{CONSTITUTION, Findings, HIVE, MEMORY, escape},
 };
-use std::collections::BTreeMap;
 pub use integration::*;
+use std::collections::BTreeMap;
 pub use types::*;
 
 /// Parse canonical JSON and Markdown from host-owned strings.
