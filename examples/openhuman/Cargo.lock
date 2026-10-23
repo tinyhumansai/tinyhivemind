@@ -2059,7 +2059,7 @@ dependencies = [
  "tinycomputer-bus",
  "tinyconnectors-bus",
  "tinydocs-bus",
- "tinyflows-bus 0.1.0",
+ "tinyflows-bus",
  "tinyhosts-bus",
  "tinyinference-core",
  "tinyinference-embeddings",
@@ -3611,19 +3611,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "tinyflows-bus"
-version = "0.1.0"
-source = "git+https://github.com/tinyhumansai/tinyflows?rev=99fd391d43a9af943535cda5579f1e2246bafbdc#99fd391d43a9af943535cda5579f1e2246bafbdc"
-dependencies = [
- "chrono",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "tinyflows-schedule"
 version = "0.1.0"
-source = "git+https://github.com/tinyhumansai/tinyflows?rev=99fd391d43a9af943535cda5579f1e2246bafbdc#99fd391d43a9af943535cda5579f1e2246bafbdc"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3631,7 +3620,7 @@ dependencies = [
  "chrono-tz",
  "cron",
  "serde",
- "tinyflows-bus 0.1.0 (git+https://github.com/tinyhumansai/tinyflows?rev=99fd391d43a9af943535cda5579f1e2246bafbdc)",
+ "tinyflows-bus",
  "tokio",
  "tracing",
  "uuid",
