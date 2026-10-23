@@ -224,7 +224,9 @@ async fn a_script_briefly_open_for_writing_still_runs() {
     let mut context = context();
     context.package_root = package.path().to_path_buf();
     let tool = tool(&["tools/busy.sh"], json!({"stdin": "none"}));
-    let output = run(&tool, &context, &FixedSecrets, &json!({}), "c1").await.expect("ran");
+    let output = run(&tool, &context, &FixedSecrets, &json!({}), "c1")
+        .await
+        .expect("ran");
     assert_eq!(output.text, "ran");
     release.await.expect("released");
 }
