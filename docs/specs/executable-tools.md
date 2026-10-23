@@ -96,10 +96,15 @@ its argument object:
 | --- | --- | --- |
 | `pre_tool_use` | `{"event", "tool", "arguments", "seat", "hive"}` | optional JSON `{"permission": "deny", "message": "…"}` refuses the call |
 | `post_tool_use` | `{"event", "tool", "arguments", "result", "seat", "hive"}` | ignored |
-| `stop` | `{"event", "reply", "seat", "hive"}` | optional JSON `{"followup": "…"}` asks for one more turn |
+| `stop` | `{"event", "reply", "seat", "hive"}` | ignored |
 
 A failing hook is ignored unless `fail_closed` is true, in which case a failing
 `pre_tool_use` hook refuses the call.
+
+A `stop` hook observes the finished reply and cannot start another turn. A
+turn is authorized by the coordinator's round, bounded by `round_width`; a
+hook that could inject one would bypass that bound (charter rule 3). A script
+that wants follow-up work sends it the way any client does, as a message.
 
 ## Acceptance criteria
 

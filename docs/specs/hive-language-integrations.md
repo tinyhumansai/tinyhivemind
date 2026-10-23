@@ -93,7 +93,8 @@ no SSE client, so `sse` is rejected rather than accepted and dropped.
 `withheld` or `off`. The language checks the mode; the adapter rejects an
 unknown group id at deployment.
 
-`hooks[].event` is `pre_tool_use`, `post_tool_use` or `stop`. `run` names a
+`hooks[].event` is `pre_tool_use`, `post_tool_use` or `stop` (observe-only;
+see [executable tools](executable-tools.md#hooks)). `run` names a
 declared executable tool; a hook is a tool bound to an event, so client hooks
 are scripts too. `matcher` limits a tool event to tool names matching it (`*`
 wildcards).
