@@ -57,7 +57,13 @@ fn a_package_seat_runs_its_python_tool_and_a_script_hook_refuses_a_call() -> any
         .lock()
         .unwrap_or_else(PoisonError::into_inner);
     run(async {
-        let (options, _backend, model) = build_options().await;
+        let (mut options, _backend, model) = build_options().await;
+        // The package's dollar budget needs the host's per-call bound.
+        options.call_budget = Some(openhuman_embed::budget::CallBudget {
+            input_tokens: 100_000,
+            output_tokens: 4_096,
+            cost_micros: 10_000,
+        });
         let script = Script {
             action: Some("word_count".into()),
             arguments: Some(json!({"text": "please git push --force now"})),
@@ -118,7 +124,13 @@ fn a_package_seat_runs_a_shell_tool_and_an_unknown_group_is_refused() -> anyhow:
         .lock()
         .unwrap_or_else(PoisonError::into_inner);
     run(async {
-        let (options, _backend, model) = build_options().await;
+        let (mut options, _backend, model) = build_options().await;
+        // The package's dollar budget needs the host's per-call bound.
+        options.call_budget = Some(openhuman_embed::budget::CallBudget {
+            input_tokens: 100_000,
+            output_tokens: 4_096,
+            cost_micros: 10_000,
+        });
         let script = Script {
             action: Some("grep_repo".into()),
             arguments: Some(json!({"pattern": "release-notes", "path": "."})),
