@@ -39,7 +39,7 @@ fn exact_known_remote_verbs_keep_their_declared_effects() {
 }
 fn context(name: &str, arguments: serde_json::Value) -> openhuman_embed::seams::ToolHookContext {
     openhuman_embed::seams::ToolHookContext {
-        event: openhuman_core::agent::hooks::ToolHookEvent::PreToolUse,
+        event: openhuman_embed::seams::ToolHookEvent::PreToolUse,
         call_id: "fixture".into(),
         tool_name: name.into(),
         arguments,

@@ -69,7 +69,7 @@ fn async_context_loading_uses_the_turn_deadline() {
                 assert!(result.is_err_and(|error| error.to_string().contains("timed out")));
             })
             .await
-            .unwrap()
+            .unwrap();
         });
 }
 #[test]

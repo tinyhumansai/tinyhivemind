@@ -533,6 +533,7 @@ fn retryable_provider_error(error: &CoreError) -> bool {
         | CoreError::DeadlineExceeded { .. }
         | CoreError::StructuredOutput { .. }
         | CoreError::BudgetExceeded { .. }
+        | CoreError::DispatchAdmission { .. }
         | CoreError::TurnCancelled { .. }
         | CoreError::AgentRemoved { .. }
         | CoreError::Unavailable { .. }
