@@ -77,16 +77,9 @@ struct Ids {
     tools: Vec<String>,
 }
 
-/// One seat's resolved integration.
-pub(super) fn seat(package: &Package, seat: &Seat) -> LoweredSeatIntegration {
-    let m = &package.manifest;
-    let profile: Option<&Profile> = seat
-        .profile
-        .as_ref()
-        .and_then(|id| find(&m.profiles, id, |p| &p.id));
-    let empty = Profile::default();
-    let p = profile.unwrap_or(&empty);
-
+/// The ids a seat ends up with from runtime, profile and seat, with its
+/// toolpacks expanded, and the tool group modes those packs set.
+fn gather(m: &Manifest, p: &Profile, seat: &Seat) -> (Ids, BTreeMap<String, GroupMode>) {
     let mut ids = Ids::default();
     extend(&mut ids.toolpacks, &m.runtime.toolpacks);
     for layer in [
@@ -114,6 +107,20 @@ pub(super) fn seat(package: &Package, seat: &Seat) -> LoweredSeatIntegration {
             groups.extend(pack.groups.clone());
         }
     }
+    (ids, groups)
+}
+
+/// One seat's resolved integration.
+pub(super) fn seat(package: &Package, seat: &Seat) -> LoweredSeatIntegration {
+    let m = &package.manifest;
+    let profile: Option<&Profile> = seat
+        .profile
+        .as_ref()
+        .and_then(|id| find(&m.profiles, id, |p| &p.id));
+    let empty = Profile::default();
+    let p = profile.unwrap_or(&empty);
+
+    let (ids, groups) = gather(m, p, seat);
 
     let model_id = seat
         .model
@@ -149,6 +156,43 @@ pub(super) fn seat(package: &Package, seat: &Seat) -> LoweredSeatIntegration {
         seat.tools.allow.clone()
     };
 
+    let (mcp, skills, programs, hooks) = switched(m, &ids);
+    let context = ids
+        .context
+        .iter()
+        .filter_map(|path| Some((path.clone(), package.documents.get(path)?.clone())))
+        .collect();
+
+    LoweredSeatIntegration {
+        profile: profile.map(|p| p.id.clone()),
+        agent_id: seat.agent_id.clone(),
+        model,
+        tools: ToolAccess { allow, deny },
+        mcp,
+        skills,
+        programs,
+        hooks,
+        groups,
+        permissions,
+        limits,
+        context,
+        subagents: p.subagents.clone(),
+        bare_prompt: p.bare_prompt,
+        definition_base: p.definition_base.clone(),
+    }
+}
+
+/// The MCP servers, skills, executable tools and hooks `ids` names, each
+/// empty when its feature is switched off.
+fn switched(
+    m: &Manifest,
+    ids: &Ids,
+) -> (
+    Vec<crate::McpServer>,
+    Vec<crate::Skill>,
+    Vec<crate::ExecTool>,
+    Vec<LoweredHook>,
+) {
     let mcp = if on(m, "mcp") {
         resolve(&ids.mcp, &m.mcp, |v| &v.id)
     } else {
@@ -176,29 +220,7 @@ pub(super) fn seat(package: &Package, seat: &Seat) -> LoweredSeatIntegration {
     } else {
         Vec::new()
     };
-    let context = ids
-        .context
-        .iter()
-        .filter_map(|path| Some((path.clone(), package.documents.get(path)?.clone())))
-        .collect();
-
-    LoweredSeatIntegration {
-        profile: profile.map(|p| p.id.clone()),
-        agent_id: seat.agent_id.clone(),
-        model,
-        tools: ToolAccess { allow, deny },
-        mcp,
-        skills,
-        programs,
-        hooks,
-        groups,
-        permissions,
-        limits,
-        context,
-        subagents: p.subagents.clone(),
-        bare_prompt: p.bare_prompt,
-        definition_base: p.definition_base.clone(),
-    }
+    (mcp, skills, programs, hooks)
 }
 
 /// The declarations `ids` names, in `ids` order.
