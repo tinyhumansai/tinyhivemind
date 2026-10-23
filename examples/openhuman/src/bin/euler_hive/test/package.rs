@@ -78,7 +78,10 @@ fn a_seat_allowing_an_unserved_or_denied_tool_is_refused() {
     seat.integration.tools.deny.push("hive_complete".into());
     assert!(package::seat_tools(&seat).is_err());
     let mut seat = hive.seats[0].clone();
-    seat.integration.tools.allow.retain(|tool| tool != "hive_complete");
+    seat.integration
+        .tools
+        .allow
+        .retain(|tool| tool != "hive_complete");
     assert!(package::seat_tools(&seat).is_err());
 }
 
