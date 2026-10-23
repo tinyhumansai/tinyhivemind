@@ -1,7 +1,7 @@
 //! One call of an executable tool under the calling convention of
 //! `docs/specs/executable-tools.md`.
 //!
-//! [`run`] resolves the program, substitutes the `argv` placeholders, builds
+//! [`run()`] resolves the program, substitutes the `argv` placeholders, builds
 //! the scrubbed environment, starts the program in a process group of its
 //! own, writes the argument object to stdin, and turns the exit status and
 //! stdout into an [`Output`] or an [`Error`]. Nothing is cached: a `tools/…`
