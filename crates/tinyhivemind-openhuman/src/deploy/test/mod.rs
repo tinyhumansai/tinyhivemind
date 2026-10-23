@@ -28,6 +28,7 @@ mod cancellation;
 
 mod delegation;
 mod mcp;
+mod packages;
 mod sends;
 
 mod hook_composition;
