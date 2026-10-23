@@ -52,7 +52,7 @@ pub(super) async fn execute(tool: &ExecTool, launch: Launch) -> Result<Finished>
         .kill_on_drop(true);
     #[cfg(unix)]
     command.process_group(0);
-    let mut child = command.spawn().map_err(|source| Error::Spawn {
+    let mut child = spawn(&mut command).await.map_err(|source| Error::Spawn {
         program: tool.command.first().cloned().unwrap_or_default(),
         source,
     })?;
@@ -70,6 +70,27 @@ pub(super) async fn execute(tool: &ExecTool, launch: Launch) -> Result<Finished>
         tool: tool.id.clone(),
         source,
     })
+}
+
+/// Start `command`, retrying briefly while its file is open for writing.
+///
+/// Exec fails with "text file busy" while any process holds the program open
+/// for writing. That includes a child this process forked in the instant
+/// between another thread writing a script and closing it, so a host that
+/// edits package scripts while it runs tools would otherwise see spurious
+/// failures. Ten attempts back off for 450 ms in all.
+async fn spawn(command: &mut Command) -> std::io::Result<Child> {
+    const ATTEMPTS: u64 = 10;
+    let mut attempt = 1;
+    loop {
+        match command.spawn() {
+            Err(error) if error.kind() == ErrorKind::ExecutableFileBusy && attempt < ATTEMPTS => {
+                tokio::time::sleep(Duration::from_millis(10 * attempt)).await;
+                attempt += 1;
+            }
+            spawned => return spawned,
+        }
+    }
 }
 
 /// Write stdin, read both outputs and wait, all at once so that no pipe
