@@ -61,6 +61,7 @@ fn scheduled_mcp_envelope_and_private_children_never_reach_remote_effect() -> an
             .mount(&remote)
             .await;
         let (mut options, _backend, model) = build_options().await;
+        let _ = env_logger::builder().is_test(true).try_init();
         openhuman_embed::modules::register_linked("tinymcp", tinymcp::linked_module);
         options.classifier = Some(Arc::new(RemoteEffects));
         let script = Script {
