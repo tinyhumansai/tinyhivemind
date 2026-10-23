@@ -4,6 +4,7 @@
 
 mod files;
 mod guards;
+mod integration;
 mod locations;
 mod sequence;
 mod support;

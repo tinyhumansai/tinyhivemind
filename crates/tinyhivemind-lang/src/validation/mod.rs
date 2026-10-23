@@ -411,3 +411,5 @@ fn frontmatter(package: &Package, seat: &crate::Seat) -> Result<()> {
 }
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+pub(crate) use test::integration::documents as test_documents;
