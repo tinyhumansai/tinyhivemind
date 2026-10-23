@@ -206,6 +206,12 @@ fn references(package: &Package, d: &Declared<'_>, seats: &BTreeSet<&str>, found
             format!("/hooks/{i}/run"),
         );
     }
+    agents(package, d, seats, found);
+}
+
+/// References made by profiles, seats and workflows.
+fn agents(package: &Package, d: &Declared<'_>, seats: &BTreeSet<&str>, found: &mut Findings) {
+    let m = &package.manifest;
     for (i, p) in m.profiles.iter().enumerate() {
         let at = format!("/profiles/{i}");
         all(
