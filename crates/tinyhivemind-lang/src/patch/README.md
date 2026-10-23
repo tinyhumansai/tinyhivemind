@@ -19,5 +19,8 @@ The library opens no store and never embeds learned entries in the package.
 | `test.rs` | Deterministic wire, diff/apply and guard regressions |
 
 Context item bodies end with a newline. Deltas preserve text outside item
-boundaries. Prompt edits preserve JSON frontmatter. Constitution controls
-permitted classes, canaries, pinned read-only memory and package invariants.
+boundaries. Prompt edits preserve JSON frontmatter. The `integration` class owns the
+integration sections of the manifest, a seat's integration fields, and every
+file under `tools/` and `skills/`; those files are edited whole, so the
+leading-`---` frontmatter rule for prompts does not apply to them. Constitution
+controls permitted classes, canaries, pinned read-only memory and package invariants.

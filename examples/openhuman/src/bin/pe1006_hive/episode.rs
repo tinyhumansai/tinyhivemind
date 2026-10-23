@@ -93,6 +93,13 @@ pub(super) fn route_candidates(problem: &str, exclude: Option<&str>) -> Vec<Rout
     .collect()
 }
 
+/// Whether `server` names a seat's hive tool server, `tinyhive-<seat>`.
+fn hive_server(server: &str) -> bool {
+    server
+        .strip_prefix("tinyhive-")
+        .is_some_and(|seat| !seat.is_empty())
+}
+
 pub(super) fn recover_tool_call(text: &str) -> Option<Utterance> {
     let trimmed = text.trim();
     for (prefix, name) in [
@@ -120,7 +127,7 @@ pub(super) fn recover_tool_call(text: &str) -> Option<Utterance> {
     let tool = value.get("tool")?.as_str()?;
     let (name, arguments) = if tool == "mcp_call_tool" {
         let outer = value.get("arguments")?;
-        if outer.get("server")?.as_str()? != "tinyhive" {
+        if !hive_server(outer.get("server")?.as_str()?) {
             return None;
         }
         (
@@ -134,7 +141,7 @@ pub(super) fn recover_tool_call(text: &str) -> Option<Utterance> {
         if !matches!(tool, "broadcast" | "complete_episode")
             || value
                 .get("server")
-                .is_some_and(|server| server.as_str() != Some("tinyhive"))
+                .is_some_and(|server| !server.as_str().is_some_and(hive_server))
         {
             return None;
         }

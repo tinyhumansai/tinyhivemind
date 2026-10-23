@@ -571,7 +571,7 @@ fn retryable_provider_message(message: &str) -> bool {
 
 fn seat_prompt(task: &Task, id: &str, delta: &str, retry_instruction: Option<&str>) -> String {
     let mut prompt = format!(
-        "## Task\n{}\n\n## Repository\n/workspace\n\n## New desk messages\n{}\n\n## Role\n{}\n\nUse only the deepswe MCP file/shell tools and tinyhive broadcast/complete_episode tools. End with exactly one tinyhive action. Do not access the network, credentials, browser, integrations, or paths outside /workspace.",
+        "## Task\n{}\n\n## Repository\n/workspace\n\n## New desk messages\n{}\n\n## Role\n{}\n\nUse only the deepswe MCP file/shell tools and tinyhive-{id} broadcast/complete_episode tools. End with exactly one tinyhive-{id} action. Do not access the network, credentials, browser, integrations, or paths outside /workspace.",
         task.problem_statement,
         if delta.is_empty() { "(none)" } else { delta },
         role(id),
