@@ -282,7 +282,7 @@ fn candidate(package: &Package, patch: &Patch) -> Result<AppliedPatch> {
                 if &document[offset..] != before {
                     return Err(Error::Stale(path.clone()));
                 }
-                if offset == 0 && !whole(path) && after.starts_with("---\n") {
+                if !whole(path) && after.starts_with("---\n") {
                     return Err(Error::Immutable);
                 }
                 document.replace_range(offset.., after);
