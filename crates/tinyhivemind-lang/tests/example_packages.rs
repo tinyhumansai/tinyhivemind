@@ -203,12 +203,12 @@ fn shipped_deepswe_package_parses_and_lowers_without_host_io()
     assert_eq!(lowered.seats.len(), 4);
     for seat in &lowered.seats {
         assert_eq!(seat.template, "deepswe");
-        assert_eq!(seat.tools.allow, ["mcp_list_tools", "mcp_call_tool"]);
-        assert_eq!(seat.tools.deny, Vec::<String>::new());
-        assert_eq!(seat.mcp, ["deepswe", "tinyhive"]);
+        assert_eq!(seat.integration.tools.allow, ["mcp_list_tools", "mcp_call_tool"]);
+        assert_eq!(seat.integration.tools.deny, Vec::<String>::new());
+        assert_eq!(mcp_ids(seat), ["deepswe", "tinyhive"]);
         assert_eq!(seat.config["max_iterations"], 16);
         assert_eq!(seat.config["temperature"], 0.0);
-        assert_eq!(seat.model, None);
+        assert_eq!(seat.integration.model, None);
         assert!(seat.prompt.contains(&format!("accepted from @{}", seat.id)));
     }
     Ok(())
@@ -281,7 +281,7 @@ fn shipped_pe1006_package_parses_and_lowers_without_host_io()
     for seat in &lowered.seats {
         assert_eq!(seat.template, "pe1006");
         assert_eq!(
-            seat.tools.allow,
+            seat.integration.tools.allow,
             [
                 "file_read",
                 "file_write",
@@ -290,11 +290,11 @@ fn shipped_pe1006_package_parses_and_lowers_without_host_io()
                 "shell"
             ]
         );
-        assert_eq!(seat.tools.deny, ["run_code", "ask_docs"]);
-        assert_eq!(seat.mcp, ["tinyhive"]);
+        assert_eq!(seat.integration.tools.deny, ["run_code", "ask_docs"]);
+        assert_eq!(mcp_ids(seat), ["tinyhive"]);
         assert_eq!(seat.config["max_iterations"], 12);
         assert_eq!(seat.config["temperature"], 0.0);
-        assert_eq!(seat.model, None);
+        assert_eq!(seat.integration.model, None);
         if seat.id == "researcher" {
             assert!(
                 seat.prompt
@@ -305,4 +305,9 @@ fn shipped_pe1006_package_parses_and_lowers_without_host_io()
         }
     }
     Ok(())
+}
+
+/// The ids of the MCP servers a lowered seat connects to.
+fn mcp_ids(seat: &tinyhivemind_lang::LoweredSeat) -> Vec<&str> {
+    seat.integration.mcp.iter().map(|server| server.id.as_str()).collect()
 }

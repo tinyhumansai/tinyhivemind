@@ -4,15 +4,12 @@
 //! Called only on a validated package, so every reference resolves; an id
 //! that does not is skipped rather than reported.
 use super::{LoweredHook, LoweredIntegrations, LoweredModel, LoweredSeatIntegration};
-use crate::{GroupMode, Limits, Manifest, Package, Profile, Seat, ToolAccess};
+use crate::{GroupMode, Manifest, Package, Profile, Seat, ToolAccess};
 use std::collections::BTreeMap;
 
-/// The features that switch an integration off when set to `false`.
-const SWITCHES: [&str; 4] = ["mcp", "skills", "script_tools", "hooks"];
-
-/// Whether feature `name` leaves its integration on.
+/// Whether feature `name` (`mcp`, `skills`, `script_tools` or `hooks`)
+/// leaves its integration on: it does unless set to `false`.
 fn on(manifest: &Manifest, name: &str) -> bool {
-    debug_assert!(SWITCHES.contains(&name));
     manifest.features.get(name).copied().unwrap_or(true)
 }
 
@@ -200,10 +197,4 @@ fn resolve<T: Clone>(ids: &[String], items: &[T], key: impl Fn(&T) -> &str) -> V
     ids.iter()
         .filter_map(|id| find(items, id, &key).cloned())
         .collect()
-}
-
-/// Limits with every field unset, for callers that want an explicit value.
-#[must_use]
-pub(super) fn none() -> Limits {
-    Limits::default()
 }

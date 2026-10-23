@@ -50,7 +50,7 @@ pub(crate) fn tree(loaded: &Loaded) -> String {
 }
 
 fn seat_line(seat: &LoweredSeat, role: &str) -> String {
-    let mut line = format!("{} ({role}) tools={}", seat.id, seat.tools.allow.join(","));
+    let mut line = format!("{} ({role}) tools={}", seat.id, seat.integration.tools.allow.join(","));
     if !seat.mcp.is_empty() {
         let _ = write!(line, " mcp={}", seat.mcp.join(","));
     }
