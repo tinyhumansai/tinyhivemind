@@ -1,0 +1,125 @@
+{
+  "$schema": "https://tinyhumans.ai/schemas/hive/v1",
+  "version": 1,
+  "id": "integrations",
+  "name": "Release desk",
+  "roles": [
+    {"id": "lead", "charter": "roles/lead.md"},
+    {"id": "researcher", "charter": "roles/researcher.md"}
+  ],
+  "seats": [
+    {
+      "id": "lead",
+      "role": "lead",
+      "prompt": "seats/lead.md",
+      "template": "openhuman",
+      "profile": "editor",
+      "hooks": ["no_force_push"]
+    },
+    {
+      "id": "scout",
+      "label": "Scout",
+      "role": "researcher",
+      "prompt": "seats/scout.md",
+      "template": "openhuman",
+      "profile": "reader",
+      "model": "fast",
+      "permissions": "read_only",
+      "limits": {"iterations": 6}
+    }
+  ],
+  "desks": [
+    {"id": "release", "name": "Release", "members": ["lead", "scout"]}
+  ],
+  "context": ["context/style.md"],
+  "runtime": {
+    "deployment_id": "release-desk",
+    "session_store": "sqlite",
+    "autonomy": "supervised",
+    "concurrency": 2,
+    "provider": "openrouter",
+    "model": "careful",
+    "toolpacks": ["repo"],
+    "limits": {"timeout_ms": 120000, "budget_usd": 0.5}
+  },
+  "providers": [
+    {"id": "openrouter", "kind": "openrouter", "credential": {"env": "OPENROUTER_API_KEY"}}
+  ],
+  "models": [
+    {"id": "careful", "name": "anthropic/claude-sonnet-4.5", "temperature": 0.2, "max_tokens": 4096},
+    {"id": "fast", "provider": "openrouter", "name": "openai/gpt-5-mini", "limits": {"iterations": 8}}
+  ],
+  "mcp": [
+    {
+      "id": "issues",
+      "transport": "http",
+      "endpoint": "https://mcp.example.com/issues",
+      "headers": {"Authorization": {"env": "ISSUES_TOKEN"}},
+      "tools": ["search_issues", "get_issue"]
+    }
+  ],
+  "skills": [{"id": "release-notes"}],
+  "tools": [
+    {
+      "id": "grep_repo",
+      "description": "Search the repository for a pattern and print matching lines",
+      "command": ["tools/grep_repo.sh"],
+      "args": {
+        "type": "object",
+        "properties": {
+          "pattern": {"type": "string", "description": "Extended regular expression"},
+          "path": {"type": "string", "description": "Directory to search, default ."}
+        },
+        "required": ["pattern"]
+      },
+      "argv": ["{pattern}", "{path?}"],
+      "stdin": "none",
+      "side_effects": "read",
+      "timeout_ms": 20000
+    },
+    {
+      "id": "word_count",
+      "description": "Count the words, lines and characters of a text",
+      "command": ["python3", "tools/word_count.py"],
+      "args": {
+        "type": "object",
+        "properties": {"text": {"type": "string"}},
+        "required": ["text"]
+      },
+      "output": "json",
+      "side_effects": "read",
+      "cwd": "package"
+    },
+    {
+      "id": "guard_shell",
+      "description": "Refuse destructive git commands",
+      "command": ["tools/guard_shell.sh"],
+      "side_effects": "read"
+    }
+  ],
+  "toolpacks": [
+    {
+      "id": "repo",
+      "description": "Read the repository and its issues",
+      "tools": ["grep_repo", "word_count"],
+      "mcp": ["issues"],
+      "groups": {"web": "off"}
+    }
+  ],
+  "permissions": [
+    {"id": "read_only", "access": "read_only", "sandbox": "read_only", "deny_tools": ["shell"]}
+  ],
+  "profiles": [
+    {"id": "editor", "skills": ["release-notes"], "subagents": ["reader"]},
+    {"id": "reader", "model": "fast", "permissions": "read_only", "tools": {"allow": [], "deny": ["write_file"]}}
+  ],
+  "hooks": [
+    {"id": "no_force_push", "event": "pre_tool_use", "matcher": "shell", "run": "guard_shell", "fail_closed": true}
+  ],
+  "session": {"compact_context": true, "max_history_messages": 80, "parallel_tools": true},
+  "jev": {"ranker": "auto", "top_k": 5},
+  "features": {"script_tools": true, "verbose_tools": false},
+  "workflows": [
+    {"id": "nightly-digest", "schedule": "0 6 * * *", "target": {"hive": "integrations"}, "prompt": "Summarise what changed since yesterday"}
+  ]
+}
