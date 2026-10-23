@@ -61,8 +61,10 @@ pub struct ExecTool {
     pub id: String,
     /// What the model is told the tool does.
     pub description: String,
-    /// Program and fixed leading arguments. A program starting with `tools/`
-    /// is a package file; any other is found on `PATH` by the host.
+    /// Program and fixed leading arguments. Every element starting with
+    /// `tools/` is a package file: validation requires it to ship in the
+    /// package and the host resolves it against the package root. A program
+    /// that is not one is found on `PATH` by the host.
     pub command: Vec<String>,
     /// JSON Schema of the argument object; a plain object schema.
     #[serde(default = "object_schema")]
@@ -92,7 +94,9 @@ pub struct ExecTool {
 }
 
 impl ExecTool {
-    /// The package file the program names, when it is one.
+    /// The package file the program (the first element of `command`) names,
+    /// when it is one. A later `tools/…` element, such as a script passed to
+    /// an interpreter, is not reported here.
     #[must_use]
     pub fn package_program(&self) -> Option<&str> {
         self.command
