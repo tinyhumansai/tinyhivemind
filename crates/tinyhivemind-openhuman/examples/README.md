@@ -2,8 +2,28 @@
 
 | File | Purpose |
 | --- | --- |
+| `run_package.rs` | Checks a hive package, summarises what each seat runs with, calls one of its executable tools as a seat would (`--call`), or deploys it and sends one message (`--live`) |
+| `run_package/` | The example's offline regressions and directory guide |
 | `live_language/` | Exact completion and audience evidence, plus offline regressions |
 | `live_language.rs` | Loads a live-evaluated language package, creates two model-backed seats through the management adapter with a shared memory binding, and verifies native completion, private delivery and leave access. |
+
+## Running a package
+
+```sh
+cargo run -p tinyhivemind-openhuman --example run_package -- \
+  crates/tinyhivemind-lang/examples/hives/integrations
+cargo run -p tinyhivemind-openhuman --example run_package -- \
+  crates/tinyhivemind-lang/examples/hives/integrations --seat scout \
+  --call word_count --args '{"text":"one two three"}'
+cargo test -p tinyhivemind-openhuman --example run_package
+```
+
+With no flag it prints one line per seat. `--call` runs the seat's
+`pre_tool_use` hooks, then the tool, then `post_tool_use`, with no model and no
+harness: edit a script and call it again. `--live` deploys the package with
+`HiveDeployment::from_packages` and needs its provider credential.
+
+## Live language package
 
 Run from the repository root, after the language live example has produced its
 accepted package:
