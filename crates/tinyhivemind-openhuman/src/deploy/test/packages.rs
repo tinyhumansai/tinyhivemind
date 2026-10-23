@@ -94,7 +94,7 @@ fn a_package_seat_runs_its_python_tool_and_a_script_hook_refuses_a_call() -> any
             })
             .await?;
         let report = deployment.host().coordinator().run_until_idle().await?;
-        for r in results(&model).await { eprintln!("SEEN {r:?}"); }
+        for r in model.received_requests().await.unwrap_or_default() { let v: Value = serde_json::from_slice(&r.body).unwrap_or_default(); let names: Vec<_> = v["tools"].as_array().cloned().unwrap_or_default().iter().map(|t| t["function"]["name"].as_str().unwrap_or_default().to_owned()).collect(); let last = v["messages"].as_array().and_then(|m| m.last().cloned()); eprintln!("REQ path={} tools={names:?} last={}", r.url.path(), last.map(|l| l.to_string().chars().take(300).collect::<String>()).unwrap_or_default()); }
         assert_eq!(report.failed, 0, "{report:?}");
         let seen = results(&model).await;
         let counts: Vec<_> = seen
