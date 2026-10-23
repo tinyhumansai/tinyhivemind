@@ -9,12 +9,15 @@ use std::sync::{Arc, PoisonError};
 use tinyhivemind_hives::{Destination, SendMessage};
 
 /// The `integrations` example, with MCP off (its server is not reachable
-/// offline) and its hook matching the Python tool the script calls.
+/// offline), its provider left to the offline fixture, and its hook
+/// matching the Python tool the script calls.
 fn package() -> anyhow::Result<PackageSource> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../tinyhivemind-lang/examples/hives/integrations");
     let mut package = PackageSource::read(&root)?;
     package.manifest.features.insert("mcp".into(), false);
+    package.manifest.runtime.provider = None;
+    package.manifest.models[1].provider = None;
     package.manifest.hooks[0].matcher = Some("word_count".into());
     Ok(PackageSource::new(root, package)?)
 }
@@ -115,8 +118,7 @@ fn a_package_seat_runs_a_shell_tool_and_an_unknown_group_is_refused() -> anyhow:
             ..Default::default()
         };
         mount(&model, script).await;
-        let mut source = PackageSource::read(package()?.root())?;
-        source.manifest.features.insert("mcp".into(), false);
+        let mut source = package()?.package().clone();
         source.manifest.tools[0].cwd = tinyhivemind_lang::ToolDirectory::Package;
         let root = package()?.root().to_path_buf();
         let deployment = Box::pin(HiveDeployment::from_packages(
