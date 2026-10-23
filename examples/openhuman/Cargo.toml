@@ -80,6 +80,9 @@ tinymemory-api = { path = "../../vendor/openhuman/vendor/tinymemory/crates/tinym
 tinymemory-tools = { path = "../../vendor/openhuman/vendor/tinymemory/crates/tinymemory-tools" }
 tinymemory-integrations = { path = "../../vendor/openhuman/vendor/tinymemory/crates/tinymemory-integrations" }
 
+[patch."https://github.com/tinyhumansai/tinyflows"]
+tinyflows-schedule = { path = "../../vendor/openhuman/vendor/tinyflows/crates/tinyflows-schedule" }
+
 [patch."https://github.com/tinyhumansai/tinybus"]
 # tinystoragedrivers-bus (and tinywallet, which names tinybus by git rev) name
 # tinybus by git. Redirect them to the in-tree copy so the graph holds exactly
