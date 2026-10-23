@@ -28,6 +28,25 @@ pub(super) fn arguments(tool: &ExecTool, args: &Value) -> Result<Vec<String>> {
     fixed.chain(templated).collect()
 }
 
+/// `arguments` with each fixed leading argument of `command` that names a
+/// package file (`tools/…`) made absolute under the package root, so
+/// `["python3", "tools/count.py"]` finds its script from any working
+/// directory. Substituted arguments are left as the model sent them.
+pub(super) fn package_paths(
+    mut arguments: Vec<String>,
+    tool: &ExecTool,
+    context: &ExecContext,
+) -> Vec<String> {
+    let fixed = tool.command.len().saturating_sub(1);
+    let root = absolute(&context.package_root);
+    for argument in arguments.iter_mut().take(fixed) {
+        if argument.starts_with("tools/") {
+            *argument = root.join(argument.as_str()).display().to_string();
+        }
+    }
+    arguments
+}
+
 /// The program to start: a `tools/…` path under the package root, or the
 /// declared name for the operating system to find on `PATH`.
 pub(super) fn program(tool: &ExecTool, context: &ExecContext) -> Result<PathBuf> {

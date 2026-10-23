@@ -48,7 +48,7 @@ pub async fn run(
 ) -> Result<Output> {
     let launch = Launch {
         program: command::program(tool, context)?,
-        arguments: command::arguments(tool, args)?,
+        arguments: command::package_paths(command::arguments(tool, args)?, tool, context),
         environment: command::environment(tool, context, secrets, call_id)?,
         directory: command::working_directory(tool, context),
         input: (tool.stdin == ToolStdin::Json).then(|| args.to_string().into_bytes()),
