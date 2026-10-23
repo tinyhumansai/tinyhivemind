@@ -377,12 +377,9 @@ and [crate dependency map](docs/crate-dependencies.md) show their boundaries.
 
 ### Supplied OpenHuman agents
 
-Construct all agents on one OpenHuman `Runtime`, with their MCPs, skills,
-memory, providers, and prompts configured before registration. Pass the handles
-to `OpenHumanHost::new(runtime_id, coordinator)?`, then `register_agent(agent)?`
-or `register_agent_in_session(agent, session_id)?` for an existing conversation.
-Each agent retains one continuing session across all joined hives. A hive and a
-desk have one public `hive_id`.
+Deploy hive packages with `HiveDeployment::from_packages`, or construct agents
+on one OpenHuman `Runtime` yourself and register the handles with
+`OpenHumanHost`. Each agent keeps one continuing session across its hives.
 
 Nine permanent tools stay in the system catalogue and provider schemas under
 deferred discovery. Four additional management tools require an explicit host
