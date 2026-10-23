@@ -16,6 +16,8 @@ fn package() -> anyhow::Result<PackageSource> {
         .join("../tinyhivemind-lang/examples/hives/integrations");
     let mut package = PackageSource::read(&root)?;
     package.manifest.features.insert("mcp".into(), false);
+    for f in std::env::var("BISECT").unwrap_or_default().split(',').filter(|f| !f.is_empty()) { package.manifest.features.insert(f.into(), false); }
+    if std::env::var("BISECT_NOSKILL").is_ok() { for s in &mut package.manifest.seats { s.profile = None; } package.manifest.runtime.toolpacks.clear(); }
     package.manifest.runtime.provider = None;
     // Plain model names: the scripted model reads plain-text turns, and a
     // provider-prefixed Anthropic name switches the harness to cache-control
