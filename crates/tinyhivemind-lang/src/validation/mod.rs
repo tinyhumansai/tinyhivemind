@@ -8,6 +8,7 @@
 //! the frontmatter of a document that is missing, is skipped rather than
 //! reported twice.
 mod bounds;
+mod integration;
 mod memory;
 use crate::{
     Diagnostic, Error, Package, Result,
@@ -92,6 +93,7 @@ pub(crate) fn rules(package: &Package, found: &mut Findings) {
     wiring(package, found, &desks);
     bounds::bounds(package, found);
     memory::memory(package, &seats, found);
+    integration::integration(package, &seats, found);
 }
 
 /// Roles, seats and desk membership.

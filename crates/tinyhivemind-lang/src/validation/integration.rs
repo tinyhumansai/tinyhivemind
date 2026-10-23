@@ -6,7 +6,7 @@
 //! [`Error::Integration`].
 use super::{declared_document, identities, reference, validate_path};
 use crate::{
-    Error, ExecTool, HookEvent, Limits, Manifest, Package, Result, SecretRef, WorkflowTarget,
+    Error, ExecTool, HookEvent, Limits, Manifest, Package, SecretRef, WorkflowTarget,
     diagnostic::{Findings, HIVE},
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -330,13 +330,4 @@ fn tool_shape(tool: &ExecTool, i: usize, found: &mut Findings) {
         }
     }
     secrets(found, &tool.env, &format!("{field}.env"), &format!("{at}/env"));
-}
-
-/// Check `result` was produced by `integration`, for the module's tests.
-#[cfg(test)]
-pub(super) fn first(package: &Package) -> Result<()> {
-    let mut found = Findings::default();
-    let seats = package.manifest.seats.iter().map(|s| s.id.as_str()).collect();
-    integration(package, &seats, &mut found);
-    found.into_first()
 }

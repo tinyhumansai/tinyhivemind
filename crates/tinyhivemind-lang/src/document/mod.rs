@@ -63,16 +63,22 @@ pub(crate) fn collect(documents: &BTreeMap<String, String>) -> (Option<Package>,
         memory,
         documents: documents
             .iter()
-            .filter(|(path, _)| {
-                std::path::Path::new(path)
-                    .extension()
-                    .is_some_and(|extension| extension.eq_ignore_ascii_case("md"))
-            })
+            .filter(|(path, _)| carried(path))
             .map(|(p, s)| (p.clone(), s.clone()))
             .collect(),
     };
     crate::validation::rules(&package, &mut found);
     (Some(package), found)
+}
+
+/// Whether `parse` keeps a non-canonical file: Markdown anywhere, and every
+/// file under `tools/` (executable sources) and `skills/` (skill bundles).
+pub(crate) fn carried(path: &str) -> bool {
+    path.starts_with("tools/")
+        || path.starts_with("skills/")
+        || std::path::Path::new(path)
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("md"))
 }
 
 fn decode<T: serde::de::DeserializeOwned + serde::Serialize>(
