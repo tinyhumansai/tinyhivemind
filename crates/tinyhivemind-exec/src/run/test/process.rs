@@ -201,3 +201,30 @@ async fn an_edited_script_takes_effect_on_the_next_call() {
         ("first", "second")
     );
 }
+
+#[tokio::test]
+async fn a_script_briefly_open_for_writing_still_runs() {
+    let package = tempfile::tempdir().expect("tempdir");
+    std::fs::create_dir(package.path().join("tools")).expect("tools dir");
+    let script = package.path().join("tools/busy.sh");
+    std::fs::write(&script, "#!/bin/sh\nprintf 'ran'\n").expect("script");
+    let mut permissions = std::fs::metadata(&script).expect("meta").permissions();
+    std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o755);
+    std::fs::set_permissions(&script, permissions).expect("chmod");
+    // A writer still holding the file makes exec fail with "text file busy",
+    // as a host process writing a package script does while it spawns.
+    let writer = std::fs::OpenOptions::new()
+        .write(true)
+        .open(&script)
+        .expect("open for writing");
+    let release = tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        drop(writer);
+    });
+    let mut context = context();
+    context.package_root = package.path().to_path_buf();
+    let tool = tool(&["tools/busy.sh"], json!({"stdin": "none"}));
+    let output = run(&tool, &context, &FixedSecrets, &json!({}), "c1").await.expect("ran");
+    assert_eq!(output.text, "ran");
+    release.await.expect("released");
+}
