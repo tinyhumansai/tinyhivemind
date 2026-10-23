@@ -16,8 +16,6 @@ fn package() -> anyhow::Result<PackageSource> {
         .join("../tinyhivemind-lang/examples/hives/integrations");
     let mut package = PackageSource::read(&root)?;
     package.manifest.features.insert("mcp".into(), false);
-    for f in std::env::var("BISECT").unwrap_or_default().split(',').filter(|f| !f.is_empty()) { package.manifest.features.insert(f.into(), false); }
-    if std::env::var("BISECT_NOSKILL").is_ok() { for s in &mut package.manifest.seats { s.profile = None; } package.manifest.runtime.toolpacks.clear(); }
     package.manifest.runtime.provider = None;
     // Plain model names: the scripted model reads plain-text turns, and a
     // provider-prefixed Anthropic name switches the harness to cache-control
@@ -69,7 +67,7 @@ fn a_package_seat_runs_its_python_tool_and_a_script_hook_refuses_a_call() -> any
     run(async {
         let (options, _backend, model) = build_options().await;
         let script = Script {
-            action: std::env::var("BISECT_ACTION").ok().or(Some("word_count".into())).filter(|a| a != "none"),
+            action: Some("word_count".into()),
             arguments: Some(json!({"text": "please git push --force now"})),
             ..Default::default()
         };
@@ -84,40 +82,44 @@ fn a_package_seat_runs_its_python_tool_and_a_script_hook_refuses_a_call() -> any
             deployment.seats().keys().collect::<Vec<_>>(),
             ["lead", "scout"]
         );
+        let send = |id: &str, seat: &str| SendMessage {
+            message_id: id.into(),
+            sender: String::new(),
+            destination: Destination::Hive("integrations".into()),
+            body: "Count the words".into(),
+            thread: None,
+            only_for: Vec::new(),
+            starters: vec![seat.into()],
+        };
+        // The scout has no hooks: its Python tool runs and counts five words.
         deployment
             .host()
             .coordinator()
-            .send_as_host(SendMessage {
-                message_id: "release".into(),
-                sender: String::new(),
-                destination: Destination::Hive("integrations".into()),
-                body: "Count the words".into(),
-                thread: None,
-                only_for: Vec::new(),
-                starters: vec!["lead".into(), "scout".into()],
-            })
+            .send_as_host(send("scout", "scout"))
             .await?;
         let report = deployment.host().coordinator().run_until_idle().await?;
         assert_eq!(report.failed, 0, "{report:?}");
         let seen = results(&model).await;
-        let counts: Vec<_> = seen
-            .iter()
+        assert!(
+            seen.iter().any(|(name, text)| name == "word_count"
+                && (text.contains("\"words\": 5") || text.contains("\"words\":5"))),
+            "{seen:?}"
+        );
+        // The lead's pre_tool_use hook refuses the same call, and a refused
+        // call ends the turn, as any refusal at the hive gate does.
+        deployment
+            .host()
+            .coordinator()
+            .send_as_host(send("lead", "lead"))
+            .await?;
+        let report = deployment.host().coordinator().run_until_idle().await?;
+        assert_eq!(report.failed, 1, "{report:?}");
+        let counted = results(&model)
+            .await
+            .into_iter()
             .filter(|(name, _)| name == "word_count")
-            .collect();
-        // The scout has no hooks: its Python tool ran and counted five words.
-        assert!(
-            counts
-                .iter()
-                .any(|(_, text)| text.contains("\"words\": 5") || text.contains("\"words\":5")),
-            "{seen:?}"
-        );
-        // The lead's pre_tool_use hook refused the same call.
-        assert!(
-            counts
-                .iter()
-                .any(|(_, text)| text.contains("destructive git commands")),
-            "{seen:?}"
-        );
+            .count();
+        assert_eq!(counted, 1, "the refused call never ran");
         Ok(())
     })
 }
