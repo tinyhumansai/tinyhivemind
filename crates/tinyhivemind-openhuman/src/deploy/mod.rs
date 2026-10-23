@@ -56,6 +56,12 @@ impl HiveDeployment {
         let mut native = options.config.clone().unwrap_or_default();
         let (config, extras) = packages::prepare(&packages, &secrets, &mut native)?;
         options.config = Some(native);
+        if extras.values().any(|seat| !seat.programs.is_empty()) {
+            options.classifier = Some(Arc::new(packages::ProgramEffects::new(
+                &extras,
+                options.classifier.take(),
+            )));
+        }
         let validated = config.validate()?;
         Box::pin(Self::build_plan(validated, secrets, options, extras)).await
     }

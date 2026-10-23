@@ -243,3 +243,50 @@ impl ToolHook<OpenHumanRunContext> for ScriptHooks {
         Ok(())
     }
 }
+
+/// Classifies a package's executable tools by their declared side effects,
+/// and defers every other tool to the host's own classifier.
+pub(super) struct ProgramEffects {
+    effects: BTreeMap<String, tinyhivemind_core::approval::Effect>,
+    host: Option<Arc<dyn super::EffectClassifier>>,
+}
+
+impl ProgramEffects {
+    /// Wrap `host` with the effects of every program in `extras`.
+    pub(super) fn new(extras: &Extras, host: Option<Arc<dyn super::EffectClassifier>>) -> Self {
+        use tinyhivemind_core::approval::Effect;
+        let effects = extras
+            .values()
+            .flat_map(|seat| &seat.programs)
+            .map(|tool| {
+                let effect = match tool.side_effects {
+                    lang::SideEffects::Read => Effect::ReadOnly,
+                    lang::SideEffects::Write | lang::SideEffects::Network => Effect::Mutating,
+                };
+                (tool.id.clone(), effect)
+            })
+            .collect();
+        Self { effects, host }
+    }
+}
+
+impl super::EffectClassifier for ProgramEffects {
+    fn subject(&self, context: &ToolHookContext) -> Option<tinytools::ToolSubject> {
+        self.host.as_ref().and_then(|host| host.subject(context))
+    }
+
+    fn rule_context(&self, context: &ToolHookContext) -> tinytools::RuleContext {
+        self.host
+            .as_ref()
+            .map_or_else(tinytools::RuleContext::new, |host| host.rule_context(context))
+    }
+
+    fn classify(&self, context: &ToolHookContext) -> tinyhivemind_core::approval::Effect {
+        self.effects.get(&context.tool_name).copied().unwrap_or_else(|| {
+            self.host.as_ref().map_or(
+                tinyhivemind_core::approval::Effect::Unclassified,
+                |host| host.classify(context),
+            )
+        })
+    }
+}
