@@ -54,6 +54,8 @@ tokio = { workspace = true, features = ["rt", "sync", "time"] }
 tinyhivemind-core.workspace = true
 # Convert portable hive definitions at the host boundary.
 tinyhivemind-lang.workspace = true
+# Run a package's executable tools and script hooks for its seats.
+tinyhivemind-exec.workspace = true
 # Durable messaging and cross-hive scheduling.
 tinyhivemind-hives.workspace = true
 # The engine contract and agent memory lifecycle behind hive `Recall`/`Remember`.

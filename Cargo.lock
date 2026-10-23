@@ -3518,6 +3518,7 @@ dependencies = [
  "tinyagents-definition",
  "tinyflows-schedule",
  "tinyhivemind-core",
+ "tinyhivemind-exec",
  "tinyhivemind-hives",
  "tinyhivemind-lang",
  "tinymemory-api",
