@@ -230,3 +230,19 @@ async fn a_script_briefly_open_for_writing_still_runs() {
     assert_eq!(output.text, "ran");
     release.await.expect("released");
 }
+
+#[tokio::test]
+async fn a_script_given_to_an_interpreter_resolves_from_any_directory() {
+    // `sh tools/echo_args.sh` from a workspace elsewhere still finds the
+    // package's script; the substituted argument is left as sent.
+    let tool = tool(
+        &["sh", "tools/echo_args.sh"],
+        json!({"argv": ["{path}"], "stdin": "none", "cwd": "workspace"}),
+    );
+    let mut context = context();
+    context.workspace = Some(std::env::temp_dir());
+    let output = run(&tool, &context, &FixedSecrets, &json!({"path": "tools/x"}), "c9")
+        .await
+        .expect("ran");
+    assert_eq!(output.text, "tools/x\n");
+}
