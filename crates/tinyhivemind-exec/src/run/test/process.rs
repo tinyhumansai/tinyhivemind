@@ -128,8 +128,11 @@ async fn a_timeout_kills_the_whole_process_group() {
 }
 
 fn alive(pid: &str) -> bool {
-    std::fs::read_to_string(format!("/proc/{pid}/stat"))
-        .is_ok_and(|stat| !stat.split_whitespace().nth(2).is_some_and(|s| s == "Z"))
+    std::fs::read_to_string(format!("/proc/{pid}/stat")).is_ok_and(|stat| {
+        stat.split_whitespace()
+            .nth(2)
+            .is_none_or(|state| state != "Z")
+    })
 }
 
 #[tokio::test]
