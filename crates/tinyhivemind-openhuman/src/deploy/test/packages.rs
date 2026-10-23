@@ -94,6 +94,7 @@ fn a_package_seat_runs_its_python_tool_and_a_script_hook_refuses_a_call() -> any
             })
             .await?;
         let report = deployment.host().coordinator().run_until_idle().await?;
+        for r in results(&model).await { eprintln!("SEEN {r:?}"); }
         assert_eq!(report.failed, 0, "{report:?}");
         let seen = results(&model).await;
         let counts: Vec<_> = seen
