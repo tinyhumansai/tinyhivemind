@@ -61,6 +61,46 @@ impl PackageSource {
         })
     }
 
+    /// Check a package a host built or edited in memory, rooted at `root`.
+    ///
+    /// For a host that adjusts a loaded package before deploying it — a
+    /// per-run deployment id, a program path, a server's arguments.
+    /// # Errors
+    /// [`ConfigError::Package`] with every finding when it does not check.
+    pub fn new(root: impl Into<PathBuf>, package: Package) -> Result<Self, ConfigError> {
+        let root = root.into();
+        let diagnostics = tinyhivemind_lang::diagnose(&package);
+        if !diagnostics.is_empty() {
+            return Err(ConfigError::Package {
+                root: root.display().to_string(),
+                diagnostics,
+            });
+        }
+        let mut documents = package.documents.clone();
+        for (name, value) in [
+            ("hive.json", serde_json::to_string(&package.manifest)),
+            ("constitution.json", serde_json::to_string(&package.constitution)),
+            ("memory.json", serde_json::to_string(&package.memory)),
+        ] {
+            documents.insert(name.into(), value.map_err(|_| ConfigError::Json)?);
+        }
+        Self::from_documents(root, documents)
+    }
+
+    /// Read a package from disk without checking it, for a host to edit and
+    /// then hand to [`PackageSource::new`].
+    /// # Errors
+    /// [`ConfigError::Io`] when a file cannot be read, and
+    /// [`ConfigError::Package`] when the canonical files do not decode.
+    pub fn read(root: impl AsRef<Path>) -> Result<Package, ConfigError> {
+        let root = root.as_ref();
+        let (package, diagnostics) = tinyhivemind_lang::diagnose_documents(&read(root)?);
+        package.ok_or_else(|| ConfigError::Package {
+            root: root.display().to_string(),
+            diagnostics,
+        })
+    }
+
     /// The directory relative package files resolve against.
     #[must_use]
     pub fn root(&self) -> &Path {
