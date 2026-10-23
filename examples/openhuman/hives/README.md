@@ -1,34 +1,50 @@
 # Checked-in OpenHuman hives
 
-| Directory | Runtime and seats |
+Every hive here is a [hive language package](../../../docs/specs/hive-language.md):
+`hive.json`, `constitution.json` and `memory.json`, one `roles/<role>.md`
+charter per role, one `seats/<seat>.md` prompt per seat, and `context/*.md`
+documents. The adapter deploys them with `HiveDeployment::from_packages`
+([integration spec](../../../docs/specs/hive-language-integrations.md)).
+
+| Directory | Hive and seats |
 | --- | --- |
-| `basic_hive/` | Read-only Alice and Bob; ephemeral workspace and continuing host sessions |
-| `deepswe_hive/` | Lead, implementer, tester and reviewer; two MCP servers, 16 iterations, temperature zero, width four |
-| `pe1006_hive/` | Five mathematical/research seats; native CortexDB port, durable Markdown memory, sealed/research context and original workspace templates |
-| `multi_hive/` | Three reusable profiles, four persistent seats, two hives sharing one seat with narrower review authority |
+| `basic_hive/` | Hive `release`: read-only Alice and Bob; ephemeral workspace and continuing host sessions |
+| `deepswe_hive/` | Hive `deepswe`: lead, implementer, tester and reviewer; the `deepswe` workspace server plus one hive tool server per seat, 16 iterations, temperature zero, width four |
+| `pe1006_hive/` | Hive `pe1006`: five mathematical/research seats; host CortexDB engine, sealed/research context and original workspace templates |
+| `multi_hive/` | Two packages, hives `a` and `b`, deployed together: four persistent seats, one shared with narrower review authority in `b` |
 
-Each `hive.json` is parsed through `HiveConfig::load_dir`. Profile Markdown
-frontmatter supplies typed template metadata; its body supplies the native
-system prompt. Context Markdown is selected explicitly by filename stem.
-Conventional `README.md` files are ignored by both directory scanners.
+Each `hive.json` is canonical: it is the complete serialization of its decoded
+manifest, and `tests/manifests.rs` fails if it drifts. Check a package after
+editing it, from the repository root:
 
-Runtime-only executable paths, outboxes, Docker arguments and model routes are
-set by the binary before validation. No manifest carries a literal credential.
-The multi-hive live provider uses `{"env":"OPENROUTER_API_KEY"}`; offline runs
-replace that reference with a trusted loopback provider port and a non-secret
-fixture token. No operator credential is needed.
+```sh
+cargo run -q -p tinyhivemind-lang --example hive_check -- examples/openhuman/hives/basic_hive
+```
 
-The Euler binary resolves its existing configured native CortexDB engine and
-injects it through `BuildOptions.memory_engine`. If native memory is off because
-its credential is unavailable, it continues with durable Markdown memory, as
-before. The deterministic lowering test substitutes the native in-process
-reference engine and never inspects operator credentials. Its acting directory
-is selected per turn; workspace templates remain non-overwriting.
+A binary reads its package with `PackageSource::read`, edits the decoded
+package, and deploys it; nothing it changes is written back. Run-only values —
+the deployment id, the workspace, every MCP server's executable path and
+arguments, the model name, and the memory engine when CortexDB is unavailable —
+are set that way. Each seat has its own `tinyhive-<seat>` server because its
+arguments (`--agent <seat>`, its outbox) differ per seat, and a package
+declares a server once.
 
-The DeepSWE and Euler hosts retain their pure completion drivers. Declared
-routing values feed those drivers; the deployment policy view supplies the
-DeepSWE episode width. Coordinator membership and role settings use the same
-manifest. Direct native turns are admitted by the pure driver rather than the
+No package carries a literal credential. `multi_hive` names its provider key as
+`{"env": "OPENROUTER_API_KEY"}`; offline runs drop the provider and supply a
+trusted loopback route through `BuildOptions`, so no operator credential is
+needed.
+
+The Euler binary resolves its configured native CortexDB engine and injects it
+through `BuildOptions.memory_engine`. If native memory is off because its
+credential is unavailable, it sets the package's engine to `disabled` and
+continues with durable Markdown memory. The deterministic lowering test
+substitutes the in-process reference engine and never inspects operator
+credentials.
+
+The DeepSWE and Euler hosts retain their pure completion drivers. The declared
+routing policy feeds those drivers; the deployment policy view supplies the
+DeepSWE episode width. Coordinator membership and roles come from the same
+packages. Direct native turns are admitted by the pure driver rather than the
 coordinator's separate global concurrency gate.
 
 See the [example guide](../README.md) for commands and the native denial/safe

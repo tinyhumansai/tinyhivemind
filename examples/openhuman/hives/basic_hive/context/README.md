@@ -4,5 +4,5 @@
 | --- | --- |
 | `release.md` | Checked-in release Markdown context |
 
-The config loader ignores this README. Context bodies are selected
-explicitly by filename stem.
+No seat lists `release.md` in its `context`, so it is carried with the package
+but composed into no prompt, as before the move to packages.

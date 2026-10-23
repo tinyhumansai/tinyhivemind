@@ -4,5 +4,5 @@
 | --- | --- |
 | `protocol.md` | Checked-in protocol Markdown context |
 
-The config loader ignores this README. Context bodies are selected
-explicitly by filename stem.
+No seat lists `protocol.md` in its `context`, so it is carried with the package
+but composed into no prompt; each seat prompt states the protocol itself.
