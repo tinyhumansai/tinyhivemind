@@ -9,7 +9,7 @@ use std::sync::{Arc, PoisonError};
 use tinyhivemind_hives::{Destination, SendMessage};
 
 /// The `integrations` example, with MCP off (its server is not reachable
-/// offline), its provider left to the offline fixture, and its hook
+/// offline), its provider and models left to the offline fixture, and its hook
 /// matching the Python tool the script calls.
 fn package() -> anyhow::Result<PackageSource> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -17,7 +17,13 @@ fn package() -> anyhow::Result<PackageSource> {
     let mut package = PackageSource::read(&root)?;
     package.manifest.features.insert("mcp".into(), false);
     package.manifest.runtime.provider = None;
-    package.manifest.models[1].provider = None;
+    // Plain model names: the scripted model reads plain-text turns, and a
+    // provider-prefixed Anthropic name switches the harness to cache-control
+    // content blocks.
+    for model in &mut package.manifest.models {
+        model.provider = None;
+        model.name = "fixture".into();
+    }
     package.manifest.hooks[0].matcher = Some("word_count".into());
     Ok(PackageSource::new(root, package)?)
 }
@@ -94,7 +100,6 @@ fn a_package_seat_runs_its_python_tool_and_a_script_hook_refuses_a_call() -> any
             })
             .await?;
         let report = deployment.host().coordinator().run_until_idle().await?;
-        for r in model.received_requests().await.unwrap_or_default() { let v: Value = serde_json::from_slice(&r.body).unwrap_or_default(); let names: Vec<_> = v["tools"].as_array().cloned().unwrap_or_default().iter().map(|t| t["function"]["name"].as_str().unwrap_or_default().to_owned()).collect(); let last = v["messages"].as_array().and_then(|m| m.last().cloned()); eprintln!("REQ path={} tools={names:?} last={}", r.url.path(), last.map(|l| l.to_string().chars().take(300).collect::<String>()).unwrap_or_default()); }
         assert_eq!(report.failed, 0, "{report:?}");
         let seen = results(&model).await;
         let counts: Vec<_> = seen
