@@ -210,10 +210,36 @@ pub(super) fn seat(
         definitions.push((id.clone(), self::definition(config, child)));
     }
     spec = spec.subagents(definitions);
+    if !profile.groups.is_empty() {
+        spec = spec.tool_groups(groups(&profile.groups)?);
+    }
     let id = agent_id;
     Ok(spec.can_use_tool(move |context| {
         let permissions = permissions.clone();
         let id = id.clone();
         Box::pin(async move { permissions.decide(&id, None, context).await })
     }))
+}
+
+/// Harness tool groups with each named group in its declared mode.
+pub(super) fn groups(
+    modes: &std::collections::BTreeMap<String, tinyhivemind_lang::GroupMode>,
+) -> DeployResult<openhuman_embed::ToolGroups> {
+    let mut groups = openhuman_embed::ToolGroups::packed();
+    for (id, mode) in modes {
+        if !openhuman_embed::ToolGroups::ids().any(|known| known == id) {
+            return Err(DeployError::Config(
+                crate::config::ConfigError::UnsupportedSetting(format!("toolpack group {id}")),
+            ));
+        }
+        groups = groups.with(
+            id,
+            match mode {
+                tinyhivemind_lang::GroupMode::Advertised => openhuman_embed::GroupMode::Advertised,
+                tinyhivemind_lang::GroupMode::Withheld => openhuman_embed::GroupMode::Withheld,
+                tinyhivemind_lang::GroupMode::Off => openhuman_embed::GroupMode::Off,
+            },
+        );
+    }
+    Ok(groups)
 }
