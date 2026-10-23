@@ -32,4 +32,4 @@ the benign evidence server. These supplied-agent fixtures therefore use full
 access with an explicit three-tool native scope (`use_skill`, `mcp_list_tools`,
 `mcp_call_tool`) and a per-server allowlist containing only that agent’s evidence
 verb. Host authorization independently refuses the denied management template.
-The separate manifest-backed basic hive retains its read-only access proof.
+The separate package-backed basic hive retains its read-only access proof.

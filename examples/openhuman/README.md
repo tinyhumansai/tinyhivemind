@@ -1,10 +1,11 @@
 # Supplied OpenHuman agents and dynamic hives
 
-`HiveDeployment` builds one OpenHuman `Runtime` from a validated manifest,
-registers reusable profiles and persistent seats, and joins them to configured
-hives. Runtime-only model routes, Docker paths and storage ports remain host
-inputs. `OpenHumanHost` also accepts independently constructed agents. Each
-coordinator seat continues one conversation across all its joined hives.
+`HiveDeployment::from_packages` builds one OpenHuman `Runtime` from checked
+hive language packages, creates each package's persistent seats, and joins them
+to that package's hive. Runtime-only model routes, Docker paths and storage
+ports remain host inputs. `OpenHumanHost` also accepts independently
+constructed agents. Each coordinator seat continues one conversation across all
+its joined hives.
 
 For a short introduction, run the offline two-agent example:
 
@@ -12,24 +13,26 @@ For a short introduction, run the offline two-agent example:
 cargo run --manifest-path examples/openhuman/Cargo.toml --bin basic_hive
 ```
 
-The [checked-in manifests](hives/README.md) provide the profiles, permission
-baselines, memberships, policies and Markdown context for `basic_hive`,
-`deepswe_hive`, `pe1006_hive` and `multi_hive`. The three existing binaries load
-these files before adding CLI-selected endpoints and run paths.
+The [checked-in packages](hives/README.md) provide the seats, roles, prompts,
+permission sets, MCP servers, policies and Markdown context for `basic_hive`,
+`deepswe_hive`, `pe1006_hive` and `multi_hive`. Each binary reads its packages,
+sets CLI-selected endpoints, run paths and model names on the decoded package,
+then checks and deploys it.
 
 ```sh
 cargo run --manifest-path examples/openhuman/Cargo.toml --bin multi_hive
 cargo test --manifest-path examples/openhuman/Cargo.toml --test manifests
 ```
 
-`multi_hive` uses a local model by default: three profiles create four seats on
-one runtime; two hives share the same seat with implementer and observer roles.
+`multi_hive` uses a local model by default: two packages create four seats on
+one runtime; their two hives share the same seat with implementer and observer
+roles.
 The same native `file_write` succeeds in hive A and is refused in hive B. The
 native denial aborts B's turn and remains an audited failure. The host explicitly
 releases the seat with a safe note and submits a fresh assignment, which completes
 without replaying the write. Both hives finish successfully, and the shared seat
 keeps its original native session. `--live` resolves `OPENROUTER_API_KEY` through
-the manifest reference; `OPENROUTER_MODEL` optionally selects the model.
+the packages' provider reference; `OPENROUTER_MODEL` optionally selects the model.
 
 The pure completion experiments retain their host-owned `CompletionDriver` and
 outbox tools. Deployment supplies their native seats, MCP connections and
