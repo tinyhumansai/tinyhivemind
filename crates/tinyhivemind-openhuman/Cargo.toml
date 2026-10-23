@@ -15,6 +15,12 @@ publish = false
 name = "live_language"
 required-features = ["offline"]
 
+# Discovered automatically like the others; declared so `cargo test` runs its
+# offline regressions.
+[[example]]
+name = "run_package"
+test = true
+
 [features]
 # Loopback backend fixtures for standalone deterministic host examples.
 offline = ["dep:wiremock"]
