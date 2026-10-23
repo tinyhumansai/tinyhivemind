@@ -4,7 +4,6 @@
 //! Each mirrors a setting the OpenHuman harness can run, in the language's own
 //! vocabulary; none names a harness type. Every struct denies unknown fields
 //! and every optional field defaults, so a manifest names only what it sets.
-use super::ExecTool;
 use crate::ToolAccess;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -515,40 +514,4 @@ pub struct Workflow {
 
 fn yes() -> bool {
     true
-}
-
-/// Everything a hive's agents run with, as declared in `hive.json`.
-///
-/// Flattened into [`crate::Manifest`]: each field is a top-level section.
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
-#[serde(default, deny_unknown_fields)]
-pub struct Integrations {
-    /// The runtime and the defaults every seat inherits.
-    pub runtime: RuntimeSettings,
-    /// Inference providers.
-    pub providers: Vec<Provider>,
-    /// Models.
-    pub models: Vec<Model>,
-    /// MCP servers.
-    pub mcp: Vec<McpServer>,
-    /// Skill bundles under `skills/`.
-    pub skills: Vec<Skill>,
-    /// Executable tools.
-    pub tools: Vec<ExecTool>,
-    /// Named tool bundles.
-    pub toolpacks: Vec<Toolpack>,
-    /// Permission sets.
-    pub permissions: Vec<PermissionSet>,
-    /// Reusable seat integrations.
-    pub profiles: Vec<Profile>,
-    /// Executable tools bound to events.
-    pub hooks: Vec<Hook>,
-    /// Agent session settings.
-    pub session: SessionSettings,
-    /// Jev tool-search settings.
-    pub jev: JevSettings,
-    /// Feature flags.
-    pub features: BTreeMap<String, bool>,
-    /// Scheduled prompts.
-    pub workflows: Vec<Workflow>,
 }

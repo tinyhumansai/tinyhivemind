@@ -5,12 +5,14 @@
 //! all three decode, every validation finding. [`parse`] returns the first;
 //! [`diagnose_documents`] returns them all.
 mod defaults;
+mod integration;
 mod types;
 use crate::{
     Diagnostic, Error, Result,
     diagnostic::{CONSTITUTION, Findings, HIVE, MEMORY, escape},
 };
 use std::collections::BTreeMap;
+pub use integration::*;
 pub use types::*;
 
 /// Parse canonical JSON and Markdown from host-owned strings.
