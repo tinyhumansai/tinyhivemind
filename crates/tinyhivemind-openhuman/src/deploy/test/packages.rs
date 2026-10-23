@@ -69,7 +69,7 @@ fn a_package_seat_runs_its_python_tool_and_a_script_hook_refuses_a_call() -> any
     run(async {
         let (options, _backend, model) = build_options().await;
         let script = Script {
-            action: Some("word_count".into()),
+            action: std::env::var("BISECT_ACTION").ok().or(Some("word_count".into())).filter(|a| a != "none"),
             arguments: Some(json!({"text": "please git push --force now"})),
             ..Default::default()
         };
