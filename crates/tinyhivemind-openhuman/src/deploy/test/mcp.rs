@@ -63,6 +63,10 @@ fn scheduled_mcp_envelope_and_private_children_never_reach_remote_effect() -> an
         let (mut options, _backend, model) = build_options().await;
         let _ = env_logger::builder().is_test(true).try_init();
         openhuman_embed::modules::register_linked("tinymcp", tinymcp::linked_module);
+        let mut linked = openhuman_core::config::Config::default();
+        linked.modules.allow_download = false;
+        linked.modules.source = openhuman_core::config::schema::ModuleSourceMode::Linked;
+        openhuman_core::modules::ops::ensure_loaded(&linked, "tinymcp").await.map_err(anyhow::Error::msg)?;
         options.classifier = Some(Arc::new(RemoteEffects));
         let script = Script {
             action: Some("mcp_call_tool".into()),

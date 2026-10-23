@@ -35,7 +35,7 @@ offline = ["dep:wiremock"]
 # need OpenHuman's module host (`openhuman-embed/modules`), which loads the
 # TinyMCP module; the consuming host enables it, since it decides whether and
 # where module releases may be fetched.
-openhuman-embed = { workspace = true, features = ["mcp", "skills", "storage-sqlite", "secret-file", "legacy-import", "testkit", "modules"] }
+openhuman-embed = { workspace = true, features = ["mcp", "skills", "storage-sqlite", "secret-file", "legacy-import", "testkit"] }
 # Host usage and policy types remain OpenHuman's own.
 openhuman.workspace = true
 # Fixed-time validation of workflow cron schedules.
@@ -70,6 +70,7 @@ tinymemory-tools.workspace = true
 wiremock = { workspace = true, optional = true }
 
 [dev-dependencies]
+openhuman-embed = { workspace = true, features = ["modules"] }
 env_logger = "0.11"
 tinymcp = { path = "../../vendor/openhuman/vendor/tinymcp/crates/tinymcp", features = ["static-link"] }
 # OpenHuman's agent definition types, to assert what a deployed profile built.
