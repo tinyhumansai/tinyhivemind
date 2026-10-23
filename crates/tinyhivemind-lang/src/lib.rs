@@ -176,6 +176,9 @@ pub use check::{Review, check, check_packages};
 pub use diagnostic::{Diagnostic, Rule};
 pub use document::*;
 pub use error::{Error, Result};
-pub use lowering::{LoweredHive, LoweredMemoryBinding, LoweredSeat, lower};
+pub use lowering::{
+    LoweredHive, LoweredHook, LoweredIntegrations, LoweredMemoryBinding, LoweredModel, LoweredSeat,
+    LoweredSeatIntegration, lower,
+};
 pub use memory::*;
 pub use validation::{diagnose, validate, validate_namespace, validate_path};
