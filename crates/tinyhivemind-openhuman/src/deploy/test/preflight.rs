@@ -106,7 +106,7 @@ fn child_instance_only_settings_are_explicitly_refused() -> anyhow::Result<()> {
     config.profiles[1].memory = None;
     assert!(runtime::preflight(&config, &BuildOptions::default()).is_ok());
     config.permission_profiles[0].send_destinations = Some(vec!["a".into()]);
-    config.profiles[1].permission_profile = Some("narrow".into());
+    config.profiles[1].permissions = Some("narrow".into());
     assert!(runtime::preflight(&config, &BuildOptions::default()).is_err());
     Ok(())
 }

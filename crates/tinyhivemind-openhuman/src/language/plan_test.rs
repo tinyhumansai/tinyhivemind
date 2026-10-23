@@ -72,7 +72,7 @@ fn a_seat_two_packages_declare_differently_conflicts() -> anyhow::Result<()> {
     package.manifest.id = "second".into();
     package.manifest.workflows.clear();
     package.manifest.seats[1].model = Some("careful".into());
-    let second = PackageSource::new(first.root(), package)?;
+    let second = PackageSource::new(first.root(), &package)?;
     let error = plan(&[first, second]).err();
     assert!(
         matches!(error, Some(ConfigError::ConflictingSeat(ref seat)) if seat == "scout"),
@@ -88,7 +88,7 @@ fn a_shared_seat_may_narrow_per_hive_and_runtimes_must_match() -> anyhow::Result
     package.manifest.id = "second".into();
     package.manifest.workflows.clear();
     package.manifest.seats[0].permissions = Some("read_only".into());
-    let second = PackageSource::new(first.root(), package.clone())?;
+    let second = PackageSource::new(first.root(), &package)?;
     let plan = plan(&[first.clone(), second])?;
     assert_eq!(plan.config.hives.len(), 2);
     assert_eq!(plan.config.seats.len(), 2);
@@ -99,7 +99,7 @@ fn a_shared_seat_may_narrow_per_hive_and_runtimes_must_match() -> anyhow::Result
         Some("read_only")
     );
     package.manifest.runtime.concurrency = 9;
-    let third = PackageSource::new(first.root(), package)?;
+    let third = PackageSource::new(first.root(), &package)?;
     let error = super::plan(&[first, third]).err();
     assert!(matches!(
         error,
@@ -114,7 +114,7 @@ fn an_empty_deployment_and_undecodable_tool_rules_are_refused() -> anyhow::Resul
     let first = integrations();
     let mut package = first.package().clone();
     package.manifest.permissions[0].tool_rules = serde_json::json!("not rules");
-    let source = PackageSource::new(first.root(), package)?;
+    let source = PackageSource::new(first.root(), &package)?;
     assert!(matches!(
         plan(&[source]),
         Err(ConfigError::UnsupportedSetting(ref field)) if field.contains("tool_rules")
@@ -128,7 +128,7 @@ fn a_package_that_does_not_check_reports_every_finding() {
     let mut package = first.package().clone();
     package.manifest.seats[0].model = Some("ghost".into());
     package.manifest.tools[0].argv = vec!["{nope}".into()];
-    let error = PackageSource::new(first.root(), package).err();
+    let error = PackageSource::new(first.root(), &package).err();
     assert!(
         matches!(error, Some(ConfigError::Package { ref diagnostics, .. }) if diagnostics.len() == 2),
         "{error:?}"

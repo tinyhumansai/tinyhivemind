@@ -61,7 +61,7 @@ fn host_only_profile_and_readonly_permissions_remove_native_mutating_surfaces() 
         let (options, _backend, _model) = build_options().await;
         let mut config = manifest()?;
         config.profiles[0].tool_scope = ToolScope::HostOnly;
-        config.profiles[0].permission_profile = Some("narrow".into());
+        config.profiles[0].permissions = Some("narrow".into());
         config.permission_profiles[0].access = Access::ReadOnly;
         config.permission_profiles[0].sandbox = Sandbox::ReadOnly;
         let deployment = Box::pin(HiveDeployment::build_with(

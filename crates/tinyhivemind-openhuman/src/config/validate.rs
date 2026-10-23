@@ -103,11 +103,7 @@ impl HiveConfig {
             .runtime
             .permission_profile
             .iter()
-            .chain(
-                self.profiles
-                    .iter()
-                    .filter_map(|p| p.permissions.as_ref()),
-            )
+            .chain(self.profiles.iter().filter_map(|p| p.permissions.as_ref()))
             .chain(
                 self.seats
                     .iter()

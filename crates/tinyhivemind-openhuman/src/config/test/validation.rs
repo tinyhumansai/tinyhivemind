@@ -51,7 +51,7 @@ fn job() -> Workflow {
 #[test]
 fn missing_references_are_typed() {
     let mut c = minimal();
-    c.profiles[0].permission_profile = Some("missing".into());
+    c.profiles[0].permissions = Some("missing".into());
     assert!(matches!(
         c.validate(),
         Err(ConfigError::UnknownPermissionProfile(_))
@@ -326,7 +326,7 @@ fn approval_grants_and_rules_cannot_be_replaced_with_permissive_defaults() {
 fn omitted_intermediate_allowlist_does_not_erase_ancestor_restrictions() {
     let mut c = minimal();
     c.runtime.permission_profile = Some("parent".into());
-    c.profiles[0].permission_profile = Some("middle".into());
+    c.profiles[0].permissions = Some("middle".into());
     c.hives[0].members[0].permission_profile = Some("child".into());
     c.permission_profiles = vec![
         PermissionProfile {

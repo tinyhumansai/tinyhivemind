@@ -355,7 +355,7 @@ fn child_policy<'a>(
     {
         return Err("child tool denied");
     }
-    let policy = child.permission_profile.as_ref().and_then(|id| {
+    let policy = child.permissions.as_ref().and_then(|id| {
         config
             .permission_profiles
             .iter()

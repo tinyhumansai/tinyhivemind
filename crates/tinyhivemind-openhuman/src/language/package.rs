@@ -27,7 +27,7 @@ impl PackageSource {
     /// check.
     pub fn load(root: impl AsRef<Path>) -> Result<Self, ConfigError> {
         let root = root.as_ref();
-        Self::from_documents(root, read(root)?)
+        Self::from_documents(root, &read(root)?)
     }
 
     /// Check a package already read into memory, rooted at `root`.
@@ -35,14 +35,14 @@ impl PackageSource {
     /// [`ConfigError::Package`] with every finding when it does not check.
     pub fn from_documents(
         root: impl Into<PathBuf>,
-        documents: BTreeMap<String, String>,
+        documents: &BTreeMap<String, String>,
     ) -> Result<Self, ConfigError> {
         let root = root.into();
         let failed = |diagnostics| ConfigError::Package {
             root: root.display().to_string(),
             diagnostics,
         };
-        let (package, diagnostics) = tinyhivemind_lang::diagnose_documents(&documents);
+        let (package, diagnostics) = tinyhivemind_lang::diagnose_documents(documents);
         let Some(package) = package.filter(|_| diagnostics.is_empty()) else {
             return Err(failed(diagnostics));
         };
@@ -67,9 +67,9 @@ impl PackageSource {
     /// per-run deployment id, a program path, a server's arguments.
     /// # Errors
     /// [`ConfigError::Package`] with every finding when it does not check.
-    pub fn new(root: impl Into<PathBuf>, package: Package) -> Result<Self, ConfigError> {
+    pub fn new(root: impl Into<PathBuf>, package: &Package) -> Result<Self, ConfigError> {
         let root = root.into();
-        let diagnostics = tinyhivemind_lang::diagnose(&package);
+        let diagnostics = tinyhivemind_lang::diagnose(package);
         if !diagnostics.is_empty() {
             return Err(ConfigError::Package {
                 root: root.display().to_string(),
@@ -87,7 +87,7 @@ impl PackageSource {
         ] {
             documents.insert(name.into(), value.map_err(|_| ConfigError::Json)?);
         }
-        Self::from_documents(root, documents)
+        Self::from_documents(root, &documents)
     }
 
     /// Read a package from disk without checking it, for a host to edit and

@@ -27,7 +27,7 @@ fn package() -> anyhow::Result<PackageSource> {
         model.name = "fixture".into();
     }
     package.manifest.hooks[0].matcher = Some("word_count".into());
-    Ok(PackageSource::new(root, package)?)
+    Ok(PackageSource::new(root, &package)?)
 }
 
 /// Every tool result the scripted model received, by the tool it answered.
@@ -126,7 +126,7 @@ fn a_package_seat_runs_its_python_tool_and_a_script_hook_refuses_a_call() -> any
         unhooked.manifest.features.insert("hooks".into(), false);
         let root = package()?.root().to_path_buf();
         let deployment = Box::pin(HiveDeployment::from_packages(
-            vec![PackageSource::new(root, unhooked)?],
+            vec![PackageSource::new(root, &unhooked)?],
             Arc::new(Secrets),
             options,
         ))
@@ -159,7 +159,7 @@ fn a_package_seat_runs_a_shell_tool_and_an_unknown_group_is_refused() -> anyhow:
         source.manifest.tools[0].cwd = tinyhivemind_lang::ToolDirectory::Package;
         let root = package()?.root().to_path_buf();
         let deployment = Box::pin(HiveDeployment::from_packages(
-            vec![PackageSource::new(&root, source.clone())?],
+            vec![PackageSource::new(&root, &source)?],
             Arc::new(Secrets),
             options.clone(),
         ))
@@ -190,7 +190,7 @@ fn a_package_seat_runs_a_shell_tool_and_an_unknown_group_is_refused() -> anyhow:
             .groups
             .insert("no-such-group".into(), tinyhivemind_lang::GroupMode::Off);
         let refused = Box::pin(HiveDeployment::from_packages(
-            vec![PackageSource::new(&root, source)?],
+            vec![PackageSource::new(&root, &source)?],
             Arc::new(Secrets),
             options,
         ))

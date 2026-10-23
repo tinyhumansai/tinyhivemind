@@ -279,6 +279,74 @@ fn agree<T: serde::Serialize>(
     }
 }
 
+/// The seats one package declares: each new seat's native profile and plan
+/// entry, a seat already declared checked for agreement, and the package's
+/// membership list.
+fn seats_of(
+    source: &PackageSource,
+    config: &mut HiveConfig,
+    profiles: &mut BTreeMap<String, config::Profile>,
+    seats: &mut Seats,
+) -> Result<Vec<Membership>, ConfigError> {
+    let package = source.package();
+    let hive = source.lowered();
+    let shipped: Vec<String> = hive
+        .integrations
+        .skills
+        .iter()
+        .map(|s| s.id.clone())
+        .collect();
+    let mut members = Vec::new();
+    for (seat, declared) in hive.seats.iter().zip(&package.manifest.seats) {
+        let mut shared = seat.integration.clone();
+        shared.permissions.clear();
+        shared.context.clear();
+        let selected: Vec<String> = seat
+            .integration
+            .skills
+            .iter()
+            .map(|s| s.id.clone())
+            .collect();
+        let extras = SeatPlan {
+            root: source.root().to_path_buf(),
+            hive: hive.id.clone(),
+            programs: seat.integration.programs.clone(),
+            hooks: seat.integration.hooks.clone(),
+            features: hive.integrations.features.clone(),
+            skills: (selected, shipped.clone()),
+        };
+        match seats.get(&seat.id) {
+            Some((existing, prompt, _)) if existing != &shared || prompt != &seat.prompt => {
+                return Err(ConfigError::ConflictingSeat(seat.id.clone()));
+            }
+            Some(_) => {}
+            None => {
+                let mut native = profile(hive, seat, None);
+                native.include_user_skills = Some(hive.integrations.runtime.include_user_skills);
+                agree(&mut profiles, "profiles", &native.id.clone(), native)?;
+                seats.insert(seat.id.clone(), (shared, seat.prompt.clone(), extras));
+                config.seats.push(config::Seat {
+                    id: seat.id.clone(),
+                    agent_id: seat.integration.agent_id.clone(),
+                    profile: seat_profile(&seat.id),
+                    overrides: config::SeatOverrides::default(),
+                });
+            }
+        }
+        members.push(Membership {
+            seat: seat.id.clone(),
+            role: declared.role.clone(),
+            context: Vec::new(),
+            permission_profile: declared.permissions.clone(),
+            mcp: None,
+        });
+    }
+    Ok(members)
+}
+
+/// Seats declared so far: shared integration, prompt and plan, by seat id.
+type Seats = BTreeMap<String, (lang::LoweredSeatIntegration, String, SeatPlan)>;
+
 /// Lower `packages` into one deployment plan.
 ///
 /// # Errors
@@ -296,8 +364,7 @@ pub(crate) fn plan(packages: &[PackageSource]) -> Result<Plan, ConfigError> {
     };
     let mut profiles = BTreeMap::new();
     let mut permissions = BTreeMap::new();
-    let mut seats: BTreeMap<String, (lang::LoweredSeatIntegration, String, SeatPlan)> =
-        BTreeMap::new();
+    let mut seats = Seats::new();
     for source in packages {
         if runtime(source).deployment_id != config.runtime.deployment_id
             || source.package().manifest.runtime != first.package().manifest.runtime
@@ -320,58 +387,7 @@ pub(crate) fn plan(packages: &[PackageSource]) -> Result<Plan, ConfigError> {
                 subagent(package, declared),
             )?;
         }
-        let shipped: Vec<String> = hive
-            .integrations
-            .skills
-            .iter()
-            .map(|s| s.id.clone())
-            .collect();
-        let mut members = Vec::new();
-        for (seat, declared) in hive.seats.iter().zip(&package.manifest.seats) {
-            let mut shared = seat.integration.clone();
-            shared.permissions.clear();
-            shared.context.clear();
-            let selected: Vec<String> = seat
-                .integration
-                .skills
-                .iter()
-                .map(|s| s.id.clone())
-                .collect();
-            let extras = SeatPlan {
-                root: source.root().to_path_buf(),
-                hive: hive.id.clone(),
-                programs: seat.integration.programs.clone(),
-                hooks: seat.integration.hooks.clone(),
-                features: hive.integrations.features.clone(),
-                skills: (selected, shipped.clone()),
-            };
-            match seats.get(&seat.id) {
-                Some((existing, prompt, _)) if existing != &shared || prompt != &seat.prompt => {
-                    return Err(ConfigError::ConflictingSeat(seat.id.clone()));
-                }
-                Some(_) => {}
-                None => {
-                    let mut native = profile(hive, seat, None);
-                    native.include_user_skills =
-                        Some(hive.integrations.runtime.include_user_skills);
-                    agree(&mut profiles, "profiles", &native.id.clone(), native)?;
-                    seats.insert(seat.id.clone(), (shared, seat.prompt.clone(), extras));
-                    config.seats.push(config::Seat {
-                        id: seat.id.clone(),
-                        agent_id: seat.integration.agent_id.clone(),
-                        profile: seat_profile(&seat.id),
-                        overrides: config::SeatOverrides::default(),
-                    });
-                }
-            }
-            members.push(Membership {
-                seat: seat.id.clone(),
-                role: declared.role.clone(),
-                context: Vec::new(),
-                permission_profile: declared.permissions.clone(),
-                mcp: None,
-            });
-        }
+        let members = seats_of(source, &mut config, &mut profiles, &mut seats)?;
         let policies = &hive.policies;
         config.hives.push(HiveSpec {
             id: hive.id.clone(),
