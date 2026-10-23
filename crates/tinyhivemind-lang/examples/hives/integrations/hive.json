@@ -24,7 +24,12 @@
       "model": null,
       "tools": {
         "allow": [],
-        "deny": []
+        "deny": [
+          "web_search",
+          "web_fetch",
+          "browser",
+          "http"
+        ]
       },
       "mcp": [],
       "skills": [],
@@ -52,7 +57,12 @@
       "model": "fast",
       "tools": {
         "allow": [],
-        "deny": []
+        "deny": [
+          "web_search",
+          "web_fetch",
+          "browser",
+          "http"
+        ]
       },
       "mcp": [],
       "skills": [],
