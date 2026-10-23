@@ -360,15 +360,18 @@ bounded round of concurrent turns: `round_width` limits blind rounds and
 `revealed_width` limits rounds that can read previous peer work. The host
 commits the round's state after all authorized turns are appended.
 
-`tinyhivemind-lang` makes a hive’s definition editable data: roles, goals,
-seats, memory bindings and policies, with guarded patches and an evaluated
-lineage. A package is a `hive.json`, Markdown prompts, and a constitution no self-edit may
-touch. Read the [language specification](docs/specs/hive-language.md), or start from the [gallery](crates/tinyhivemind-lang/examples/hives).
+`tinyhivemind-lang` is where a hive mind is defined: roles, goals, seats,
+memory and policies, and everything its agents run with — providers, models,
+MCP servers, skills, toolpacks, permissions, hooks, Jev and feature flags. A
+tool can be a script in any language; edit it and the next call runs it, no
+rebuild. A constitution decides which of this a self-edit may change. Read the
+[language](docs/specs/hive-language.md) and [integrations](docs/specs/hive-language-integrations.md)
+specs, or start from the [gallery](crates/tinyhivemind-lang/examples/hives).
 
-`tinyhivemind-tools` renders native `tinytools::ToolSpec` definitions and
-records episode calls. `tinyhivemind-hives` coordinates durable messages and
-serialized turns across dynamic hives with memory, SQLite, or host storage.
-`tinyhivemind-openhuman` attaches tools to already configured OpenHuman agents. The
+`tinyhivemind-tools` renders native tool specs and records episode calls;
+`tinyhivemind-hives` coordinates durable messages across dynamic hives;
+`tinyhivemind-exec` runs a package's script tools and hooks; and
+`tinyhivemind-openhuman` deploys packages on OpenHuman. The
 [architecture guide](https://github.com/tinyhumansai/tinyhivemind/wiki/Architecture)
 and [crate dependency map](docs/crate-dependencies.md) show their boundaries.
 
