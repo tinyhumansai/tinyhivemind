@@ -21,16 +21,19 @@ fn package() -> anyhow::Result<PackageSource> {
 
 /// Every tool result the scripted model received, by the tool it answered.
 async fn results(model: &wiremock::MockServer) -> Vec<(String, String)> {
-    let mut names = std::collections::BTreeMap::new();
+    let mut names = std::collections::BTreeMap::<String, String>::new();
     let mut found = Vec::new();
     for request in model.received_requests().await.unwrap_or_default() {
         let body: Value = serde_json::from_slice(&request.body).unwrap_or_default();
         for message in body["messages"].as_array().into_iter().flatten() {
             for call in message["tool_calls"].as_array().into_iter().flatten() {
-                names.insert(call["id"].clone(), call["function"]["name"].clone());
+                names.insert(
+                    call["id"].as_str().unwrap_or_default().to_owned(),
+                    call["function"]["name"].as_str().unwrap_or_default().to_owned(),
+                );
             }
             if message["role"] == "tool"
-                && let Some(name) = names.get(&message["tool_call_id"]).and_then(Value::as_str)
+                && let Some(name) = names.get(message["tool_call_id"].as_str().unwrap_or_default())
             {
                 let text = message["content"].as_str().unwrap_or_default().to_owned();
                 if !found.contains(&(name.to_owned(), text.clone())) {
