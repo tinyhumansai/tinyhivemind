@@ -123,11 +123,14 @@ impl HiveDeployment {
         .map_err(|_| DeployError::Coordinator)?;
         let permissions = Arc::new(Permissions::new(config.clone(), &options));
         let memories = memory_stores(&config, memory_engine.as_ref())?;
-        let hooks = Arc::new(hooks::Hooks::with_memories(
-            permissions.clone(),
-            &options,
-            memories,
-        ));
+        let stops = extras
+            .iter()
+            .filter(|(_, exec)| !exec.hooks.is_empty())
+            .map(|(seat, exec)| (seat.clone(), exec.hooks.clone()))
+            .collect();
+        let hooks = Arc::new(
+            hooks::Hooks::with_memories(permissions.clone(), &options, memories).with_stops(stops),
+        );
         let factory = ManifestFactory::new(
             runtime.clone(),
             permissions.clone(),
@@ -158,9 +161,7 @@ impl HiveDeployment {
         for seat in &config.seats {
             let mut spec = profile::seat(&config, seat, secrets.as_ref(), permissions.clone())?;
             if let Some(exec) = extras.get(&seat.id).filter(|exec| !exec.hooks.is_empty()) {
-                spec = spec
-                    .tool_hook(Arc::new(packages::ScriptHooks(exec.hooks.clone())))
-                    .post_turn_hook(Arc::new(packages::StopHooks(exec.hooks.clone())));
+                spec = spec.tool_hook(Arc::new(packages::ScriptHooks(exec.hooks.clone())));
             }
             let agent = host
                 .register_spec_as(&runtime, &seat.id, spec)

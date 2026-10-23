@@ -10,9 +10,7 @@ use crate::{
     },
 };
 use async_trait::async_trait;
-use openhuman_embed::seams::{
-    LearningSink, OpenHumanRunContext, ToolHook, ToolHookContext, ToolHookDecision, TurnSummary,
-};
+use openhuman_embed::seams::{OpenHumanRunContext, ToolHook, ToolHookContext, ToolHookDecision};
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 use tinyhivemind_exec::{ExecContext, HookRunner, ProgramTool, Secrets, Verdict};
 use tinyhivemind_lang as lang;
@@ -34,7 +32,9 @@ impl Secrets for ExecSecrets {
         };
         self.0
             .resolve(&native)
-            .map_err(|_| tinyhivemind_exec::Error::UnresolvedSecret)
+            .map_err(|_| tinyhivemind_exec::Error::UnresolvedSecret {
+                reference: reference.clone(),
+            })
     }
 }
 
@@ -240,19 +240,6 @@ impl ToolHook<OpenHumanRunContext> for ScriptHooks {
         self.0
             .post_tool_use(&context.tool_name, &context.arguments, result)
             .await;
-        Ok(())
-    }
-}
-
-/// A seat's `stop` script hooks, observing each finished reply.
-pub(super) struct StopHooks(pub(super) Arc<HookRunner>);
-
-#[async_trait]
-impl LearningSink for StopHooks {
-    async fn on_turn_complete(&self, summary: &TurnSummary) -> anyhow::Result<()> {
-        // A stop hook observes; any follow-up it asks for is not a turn the
-        // coordinator authorized, so it is not run.
-        let _ = self.0.stop(&summary.output).await;
         Ok(())
     }
 }
