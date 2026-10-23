@@ -19,8 +19,12 @@ fn fixture() -> Package {
         config: json!({}),
         model: Some("model".into()),
         tools: ToolAccess::default(),
-        mcp: vec![],
-        skills: vec![],
+        ..Seat::default()
+    });
+    p.manifest.models.push(crate::Model {
+        id: "model".into(),
+        name: "fixture-model".into(),
+        ..crate::Model::default()
     });
     p.documents
         .insert("roles/builder.md".into(), "Build reliably".into());
