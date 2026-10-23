@@ -94,10 +94,10 @@ fn integration_sections_belong_to_the_integration_class() {
         .map(|d| (d.rule, d.pointer.as_deref()))
         .collect();
     assert!(
-        pointers.contains(&(Rule::ForbiddenClass, Some("/manifest/jev"))),
+        pointers.contains(&(Rule::ForbiddenClass, Some("/jev/top_k"))),
         "{refused:?}"
     );
-    assert!(pointers.contains(&(Rule::ForbiddenClass, Some("/manifest/features"))));
+    assert!(pointers.contains(&(Rule::ForbiddenClass, Some("/features/verbose_tools"))));
 }
 
 #[test]
