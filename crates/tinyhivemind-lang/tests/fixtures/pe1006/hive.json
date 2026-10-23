@@ -385,7 +385,18 @@
   },
   "providers": [],
   "models": [],
-  "mcp": [],
+  "mcp": [
+    {
+      "id": "tinyhive",
+      "transport": "stdio",
+      "endpoint": "tinyhive-mcp",
+      "args": [],
+      "env": {},
+      "headers": {},
+      "tools": null,
+      "deny_tools": []
+    }
+  ],
   "skills": [],
   "tools": [],
   "toolpacks": [],

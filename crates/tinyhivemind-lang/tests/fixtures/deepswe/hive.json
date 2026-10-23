@@ -313,7 +313,28 @@
   },
   "providers": [],
   "models": [],
-  "mcp": [],
+  "mcp": [
+    {
+      "id": "deepswe",
+      "transport": "stdio",
+      "endpoint": "deepswe-mcp",
+      "args": [],
+      "env": {},
+      "headers": {},
+      "tools": null,
+      "deny_tools": []
+    },
+    {
+      "id": "tinyhive",
+      "transport": "stdio",
+      "endpoint": "tinyhive-mcp",
+      "args": [],
+      "env": {},
+      "headers": {},
+      "tools": null,
+      "deny_tools": []
+    }
+  ],
   "skills": [],
   "tools": [],
   "toolpacks": [],
