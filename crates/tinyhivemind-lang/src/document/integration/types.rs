@@ -1,7 +1,7 @@
 //! Wire types for what a hive's agents run with: runtime, providers, models,
 //! MCP servers, skills, toolpacks, permissions, profiles, hooks and workflows.
 //!
-//! Each mirrors a setting the OpenHuman harness can run, in the language's own
+//! Each mirrors a setting the `OpenHuman` harness can run, in the language's own
 //! vocabulary; none names a harness type. Every struct denies unknown fields
 //! and every optional field defaults, so a manifest names only what it sets.
 use crate::ToolAccess;
@@ -165,7 +165,7 @@ pub enum ProviderKind {
     Inherit,
     /// An OpenAI-compatible endpoint.
     Openai,
-    /// OpenRouter.
+    /// `OpenRouter`.
     Openrouter,
     /// Anthropic; the host must supply the client.
     Anthropic,
@@ -446,11 +446,11 @@ pub enum JevRoute {
     /// The first route the process has a credential for.
     #[default]
     Auto,
-    /// The TinyHumans proxy.
+    /// The `TinyHumans` proxy.
     Tinyhumans,
-    /// TypeSafe's API.
+    /// `TypeSafe` API.
     Typesafe,
-    /// OpenRouter's System One API.
+    /// `OpenRouter` System One API.
     Openrouter,
 }
 
