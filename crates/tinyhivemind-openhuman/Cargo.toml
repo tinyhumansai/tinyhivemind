@@ -64,7 +64,6 @@ tinymemory-tools.workspace = true
 wiremock = { workspace = true, optional = true }
 
 [dev-dependencies]
-env_logger = "0.11"
 # OpenHuman's agent definition types, to assert what a deployed profile built.
 tinyagents-definition = { path = "../../vendor/openhuman/vendor/tinyagents/crates/tinyagents-definition" }
 tempfile.workspace = true

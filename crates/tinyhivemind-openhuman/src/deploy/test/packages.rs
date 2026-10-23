@@ -20,6 +20,8 @@ fn package() -> anyhow::Result<PackageSource> {
     // Plain model names: the scripted model reads plain-text turns, and a
     // provider-prefixed Anthropic name switches the harness to cache-control
     // content blocks.
+    // A dollar budget needs a priced model; the fixture has no price.
+    package.manifest.runtime.limits.budget_usd = None;
     for model in &mut package.manifest.models {
         model.provider = None;
         model.name = "fixture".into();
@@ -63,14 +65,7 @@ fn a_package_seat_runs_its_python_tool_and_a_script_hook_refuses_a_call() -> any
         .lock()
         .unwrap_or_else(PoisonError::into_inner);
     run(async {
-        let _ = env_logger::builder().is_test(true).try_init();
-        let (mut options, _backend, model) = build_options().await;
-        // The package's dollar budget needs the host's per-call bound.
-        options.call_budget = Some(openhuman_embed::budget::CallBudget {
-            input_tokens: 100_000,
-            output_tokens: 4_096,
-            cost_micros: 10_000,
-        });
+        let (options, _backend, model) = build_options().await;
         let script = Script {
             action: Some("word_count".into()),
             arguments: Some(json!({"text": "please git push --force now"})),
@@ -101,8 +96,6 @@ fn a_package_seat_runs_its_python_tool_and_a_script_hook_refuses_a_call() -> any
             })
             .await?;
         let report = deployment.host().coordinator().run_until_idle().await?;
-        eprintln!("DBG requests={} seen={:?}", model.received_requests().await.unwrap_or_default().len(), results(&model).await);
-        for row in deployment.host().coordinator().read_transcript(None)? { eprintln!("DBG ROW {row:?}"); }
         assert_eq!(report.failed, 0, "{report:?}");
         let seen = results(&model).await;
         let counts: Vec<_> = seen
@@ -133,13 +126,7 @@ fn a_package_seat_runs_a_shell_tool_and_an_unknown_group_is_refused() -> anyhow:
         .lock()
         .unwrap_or_else(PoisonError::into_inner);
     run(async {
-        let (mut options, _backend, model) = build_options().await;
-        // The package's dollar budget needs the host's per-call bound.
-        options.call_budget = Some(openhuman_embed::budget::CallBudget {
-            input_tokens: 100_000,
-            output_tokens: 4_096,
-            cost_micros: 10_000,
-        });
+        let (options, _backend, model) = build_options().await;
         let script = Script {
             action: Some("grep_repo".into()),
             arguments: Some(json!({"pattern": "release-notes", "path": "."})),
