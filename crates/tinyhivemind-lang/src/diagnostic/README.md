@@ -4,7 +4,7 @@ The located finding every rule reports. A `Diagnostic` names a `file`, an
 optional JSON `pointer` into it, a `rule` family and a lowercase `message`,
 and displays compiler style: `hive.json:/seats/0/role: reference: unresolved
 role reference ghost`. `Rule` has one snake_case variant per family; the first
-twelve mirror `crate::Error`, the rest are the edit rules `check` adds.
+thirteen mirror `crate::Error`, the rest are the edit rules `check` adds.
 
 Inside the crate, validation and parsing push `(Error, file, pointer)`
 findings into a `Findings` collector. `validate` and `parse` return its first
