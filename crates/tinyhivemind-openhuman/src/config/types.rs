@@ -223,8 +223,9 @@ pub(crate) struct Profile {
     pub(crate) context: Vec<String>,
     /// Model/sampling overrides.
     pub(crate) model: Model,
-    /// Optional authority restriction.
-    pub(crate) permission_profile: Option<String>,
+    /// Optional authority restriction; `permission_profile` on the wire.
+    #[serde(rename = "permission_profile")]
+    pub(crate) permissions: Option<String>,
     /// Tool visibility.
     pub(crate) tool_scope: ToolScope,
     /// Additional denied tool names.
@@ -420,11 +421,6 @@ pub(crate) struct HiveConfig {
 #[derive(Clone, Debug)]
 pub(crate) struct ValidatedHiveConfig(pub(super) HiveConfig);
 impl ValidatedHiveConfig {
-    /// Immutable validated manifest.
-    #[must_use]
-    pub(crate) fn config(&self) -> &HiveConfig {
-        &self.0
-    }
     /// Consume validation proof to recover an editable manifest.
     #[must_use]
     pub(crate) fn into_config(self) -> HiveConfig {

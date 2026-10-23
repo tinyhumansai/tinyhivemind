@@ -208,7 +208,7 @@ pub(super) struct ScriptHooks(pub(super) Arc<HookRunner>);
 
 #[async_trait]
 impl ToolHook<OpenHumanRunContext> for ScriptHooks {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "tinyhivemind-script-hooks"
     }
 

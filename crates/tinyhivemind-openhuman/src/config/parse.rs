@@ -1,5 +1,7 @@
 //! Side-effect-free canonical parsing of the internal deployment plan.
-use super::{ConfigError, HiveConfig, Result};
+#[cfg(test)]
+use super::HiveConfig;
+use super::{ConfigError, Result};
 use serde_json::Value;
 
 #[cfg(test)]

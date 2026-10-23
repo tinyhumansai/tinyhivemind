@@ -203,7 +203,7 @@ fn configured_profile(skills_root: &std::path::Path) -> anyhow::Result<HiveConfi
         .skills
         .push(skills_root.to_string_lossy().into_owned());
     profile.include_user_skills = Some(false);
-    profile.permission_profile = Some("narrow".into());
+    profile.permissions = Some("narrow".into());
     let mut local = server("local");
     local.transport = "stdio".into();
     local.endpoint = "sh".into();

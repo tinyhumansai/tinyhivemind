@@ -70,7 +70,7 @@ pub(super) fn definition(config: &HiveConfig, profile: &Profile) -> AgentDefinit
     if let Some(t) = profile.model.temperature {
         definition = definition.temperature(t);
     }
-    if let Some(policy) = profile.permission_profile.as_ref().and_then(|id| {
+    if let Some(policy) = profile.permissions.as_ref().and_then(|id| {
         config
             .permission_profiles
             .iter()

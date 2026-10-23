@@ -60,7 +60,7 @@ impl HiveConfig {
         let mut layers = vec![];
         for reference in [
             self.runtime.permission_profile.as_ref(),
-            profile.permission_profile.as_ref(),
+            profile.permissions.as_ref(),
             seat.overrides.permission_profile.as_ref(),
             member.and_then(|m| m.permission_profile.as_ref()),
         ]
@@ -106,7 +106,7 @@ impl HiveConfig {
             .chain(
                 self.profiles
                     .iter()
-                    .filter_map(|p| p.permission_profile.as_ref()),
+                    .filter_map(|p| p.permissions.as_ref()),
             )
             .chain(
                 self.seats

@@ -204,7 +204,7 @@ fn profile(
         system_prompt: prompt,
         context: Vec::new(),
         model: model(integration.model.as_ref()),
-        permission_profile: None,
+        permissions: None,
         tool_scope: if named.is_empty() {
             config::ToolScope::Wildcard
         } else {
@@ -245,7 +245,7 @@ fn subagent(package: &lang::Package, declared: &lang::Profile) -> config::Profil
         bare_prompt: declared.bare_prompt,
         system_prompt: prompt.trim_end().to_owned(),
         model,
-        permission_profile: declared.permissions.clone(),
+        permissions: declared.permissions.clone(),
         tool_scope: if declared.tools.allow.is_empty() {
             config::ToolScope::Wildcard
         } else {
@@ -378,10 +378,10 @@ pub(crate) fn plan(packages: &[PackageSource]) -> Result<Plan, ConfigError> {
             name: hive.name.clone(),
             members,
             memory_root: None,
-            episode: policies.episode.clone(),
+            episode: policies.episode,
             routing: policies.routing.clone(),
             coordinator: super::coordinator_options(&hive.coordinator),
-            division: policies.division.clone(),
+            division: policies.division,
             conduct: policies.conduct,
         });
         for job in &hive.integrations.workflows {
