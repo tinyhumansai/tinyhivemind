@@ -7,10 +7,10 @@ pinned by `the_broken_integrations_package_reports_each_rule_once` in
 
 | Fault | Where | Rule |
 | --- | --- | --- |
-| Seat `lead` names the undeclared model `turbo` | `hive.json` `/seats/0/model` | `reference` |
-| `tools/word_count.py` is absent though `word_count` runs it | `hive.json` `/tools/1/command` | `missing_document` |
+| Seat `scout` names the undeclared model `turbo` | `hive.json` `/seats/1/model` | `reference` |
+| `tools/word_count.py` is absent though `word_count` runs it | `hive.json` `/tools/1/command/1` | `missing_document` |
 | The delegated `summariser` profile sets the model `fast` | `hive.json` `/profiles/2/model` | `integration` |
-| `grep_repo`'s `argv` names `{depth}`, which is no argument | `hive.json` `/tools/0/argv` | `integration` |
+| `grep_repo`'s `argv` names `{depth}`, which is no argument | `hive.json` `/tools/0/argv/1` | `integration` |
 | `session_store` is `sqlite` but `runtime.workspace` is unset | `hive.json` `/runtime/session_store` | `integration` |
 
 | Path | Purpose |
