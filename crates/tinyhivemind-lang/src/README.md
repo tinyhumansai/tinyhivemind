@@ -16,10 +16,10 @@ paths.
 | --- | --- |
 | `check` | `check` and `check_packages`: direct edits checked against the original and the constitution, every finding collected; `Review` on success. |
 | `diagnostic` | `Diagnostic` and `Rule`, and the collector every rule reports into. |
-| `document` | `Package` and `Manifest` wire types, `parse` and `diagnose_documents` over a caller-supplied document map. |
+| `document` | `Package` and `Manifest` wire types, the integration sections (`document/integration/`), `parse` and `diagnose_documents` over a caller-supplied document map. |
 | `memory` | `Constitution` and `MemorySpec`: caps, protected namespaces, identities, lifecycles, reaches and recall settings. |
-| `validation` | `validate`, `diagnose`, `validate_path`, `validate_namespace`: references, paths, frontmatter agreement, goal acyclicity, policy bounds and memory access. |
-| `lowering` | `lower`: core desks, routing candidates and host seat creation inputs. |
+| `validation` | `validate`, `diagnose`, `validate_path`, `validate_namespace`: references, paths, frontmatter agreement, goal acyclicity, policy bounds, memory access and the integration sections. |
+| `lowering` | `lower`: core desks, routing candidates, host seat creation inputs and each seat's resolved integration. |
 | `error` | The package-level `Error` returned by parsing, validation and lowering. |
-| `patch` | The recorded form of an edit: `apply`, `guard`, and `diff`; learning operations. |
+| `patch` | The recorded form of an edit: `apply`, `guard`, and `diff`; learning operations; eight edit classes including `integration`. |
 | `lineage` | Content identities, evaluated records, `accepted_head` and `pareto_frontier`. |

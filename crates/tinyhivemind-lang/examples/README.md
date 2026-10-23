@@ -2,6 +2,7 @@
 
 | File | Purpose |
 | --- | --- |
+| `broken/` | Packages that deliberately fail `hive_check`, one finding per rule, so the report is pinned by a test |
 | `hive_check/` | The compiler-style check an orchestrator runs after editing a package's files: every finding as `file:pointer: rule: message`, non-zero exit on any |
 | `hive_view/` | Render a package (text, mermaid, JSON) and run it through core's `hive::step`, one floor per desk linked by referral, offline or `--live` on OpenRouter; NDJSON frames for the viewer; the math `--compare` |
 | `hives/` | The example package gallery: eight complete packages, from a three-seat review board to a fifty-seat math swarm |
