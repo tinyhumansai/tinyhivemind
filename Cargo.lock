@@ -660,6 +660,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dirs"
+version = "7.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d57d423b3c82e89b9a24ca3091fee61f456a26edbd28d26c65906f4bc1dcd8f"
+dependencies = [
+ "dirs-sys",
+]
+
+[[package]]
 name = "dirs-sys"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1850,7 +1859,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "directories",
- "dirs",
+ "dirs 6.0.0",
  "dotenvy",
  "flate2",
  "fs2",
@@ -1892,7 +1901,7 @@ dependencies = [
  "tinyagents-session",
  "tinyagents-storage-kit",
  "tinyagents-tasks",
- "tinybox-bus",
+ "tinybox-bus 0.2.0",
  "tinybus",
  "tinybus-module",
  "tinychannels-bus",
@@ -3144,7 +3153,7 @@ dependencies = [
  "base64 0.22.1",
  "cap-std",
  "chrono",
- "dirs",
+ "dirs 6.0.0",
  "flate2",
  "futures",
  "libc",
@@ -3320,6 +3329,14 @@ dependencies = [
  "tinyinference-llm",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "tinybox-bus"
+version = "0.1.36"
+source = "git+https://github.com/tinyhumansai/tinybox?tag=v0.1.36#39fe22189431bdf787dafce5eea6d7d49d1a00f8"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -3507,6 +3524,7 @@ dependencies = [
  "tinyhivemind-exec",
  "tinyhivemind-hives",
  "tinyhivemind-lang",
+ "tinymcp",
  "tinymemory-api",
  "tinymemory-tools",
  "tinytools",
@@ -3670,6 +3688,35 @@ dependencies = [
  "tinyjuice-bus",
  "tinytools",
  "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "tinymcp"
+version = "0.20.1"
+dependencies = [
+ "base64 0.23.1",
+ "data-encoding",
+ "dirs 7.0.0",
+ "futures-util",
+ "parking_lot",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "thiserror",
+ "tinybox-bus 0.1.36",
+ "tinybus",
+ "tinybus-module",
+ "tinymcp-bus",
+ "tinystoragedrivers-api",
+ "tinystoragedrivers-busproxy",
+ "tinystoragedrivers-types",
+ "tinytools",
+ "tokio",
+ "tracing",
+ "url",
+ "urlencoding",
  "uuid",
 ]
 

@@ -61,6 +61,7 @@ fn scheduled_mcp_envelope_and_private_children_never_reach_remote_effect() -> an
             .mount(&remote)
             .await;
         let (mut options, _backend, model) = build_options().await;
+        openhuman_embed::modules::register_linked("tinymcp", tinymcp::linked_module);
         options.classifier = Some(Arc::new(RemoteEffects));
         let script = Script {
             action: Some("mcp_call_tool".into()),
@@ -117,7 +118,7 @@ fn scheduled_mcp_envelope_and_private_children_never_reach_remote_effect() -> an
         // module is unavailable. Either result proves the gate let it through.
         let result = mcp_result(&model).await;
         assert!(
-            count.load(Ordering::Relaxed) > 0 || result.contains("TinyMCP module is unavailable"),
+            count.load(Ordering::Relaxed) > 0,
             "interactive MCP call must pass the hive gate, got {result:?}"
         );
         Ok(())
