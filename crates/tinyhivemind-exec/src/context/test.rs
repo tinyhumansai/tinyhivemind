@@ -14,7 +14,7 @@ fn env_secrets_resolve_a_variable_the_process_has() {
 fn env_secrets_refuse_an_unset_variable() {
     let reference = SecretRef::Env("THM_EXEC_TEST_SURELY_UNSET_VARIABLE".into());
     let error = EnvSecrets.resolve(&reference).expect_err("unset");
-    assert!(matches!(error, Error::UnresolvedSecret { reference: r } if r == reference));
+    assert!(matches!(&error, Error::UnresolvedSecret { reference: r } if *r == reference));
     assert_eq!(
         error.to_string(),
         "secret env:THM_EXEC_TEST_SURELY_UNSET_VARIABLE could not be resolved"
