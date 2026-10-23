@@ -9,15 +9,8 @@ use tinyhivemind_core::{
 };
 use tinyhivemind_hives::CoordinatorOptions;
 
-/// Credential location; never a resolved credential.
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord)]
-#[serde(rename_all = "snake_case")]
-pub enum SecretRef {
-    /// Environment variable name.
-    Env(String),
-    /// Host secret-store key.
-    Store(String),
-}
+/// Credential location; never a resolved credential. The language's own.
+pub use tinyhivemind_lang::SecretRef;
 /// Provider endpoint and credential reference.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
