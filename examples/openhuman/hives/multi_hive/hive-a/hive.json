@@ -1,0 +1,92 @@
+{
+  "$schema": "https://tinyhumans.ai/schemas/hive/v1",
+  "version": 1,
+  "id": "a",
+  "name": "Implementation",
+  "seats": [
+    {
+      "id": "shared",
+      "role": "implementer",
+      "prompt": "seats/shared.md",
+      "template": "openhuman",
+      "limits": {
+        "iterations": 8
+      }
+    },
+    {
+      "id": "architect",
+      "role": "planner",
+      "prompt": "seats/architect.md",
+      "template": "openhuman",
+      "limits": {
+        "iterations": 8
+      }
+    },
+    {
+      "id": "helper",
+      "role": "assistant",
+      "prompt": "seats/helper.md",
+      "template": "openhuman",
+      "limits": {
+        "iterations": 8
+      }
+    }
+  ],
+  "desks": [
+    {
+      "id": "a",
+      "name": "Implementation",
+      "members": [
+        "shared",
+        "architect",
+        "helper"
+      ]
+    }
+  ],
+  "policies": {
+    "routing": {
+      "minimum_confidence": 600000,
+      "high_impact_minimum_confidence": 800000,
+      "clarification_threshold": 700000,
+      "high_impact_threshold": 700000,
+      "round_width": 4,
+      "choice_option_limit": 8
+    }
+  },
+  "runtime": {
+    "deployment_id": "default",
+    "autonomy": "autonomous",
+    "provider": "openrouter",
+    "model": "default"
+  },
+  "providers": [
+    {
+      "id": "openrouter",
+      "kind": "openrouter",
+      "credential": {
+        "env": "OPENROUTER_API_KEY"
+      }
+    }
+  ],
+  "models": [
+    {
+      "id": "default",
+      "name": "openai/gpt-oss-120b:nitro",
+      "temperature": 0.0
+    }
+  ],
+  "roles": [
+    {
+      "id": "implementer",
+      "charter": "roles/implementer.md"
+    },
+    {
+      "id": "planner",
+      "charter": "roles/planner.md"
+    },
+    {
+      "id": "assistant",
+      "charter": "roles/assistant.md"
+    }
+  ]
+}

@@ -1,71 +1,287 @@
 {
-  "runtime": {
-    "autonomy": "autonomous",
-    "memory_engine": "host",
-    "model": {
-      "temperature": 0.0
-    },
-    "concurrency": 5
-  },
+  "$schema": "https://tinyhumans.ai/schemas/hive/v1",
+  "version": 1,
+  "id": "pe1006",
+  "name": "pe1006",
   "seats": [
     {
       "id": "theory",
-      "profile": "theory"
+      "role": "theory",
+      "prompt": "seats/theory.md",
+      "template": "openhuman",
+      "tools": {
+        "allow": [
+          "file_read",
+          "file_write",
+          "mcp_list_tools",
+          "mcp_call_tool",
+          "shell"
+        ],
+        "deny": [
+          "run_code",
+          "ask_docs"
+        ]
+      },
+      "mcp": [
+        "tinyhive-theory"
+      ],
+      "limits": {
+        "iterations": 12
+      },
+      "context": [
+        "context/sealed.md"
+      ]
     },
     {
       "id": "solver",
-      "profile": "solver"
+      "role": "solver",
+      "prompt": "seats/solver.md",
+      "template": "openhuman",
+      "tools": {
+        "allow": [
+          "file_read",
+          "file_write",
+          "mcp_list_tools",
+          "mcp_call_tool",
+          "shell"
+        ],
+        "deny": [
+          "run_code",
+          "ask_docs"
+        ]
+      },
+      "mcp": [
+        "tinyhive-solver"
+      ],
+      "limits": {
+        "iterations": 12
+      },
+      "context": [
+        "context/sealed.md"
+      ]
     },
     {
       "id": "checker",
-      "profile": "checker"
+      "role": "checker",
+      "prompt": "seats/checker.md",
+      "template": "openhuman",
+      "tools": {
+        "allow": [
+          "file_read",
+          "file_write",
+          "mcp_list_tools",
+          "mcp_call_tool",
+          "shell"
+        ],
+        "deny": [
+          "run_code",
+          "ask_docs"
+        ]
+      },
+      "mcp": [
+        "tinyhive-checker"
+      ],
+      "limits": {
+        "iterations": 12
+      },
+      "context": [
+        "context/sealed.md"
+      ]
     },
     {
       "id": "lead",
-      "profile": "lead"
+      "role": "lead",
+      "prompt": "seats/lead.md",
+      "template": "openhuman",
+      "tools": {
+        "allow": [
+          "file_read",
+          "file_write",
+          "mcp_list_tools",
+          "mcp_call_tool",
+          "shell"
+        ],
+        "deny": [
+          "run_code",
+          "ask_docs"
+        ]
+      },
+      "mcp": [
+        "tinyhive-lead"
+      ],
+      "limits": {
+        "iterations": 12
+      },
+      "context": [
+        "context/sealed.md"
+      ]
     },
     {
       "id": "researcher",
-      "profile": "researcher"
+      "role": "researcher",
+      "prompt": "seats/researcher.md",
+      "template": "openhuman",
+      "tools": {
+        "allow": [
+          "file_read",
+          "file_write",
+          "mcp_list_tools",
+          "mcp_call_tool",
+          "shell"
+        ],
+        "deny": [
+          "run_code",
+          "ask_docs"
+        ]
+      },
+      "mcp": [
+        "tinyhive-researcher"
+      ],
+      "limits": {
+        "iterations": 12
+      },
+      "context": [
+        "context/research.md"
+      ]
     }
   ],
-  "hives": [
+  "desks": [
     {
       "id": "pe1006",
+      "name": "pe1006",
       "members": [
-        {
-          "seat": "theory",
-          "role": "theory"
-        },
-        {
-          "seat": "solver",
-          "role": "solver"
-        },
-        {
-          "seat": "checker",
-          "role": "checker"
-        },
-        {
-          "seat": "lead",
-          "role": "lead"
-        },
-        {
-          "seat": "researcher",
-          "role": "researcher"
-        }
+        "theory",
+        "solver",
+        "checker",
+        "lead",
+        "researcher"
+      ]
+    }
+  ],
+  "policies": {
+    "routing": {
+      "minimum_confidence": 0,
+      "high_impact_minimum_confidence": 0,
+      "clarification_threshold": 1000000,
+      "high_impact_threshold": 1000000,
+      "round_width": 5,
+      "choice_option_limit": 8
+    }
+  },
+  "coordinator": {
+    "round_width": 4
+  },
+  "runtime": {
+    "deployment_id": "default",
+    "autonomy": "autonomous",
+    "memory_engine": "host",
+    "concurrency": 5,
+    "model": "default"
+  },
+  "models": [
+    {
+      "id": "default",
+      "name": "openai/gpt-oss-120b:nitro",
+      "temperature": 0.0
+    }
+  ],
+  "mcp": [
+    {
+      "id": "tinyhive-theory",
+      "transport": "stdio",
+      "endpoint": "pe1006_hive",
+      "args": [
+        "--hive-tools"
       ],
-      "memory_root": "pe1006",
-      "routing": {
-        "minimum_confidence": 0,
-        "high_impact_minimum_confidence": 0,
-        "clarification_threshold": 1000000,
-        "high_impact_threshold": 1000000,
-        "round_width": 5,
-        "choice_option_limit": 8
-      },
-      "coordinator": {
-        "round_width": 4
-      }
+      "tools": [
+        "broadcast",
+        "complete_episode",
+        "hive_memory_recall",
+        "hive_memory_note",
+        "hive_memory_forget"
+      ]
+    },
+    {
+      "id": "tinyhive-solver",
+      "transport": "stdio",
+      "endpoint": "pe1006_hive",
+      "args": [
+        "--hive-tools"
+      ],
+      "tools": [
+        "broadcast",
+        "complete_episode",
+        "hive_memory_recall",
+        "hive_memory_note",
+        "hive_memory_forget"
+      ]
+    },
+    {
+      "id": "tinyhive-checker",
+      "transport": "stdio",
+      "endpoint": "pe1006_hive",
+      "args": [
+        "--hive-tools"
+      ],
+      "tools": [
+        "broadcast",
+        "complete_episode",
+        "hive_memory_recall",
+        "hive_memory_note",
+        "hive_memory_forget"
+      ]
+    },
+    {
+      "id": "tinyhive-lead",
+      "transport": "stdio",
+      "endpoint": "pe1006_hive",
+      "args": [
+        "--hive-tools"
+      ],
+      "tools": [
+        "broadcast",
+        "complete_episode",
+        "hive_memory_recall",
+        "hive_memory_note",
+        "hive_memory_forget"
+      ]
+    },
+    {
+      "id": "tinyhive-researcher",
+      "transport": "stdio",
+      "endpoint": "pe1006_hive",
+      "args": [
+        "--hive-tools"
+      ],
+      "tools": [
+        "broadcast",
+        "complete_episode",
+        "hive_memory_recall",
+        "hive_memory_note",
+        "hive_memory_forget"
+      ]
+    }
+  ],
+  "roles": [
+    {
+      "id": "theory",
+      "charter": "roles/theory.md"
+    },
+    {
+      "id": "solver",
+      "charter": "roles/solver.md"
+    },
+    {
+      "id": "checker",
+      "charter": "roles/checker.md"
+    },
+    {
+      "id": "lead",
+      "charter": "roles/lead.md"
+    },
+    {
+      "id": "researcher",
+      "charter": "roles/researcher.md"
     }
   ]
 }

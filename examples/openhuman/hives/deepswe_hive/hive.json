@@ -1,98 +1,225 @@
 {
-  "runtime": {
-    "autonomy": "autonomous",
-    "model": {
-      "temperature": 0.0
-    },
-    "concurrency": 4,
-    "mcp": [
-      {
-        "id": "deepswe",
-        "transport": "stdio",
-        "endpoint": "deepswe_hive",
-        "args": [
-          "--mcp-workspace"
-        ],
-        "tools": [
-          "file_read",
-          "file_write",
-          "file_edit",
-          "shell",
-          "test"
-        ]
-      }
-    ]
-  },
+  "$schema": "https://tinyhumans.ai/schemas/hive/v1",
+  "version": 1,
+  "id": "deepswe",
+  "name": "deepswe",
   "seats": [
     {
       "id": "lead",
-      "profile": "lead"
+      "role": "lead",
+      "prompt": "seats/lead.md",
+      "template": "openhuman",
+      "tools": {
+        "allow": [
+          "mcp_list_tools",
+          "mcp_call_tool"
+        ]
+      },
+      "mcp": [
+        "deepswe",
+        "tinyhive-lead"
+      ],
+      "limits": {
+        "iterations": 16
+      }
     },
     {
       "id": "implementer",
-      "profile": "implementer"
+      "role": "implementer",
+      "prompt": "seats/implementer.md",
+      "template": "openhuman",
+      "tools": {
+        "allow": [
+          "mcp_list_tools",
+          "mcp_call_tool"
+        ]
+      },
+      "mcp": [
+        "deepswe",
+        "tinyhive-implementer"
+      ],
+      "limits": {
+        "iterations": 16
+      }
     },
     {
       "id": "tester",
-      "profile": "tester"
+      "role": "tester",
+      "prompt": "seats/tester.md",
+      "template": "openhuman",
+      "tools": {
+        "allow": [
+          "mcp_list_tools",
+          "mcp_call_tool"
+        ]
+      },
+      "mcp": [
+        "deepswe",
+        "tinyhive-tester"
+      ],
+      "limits": {
+        "iterations": 16
+      }
     },
     {
       "id": "reviewer",
-      "profile": "reviewer"
+      "role": "reviewer",
+      "prompt": "seats/reviewer.md",
+      "template": "openhuman",
+      "tools": {
+        "allow": [
+          "mcp_list_tools",
+          "mcp_call_tool"
+        ]
+      },
+      "mcp": [
+        "deepswe",
+        "tinyhive-reviewer"
+      ],
+      "limits": {
+        "iterations": 16
+      }
     }
   ],
-  "hives": [
+  "desks": [
     {
       "id": "deepswe",
+      "name": "deepswe",
       "members": [
-        {
-          "seat": "lead",
-          "role": "lead"
-        },
-        {
-          "seat": "implementer",
-          "role": "implementer"
-        },
-        {
-          "seat": "tester",
-          "role": "tester"
-        },
-        {
-          "seat": "reviewer",
-          "role": "reviewer"
-        }
-      ],
-      "episode": {
-        "turn_budget": 12,
-        "round_width": 4,
-        "revealed_width": 1,
-        "blind_round": true,
-        "dominance_cap": 50,
-        "repetition_cap": 3,
-        "distance": "sequence",
-        "quorum": {
-          "threshold": 2,
-          "window": 30,
-          "require_grounded": true
-        },
-        "weights": {
-          "recency": 5,
-          "importance": 30,
-          "relevance": 20,
-          "half_life": 20
-        }
+        "lead",
+        "implementer",
+        "tester",
+        "reviewer"
+      ]
+    }
+  ],
+  "policies": {
+    "episode": {
+      "turn_budget": 12,
+      "round_width": 4,
+      "revealed_width": 1,
+      "blind_round": true,
+      "dominance_cap": 50,
+      "repetition_cap": 3,
+      "distance": "sequence",
+      "quorum": {
+        "threshold": 2,
+        "window": 30,
+        "require_grounded": true
       },
-      "routing": {
-        "minimum_confidence": 0,
-        "high_impact_minimum_confidence": 0,
-        "clarification_threshold": 1000000,
-        "high_impact_threshold": 1000000,
-        "round_width": 4,
-        "choice_option_limit": 4
-      },
-      "coordinator": {
-        "round_width": 4
+      "weights": {
+        "recency": 5,
+        "importance": 30,
+        "relevance": 20,
+        "half_life": 20
       }
+    },
+    "routing": {
+      "minimum_confidence": 0,
+      "high_impact_minimum_confidence": 0,
+      "clarification_threshold": 1000000,
+      "high_impact_threshold": 1000000,
+      "round_width": 4,
+      "choice_option_limit": 4
+    }
+  },
+  "coordinator": {
+    "round_width": 4
+  },
+  "runtime": {
+    "deployment_id": "default",
+    "autonomy": "autonomous",
+    "concurrency": 4,
+    "model": "default"
+  },
+  "models": [
+    {
+      "id": "default",
+      "name": "openai/gpt-oss-120b:nitro",
+      "temperature": 0.0
+    }
+  ],
+  "mcp": [
+    {
+      "id": "deepswe",
+      "transport": "stdio",
+      "endpoint": "deepswe_hive",
+      "args": [
+        "--mcp-workspace"
+      ],
+      "tools": [
+        "file_read",
+        "file_write",
+        "file_edit",
+        "shell",
+        "test"
+      ]
+    },
+    {
+      "id": "tinyhive-lead",
+      "transport": "stdio",
+      "endpoint": "deepswe_hive",
+      "args": [
+        "--mcp-hive"
+      ],
+      "tools": [
+        "broadcast",
+        "complete_episode"
+      ]
+    },
+    {
+      "id": "tinyhive-implementer",
+      "transport": "stdio",
+      "endpoint": "deepswe_hive",
+      "args": [
+        "--mcp-hive"
+      ],
+      "tools": [
+        "broadcast",
+        "complete_episode"
+      ]
+    },
+    {
+      "id": "tinyhive-tester",
+      "transport": "stdio",
+      "endpoint": "deepswe_hive",
+      "args": [
+        "--mcp-hive"
+      ],
+      "tools": [
+        "broadcast",
+        "complete_episode"
+      ]
+    },
+    {
+      "id": "tinyhive-reviewer",
+      "transport": "stdio",
+      "endpoint": "deepswe_hive",
+      "args": [
+        "--mcp-hive"
+      ],
+      "tools": [
+        "broadcast",
+        "complete_episode"
+      ]
+    }
+  ],
+  "roles": [
+    {
+      "id": "lead",
+      "charter": "roles/lead.md"
+    },
+    {
+      "id": "implementer",
+      "charter": "roles/implementer.md"
+    },
+    {
+      "id": "tester",
+      "charter": "roles/tester.md"
+    },
+    {
+      "id": "reviewer",
+      "charter": "roles/reviewer.md"
     }
   ]
 }

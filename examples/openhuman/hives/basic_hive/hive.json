@@ -1,31 +1,54 @@
 {
-  "runtime": {
-    "autonomy": "read_only"
-  },
+  "$schema": "https://tinyhumans.ai/schemas/hive/v1",
+  "version": 1,
+  "id": "release",
+  "name": "Release",
   "seats": [
     {
       "id": "alice",
-      "profile": "alice"
+      "role": "planner",
+      "prompt": "seats/alice.md",
+      "template": "openhuman"
     },
     {
       "id": "bob",
-      "profile": "bob"
+      "role": "reviewer",
+      "prompt": "seats/bob.md",
+      "template": "openhuman"
     }
   ],
-  "hives": [
+  "desks": [
     {
       "id": "release",
       "name": "Release",
       "members": [
-        {
-          "seat": "alice",
-          "role": "planner"
-        },
-        {
-          "seat": "bob",
-          "role": "reviewer"
-        }
+        "alice",
+        "bob"
       ]
+    }
+  ],
+  "policies": {
+    "routing": {
+      "minimum_confidence": 600000,
+      "high_impact_minimum_confidence": 800000,
+      "clarification_threshold": 700000,
+      "high_impact_threshold": 700000,
+      "round_width": 4,
+      "choice_option_limit": 8
+    }
+  },
+  "runtime": {
+    "deployment_id": "default",
+    "autonomy": "read_only"
+  },
+  "roles": [
+    {
+      "id": "planner",
+      "charter": "roles/planner.md"
+    },
+    {
+      "id": "reviewer",
+      "charter": "roles/reviewer.md"
     }
   ]
 }

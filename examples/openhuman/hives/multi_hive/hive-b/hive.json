@@ -1,0 +1,88 @@
+{
+  "$schema": "https://tinyhumans.ai/schemas/hive/v1",
+  "version": 1,
+  "id": "b",
+  "name": "Review",
+  "seats": [
+    {
+      "id": "shared",
+      "role": "observer",
+      "prompt": "seats/shared.md",
+      "template": "openhuman",
+      "limits": {
+        "iterations": 8
+      },
+      "permissions": "readonly",
+      "context": [
+        "context/review.md"
+      ]
+    },
+    {
+      "id": "reviewer",
+      "role": "reviewer",
+      "prompt": "seats/reviewer.md",
+      "template": "openhuman",
+      "limits": {
+        "iterations": 8
+      }
+    }
+  ],
+  "desks": [
+    {
+      "id": "b",
+      "name": "Review",
+      "members": [
+        "shared",
+        "reviewer"
+      ]
+    }
+  ],
+  "policies": {
+    "routing": {
+      "minimum_confidence": 600000,
+      "high_impact_minimum_confidence": 800000,
+      "clarification_threshold": 700000,
+      "high_impact_threshold": 700000,
+      "round_width": 4,
+      "choice_option_limit": 8
+    }
+  },
+  "runtime": {
+    "deployment_id": "default",
+    "autonomy": "autonomous",
+    "provider": "openrouter",
+    "model": "default"
+  },
+  "providers": [
+    {
+      "id": "openrouter",
+      "kind": "openrouter",
+      "credential": {
+        "env": "OPENROUTER_API_KEY"
+      }
+    }
+  ],
+  "models": [
+    {
+      "id": "default",
+      "name": "openai/gpt-oss-120b:nitro",
+      "temperature": 0.0
+    }
+  ],
+  "permissions": [
+    {
+      "id": "readonly",
+      "access": "read_only"
+    }
+  ],
+  "roles": [
+    {
+      "id": "observer",
+      "charter": "roles/observer.md"
+    },
+    {
+      "id": "reviewer",
+      "charter": "roles/reviewer.md"
+    }
+  ]
+}
