@@ -391,3 +391,7 @@ pub(crate) fn plan(packages: &[PackageSource]) -> Result<Plan, ConfigError> {
         jev: lowered.integrations.jev.clone(),
     })
 }
+
+#[cfg(test)]
+#[path = "plan_test.rs"]
+mod test;
