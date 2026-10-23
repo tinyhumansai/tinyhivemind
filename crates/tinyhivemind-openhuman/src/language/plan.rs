@@ -323,7 +323,7 @@ fn seats_of(
             None => {
                 let mut native = profile(hive, seat, None);
                 native.include_user_skills = Some(hive.integrations.runtime.include_user_skills);
-                agree(&mut profiles, "profiles", &native.id.clone(), native)?;
+                agree(profiles, "profiles", &native.id.clone(), native)?;
                 seats.insert(seat.id.clone(), (shared, seat.prompt.clone(), extras));
                 config.seats.push(config::Seat {
                     id: seat.id.clone(),
