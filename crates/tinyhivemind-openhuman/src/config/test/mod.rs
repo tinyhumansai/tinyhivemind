@@ -70,7 +70,6 @@ fn policy_serde_preserves_defaults() -> anyhow::Result<()> {
     assert_eq!(retention, tinyhivemind_hives::RetentionPolicy::default());
     Ok(())
 }
-mod directory;
 mod validation;
 
 #[test]

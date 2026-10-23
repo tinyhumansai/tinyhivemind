@@ -11,7 +11,7 @@
 //! host.register_agent(agent).await?;
 //! # Ok(()) }
 //! ```
-pub mod config;
+pub(crate) mod config;
 pub mod deploy;
 mod error;
 mod host;
