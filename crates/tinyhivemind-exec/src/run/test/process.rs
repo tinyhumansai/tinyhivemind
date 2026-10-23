@@ -11,7 +11,9 @@ async fn a_package_program_receives_its_substituted_arguments() {
         json!({"argv": ["{pattern}", "{path?}", "{count}"], "stdin": "none"}),
     );
     let args = json!({"pattern": "fn main", "count": 2});
-    let output = run(&tool, &context(), &FixedSecrets, &args, "c1").await.expect("ran");
+    let output = run(&tool, &context(), &FixedSecrets, &args, "c1")
+        .await
+        .expect("ran");
     assert_eq!(
         output,
         Output {
@@ -26,7 +28,9 @@ async fn a_package_program_receives_its_substituted_arguments() {
 async fn stdin_json_carries_the_argument_object() {
     let tool = tool(&["tools/echo_stdin.sh"], json!({}));
     let args = json!({"pattern": "x", "nested": {"n": [1, 2]}});
-    let output = run(&tool, &context(), &FixedSecrets, &args, "c1").await.expect("ran");
+    let output = run(&tool, &context(), &FixedSecrets, &args, "c1")
+        .await
+        .expect("ran");
     let echoed: serde_json::Value = serde_json::from_str(&output.text).expect("json");
     assert_eq!(echoed, args);
 }
@@ -43,7 +47,9 @@ async fn stdin_none_gives_the_program_an_empty_stdin() {
 #[tokio::test]
 async fn json_output_is_parsed() {
     let tool = tool(&["tools/json_ok.sh"], json!({"output": "json"}));
-    let output = run(&tool, &context(), &FixedSecrets, &json!({}), "c1").await.expect("ran");
+    let output = run(&tool, &context(), &FixedSecrets, &json!({}), "c1")
+        .await
+        .expect("ran");
     assert_eq!(output.json, Some(json!({"ok": true, "n": 2})));
     assert_eq!(output.text, "{\"ok\": true, \"n\": 2}\n");
 }
@@ -55,7 +61,11 @@ async fn json_output_that_does_not_parse_fails_the_call() {
         .await
         .expect_err("not json");
     assert!(matches!(error, Error::InvalidOutput { .. }), "{error:?}");
-    assert!(error.to_string().starts_with("probe printed invalid json: "));
+    assert!(
+        error
+            .to_string()
+            .starts_with("probe printed invalid json: ")
+    );
 }
 
 #[tokio::test]
@@ -70,7 +80,11 @@ async fn a_non_zero_exit_fails_with_the_code_and_the_stderr_tail() {
     assert_eq!((tool.as_str(), *code), ("probe", Some(3)));
     assert_eq!(stderr.len(), 4096);
     assert!(stderr.ends_with("TAIL-MARKER"));
-    assert!(error.to_string().starts_with("probe exited with status 3: xxx"));
+    assert!(
+        error
+            .to_string()
+            .starts_with("probe exited with status 3: xxx")
+    );
 }
 
 #[tokio::test]
@@ -86,13 +100,29 @@ async fn a_timeout_kills_the_whole_process_group() {
     let error = run(&tool, &context(), &FixedSecrets, &args, "c1")
         .await
         .expect_err("timed out");
-    assert!(started.elapsed() < Duration::from_secs(2), "{:?}", started.elapsed());
-    assert!(matches!(error, Error::Timeout { timeout_ms: 300, .. }), "{error:?}");
+    assert!(
+        started.elapsed() < Duration::from_secs(2),
+        "{:?}",
+        started.elapsed()
+    );
+    assert!(
+        matches!(
+            error,
+            Error::Timeout {
+                timeout_ms: 300,
+                ..
+            }
+        ),
+        "{error:?}"
+    );
     assert_eq!(error.to_string(), "probe timed out after 300 ms");
     let child = std::fs::read_to_string(&pid_file).expect("the child pid");
     let deadline = Instant::now() + Duration::from_secs(2);
     while alive(&child) {
-        assert!(Instant::now() < deadline, "child {child} outlived the timeout");
+        assert!(
+            Instant::now() < deadline,
+            "child {child} outlived the timeout"
+        );
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
 }
@@ -105,7 +135,9 @@ fn alive(pid: &str) -> bool {
 #[tokio::test]
 async fn stdout_past_one_mebibyte_is_truncated_and_says_so() {
     let tool = tool(&["tools/flood.sh"], json!({"stdin": "none"}));
-    let output = run(&tool, &context(), &FixedSecrets, &json!({}), "c1").await.expect("ran");
+    let output = run(&tool, &context(), &FixedSecrets, &json!({}), "c1")
+        .await
+        .expect("ran");
     assert_eq!(output.text.len(), 1024 * 1024);
     assert!(output.truncated);
 }
@@ -117,8 +149,15 @@ async fn an_unknown_program_fails_the_call() {
         let error = run(&tool, &context(), &FixedSecrets, &json!({}), "c1")
             .await
             .expect_err("no such program");
-        assert!(matches!(&error, Error::Spawn { program: p, .. } if p == program), "{error:?}");
-        assert!(error.to_string().starts_with(&format!("could not start {program}: ")));
+        assert!(
+            matches!(&error, Error::Spawn { program: p, .. } if p == program),
+            "{error:?}"
+        );
+        assert!(
+            error
+                .to_string()
+                .starts_with(&format!("could not start {program}: "))
+        );
     }
 }
 
@@ -147,8 +186,15 @@ async fn an_edited_script_takes_effect_on_the_next_call() {
     context.package_root = package.path().to_path_buf();
     let tool = tool(&["tools/edit.sh"], json!({"stdin": "none"}));
     write("first");
-    let first = run(&tool, &context, &FixedSecrets, &json!({}), "c1").await.expect("ran");
+    let first = run(&tool, &context, &FixedSecrets, &json!({}), "c1")
+        .await
+        .expect("ran");
     write("second");
-    let second = run(&tool, &context, &FixedSecrets, &json!({}), "c2").await.expect("ran");
-    assert_eq!((first.text.as_str(), second.text.as_str()), ("first", "second"));
+    let second = run(&tool, &context, &FixedSecrets, &json!({}), "c2")
+        .await
+        .expect("ran");
+    assert_eq!(
+        (first.text.as_str(), second.text.as_str()),
+        ("first", "second")
+    );
 }

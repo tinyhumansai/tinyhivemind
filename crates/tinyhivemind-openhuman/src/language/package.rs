@@ -79,7 +79,10 @@ impl PackageSource {
         let mut documents = package.documents.clone();
         for (name, value) in [
             ("hive.json", serde_json::to_string(&package.manifest)),
-            ("constitution.json", serde_json::to_string(&package.constitution)),
+            (
+                "constitution.json",
+                serde_json::to_string(&package.constitution),
+            ),
             ("memory.json", serde_json::to_string(&package.memory)),
         ] {
             documents.insert(name.into(), value.map_err(|_| ConfigError::Json)?);
@@ -136,7 +139,11 @@ fn read(root: &Path) -> Result<BTreeMap<String, String>, ConfigError> {
             }
             let key = format!("{prefix}{name}");
             let path = entry.path();
-            if entry.file_type().map_err(|error| io(&path, error))?.is_dir() {
+            if entry
+                .file_type()
+                .map_err(|error| io(&path, error))?
+                .is_dir()
+            {
                 pending.push((path, format!("{key}/")));
             } else {
                 let text = std::fs::read_to_string(&path).map_err(|error| io(&path, error))?;

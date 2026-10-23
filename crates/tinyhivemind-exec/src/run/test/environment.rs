@@ -53,13 +53,19 @@ async fn the_environment_holds_only_the_convention() {
     for name in inherited {
         assert_eq!(env.get(name).cloned(), std::env::var(name).ok(), "{name}");
     }
-    assert!(std::env::var_os("CARGO_PKG_NAME").is_some(), "cargo sets it for tests");
+    assert!(
+        std::env::var_os("CARGO_PKG_NAME").is_some(),
+        "cargo sets it for tests"
+    );
     assert!(!env.contains_key("CARGO_PKG_NAME"));
 }
 
 #[tokio::test]
 async fn an_unresolved_secret_fails_the_call() {
-    let tool = tool(&["tools/env.sh"], json!({"env": {"TOKEN": {"store": "gh"}}}));
+    let tool = tool(
+        &["tools/env.sh"],
+        json!({"env": {"TOKEN": {"store": "gh"}}}),
+    );
     let error = run(&tool, &context(), &FixedSecrets, &json!({}), "c1")
         .await
         .expect_err("unresolved");
@@ -68,7 +74,9 @@ async fn an_unresolved_secret_fails_the_call() {
 
 async fn working_directory(context: &crate::ExecContext, cwd: &str) -> std::path::PathBuf {
     let tool = tool(&["tools/pwd.sh"], json!({"cwd": cwd, "stdin": "none"}));
-    let output = run(&tool, context, &FixedSecrets, &json!({}), "c1").await.expect("ran");
+    let output = run(&tool, context, &FixedSecrets, &json!({}), "c1")
+        .await
+        .expect("ran");
     output.text.trim_end().into()
 }
 

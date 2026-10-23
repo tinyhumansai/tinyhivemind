@@ -146,14 +146,7 @@ impl HookRunner {
         tool.timeout_ms = hook.hook.timeout_ms.unwrap_or(tool.timeout_ms);
         let call = self.calls.fetch_add(1, Ordering::Relaxed) + 1;
         let call_id = format!("hook-{}-{call}", hook.hook.id);
-        let output = run(
-            &tool,
-            &self.context,
-            self.secrets.as_ref(),
-            event,
-            &call_id,
-        )
-        .await?;
+        let output = run(&tool, &self.context, self.secrets.as_ref(), event, &call_id).await?;
         Ok(output
             .json
             .or_else(|| serde_json::from_str(output.text.trim()).ok()))

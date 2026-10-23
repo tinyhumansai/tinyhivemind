@@ -8,13 +8,27 @@ async fn post_tool_use_runs_its_hooks_with_the_result() {
     let hooks = runner(
         vec![
             hook("guard", "pre_tool_use", "record", json!({})),
-            hook("audit", "post_tool_use", "record", json!({"matcher": "git_*"})),
-            hook("broken", "post_tool_use", "fail", json!({"fail_closed": true})),
+            hook(
+                "audit",
+                "post_tool_use",
+                "record",
+                json!({"matcher": "git_*"}),
+            ),
+            hook(
+                "broken",
+                "post_tool_use",
+                "fail",
+                json!({"fail_closed": true}),
+            ),
         ],
         dir.path(),
     );
-    hooks.post_tool_use("git_push", &json!({"branch": "main"}), "pushed").await;
-    hooks.post_tool_use("read_file", &json!({}), "contents").await;
+    hooks
+        .post_tool_use("git_push", &json!({"branch": "main"}), "pushed")
+        .await;
+    hooks
+        .post_tool_use("read_file", &json!({}), "contents")
+        .await;
     assert_eq!(
         recorded(dir.path()),
         [json!({

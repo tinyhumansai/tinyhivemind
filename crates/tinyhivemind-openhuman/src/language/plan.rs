@@ -122,11 +122,9 @@ fn permission(set: &lang::PermissionSet) -> Result<PermissionProfile, ConfigErro
     let tool_rules = if set.tool_rules.is_null() {
         None
     } else {
-        Some(
-            serde_json::from_value(set.tool_rules.clone()).map_err(|_| {
-                ConfigError::UnsupportedSetting(format!("permissions.{}.tool_rules", set.id))
-            })?,
-        )
+        Some(serde_json::from_value(set.tool_rules.clone()).map_err(|_| {
+            ConfigError::UnsupportedSetting(format!("permissions.{}.tool_rules", set.id))
+        })?)
     };
     Ok(PermissionProfile {
         id: set.id.clone(),
@@ -179,7 +177,11 @@ fn runtime(source: &PackageSource) -> RuntimeSection {
 }
 
 /// A native profile for one seat's resolved integration.
-fn profile(hive: &lang::LoweredHive, seat: &lang::LoweredSeat, skills: Option<String>) -> config::Profile {
+fn profile(
+    hive: &lang::LoweredHive,
+    seat: &lang::LoweredSeat,
+    skills: Option<String>,
+) -> config::Profile {
     let integration = &seat.integration;
     let mut prompt = seat.prompt.clone();
     for body in hive
@@ -311,15 +313,30 @@ pub(crate) fn plan(packages: &[PackageSource]) -> Result<Plan, ConfigError> {
             agree(&mut permissions, "permissions", &set.id, permission(set)?)?;
         }
         for declared in &package.manifest.profiles {
-            agree(&mut profiles, "profiles", &declared.id, subagent(package, declared))?;
+            agree(
+                &mut profiles,
+                "profiles",
+                &declared.id,
+                subagent(package, declared),
+            )?;
         }
-        let shipped: Vec<String> = hive.integrations.skills.iter().map(|s| s.id.clone()).collect();
+        let shipped: Vec<String> = hive
+            .integrations
+            .skills
+            .iter()
+            .map(|s| s.id.clone())
+            .collect();
         let mut members = Vec::new();
         for (seat, declared) in hive.seats.iter().zip(&package.manifest.seats) {
             let mut shared = seat.integration.clone();
             shared.permissions.clear();
             shared.context.clear();
-            let selected: Vec<String> = seat.integration.skills.iter().map(|s| s.id.clone()).collect();
+            let selected: Vec<String> = seat
+                .integration
+                .skills
+                .iter()
+                .map(|s| s.id.clone())
+                .collect();
             let extras = SeatPlan {
                 root: source.root().to_path_buf(),
                 hive: hive.id.clone(),
@@ -335,7 +352,8 @@ pub(crate) fn plan(packages: &[PackageSource]) -> Result<Plan, ConfigError> {
                 Some(_) => {}
                 None => {
                     let mut native = profile(hive, seat, None);
-                    native.include_user_skills = Some(hive.integrations.runtime.include_user_skills);
+                    native.include_user_skills =
+                        Some(hive.integrations.runtime.include_user_skills);
                     agree(&mut profiles, "profiles", &native.id.clone(), native)?;
                     seats.insert(seat.id.clone(), (shared, seat.prompt.clone(), extras));
                     config.seats.push(config::Seat {
@@ -386,7 +404,10 @@ pub(crate) fn plan(packages: &[PackageSource]) -> Result<Plan, ConfigError> {
     let lowered = first.lowered();
     Ok(Plan {
         config,
-        seats: seats.into_iter().map(|(id, (_, _, plan))| (id, plan)).collect(),
+        seats: seats
+            .into_iter()
+            .map(|(id, (_, _, plan))| (id, plan))
+            .collect(),
         session: lowered.integrations.session.clone(),
         jev: lowered.integrations.jev.clone(),
     })

@@ -30,7 +30,10 @@ fn a_package_lowers_to_a_native_plan_with_every_integration() -> anyhow::Result<
         .ok_or_else(|| anyhow::anyhow!("lead profile"))?;
     assert!(lead.system_prompt.starts_with("You lead the release desk"));
     assert!(lead.system_prompt.contains("one change per line"));
-    assert_eq!(lead.model.name.as_deref(), Some("anthropic/claude-sonnet-4.5"));
+    assert_eq!(
+        lead.model.name.as_deref(),
+        Some("anthropic/claude-sonnet-4.5")
+    );
     assert_eq!(lead.mcp[0].id, "issues");
     assert_eq!(lead.mcp[0].transport, "http");
     assert_eq!(lead.groups["web"], lang::GroupMode::Off);
@@ -47,7 +50,10 @@ fn a_package_lowers_to_a_native_plan_with_every_integration() -> anyhow::Result<
     assert_eq!(config.permission_profiles[0].id, "read_only");
     let hive = &config.hives[0];
     assert_eq!(hive.id, "integrations");
-    assert_eq!(hive.members[1].permission_profile.as_deref(), Some("read_only"));
+    assert_eq!(
+        hive.members[1].permission_profile.as_deref(),
+        Some("read_only")
+    );
     assert_eq!(config.workflows[0].id, "nightly-digest");
     let lead = &plan.seats["lead"];
     assert_eq!(lead.programs.len(), 2);
@@ -87,7 +93,9 @@ fn a_shared_seat_may_narrow_per_hive_and_runtimes_must_match() -> anyhow::Result
     assert_eq!(plan.config.hives.len(), 2);
     assert_eq!(plan.config.seats.len(), 2);
     assert_eq!(
-        plan.config.hives[1].members[0].permission_profile.as_deref(),
+        plan.config.hives[1].members[0]
+            .permission_profile
+            .as_deref(),
         Some("read_only")
     );
     package.manifest.runtime.concurrency = 9;

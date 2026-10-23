@@ -187,7 +187,10 @@ fn copy_dir(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<()>
 }
 
 /// A seat's executable tools, built fresh for one turn.
-pub(super) fn programs(seat: &SeatExec, secrets: &Arc<dyn Secrets>) -> Vec<Box<dyn tinytools::Tool>> {
+pub(super) fn programs(
+    seat: &SeatExec,
+    secrets: &Arc<dyn Secrets>,
+) -> Vec<Box<dyn tinytools::Tool>> {
     seat.programs
         .iter()
         .map(|tool| {
@@ -214,7 +217,11 @@ impl ToolHook<OpenHumanRunContext> for ScriptHooks {
         _host: &OpenHumanRunContext,
         context: &ToolHookContext,
     ) -> ToolHookDecision {
-        match self.0.pre_tool_use(&context.tool_name, &context.arguments).await {
+        match self
+            .0
+            .pre_tool_use(&context.tool_name, &context.arguments)
+            .await
+        {
             Verdict::Allow => ToolHookDecision::default(),
             Verdict::Deny(message) => ToolHookDecision::deny(message),
         }

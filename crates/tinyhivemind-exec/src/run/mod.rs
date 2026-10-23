@@ -64,12 +64,14 @@ pub async fn run(
     let text = String::from_utf8_lossy(&finished.stdout).into_owned();
     let json = match tool.output {
         ToolOutput::Text => None,
-        ToolOutput::Json => Some(serde_json::from_str(&text).map_err(|source| {
-            Error::InvalidOutput {
-                tool: tool.id.clone(),
-                source,
-            }
-        })?),
+        ToolOutput::Json => {
+            Some(
+                serde_json::from_str(&text).map_err(|source| Error::InvalidOutput {
+                    tool: tool.id.clone(),
+                    source,
+                })?,
+            )
+        }
     };
     Ok(Output {
         text,

@@ -26,5 +26,8 @@ fn env_secrets_refuse_a_store_reference() {
     let reference = SecretRef::Store("github".into());
     let error = EnvSecrets.resolve(&reference).expect_err("no store");
     assert!(matches!(error, Error::UnresolvedSecret { .. }));
-    assert_eq!(error.to_string(), "secret store:github could not be resolved");
+    assert_eq!(
+        error.to_string(),
+        "secret store:github could not be resolved"
+    );
 }

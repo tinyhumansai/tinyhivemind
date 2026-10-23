@@ -51,7 +51,9 @@ fn a_placeholder_must_be_the_whole_element() {
 fn an_absent_required_placeholder_fails_the_call() {
     let tool = tool(&["tools/a.sh"], &["{pattern}"]);
     let error = arguments(&tool, &json!({})).expect_err("missing");
-    assert!(matches!(&error, Error::MissingArgument { tool, name } if tool == "probe" && name == "pattern"));
+    assert!(
+        matches!(&error, Error::MissingArgument { tool, name } if tool == "probe" && name == "pattern")
+    );
     assert_eq!(error.to_string(), "probe requires the argument pattern");
     assert!(arguments(&tool, &json!({"pattern": null})).is_err());
 }

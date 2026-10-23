@@ -5,9 +5,9 @@
 //! [`crate::deploy::HiveDeployment::from_packages`] builds.
 mod package;
 pub(crate) mod plan;
-pub use package::PackageSource;
 use crate::{Error, ManagementRequest, Result};
 use openhuman_embed::MemoryBinding;
+pub use package::PackageSource;
 use tinyhivemind_hives::{CoordinatorOptions, RetentionPolicy};
 use tinyhivemind_lang::{CoordinatorSettings, LoweredMemoryBinding, LoweredSeat, MemoryKind};
 

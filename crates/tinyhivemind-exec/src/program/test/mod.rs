@@ -86,7 +86,10 @@ async fn a_successful_call_returns_stdout_with_a_fresh_call_id_each_time() {
 #[tokio::test]
 async fn a_failing_program_is_reported_to_the_model_not_raised() {
     let tool = program("tools/fail.sh", json!({}));
-    let result = tool.execute(json!({"name": "ada"})).await.expect("reported");
+    let result = tool
+        .execute(json!({"name": "ada"}))
+        .await
+        .expect("reported");
     assert!(result.is_error);
     assert_eq!(result.output(), "greet exited with status 2: boom");
 }
@@ -105,5 +108,9 @@ async fn a_truncated_result_says_so() {
     let result = tool.execute(json!({})).await.expect("ran");
     let text = result.output();
     assert!(text.starts_with("aaaa"));
-    assert!(text.ends_with("\n[output truncated at 1 MiB]"), "{}", &text[text.len() - 60..]);
+    assert!(
+        text.ends_with("\n[output truncated at 1 MiB]"),
+        "{}",
+        &text[text.len() - 60..]
+    );
 }
