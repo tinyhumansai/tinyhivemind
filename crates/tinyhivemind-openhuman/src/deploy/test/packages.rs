@@ -63,6 +63,7 @@ fn a_package_seat_runs_its_python_tool_and_a_script_hook_refuses_a_call() -> any
         .lock()
         .unwrap_or_else(PoisonError::into_inner);
     run(async {
+        let _ = env_logger::builder().is_test(true).try_init();
         let (mut options, _backend, model) = build_options().await;
         // The package's dollar budget needs the host's per-call bound.
         options.call_budget = Some(openhuman_embed::budget::CallBudget {
