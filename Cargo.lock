@@ -3463,6 +3463,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "tinyhivemind-exec"
+version = "0.2.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tinyhivemind-lang",
+ "tinytools",
+ "tokio",
+]
+
+[[package]]
 name = "tinyhivemind-hives"
 version = "0.2.1"
 dependencies = [
