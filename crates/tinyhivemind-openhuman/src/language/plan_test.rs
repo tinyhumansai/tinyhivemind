@@ -36,7 +36,7 @@ fn a_package_lowers_to_a_native_plan_with_every_integration() -> anyhow::Result<
     );
     assert_eq!(lead.mcp[0].id, "issues");
     assert_eq!(lead.mcp[0].transport, "http");
-    assert_eq!(lead.groups["web"], lang::GroupMode::Off);
+    assert_eq!(lead.groups["web3"], lang::GroupMode::Off);
     assert_eq!(lead.subagents, ["summariser"]);
     let scout = config
         .profiles

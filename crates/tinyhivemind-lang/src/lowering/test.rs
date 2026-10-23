@@ -104,7 +104,7 @@ fn a_seat_resolves_its_profile_toolpacks_model_and_hooks() {
     // The runtime's `repo` toolpack expands into its tools, server and groups.
     assert_eq!(ids(&lead.programs, |t| &t.id), ["grep_repo", "word_count"]);
     assert_eq!(ids(&lead.mcp, |s| &s.id), ["issues"]);
-    assert_eq!(lead.groups["web"], crate::GroupMode::Off);
+    assert_eq!(lead.groups["web3"], crate::GroupMode::Off);
     assert_eq!(ids(&lead.skills, |s| &s.id), ["release-notes"]);
     assert_eq!(lead.hooks.len(), 1);
     assert_eq!(lead.hooks[0].tool.id, "guard_shell");
