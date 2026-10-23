@@ -281,18 +281,15 @@ fn shipped(package: &Package, found: &mut Findings) {
         }
     }
     for (i, tool) in m.tools.iter().enumerate() {
-        if let Some(program) = tool.package_program() {
-            let at = format!("/tools/{i}/command/0");
-            if found.check(validate_path(program), HIVE, at.clone())
-                && !package.documents.contains_key(program)
+        for (k, part) in tool.command.iter().enumerate() {
+            if !part.starts_with("tools/") {
+                continue;
+            }
+            let at = format!("/tools/{i}/command/{k}");
+            if found.check(validate_path(part), HIVE, at.clone())
+                && !package.documents.contains_key(part)
             {
-                found.push(
-                    Error::MissingDocument {
-                        path: program.into(),
-                    },
-                    HIVE,
-                    at,
-                );
+                found.push(Error::MissingDocument { path: part.clone() }, HIVE, at);
             }
         }
     }

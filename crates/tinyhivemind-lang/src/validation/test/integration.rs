@@ -109,9 +109,12 @@ fn integration_identities_are_unique_and_named() {
 fn shipped_files_must_be_in_the_package() {
     let mut docs = documents();
     docs.remove("tools/grep_repo.sh");
+    docs.remove("tools/word_count.py");
     docs.remove("skills/release-notes/SKILL.md");
     let found = diagnose_documents(&docs).1;
     assert!(has(&found, Rule::MissingDocument, "/tools/0/command/0"));
+    // A script handed to an interpreter must ship too.
+    assert!(has(&found, Rule::MissingDocument, "/tools/1/command/1"));
     assert!(has(&found, Rule::MissingDocument, "/skills/0/id"));
     let found = after(|m| m["skills"][0]["id"] = json!("../escape"));
     assert!(has(&found, Rule::Path, "/skills/0/id"));

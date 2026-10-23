@@ -55,7 +55,7 @@ In `hive.json` under `tools`:
 | --- | --- | --- |
 | `id` | required | Tool name the model calls; `[a-z0-9_]+`, unique in the package |
 | `description` | required | What the model is told the tool does |
-| `command` | required | Program and fixed leading arguments. A first element starting with `tools/` is a package file and must exist; any other is resolved on `PATH` by the host |
+| `command` | required | Program and fixed leading arguments. Any element starting with `tools/` is a package file: it must exist and is resolved against the package root, so `["python3", "tools/count.py"]` works from any directory. A program that is not a package file is found on `PATH` |
 | `args` | `{"type":"object"}` | JSON Schema of the call arguments; must be a plain object schema (strict providers reject anything else) |
 | `argv` | `[]` | Extra arguments: literal strings, `{name}` substituted with that argument, `{name?}` dropped when the argument is absent |
 | `stdin` | `json` | `json` writes the argument object to stdin; `none` closes it |
@@ -69,8 +69,8 @@ An `argv` placeholder must name a property of `args`.
 
 ## Calling convention
 
-1. The host resolves the program: a `tools/…` path against the package root
-   on disk, anything else on `PATH`.
+1. The host resolves the program and every fixed `tools/…` argument against
+   the package root on disk; any other program is found on `PATH`.
 2. It runs `command ++ argv` with placeholders substituted. A non-string
    argument is substituted as its compact JSON.
 3. The environment is cleared and then holds only `PATH`, `HOME`, `LANG`, the

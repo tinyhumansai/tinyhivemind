@@ -241,8 +241,14 @@ async fn a_script_given_to_an_interpreter_resolves_from_any_directory() {
     );
     let mut context = context();
     context.workspace = Some(std::env::temp_dir());
-    let output = run(&tool, &context, &FixedSecrets, &json!({"path": "tools/x"}), "c9")
-        .await
-        .expect("ran");
+    let output = run(
+        &tool,
+        &context,
+        &FixedSecrets,
+        &json!({"path": "tools/x"}),
+        "c9",
+    )
+    .await
+    .expect("ran");
     assert_eq!(output.text, "tools/x\n");
 }
