@@ -5,8 +5,9 @@
 //! `PATH`. This crate runs one call of such a tool under the calling
 //! convention of `docs/specs/executable-tools.md`:
 //!
-//! 1. a `tools/…` program resolves against the package root, any other on
-//!    `PATH`;
+//! 1. a `tools/…` program, and every fixed `tools/…` argument of `command`
+//!    (the script handed to an interpreter), resolves against the package
+//!    root; any other program is found on `PATH`;
 //! 2. it runs as `command ++ argv`, each whole-element `{name}` replaced by
 //!    that argument (raw when a string, compact JSON otherwise) and each
 //!    `{name?}` dropped when the argument is absent;

@@ -165,7 +165,7 @@ async fn main_with(command: Command) -> Result<String> {
         return call(&source, &seat, tool, &args).await;
     }
     if let Some(message) = &command.live {
-        live(source, message).await?;
+        Box::pin(live(source, message)).await?;
         return Ok(String::new());
     }
     Ok(summary(&source))
@@ -177,7 +177,7 @@ fn main() -> Result<()> {
         .enable_all()
         .thread_stack_size(16 * 1024 * 1024)
         .build()?;
-    let output = runtime.block_on(async { tokio::spawn(main_with(command)).await? })?;
+    let output = runtime.block_on(async { tokio::spawn(Box::pin(main_with(command))).await? })?;
     print!("{output}");
     Ok(())
 }

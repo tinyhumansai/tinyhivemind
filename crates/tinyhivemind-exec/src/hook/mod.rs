@@ -9,11 +9,17 @@
 //! | --- | --- | --- |
 //! | `pre_tool_use` | `{"event", "tool", "arguments", "seat", "hive"}` | `{"permission": "deny", "message": "…"}` refuses the call |
 //! | `post_tool_use` | `{"event", "tool", "arguments", "result", "seat", "hive"}` | ignored |
-//! | `stop` | `{"event", "reply", "seat", "hive"}` | `{"followup": "…"}` asks for one more turn |
+//! | `stop` | `{"event", "reply", "seat", "hive"}` | `{"followup": "…"}` is returned by [`HookRunner::stop`]; the `OpenHuman` adapter drops it |
 //!
 //! A tool event runs only the hooks whose matcher names the tool. A failing
 //! hook is ignored, except that a failing `fail_closed` `pre_tool_use` hook
 //! refuses the call. A hook's own `timeout_ms` replaces its tool's.
+//!
+//! A `stop` hook observes the finished reply. [`HookRunner::stop`] still
+//! reports a `followup` a script prints, but a turn is authorized only by the
+//! coordinator's round, so the adapter discards it (see
+//! `docs/specs/executable-tools.md#hooks`); a host that runs a follow-up
+//! turn from it bypasses that bound.
 mod matcher;
 
 use crate::{ExecContext, Result, Secrets, run};

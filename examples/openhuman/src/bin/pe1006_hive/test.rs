@@ -18,3 +18,19 @@ fn memory_bootstrap_selects_only_the_memory_queue() {
     assert!(!services.skill_catalog_refresh && !services.mcp_boot);
     assert!(!services.integrations && !services.memory_sync);
 }
+
+#[test]
+fn recovers_a_printed_action_only_on_a_seat_hive_server() {
+    let printed = |server: &str| {
+        format!(
+            r#"{{"tool":"mcp_call_tool","arguments":{{"server":"{server}","tool":"broadcast","arguments":{{"message":"check k=10"}}}}}}"#
+        )
+    };
+    assert!(super::episode_support::recover_tool_call(&printed("tinyhive-solver")).is_some());
+    for refused in ["tinyhive", "tinyhive-", "deepswe"] {
+        assert!(
+            super::episode_support::recover_tool_call(&printed(refused)).is_none(),
+            "{refused}"
+        );
+    }
+}

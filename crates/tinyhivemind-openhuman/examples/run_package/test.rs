@@ -8,10 +8,10 @@ fn integrations() -> PathBuf {
 
 #[tokio::test]
 async fn summarises_what_each_seat_runs() -> Result<()> {
-    let out = main_with(Command {
+    let out = Box::pin(main_with(Command {
         dir: integrations(),
         ..Command::default()
-    })
+    }))
     .await?;
     assert!(
         out.contains("hive integrations (Release desk): 2 seats"),
@@ -29,7 +29,7 @@ async fn summarises_what_each_seat_runs() -> Result<()> {
 
 #[tokio::test]
 async fn calls_a_tool_as_a_seat_and_honours_its_hooks() -> Result<()> {
-    let out = main_with(parse(
+    let out = Box::pin(main_with(parse(
         [
             integrations().display().to_string(),
             "--seat".into(),
@@ -40,14 +40,14 @@ async fn calls_a_tool_as_a_seat_and_honours_its_hooks() -> Result<()> {
             r#"{"text":"one two three"}"#.into(),
         ]
         .into_iter(),
-    )?)
+    )?))
     .await?;
     assert!(
         out.contains("\"words\": 3") || out.contains("\"words\":3"),
         "{out}"
     );
     // The lead's hook guards shell calls only, so its word count runs too.
-    let out = main_with(parse(
+    let out = Box::pin(main_with(parse(
         [
             integrations().display().to_string(),
             "--call".into(),
@@ -56,7 +56,7 @@ async fn calls_a_tool_as_a_seat_and_honours_its_hooks() -> Result<()> {
             r#"{"text":"hello"}"#.into(),
         ]
         .into_iter(),
-    )?)
+    )?))
     .await?;
     assert!(
         out.contains("\"words\": 1") || out.contains("\"words\":1"),
