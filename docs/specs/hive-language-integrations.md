@@ -155,7 +155,8 @@ identical.
 - a zero `concurrency`, `timeout_ms`, `iterations`, `top_k` or
   `max_history_messages`, a negative or non-finite `budget_usd` or
   `temperature`, and a cron expression without five fields (`bound`);
-- an `allow_tools` entry also in `deny_tools`, a `matcher` on a `stop` hook
+- `sqlite` sessions without a runtime `workspace`, an `allow_tools` entry
+  also in `deny_tools`, a `matcher` on a `stop` hook
   (stop has no tool), an `argv` placeholder that names no argument, and a
   feature name outside `[a-z0-9_]+` (`integration`).
 

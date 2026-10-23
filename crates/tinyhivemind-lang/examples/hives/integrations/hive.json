@@ -200,7 +200,7 @@
   "runtime": {
     "deployment_id": "release-desk",
     "workspace": null,
-    "session_store": "sqlite",
+    "session_store": "memory",
     "memory_engine": "disabled",
     "autonomy": "supervised",
     "sandbox": "none",

@@ -189,6 +189,8 @@ fn unrunnable_shapes_are_integration_findings() {
     ));
     let found = after(|m| m["hooks"][0]["event"] = json!("stop"));
     assert!(has(&found, Rule::Integration, "/hooks/0/matcher"));
+    let found = after(|m| m["runtime"]["session_store"] = json!("sqlite"));
+    assert!(has(&found, Rule::Integration, "/runtime/session_store"));
     let found = after(|m| m["features"] = json!({"Bad-Flag": true}));
     assert!(has(&found, Rule::Integration, "/features/Bad-Flag"));
 }

@@ -32,7 +32,10 @@ async fn results(model: &wiremock::MockServer) -> Vec<(String, String)> {
             for call in message["tool_calls"].as_array().into_iter().flatten() {
                 names.insert(
                     call["id"].as_str().unwrap_or_default().to_owned(),
-                    call["function"]["name"].as_str().unwrap_or_default().to_owned(),
+                    call["function"]["name"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .to_owned(),
                 );
             }
             if message["role"] == "tool"
@@ -87,11 +90,15 @@ fn a_package_seat_runs_its_python_tool_and_a_script_hook_refuses_a_call() -> any
         let report = deployment.host().coordinator().run_until_idle().await?;
         assert_eq!(report.failed, 0, "{report:?}");
         let seen = results(&model).await;
-        let counts: Vec<_> = seen.iter().filter(|(name, _)| name == "word_count").collect();
+        let counts: Vec<_> = seen
+            .iter()
+            .filter(|(name, _)| name == "word_count")
+            .collect();
         // The scout has no hooks: its Python tool ran and counted five words.
         assert!(
-            counts.iter().any(|(_, text)| text.contains("\"words\": 5")
-                || text.contains("\"words\":5")),
+            counts
+                .iter()
+                .any(|(_, text)| text.contains("\"words\": 5") || text.contains("\"words\":5")),
             "{seen:?}"
         );
         // The lead's pre_tool_use hook refused the same call.

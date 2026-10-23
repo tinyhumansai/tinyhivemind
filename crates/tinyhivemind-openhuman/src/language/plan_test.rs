@@ -21,7 +21,7 @@ fn a_package_lowers_to_a_native_plan_with_every_integration() -> anyhow::Result<
         config.runtime.provider.credential,
         Some(config::SecretRef::Env("OPENROUTER_API_KEY".into()))
     );
-    assert_eq!(config.runtime.session_store, "sqlite");
+    assert_eq!(config.runtime.session_store, "memory");
     assert_eq!(config.runtime.concurrency, 2);
     let lead = config
         .profiles

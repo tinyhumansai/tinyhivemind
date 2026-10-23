@@ -453,6 +453,14 @@ fn secrets(found: &mut Findings, values: &BTreeMap<String, SecretRef>, field: &s
 }
 
 fn shapes(m: &Manifest, found: &mut Findings) {
+    if m.runtime.session_store == crate::SessionStore::Sqlite && m.runtime.workspace.is_none() {
+        invalid(
+            found,
+            "runtime.session_store".into(),
+            "sqlite sessions need a runtime workspace",
+            "/runtime/session_store".into(),
+        );
+    }
     for (i, p) in m.providers.iter().enumerate() {
         if let Some(SecretRef::Env(name) | SecretRef::Store(name)) = &p.credential
             && name.trim().is_empty()
