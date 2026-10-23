@@ -278,15 +278,21 @@ impl super::EffectClassifier for ProgramEffects {
     fn rule_context(&self, context: &ToolHookContext) -> tinytools::RuleContext {
         self.host
             .as_ref()
-            .map_or_else(tinytools::RuleContext::new, |host| host.rule_context(context))
+            .map_or_else(tinytools::RuleContext::new, |host| {
+                host.rule_context(context)
+            })
     }
 
     fn classify(&self, context: &ToolHookContext) -> tinyhivemind_core::approval::Effect {
-        self.effects.get(&context.tool_name).copied().unwrap_or_else(|| {
-            self.host.as_ref().map_or(
-                tinyhivemind_core::approval::Effect::Unclassified,
-                |host| host.classify(context),
-            )
-        })
+        self.effects
+            .get(&context.tool_name)
+            .copied()
+            .unwrap_or_else(|| {
+                self.host
+                    .as_ref()
+                    .map_or(tinyhivemind_core::approval::Effect::Unclassified, |host| {
+                        host.classify(context)
+                    })
+            })
     }
 }

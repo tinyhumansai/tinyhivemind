@@ -75,7 +75,7 @@ fn a_package_seat_runs_its_python_tool_and_a_script_hook_refuses_a_call() -> any
         let deployment = Box::pin(HiveDeployment::from_packages(
             vec![package()?],
             Arc::new(Secrets),
-            options,
+            options.clone(),
         ))
         .await?;
         assert_eq!(
@@ -120,6 +120,24 @@ fn a_package_seat_runs_its_python_tool_and_a_script_hook_refuses_a_call() -> any
             .filter(|(name, _)| name == "word_count")
             .count();
         assert_eq!(counted, 1, "the refused call never ran");
+        drop(deployment);
+        // Control: with the hooks feature off the same call by the lead runs.
+        let mut unhooked = package()?.package().clone();
+        unhooked.manifest.features.insert("hooks".into(), false);
+        let root = package()?.root().to_path_buf();
+        let deployment = Box::pin(HiveDeployment::from_packages(
+            vec![PackageSource::new(root, unhooked)?],
+            Arc::new(Secrets),
+            options,
+        ))
+        .await?;
+        deployment
+            .host()
+            .coordinator()
+            .send_as_host(send("lead-unhooked", "lead"))
+            .await?;
+        let report = deployment.host().coordinator().run_until_idle().await?;
+        assert_eq!(report.failed, 0, "{report:?}");
         Ok(())
     })
 }
