@@ -288,9 +288,11 @@ pub(super) fn classify(
                 if path.starts_with("context/") {
                     out.extend(context_replay(path, before, after, &list));
                 }
-                if list.iter().any(|operation| {
-                    matches!(operation, Operation::Prompt { after, .. } if after.starts_with("---\n"))
-                }) {
+                if !patch::whole(path)
+                    && list.iter().any(|operation| {
+                        matches!(operation, Operation::Prompt { after, .. } if after.starts_with("---\n"))
+                    })
+                {
                     out.push(diagnostic(
                         path,
                         None,
@@ -320,8 +322,9 @@ pub(super) fn classify(
                     pointer.split('/').nth(1).unwrap_or_default()
                 });
                 let message = format!(
-                    "no edit class owns {what}; only seats/, roles/ and context/ documents and \
-                     the manifest and memory sections a class names may change"
+                    "no edit class owns {what}; only seats/, roles/, context/, tools/ and \
+                     skills/ documents and the manifest and memory sections a class names may \
+                     change"
                 );
                 out.push(diagnostic(&file, pointer, Rule::Unowned, message));
             }
@@ -347,10 +350,7 @@ pub(super) fn outside_package(
 ) {
     let keys: BTreeSet<_> = original.keys().chain(edited.keys()).collect();
     for key in keys {
-        let markdown = std::path::Path::new(key)
-            .extension()
-            .is_some_and(|extension| extension.eq_ignore_ascii_case("md"));
-        if markdown || [HIVE, CONSTITUTION, MEMORY].contains(&key.as_str()) {
+        if crate::document::carried(key) || [HIVE, CONSTITUTION, MEMORY].contains(&key.as_str()) {
             continue;
         }
         if original.get(key) != edited.get(key) {
@@ -358,8 +358,8 @@ pub(super) fn outside_package(
                 key,
                 None,
                 Rule::Unowned,
-                "not part of the package; only hive.json, constitution.json, memory.json and \
-                 markdown documents are read"
+                "not part of the package; only hive.json, constitution.json, memory.json, \
+                 markdown documents and files under tools/ and skills/ are read"
                     .into(),
             ));
         }

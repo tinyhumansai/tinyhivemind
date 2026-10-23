@@ -12,7 +12,37 @@ pub(crate) fn validate_context(source: &str) -> Result<()> {
     items::items(source).map(|_| ())
 }
 
+/// Whether `path` is an integration file edited whole: a tool source or a
+/// file of a skill bundle. Its leading `---` block, if any, is its own
+/// content rather than frontmatter restating the manifest.
+pub(crate) fn whole(path: &str) -> bool {
+    path.starts_with("tools/") || path.starts_with("skills/")
+}
+
+/// The manifest sections the integration class owns.
+const INTEGRATION: [&str; 14] = [
+    "runtime",
+    "providers",
+    "models",
+    "mcp",
+    "skills",
+    "tools",
+    "toolpacks",
+    "permissions",
+    "profiles",
+    "hooks",
+    "session",
+    "jev",
+    "features",
+    "workflows",
+];
+
 fn boundary(class: PatchClass, op: &Operation) -> bool {
+    if let Operation::Document { path, .. } | Operation::Prompt { path, .. } = op
+        && whole(path)
+    {
+        return class == PatchClass::Integration;
+    }
     match op {
         Operation::Document {
             path,
@@ -56,6 +86,7 @@ fn boundary(class: PatchClass, op: &Operation) -> bool {
                     PatchClass::Policy => matches!(section, "policies" | "coordinator"),
                     PatchClass::Goal => matches!(section, "goals" | "missions"),
                     PatchClass::Context => section == "context",
+                    PatchClass::Integration => INTEGRATION.contains(&section),
                     _ => false,
                 }
         }
@@ -106,7 +137,7 @@ pub(crate) fn protected(value: &Value) -> std::collections::BTreeMap<String, Val
 
 fn protected_configuration(package: &Package) -> Result<std::collections::BTreeMap<String, Value>> {
     let mut values = protected(&serde_json::to_value(&package.manifest)?);
-    for (path, source) in &package.documents {
+    for (path, source) in package.documents.iter().filter(|(path, _)| !whole(path)) {
         if let Some(tail) = source.strip_prefix("---\n") {
             let Some((metadata, _)) = tail.split_once("\n---\n") else {
                 return Err(Error::Immutable);
@@ -243,11 +274,15 @@ fn candidate(package: &Package, patch: &Patch) -> Result<AppliedPatch> {
                 let document = documents
                     .get_mut(path)
                     .ok_or_else(|| Error::Stale(path.clone()))?;
-                let offset = items::body_offset(document);
+                let offset = if whole(path) {
+                    0
+                } else {
+                    items::body_offset(document)
+                };
                 if &document[offset..] != before {
                     return Err(Error::Stale(path.clone()));
                 }
-                if after.starts_with("---\n") {
+                if offset == 0 && !whole(path) && after.starts_with("---\n") {
                     return Err(Error::Immutable);
                 }
                 document.replace_range(offset.., after);
