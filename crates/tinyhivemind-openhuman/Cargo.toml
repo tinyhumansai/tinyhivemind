@@ -43,8 +43,6 @@ anyhow.workspace = true
 # Render schemas and attributed input.
 serde_json.workspace = true
 serde.workspace = true
-# Canonical typed profile metadata in Markdown frontmatter.
-serde_yaml_ng.workspace = true
 # Native schedule validation before constructing a deployment.
 chrono.workspace = true
 thiserror.workspace = true
