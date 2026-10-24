@@ -60,8 +60,8 @@ tinyhivemind-tools = { path = "crates/tinyhivemind-tools" }
 # exact; `.github/scripts/assert-openhuman-pin.sh` checks all three revs.
 openhuman-embed = { git = "https://github.com/tinyhumansai/openhuman", rev = "5f8b7c235f18b46f90fabbf1e7f1b8d9a957cee6", default-features = false }
 openhuman = { git = "https://github.com/tinyhumansai/openhuman", rev = "5f8b7c235f18b46f90fabbf1e7f1b8d9a957cee6", default-features = false }
-tinytools = { git = "https://github.com/tinyhumansai/tinytools", rev = "3a01641f8ebd8a55656cd212f9a90638d958a447" }
-tinytools-agent = { git = "https://github.com/tinyhumansai/tinytools", rev = "3a01641f8ebd8a55656cd212f9a90638d958a447" }
+tinytools = { git = "https://github.com/tinyhumansai/tinytools", rev = "75e42ba9647eb801891a12ad05b6337f6a1c126b" }
+tinytools-agent = { git = "https://github.com/tinyhumansai/tinytools", rev = "75e42ba9647eb801891a12ad05b6337f6a1c126b" }
 # The memory engine contract and the per-agent lifecycle OpenHuman runs its
 # seats' memory through, for the adapter's `Recall`/`Remember` over the same
 # engine and layout. Git sources pinned at the commit OpenHuman's tree vendors
