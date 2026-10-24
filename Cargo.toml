@@ -67,8 +67,8 @@ tinytools-agent = { git = "https://github.com/tinyhumansai/tinytools", rev = "75
 # engine and layout. Git sources pinned at the commit OpenHuman's tree vendors
 # and patched onto that copy below, for the same one-copy reason as the tool
 # crates; `.github/scripts/assert-openhuman-pin.sh` checks the rev.
-tinymemory-api = { git = "https://github.com/tinyhumansai/tinymemory", rev = "6018a91a773555efb50bf1959a6621292618e04a" }
-tinymemory-tools = { git = "https://github.com/tinyhumansai/tinymemory", rev = "6018a91a773555efb50bf1959a6621292618e04a" }
+tinymemory-api = { git = "https://github.com/tinyhumansai/tinymemory", rev = "8b919fd6d0b99e06269cab84de0c715772d0c49f" }
+tinymemory-tools = { git = "https://github.com/tinyhumansai/tinymemory", rev = "8b919fd6d0b99e06269cab84de0c715772d0c49f" }
 # OpenHuman's cron schedule validator, which moved out of `openhuman::cron`
 # into the tinyflows scheduler crate. Git source pinned at the commit
 # OpenHuman's tree vendors and patched onto that copy below, so its
