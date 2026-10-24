@@ -39,14 +39,14 @@ impl Respond for DelegateScript {
                     .any(|call| call["function"]["name"] == "hivemind_complete")
             })
         });
-        eprintln!("DBG tools={:?} n={} last={} episode={}", body["tools"].as_array().map(|t| t.iter().map(|x| x["function"]["name"].to_string()).collect::<Vec<_>>()), messages.len(), last["role"], episode.is_some());
+        eprintln!("DBG last={} {}", last["role"], last["content"].to_string().chars().take(600).collect::<String>());
         let call = if completed {
             None
         } else if last["role"] == "user" {
             if episode.is_some() {
                 Some((
-                    "delegate_helper",
-                    json!({"prompt":"Attempt the restricted write", "blocking":true}),
+                    "spawn_subagent",
+                    json!({"agent_id":"helper","prompt":"Attempt the restricted write"}),
                 ))
             } else {
                 self.0.fetch_add(1, Ordering::Relaxed);
