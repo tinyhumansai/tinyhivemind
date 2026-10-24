@@ -39,7 +39,6 @@ impl Respond for DelegateScript {
                     .any(|call| call["function"]["name"] == "hivemind_complete")
             })
         });
-        eprintln!("DBG last={} {}", last["role"], last["content"].to_string().chars().take(600).collect::<String>());
         let call = if completed {
             None
         } else if last["role"] == "user" {
