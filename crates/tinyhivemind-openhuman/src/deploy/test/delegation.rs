@@ -9,6 +9,7 @@ use std::sync::{
     Arc, PoisonError,
     atomic::{AtomicUsize, Ordering},
 };
+use std::time::Duration;
 use wiremock::{Request, Respond, ResponseTemplate};
 
 #[derive(Clone)]
@@ -39,6 +40,10 @@ impl Respond for DelegateScript {
                     .any(|call| call["function"]["name"] == "hivemind_complete")
             })
         });
+        if episode.is_none() {
+            // Every request without an episode is the native child's.
+            self.0.fetch_add(1, Ordering::Relaxed);
+        }
         let call = if completed {
             None
         } else if last["role"] == "user" {
@@ -48,7 +53,6 @@ impl Respond for DelegateScript {
                     json!({"agent_id":"helper","prompt":"Attempt the restricted write"}),
                 ))
             } else {
-                self.0.fetch_add(1, Ordering::Relaxed);
                 Some(("write", json!({})))
             }
         } else {
@@ -99,10 +103,16 @@ fn native_delegate_cannot_execute_a_child_denied_effect() -> anyhow::Result<()> 
             .send_as_host(message("delegate", "a"))
             .await?;
         let _report = deployment.host().coordinator().run_until_idle().await?;
-        assert!(
-            child_requests.load(Ordering::Relaxed) > 0,
-            "native child never ran"
-        );
+        // `spawn_subagent` returns at once, so the child runs after the parent's
+        // turn; its second request is sent only once the `write` call was
+        // either executed or denied.
+        tokio::time::timeout(Duration::from_secs(60), async {
+            while child_requests.load(Ordering::Relaxed) < 2 {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .map_err(|_| anyhow::anyhow!("native child never ran to its follow-up request"))?;
         assert_eq!(count.load(Ordering::Relaxed), 0);
         Ok(())
     })
