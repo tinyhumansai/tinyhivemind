@@ -39,7 +39,7 @@ impl ManifestFactory {
     /// Build one new seat; callers then register it with their host.
     /// # Errors
     /// Unknown profiles, widening, credential literals or native creation failure.
-    pub async fn create_seat(
+    pub(crate) async fn create_seat(
         &self,
         id: impl Into<String>,
         template: impl Into<String>,

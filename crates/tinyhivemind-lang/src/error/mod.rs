@@ -74,6 +74,14 @@ pub enum Error {
         /// Rejected context document path.
         path: String,
     },
+    /// An integration setting `OpenHuman` cannot run as written.
+    #[error("invalid integration {field}: {reason}")]
+    Integration {
+        /// The setting, as a dotted path such as `tools.grep.argv`.
+        field: String,
+        /// What is wrong with it, lowercase.
+        reason: String,
+    },
     /// Seat frontmatter disagrees with manifest metadata.
     #[error("frontmatter disagrees with manifest for {seat}")]
     Frontmatter {

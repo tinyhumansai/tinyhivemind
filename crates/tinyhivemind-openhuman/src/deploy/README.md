@@ -1,22 +1,42 @@
 # Manifest deployment
 
-`HiveDeployment::build` resolves a validated manifest into one native runtime,
-reusable templates, fixed seats and configured coordinator hives. `build_with`
-accepts host storage, native configuration, provider, tools, consent and approval
-ports. Credentials resolve during construction and are omitted from deployment
-and factory diagnostics.
+`HiveDeployment::from_packages` deploys one or more checked hive packages
+(`language::PackageSource`) onto one native runtime: reusable templates, fixed
+seats and configured coordinator hives, one hive per package. `BuildOptions`
+carries host storage, native configuration, provider, tools, consent, approval
+and effect-classifier ports. Credentials resolve during construction and are
+omitted from deployment and factory diagnostics. (`build` and `build_with`,
+which took the retired `HiveConfig`, are test-only.)
+
+A seat id that several packages declare is one agent whose integration must
+agree across them. Beyond the native definition, `packages.rs` attaches what a
+package declares and the plan does not carry: each seat's executable tools
+(`tinyhivemind_exec::ProgramTool`, added to every turn's tool belt and made
+visible), its `pre_tool_use` and `post_tool_use` script hooks (a native
+`ToolHook`), its skill bundles (a staged copy of `skills/` when the seat selects
+a subset), and the first package's `session` and `jev` settings applied to the
+runtime config. `ProgramEffects` classifies those tools for the permission gate
+by their declared `side_effects` and defers every other tool to the host's
+classifier. `stop` script hooks are run by `hooks::wrap_turn` on a finished reply
+and only observe it: a turn is authorized by the coordinator's round, so a stop
+hook cannot start another.
+
+A toolpack's tool groups apply under the runtime's ceiling (`profile::groups`):
+an agent may narrow the runtime's disclosure of a group but a mode more exposed
+than the runtime's is refused, as is an unknown group id.
 
 | File | Responsibility |
 | --- | --- |
-| `mod.rs` | Assembly, runtime/seat/policy access, pending decisions and scheduler lifetime |
+| `mod.rs` | Assembly (`from_packages`), runtime/seat/policy access, pending decisions and scheduler lifetime, and the per-turn tool belt |
+| `packages.rs` | Package extras: executable tools as native tools, script hooks, skill staging, session and Jev settings, and the `ProgramEffects` classifier |
 | `types.rs` | Typed errors, secret resolver, host ports and pure hive policy view |
 | `runtime.rs` | Native runtime settings |
 | `compatibility.rs` | Preflight checks for unsupported native representations |
 | `memory_root.rs` | Injective logical root encoding for native namespaces |
-| `profile.rs` | Templates, prompts, fixed memory roots and seat definitions |
+| `profile.rs` | Templates, prompts, fixed memory roots, seat definitions and toolpack group modes under the runtime ceiling |
 | `permission.rs` | Additive baseline, membership, child and pure approval gates |
 | `rules.rs` | Argument rules and authenticated tool/context metadata |
-| `hooks.rs` | Captured turn overlays, model budgets, parking and outbound policy |
+| `hooks.rs` | Captured turn overlays, model budgets, parking, outbound policy and observed `stop` hooks |
 | `factory.rs` | Typed dynamic seats using the same catalog and runtime |
 | `workflow.rs` | Native agent jobs and weakly captured coordinator system jobs |
 | `test/` | Offline construction, effects, approvals, jobs and cancellation fixtures |

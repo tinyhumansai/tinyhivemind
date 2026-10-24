@@ -173,7 +173,7 @@ impl Permissions {
                 self.ask(seat_id, context, captured, sequence);
                 deny("awaiting correlated host approval; original call refused")
             }
-            Ok(_) => ToolHookDecision::Proceed,
+            Ok(_) => ToolHookDecision::default(),
         }
     }
     fn next_sequence(&self, snapshot: &ApprovalSnapshot) -> u64 {
@@ -281,13 +281,11 @@ fn basic_gate(
     let external_mutation = effect == Effect::Mutating && !internal(&context.tool_name);
     let scheduled = scope.is_some_and(|scope| scope.scheduled_job_id.is_some())
         || matches!(
-            openhuman_core::agent::turn_origin::current(),
-            Some(
-                openhuman_core::agent::turn_origin::AgentTurnOrigin::TrustedAutomation {
-                    source: openhuman_core::agent::turn_origin::TrustedAutomationSource::Cron,
-                    ..
-                }
-            )
+            openhuman_embed::current_turn_origin(),
+            Some(openhuman_embed::AgentTurnOrigin::TrustedAutomation {
+                source: openhuman_embed::TrustedAutomationSource::Cron,
+                ..
+            })
         );
     if scheduled
         && scope.is_none()
@@ -357,7 +355,7 @@ fn child_policy<'a>(
     {
         return Err("child tool denied");
     }
-    let policy = child.permission_profile.as_ref().and_then(|id| {
+    let policy = child.permissions.as_ref().and_then(|id| {
         config
             .permission_profiles
             .iter()
@@ -473,7 +471,7 @@ fn approval_gate(
     Ok(ask)
 }
 pub(super) fn deny(reason: &str) -> ToolHookDecision {
-    ToolHookDecision::Deny(reason.into())
+    ToolHookDecision::deny(reason)
 }
 pub(super) fn internal(name: &str) -> bool {
     matches!(

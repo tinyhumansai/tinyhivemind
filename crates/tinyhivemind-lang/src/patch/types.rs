@@ -21,6 +21,11 @@ pub enum PatchClass {
     Policy,
     /// Goals and missions.
     Goal,
+    /// What the agents run with: the runtime, providers, models, MCP
+    /// servers, skills, tools, toolpacks, permissions, profiles, hooks,
+    /// session, Jev, features and workflows, and the files under `tools/`
+    /// and `skills/`.
+    Integration,
 }
 
 /// An atomic proposal, authorized under one edit class.

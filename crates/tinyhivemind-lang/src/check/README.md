@@ -18,6 +18,12 @@ a located `Diagnostic` or a `Review`.
    (`forbidden_class`); a change no class owns or a file outside the package
    (`unowned`); a canary (`contamination`); a pinned memory or binding
    (`read_only`); a context edit item deltas cannot express (`context`).
+   A tool source or a file of a skill bundle (anything under `tools/` or
+   `skills/`) is edited whole: the integration class owns it, and a leading
+   `---` block in it is its own content, not frontmatter restating the
+   manifest. The integration sections of `hive.json` and a seat's
+   integration fields are owned by the same class. Without `integration` in
+   `permitted_edits` the constitution refuses all of them (`forbidden_class`).
 5. With no finding, operations group into one `Patch` per class in class
    order. If a step would pass through an invalid package, the first valid
    order is used; with none, one `sequence` diagnostic is returned.

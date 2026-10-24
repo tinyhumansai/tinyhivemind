@@ -2,9 +2,10 @@
 
 | File | Purpose |
 | --- | --- |
+| `broken/` | Packages that deliberately fail `hive_check`, one finding per rule, so the report is pinned by a test |
 | `hive_check/` | The compiler-style check an orchestrator runs after editing a package's files: every finding as `file:pointer: rule: message`, non-zero exit on any |
 | `hive_view/` | Render a package (text, mermaid, JSON) and run it through core's `hive::step`, one floor per desk linked by referral, offline or `--live` on OpenRouter; NDJSON frames for the viewer; the math `--compare` |
-| `hives/` | The example package gallery: seven complete packages, from a three-seat review board to a fifty-seat math swarm |
+| `hives/` | The example package gallery: eight complete packages, from a three-seat review board to a fifty-seat math swarm |
 | `live_self_edit/` | Provider-failure regression tests and their directory guide |
 | `live_self_edit.rs` | Opt-in OpenRouter editor returning whole files, `check`ed by the host; exact-match held-out evaluation, negative control and telemetry/contamination refusals |
 | `self_edit.rs` | An editor returns whole files, the host `check`s them, evaluates the candidate, and archives one lineage record per derived change |

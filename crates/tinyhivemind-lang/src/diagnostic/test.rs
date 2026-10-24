@@ -3,7 +3,7 @@
 use super::*;
 use serde_json::json;
 
-const RULES: [(Rule, &str); 19] = [
+const RULES: [(Rule, &str); 20] = [
     (Rule::Schema, "schema"),
     (Rule::Identity, "identity"),
     (Rule::Reference, "reference"),
@@ -16,6 +16,7 @@ const RULES: [(Rule, &str); 19] = [
     (Rule::Frontmatter, "frontmatter"),
     (Rule::Json, "json"),
     (Rule::MissingDocument, "missing_document"),
+    (Rule::Integration, "integration"),
     (Rule::ForbiddenClass, "forbidden_class"),
     (Rule::Immutable, "immutable"),
     (Rule::Contamination, "contamination"),
@@ -111,6 +112,13 @@ fn every_package_error_maps_to_its_rule() {
         (Error::MemoryAccess { namespace: s() }, Rule::MemoryAccess),
         (Error::Context { path: s() }, Rule::Context),
         (Error::Frontmatter { seat: s() }, Rule::Frontmatter),
+        (
+            Error::Integration {
+                field: s(),
+                reason: s(),
+            },
+            Rule::Integration,
+        ),
     ];
     for (error, rule) in cases {
         assert_eq!(Rule::from(&error), rule);

@@ -68,11 +68,27 @@ fn seat_request_keeps_all_factory_settings_and_memory_contract() -> Result<()> {
         template: "research".into(),
         config: serde_json::json!({"temperature":0}),
         prompt: "Read carefully".into(),
-        model: Some("model".into()),
-        tools: ToolAccess::default(),
-        mcp: vec!["repo".into()],
-        skills: vec!["review".into()],
         memory: Some(binding()),
+        integration: tinyhivemind_lang::LoweredSeatIntegration {
+            model: Some(tinyhivemind_lang::LoweredModel {
+                model: tinyhivemind_lang::Model {
+                    id: "default".into(),
+                    name: "model".into(),
+                    ..Default::default()
+                },
+                provider: None,
+            }),
+            tools: ToolAccess::default(),
+            mcp: vec![tinyhivemind_lang::McpServer {
+                id: "repo".into(),
+                endpoint: "repo-mcp".into(),
+                ..Default::default()
+            }],
+            skills: vec![tinyhivemind_lang::Skill {
+                id: "review".into(),
+            }],
+            ..Default::default()
+        },
     };
     let ManagementRequest::CreateAgent {
         template,

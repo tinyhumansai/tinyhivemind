@@ -77,8 +77,8 @@ impl SeatTool {
 /// Fails on an unknown allowed tool or an allow/deny conflict.
 pub(super) fn seat_tools(seat: &LoweredSeat) -> anyhow::Result<BTreeSet<SeatTool>> {
     let mut belt = BTreeSet::new();
-    for name in &seat.tools.allow {
-        if seat.tools.deny.contains(name) {
+    for name in &seat.integration.tools.allow {
+        if seat.integration.tools.deny.contains(name) {
             anyhow::bail!("{} both allows and denies {name}", seat.id);
         }
         let tool = SeatTool::named(name).ok_or_else(|| {

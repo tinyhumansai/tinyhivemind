@@ -5,18 +5,21 @@ use serde_json::json;
 #[test]
 fn exact_known_remote_verbs_keep_their_declared_effects() {
     for (server, tool, effect) in [
-        ("tinyhive", "broadcast", Effect::ReadOnly),
-        ("tinyhive", "complete_episode", Effect::ReadOnly),
-        ("tinyhive", "hive_memory_recall", Effect::ReadOnly),
-        ("tinyhive", "hive_memory_note", Effect::Mutating),
-        ("tinyhive", "hive_memory_forget", Effect::Mutating),
+        ("tinyhive-lead", "broadcast", Effect::ReadOnly),
+        ("tinyhive-tester", "complete_episode", Effect::ReadOnly),
+        ("tinyhive-solver", "hive_memory_recall", Effect::ReadOnly),
+        ("tinyhive-checker", "hive_memory_note", Effect::Mutating),
+        ("tinyhive-theory", "hive_memory_forget", Effect::Mutating),
         ("deepswe", "file_read", Effect::ReadOnly),
         ("deepswe", "file_write", Effect::Mutating),
         ("deepswe", "file_edit", Effect::Mutating),
         ("deepswe", "shell", Effect::Mutating),
         ("deepswe", "test", Effect::Mutating),
         ("unknown", "file_read", Effect::Unclassified),
-        ("tinyhive", "shell", Effect::Unclassified),
+        ("tinyhive-lead", "shell", Effect::Unclassified),
+        // Only a per-seat hive server is declared; the bare name is unknown.
+        ("tinyhive", "broadcast", Effect::Unclassified),
+        ("tinyhive-", "hive_memory_note", Effect::Unclassified),
         ("deepswe", "broadcast", Effect::Unclassified),
     ] {
         let context = context(
@@ -32,14 +35,14 @@ fn exact_known_remote_verbs_keep_their_declared_effects() {
     assert_eq!(
         ExperimentEffects.classify(&context(
             "mcp_call_tool",
-            json!({"server_name":"tinyhive","tool_name":"broadcast"})
+            json!({"server_name":"tinyhive-lead","tool_name":"broadcast"})
         )),
         Effect::Unclassified
     );
 }
 fn context(name: &str, arguments: serde_json::Value) -> openhuman_embed::seams::ToolHookContext {
     openhuman_embed::seams::ToolHookContext {
-        event: openhuman_core::agent::hooks::ToolHookEvent::PreToolUse,
+        event: openhuman_embed::seams::ToolHookEvent::PreToolUse,
         call_id: "fixture".into(),
         tool_name: name.into(),
         arguments,

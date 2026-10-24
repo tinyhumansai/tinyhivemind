@@ -62,12 +62,10 @@ impl AgentRunner for SuppliedRunner {
             turn = configure(turn, &hooks.prepare(&scope));
             turn = hooks.configure(&scope, turn).timeout(remaining);
             if let Some(job_id) = &scope.scheduled_job_id {
-                turn = turn.origin(
-                    openhuman_core::agent::turn_origin::AgentTurnOrigin::TrustedAutomation {
-                        job_id: job_id.clone(),
-                        source: openhuman_core::agent::turn_origin::TrustedAutomationSource::Cron,
-                    },
-                );
+                turn = turn.origin(openhuman_embed::AgentTurnOrigin::TrustedAutomation {
+                    job_id: job_id.clone(),
+                    source: openhuman_embed::TrustedAutomationSource::Cron,
+                });
             }
             if let Some(progress) = hooks.progress(&scope) {
                 turn = turn.on_progress(progress);

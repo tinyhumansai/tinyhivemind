@@ -62,7 +62,7 @@ pub enum Error {
     /// `OpenHuman` has no memory engine bound for the config (memory is off,
     /// or the engine's credential is missing).
     #[error(transparent)]
-    Memory(#[from] openhuman_core::memory::MemoryError),
+    Memory(#[from] tinymemory_api::Error),
     /// A turn timeout of zero would fail every turn before it starts.
     #[error("turn timeout must be nonzero")]
     InvalidTurnTimeout,
@@ -192,4 +192,23 @@ pub enum ConfigError {
     /// Selector cannot be lowered by the adapter.
     #[error("unsupported setting {0}")]
     UnsupportedSetting(String),
+    /// A hive package that does not check; carries every finding.
+    #[error("hive package {root} has {} finding(s), first: {}", .diagnostics.len(), .diagnostics.first().map(ToString::to_string).unwrap_or_default())]
+    Package {
+        /// The package root as given.
+        root: String,
+        /// Every finding, located.
+        diagnostics: Vec<tinyhivemind_lang::Diagnostic>,
+    },
+    /// Two packages declare one seat with different integrations.
+    #[error("seat {0} is declared differently by two packages")]
+    ConflictingSeat(String),
+    /// Two packages declare one id differently in a shared section.
+    #[error("{section} {id} is declared differently by two packages")]
+    ConflictingDeclaration {
+        /// The section, such as `runtime` or `models`.
+        section: String,
+        /// The id, or the section name for `runtime`.
+        id: String,
+    },
 }

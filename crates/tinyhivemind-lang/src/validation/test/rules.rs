@@ -19,8 +19,12 @@ fn fixture() -> Package {
         config: json!({}),
         model: Some("model".into()),
         tools: ToolAccess::default(),
-        mcp: vec![],
-        skills: vec![],
+        ..Seat::default()
+    });
+    p.manifest.models.push(crate::Model {
+        id: "model".into(),
+        name: "fixture-model".into(),
+        ..crate::Model::default()
     });
     p.documents
         .insert("roles/builder.md".into(), "Build reliably".into());
@@ -313,7 +317,7 @@ fn pins_manifest_seat_goal_and_memory_identity_wire() {
     let p = fixture();
     assert_eq!(
         serde_json::to_value(&p.manifest.seats[0]).unwrap(),
-        json!({"id":"alice","label":"Alice","role":"builder","prompt":"seats/alice.md","template":"agent","config":{},"model":"model","tools":{"allow":[],"deny":[]},"mcp":[],"skills":[]})
+        json!({"id":"alice","label":"Alice","role":"builder","prompt":"seats/alice.md","template":"agent","config":{},"model":"model","tools":{"allow":[],"deny":[]},"mcp":[],"skills":[],"profile":null,"agent_id":null,"toolpacks":[],"hooks":[],"permissions":null,"limits":{"timeout_ms":null,"iterations":null,"budget_usd":null},"context":[]})
     );
     assert_eq!(
         serde_json::to_value(&p.memory.identities[0]).unwrap(),
@@ -475,16 +479,30 @@ fn pins_constitution_coordinator_retention_and_package_sections() {
             "context",
             "coordinator",
             "desks",
+            "features",
             "goals",
+            "hooks",
             "id",
+            "jev",
+            "mcp",
             "missions",
+            "models",
             "name",
+            "permissions",
             "policies",
+            "profiles",
+            "providers",
             "referrals",
             "roles",
+            "runtime",
             "seats",
+            "session",
+            "skills",
+            "toolpacks",
+            "tools",
             "topology",
-            "version"
+            "version",
+            "workflows"
         ]
     );
     assert_eq!(

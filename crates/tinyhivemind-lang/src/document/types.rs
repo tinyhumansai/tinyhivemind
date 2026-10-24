@@ -4,6 +4,10 @@
 //! rather than a silently ignored setting. Identities are opaque,
 //! case-sensitive strings: [`crate::validate`] rejects an empty (or
 //! whitespace-only) identity and a duplicate within the same section.
+use super::integration::{
+    ExecTool, Hook, JevSettings, Limits, McpServer, Model, PermissionSet, Profile, Provider,
+    RuntimeSettings, SessionSettings, Skill, Toolpack, Workflow,
+};
 use crate::{Constitution, MemorySpec};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -103,6 +107,50 @@ pub struct Manifest {
     /// Scheduling settings for a host coordinator.
     #[serde(default)]
     pub coordinator: CoordinatorSettings,
+    /// The runtime the seats run on, and the defaults they inherit.
+    #[serde(default)]
+    pub runtime: RuntimeSettings,
+    /// Inference providers.
+    #[serde(default)]
+    pub providers: Vec<Provider>,
+    /// Models seats run on.
+    #[serde(default)]
+    pub models: Vec<Model>,
+    /// MCP server connections.
+    #[serde(default)]
+    pub mcp: Vec<McpServer>,
+    /// Skill bundles under `skills/`.
+    #[serde(default)]
+    pub skills: Vec<Skill>,
+    /// Executable tools; see `docs/specs/executable-tools.md`.
+    #[serde(default)]
+    pub tools: Vec<ExecTool>,
+    /// Named bundles of tools, MCP servers, skills and harness tool groups.
+    #[serde(default)]
+    pub toolpacks: Vec<Toolpack>,
+    /// Permission sets.
+    #[serde(default)]
+    pub permissions: Vec<PermissionSet>,
+    /// Reusable seat integrations.
+    #[serde(default)]
+    pub profiles: Vec<Profile>,
+    /// Executable tools bound to events.
+    #[serde(default)]
+    pub hooks: Vec<Hook>,
+    /// Agent session settings.
+    #[serde(default)]
+    pub session: SessionSettings,
+    /// Jev tool-search settings.
+    #[serde(default)]
+    pub jev: JevSettings,
+    /// Feature flags. `mcp`, `skills`, `script_tools` and `hooks` set to
+    /// `false` switch that integration off; every flag reaches executable
+    /// tools as `THM_FEATURE_<NAME>`.
+    #[serde(default)]
+    pub features: BTreeMap<String, bool>,
+    /// Scheduled prompts.
+    #[serde(default)]
+    pub workflows: Vec<Workflow>,
 }
 impl Default for Manifest {
     fn default() -> Self {
@@ -121,6 +169,20 @@ impl Default for Manifest {
             context: vec![],
             policies: Policies::default(),
             coordinator: CoordinatorSettings::default(),
+            runtime: RuntimeSettings::default(),
+            providers: vec![],
+            models: vec![],
+            mcp: vec![],
+            skills: vec![],
+            tools: vec![],
+            toolpacks: vec![],
+            permissions: vec![],
+            profiles: vec![],
+            hooks: vec![],
+            session: SessionSettings::default(),
+            jev: JevSettings::default(),
+            features: BTreeMap::new(),
+            workflows: vec![],
         }
     }
 }
@@ -142,8 +204,9 @@ pub struct Role {
 /// One seat: an agent the host creates and places on desks.
 ///
 /// On the wire only `id`, `role`, `prompt` and `template` are required:
-/// `label` defaults to the seat's `id`, `config` to `{}`, `model` to `null`,
-/// and `tools`, `mcp` and `skills` to empty. Unknown fields are rejected.
+/// `label` defaults to the seat's `id`, `config` to `{}`, `model`, `profile`,
+/// `agent_id` and `permissions` to `null`, `limits` to no limits, and every
+/// list to empty. Unknown fields are rejected.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize, Default)]
 #[serde(from = "super::defaults::SeatWire")]
 pub struct Seat {
@@ -171,15 +234,30 @@ pub struct Seat {
     /// Opaque, nonsecret factory configuration passed through to the host;
     /// `{}` when omitted.
     pub config: Value,
-    /// Model the host should run the seat on; `None` leaves it to the host.
+    /// Id of the [`Model`] the seat runs on; `None` inherits the profile's,
+    /// then the runtime's.
     pub model: Option<String>,
     /// Tool access the host must enforce; the allow list also becomes the
     /// routing candidate's capabilities.
     pub tools: ToolAccess,
-    /// Names of host-defined MCP server configurations to attach.
+    /// Ids of the [`McpServer`]s the seat connects to.
     pub mcp: Vec<String>,
-    /// Names of skills the host installs for the seat.
+    /// Ids of the [`Skill`]s the seat has.
     pub skills: Vec<String>,
+    /// Id of the [`Profile`] the seat starts from.
+    pub profile: Option<String>,
+    /// Harness agent id; `None` derives `<deployment_id>-<seat id>`.
+    pub agent_id: Option<String>,
+    /// Ids of the [`Toolpack`]s the seat receives.
+    pub toolpacks: Vec<String>,
+    /// Ids of the [`Hook`]s that run on the seat's turns.
+    pub hooks: Vec<String>,
+    /// Id of the [`PermissionSet`] narrowing the seat in this hive.
+    pub permissions: Option<String>,
+    /// Turn limits.
+    pub limits: Limits,
+    /// Extra `context/*.md` paths composed into the seat's prompt.
+    pub context: Vec<String>,
 }
 /// A seat's tool access, enforced by the host; this crate only carries it.
 ///

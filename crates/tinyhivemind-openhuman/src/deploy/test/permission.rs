@@ -1,7 +1,6 @@
 //! Pure approval integration, tool narrowing and trusted scheduled effects.
 use super::support::*;
 use crate::deploy::*;
-use openhuman_embed::seams::ToolHookDecision;
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
@@ -9,46 +8,43 @@ use std::sync::{
 #[tokio::test]
 async fn tool_allowed_in_a_is_denied_in_b_and_under_scheduled_origin() -> anyhow::Result<()> {
     let engine = permissions(manifest()?, &BuildOptions::default());
-    assert!(matches!(
-        engine
+    assert!(
+        !(engine
             .decide("alice", Some(&scope("a")), &context("write"))
-            .await,
-        ToolHookDecision::Proceed
-    ));
-    assert!(matches!(
-        engine
+            .await)
+            .is_deny()
+    );
+    assert!(
+        (engine
             .decide("alice", Some(&scope("b")), &context("write"))
-            .await,
-        ToolHookDecision::Deny(_)
-    ));
+            .await)
+            .is_deny()
+    );
     let mut scheduled = scope("a");
     scheduled.scheduled_job_id = Some("job".into());
     for name in ["write", "shell", "http_request"] {
-        assert!(matches!(
-            engine
+        assert!(
+            (engine
                 .decide("alice", Some(&scheduled), &context(name))
-                .await,
-            ToolHookDecision::Deny(_)
-        ));
+                .await)
+                .is_deny()
+        );
     }
-    assert!(matches!(
-        engine
+    assert!(
+        !(engine
             .decide("alice", Some(&scheduled), &context("hivemind_complete"))
-            .await,
-        ToolHookDecision::Proceed
-    ));
-    assert!(matches!(
-        engine
+            .await)
+            .is_deny()
+    );
+    assert!(
+        (engine
             .decide("alice", Some(&scope("a")), &context("unrecognized"))
-            .await,
-        ToolHookDecision::Deny(_)
-    ));
+            .await)
+            .is_deny()
+    );
     let mut forged = context("read");
     forged.agent_id = Some("outsider".into());
-    assert!(matches!(
-        engine.decide("alice", None, &forged).await,
-        ToolHookDecision::Deny(_)
-    ));
+    assert!((engine.decide("alice", None, &forged).await).is_deny());
     Ok(())
 }
 struct Handler(AtomicUsize);
@@ -98,10 +94,7 @@ async fn ask_invokes_an_explicit_correlated_handler_and_original_call_is_denied(
     };
     let engine = permissions(config, &options);
     let turn = scope("a");
-    assert!(matches!(
-        engine.decide("alice", Some(&turn), &context("write")).await,
-        ToolHookDecision::Deny(_)
-    ));
+    assert!((engine.decide("alice", Some(&turn), &context("write")).await).is_deny());
     let pending = engine
         .pending
         .lock()
@@ -130,23 +123,17 @@ async fn readonly_baseline_and_argument_rules_survive_turn_allows() -> anyhow::R
     let mut config = manifest()?;
     config.runtime.autonomy = crate::config::Access::ReadOnly;
     let engine = permissions(config, &BuildOptions::default());
-    assert!(matches!(
-        engine
+    assert!(
+        (engine
             .decide("alice", Some(&scope("a")), &context("write"))
-            .await,
-        ToolHookDecision::Deny(_)
-    ));
-    assert!(matches!(
-        engine.decide("alice", None, &context("read")).await,
-        ToolHookDecision::Proceed
-    ));
+            .await)
+            .is_deny()
+    );
+    assert!(!(engine.decide("alice", None, &context("read")).await).is_deny());
     let mut config = manifest()?;
     config.runtime.tool_rules = Some(tinytools::ToolRules::deny_all());
     let engine = permissions(config, &BuildOptions::default());
-    assert!(matches!(
-        engine.decide("alice", None, &context("read")).await,
-        ToolHookDecision::Deny(_)
-    ));
+    assert!((engine.decide("alice", None, &context("read")).await).is_deny());
     Ok(())
 }
 #[tokio::test]
@@ -156,18 +143,15 @@ async fn argument_rules_and_unknown_metadata_cannot_be_bypassed() -> anyhow::Res
         serde_json::json!({"rules":[{"effect":"deny","match":{"name":"read","arg":{"pointer":"/path","value":"secret*"}}}]}),
     )?);
     let engine = permissions(config, &BuildOptions::default());
-    assert!(matches!(
-        engine
+    assert!(
+        (engine
             .decide("alice", Some(&scope("a")), &context("read"))
-            .await,
-        ToolHookDecision::Deny(_)
-    ));
+            .await)
+            .is_deny()
+    );
     let mut allowed = context("read");
     allowed.arguments = serde_json::json!({"path":"public"});
-    assert!(matches!(
-        engine.decide("alice", Some(&scope("a")), &allowed).await,
-        ToolHookDecision::Proceed
-    ));
+    assert!(!(engine.decide("alice", Some(&scope("a")), &allowed).await).is_deny());
     for matcher in [
         serde_json::json!({"family":"private"}),
         serde_json::json!({"tags":"sensitive"}),
@@ -179,12 +163,12 @@ async fn argument_rules_and_unknown_metadata_cannot_be_bypassed() -> anyhow::Res
             serde_json::json!({"rules":[{"effect":"deny","match":matcher}]}),
         )?);
         let engine = permissions(config, &BuildOptions::default());
-        assert!(matches!(
-            engine
+        assert!(
+            (engine
                 .decide("alice", Some(&scope("a")), &context("read"))
-                .await,
-            ToolHookDecision::Deny(_)
-        ));
+                .await)
+                .is_deny()
+        );
     }
     Ok(())
 }
@@ -196,21 +180,12 @@ async fn isolated_session_never_captures_active_hive_or_episode_authority() -> a
         .lock()
         .map_err(|_| anyhow::anyhow!("poison"))?
         .insert("alice".into(), scope("b"));
-    assert!(matches!(
-        engine.decide("alice", None, &context("write")).await,
-        ToolHookDecision::Deny(_)
-    ));
+    assert!((engine.decide("alice", None, &context("write")).await).is_deny());
     let mut isolated = context("write");
     isolated.session_id = Some("cron-isolated".into());
-    assert!(matches!(
-        engine.decide("alice", None, &isolated).await,
-        ToolHookDecision::Proceed
-    ));
+    assert!(!(engine.decide("alice", None, &isolated).await).is_deny());
     isolated.tool_name = "hivemind_complete".into();
-    assert!(matches!(
-        engine.decide("alice", None, &isolated).await,
-        ToolHookDecision::Deny(_)
-    ));
+    assert!((engine.decide("alice", None, &isolated).await).is_deny());
     Ok(())
 }
 #[tokio::test]
@@ -224,28 +199,22 @@ async fn declared_delegates_are_internal_but_child_rules_still_narrow_effects() 
     });
     config.profiles[0].subagents.push("helper".into());
     let engine = permissions(config, &BuildOptions::default());
-    assert!(matches!(
-        engine
+    assert!(
+        !(engine
             .decide("alice", Some(&scope("a")), &context("delegate_helper"))
-            .await,
-        ToolHookDecision::Proceed
-    ));
-    assert!(matches!(
-        engine
+            .await)
+            .is_deny()
+    );
+    assert!(
+        (engine
             .decide("alice", Some(&scope("a")), &context("delegate_unknown"))
-            .await,
-        ToolHookDecision::Deny(_)
-    ));
+            .await)
+            .is_deny()
+    );
     let mut child = context("write");
     child.agent_id = Some("helper".into());
-    assert!(matches!(
-        engine.decide("alice", Some(&scope("a")), &child).await,
-        ToolHookDecision::Deny(_)
-    ));
+    assert!((engine.decide("alice", Some(&scope("a")), &child).await).is_deny());
     child.tool_name = "read".into();
-    assert!(matches!(
-        engine.decide("alice", Some(&scope("a")), &child).await,
-        ToolHookDecision::Proceed
-    ));
+    assert!(!(engine.decide("alice", Some(&scope("a")), &child).await).is_deny());
     Ok(())
 }

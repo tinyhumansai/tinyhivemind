@@ -390,7 +390,7 @@ async fn run(args: Args) -> anyhow::Result<()> {
     }
     run.json("package.json", &json!({
         "id": lowered.id,
-        "seats": lowered.seats.iter().map(|seat| json!({"id": seat.id, "tools": seat.tools, "memory": seat.memory})).collect::<Vec<_>>(),
+        "seats": lowered.seats.iter().map(|seat| json!({"id": seat.id, "tools": seat.integration.tools, "memory": seat.memory})).collect::<Vec<_>>(),
         "desks": lowered.desks,
         "topology": lowered.topology,
         "referrals": lowered.referrals,

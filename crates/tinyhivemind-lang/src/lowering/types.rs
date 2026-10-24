@@ -1,6 +1,8 @@
 //! Translate validated packages into existing core values and host requests.
 use crate::{
-    CoordinatorSettings, Goal, Link, MemorySpec, Mission, Policies, SeatMemory, ToolAccess,
+    CoordinatorSettings, ExecTool, Goal, GroupMode, Hook, JevSettings, Limits, Link, McpServer,
+    MemorySpec, Mission, Model, PermissionSet, Policies, Provider, RuntimeSettings, SeatMemory,
+    SessionSettings, Skill, ToolAccess, Workflow,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -34,6 +36,89 @@ pub struct LoweredHive {
     pub coordinator: CoordinatorSettings,
     /// Memory identities and bindings, without contents.
     pub memory: MemorySpec,
+    /// What the hive's agents run with, hive-wide.
+    pub integrations: LoweredIntegrations,
+}
+/// The hive-wide integration: the runtime and the settings every seat shares.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LoweredIntegrations {
+    /// Runtime settings as declared.
+    pub runtime: RuntimeSettings,
+    /// The runtime's default provider, resolved.
+    pub provider: Option<Provider>,
+    /// The runtime's default model, resolved.
+    pub model: Option<LoweredModel>,
+    /// The runtime's baseline permission set, resolved.
+    pub permissions: Option<PermissionSet>,
+    /// Every skill bundle the package ships (empty when `skills` is off);
+    /// the host installs them from `skills/` and each seat selects its own.
+    pub skills: Vec<Skill>,
+    /// Agent session settings.
+    pub session: SessionSettings,
+    /// Jev tool-search settings.
+    pub jev: JevSettings,
+    /// Feature flags, as declared.
+    pub features: BTreeMap<String, bool>,
+    /// Scheduled prompts.
+    pub workflows: Vec<Workflow>,
+}
+/// A model with the provider it runs on.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LoweredModel {
+    /// The model as declared.
+    pub model: Model,
+    /// Its provider: the model's own, else the runtime's; `None` inherits
+    /// whatever provider the host runtime has.
+    pub provider: Option<Provider>,
+}
+/// A hook with the executable tool it runs.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LoweredHook {
+    /// The hook as declared.
+    pub hook: Hook,
+    /// The tool it runs.
+    pub tool: ExecTool,
+}
+/// One seat's integration after precedence and toolpack expansion.
+///
+/// Runtime defaults, then the seat's profile, then the seat: a scalar takes
+/// the most specific value, a list concatenates without repeats, limits merge
+/// field by field, and `tools.allow` is the most specific non-empty list.
+/// Toolpacks expand into their tools, MCP servers, skills and groups, and a
+/// feature switched off removes its integration.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct LoweredSeatIntegration {
+    /// The profile the seat starts from.
+    pub profile: Option<String>,
+    /// The harness agent id the seat declared.
+    pub agent_id: Option<String>,
+    /// The model the seat runs on.
+    pub model: Option<LoweredModel>,
+    /// Tool names allowed and denied.
+    pub tools: ToolAccess,
+    /// MCP servers the seat connects to.
+    pub mcp: Vec<McpServer>,
+    /// Skills the seat has.
+    pub skills: Vec<Skill>,
+    /// Executable tools the seat may call.
+    pub programs: Vec<ExecTool>,
+    /// Hooks on the seat's turns.
+    pub hooks: Vec<LoweredHook>,
+    /// Harness tool group modes from its toolpacks.
+    pub groups: BTreeMap<String, GroupMode>,
+    /// Permission sets that all apply, broadest first: runtime, profile,
+    /// seat.
+    pub permissions: Vec<PermissionSet>,
+    /// Turn limits.
+    pub limits: Limits,
+    /// Extra context documents and their contents, in composition order.
+    pub context: Vec<(String, String)>,
+    /// Profile ids the seat may delegate to.
+    pub subagents: Vec<String>,
+    /// Use the prompt alone, without the harness's composed system prompt.
+    pub bare_prompt: bool,
+    /// A harness built-in definition to start from.
+    pub definition_base: Option<String>,
 }
 /// Resolved identity plus runtime memory configuration retained for the host.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -68,14 +153,8 @@ pub struct LoweredSeat {
     pub config: serde_json::Value,
     /// Prompt body, without frontmatter.
     pub prompt: String,
-    /// Optional model name.
-    pub model: Option<String>,
-    /// Explicit tool access.
-    pub tools: ToolAccess,
-    /// MCP configuration names.
-    pub mcp: Vec<String>,
-    /// Skill names.
-    pub skills: Vec<String>,
     /// Resolved memory identity and preserved host settings.
     pub memory: Option<LoweredMemoryBinding>,
+    /// What the seat runs with, resolved.
+    pub integration: LoweredSeatIntegration,
 }

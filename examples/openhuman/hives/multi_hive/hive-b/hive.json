@@ -1,0 +1,267 @@
+{
+  "$schema": "https://tinyhumans.ai/schemas/hive/v1",
+  "version": 1,
+  "id": "b",
+  "name": "Review",
+  "roles": [
+    {
+      "id": "observer",
+      "charter": "roles/observer.md"
+    },
+    {
+      "id": "reviewer",
+      "charter": "roles/reviewer.md"
+    }
+  ],
+  "seats": [
+    {
+      "id": "shared",
+      "label": "shared",
+      "role": "observer",
+      "prompt": "seats/shared.md",
+      "template": "openhuman",
+      "config": {},
+      "model": null,
+      "tools": {
+        "allow": [],
+        "deny": []
+      },
+      "mcp": [],
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": "readonly",
+      "limits": {
+        "timeout_ms": null,
+        "iterations": 8,
+        "budget_usd": null
+      },
+      "context": [
+        "context/review.md"
+      ]
+    },
+    {
+      "id": "reviewer",
+      "label": "reviewer",
+      "role": "reviewer",
+      "prompt": "seats/reviewer.md",
+      "template": "openhuman",
+      "config": {},
+      "model": null,
+      "tools": {
+        "allow": [],
+        "deny": []
+      },
+      "mcp": [],
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": 8,
+        "budget_usd": null
+      },
+      "context": []
+    }
+  ],
+  "desks": [
+    {
+      "id": "b",
+      "name": "Review",
+      "description": null,
+      "members": [
+        "shared",
+        "reviewer"
+      ]
+    }
+  ],
+  "goals": [],
+  "missions": [],
+  "topology": [],
+  "referrals": [],
+  "context": [],
+  "policies": {
+    "episode": {
+      "turn_budget": 12,
+      "round_width": 1,
+      "revealed_width": 1,
+      "blind_round": true,
+      "dominance_cap": 50,
+      "repetition_cap": 3,
+      "distance": "sequence",
+      "quorum": {
+        "threshold": 2,
+        "window": 30,
+        "require_grounded": true
+      },
+      "weights": {
+        "recency": 5,
+        "importance": 30,
+        "relevance": 20,
+        "half_life": 20
+      }
+    },
+    "routing": {
+      "minimum_confidence": 600000,
+      "high_impact_minimum_confidence": 800000,
+      "clarification_threshold": 700000,
+      "high_impact_threshold": 700000,
+      "round_width": 4,
+      "choice_option_limit": 8
+    },
+    "approval": {
+      "enabled": false,
+      "default": "deny",
+      "rules": [],
+      "approver": {
+        "kind": "absent"
+      },
+      "allow_grants": false,
+      "max_grant_ttl": null
+    },
+    "aside": {
+      "enabled": false,
+      "max_members": 0,
+      "max_messages": 0,
+      "must_surface": false,
+      "require_thread": false
+    },
+    "referral": {
+      "enabled": false,
+      "max_hops": 0,
+      "reach": "local",
+      "returns": false
+    },
+    "digest": {
+      "keep_live": 30,
+      "fold_after": 20,
+      "fold_after_chars": 400000,
+      "input_limit": 60,
+      "budget_chars": 4000
+    },
+    "brevity": {
+      "message_chars": 600,
+      "window": 30
+    },
+    "directory": {
+      "half_life": 20,
+      "specialisation": 30,
+      "credibility": 20,
+      "prior": 10,
+      "discredit": 20,
+      "window": 30,
+      "floor": 1000
+    },
+    "exchange": {
+      "enabled": false,
+      "contact_cap": 0,
+      "round_cap": 0
+    },
+    "division": {
+      "round_width": 4,
+      "follow_directory": true
+    },
+    "conduct": {
+      "child_turn_wall": 6,
+      "turn_wall": 60
+    }
+  },
+  "coordinator": {
+    "round_width": 1,
+    "conduct_policy": {
+      "child_turn_wall": 6,
+      "turn_wall": 60
+    },
+    "broadcast_budget": null,
+    "retention": {
+      "settled_episodes": null,
+      "delivered": null,
+      "interrupted": null,
+      "pending_per_agent": null
+    }
+  },
+  "runtime": {
+    "deployment_id": "default",
+    "workspace": null,
+    "session_store": "memory",
+    "memory_engine": "disabled",
+    "autonomy": "autonomous",
+    "sandbox": "none",
+    "concurrency": 4,
+    "max_agents": null,
+    "include_user_skills": false,
+    "start_scheduler": false,
+    "provider": "openrouter",
+    "model": "default",
+    "permissions": null,
+    "toolpacks": [],
+    "limits": {
+      "timeout_ms": null,
+      "iterations": null,
+      "budget_usd": null
+    }
+  },
+  "providers": [
+    {
+      "id": "openrouter",
+      "kind": "openrouter",
+      "endpoint": null,
+      "credential": {
+        "env": "OPENROUTER_API_KEY"
+      }
+    }
+  ],
+  "models": [
+    {
+      "id": "default",
+      "provider": null,
+      "name": "openai/gpt-oss-120b:nitro",
+      "temperature": 0.0,
+      "max_tokens": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      }
+    }
+  ],
+  "mcp": [],
+  "skills": [],
+  "tools": [],
+  "toolpacks": [],
+  "permissions": [
+    {
+      "id": "readonly",
+      "access": "read_only",
+      "sandbox": "none",
+      "allow_tools": null,
+      "deny_tools": [],
+      "send_destinations": null,
+      "send_operations": null,
+      "tool_rules": null
+    }
+  ],
+  "profiles": [],
+  "hooks": [],
+  "session": {
+    "compact_context": null,
+    "max_history_messages": null,
+    "tool_result_budget_bytes": null,
+    "max_tool_iterations": null,
+    "parallel_tools": null,
+    "agents_md": null
+  },
+  "jev": {
+    "ranker": "jev",
+    "route": "auto",
+    "base_url": null,
+    "top_k": 3
+  },
+  "features": {},
+  "workflows": []
+}

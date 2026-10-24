@@ -61,7 +61,7 @@ fn host_only_profile_and_readonly_permissions_remove_native_mutating_surfaces() 
         let (options, _backend, _model) = build_options().await;
         let mut config = manifest()?;
         config.profiles[0].tool_scope = ToolScope::HostOnly;
-        config.profiles[0].permission_profile = Some("narrow".into());
+        config.profiles[0].permissions = Some("narrow".into());
         config.permission_profiles[0].access = Access::ReadOnly;
         config.permission_profiles[0].sandbox = Sandbox::ReadOnly;
         let deployment = Box::pin(HiveDeployment::build_with(
@@ -73,11 +73,11 @@ fn host_only_profile_and_readonly_permissions_remove_native_mutating_surfaces() 
         let hosted = openhuman_core::agent::host_agents::resolve("default-alice")
             .ok_or_else(|| anyhow::anyhow!("missing native hosted agent"))?;
         assert!(
-            matches!(hosted.definition.tools, openhuman_core::agent::harness::definition::ToolScope::Named(ref names) if names.is_empty())
+            matches!(hosted.definition.tools, tinyagents_definition::ToolScope::Named(ref names) if names.is_empty())
         );
         assert!(matches!(
             hosted.definition.sandbox_mode,
-            openhuman_core::agent::harness::definition::SandboxMode::ReadOnly
+            tinyagents_definition::SandboxMode::ReadOnly
         ));
         assert_eq!(hosted.definition.subagents.len(), 0);
         assert!(matches!(
@@ -143,16 +143,16 @@ fn native_definition_retains_bare_prompt_sampling_tools_skills_and_mcp_credentia
         assert!(!hosted.context.user_skill_roots());
         let definition = hosted.definition;
         assert!(
-            matches!(definition.system_prompt, openhuman_core::agent::harness::definition::PromptSource::Verbatim(ref prompt) if prompt == "Seat prompt\nProfile context\nSeat context")
+            matches!(definition.system_prompt, tinyagents_definition::PromptSource::Verbatim(ref prompt) if prompt == "Seat prompt\nProfile context\nSeat context")
         );
         assert_eq!(definition.temperature.to_bits(), 0.2_f64.to_bits());
         assert_eq!(definition.max_iterations, 2);
         assert!(
-            matches!(definition.tools, openhuman_core::agent::harness::definition::ToolScope::Named(ref names) if names.contains(&"file_read".into()))
+            matches!(definition.tools, tinyagents_definition::ToolScope::Named(ref names) if names.contains(&"file_read".into()))
         );
         assert!(matches!(
             definition.sandbox_mode,
-            openhuman_core::agent::harness::definition::SandboxMode::Sandboxed
+            tinyagents_definition::SandboxMode::Sandboxed
         ));
         assert!(definition.tool_rules.is_some());
         let native = &agent.config().mcp_client.servers;
@@ -203,7 +203,7 @@ fn configured_profile(skills_root: &std::path::Path) -> anyhow::Result<HiveConfi
         .skills
         .push(skills_root.to_string_lossy().into_owned());
     profile.include_user_skills = Some(false);
-    profile.permission_profile = Some("narrow".into());
+    profile.permissions = Some("narrow".into());
     let mut local = server("local");
     local.transport = "stdio".into();
     local.endpoint = "sh".into();

@@ -36,3 +36,6 @@ check tinytools-agent "$(pin tinytools-agent tinytools)" vendor/openhuman/vendor
 tinymemory_sub=$(git -C vendor/openhuman ls-tree HEAD vendor/tinymemory | awk '{print $3}')
 check tinymemory-api "$(pin tinymemory-api tinymemory)" vendor/openhuman/vendor/tinymemory "$tinymemory_sub"
 check tinymemory-tools "$(pin tinymemory-tools tinymemory)" vendor/openhuman/vendor/tinymemory "$tinymemory_sub"
+# The schedule validator comes from the tinyflows submodule inside OpenHuman.
+tinyflows_sub=$(git -C vendor/openhuman ls-tree HEAD vendor/tinyflows | awk '{print $3}')
+check tinyflows-schedule "$(pin tinyflows-schedule tinyflows)" vendor/openhuman/vendor/tinyflows "$tinyflows_sub"

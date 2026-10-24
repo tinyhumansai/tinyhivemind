@@ -8,7 +8,7 @@ use super::{Operation, PatchClass, Result, boundary, items};
 use serde_json::Value;
 
 /// Every edit class, in the order derived changes are recorded.
-pub(crate) const CLASSES: [PatchClass; 7] = [
+pub(crate) const CLASSES: [PatchClass; 8] = [
     PatchClass::Prompt,
     PatchClass::Context,
     PatchClass::Memory,
@@ -16,6 +16,7 @@ pub(crate) const CLASSES: [PatchClass; 7] = [
     PatchClass::Topology,
     PatchClass::Policy,
     PatchClass::Goal,
+    PatchClass::Integration,
 ];
 
 /// The class whose boundary admits `operation`, if any class does.
@@ -66,6 +67,13 @@ pub(crate) fn lifecycle(
 pub(crate) fn modification(path: &str, before: &str, after: &str) -> Result<Vec<Operation>> {
     if before == after {
         return Ok(vec![]);
+    }
+    if super::whole(path) {
+        return Ok(vec![Operation::Prompt {
+            path: path.to_owned(),
+            before: before.into(),
+            after: after.into(),
+        }]);
     }
     if path.starts_with("context/") {
         let old_items = items::items(before)?;

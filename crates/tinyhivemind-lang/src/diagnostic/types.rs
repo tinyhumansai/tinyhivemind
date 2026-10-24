@@ -37,7 +37,7 @@ impl fmt::Display for Diagnostic {
 
 /// The rule family a [`Diagnostic`] reports.
 ///
-/// The first twelve mirror the package [`crate::Error`] variants; the rest are
+/// The first thirteen mirror the package [`crate::Error`] variants; the rest are
 /// the rules [`crate::check()`] adds for an edit.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -72,6 +72,9 @@ pub enum Rule {
     /// A required or referenced document that is absent
     /// ([`crate::Error::MissingDocument`]).
     MissingDocument,
+    /// An integration setting the harness cannot run as written
+    /// ([`crate::Error::Integration`]).
+    Integration,
     /// A change of an edit class the constitution does not permit.
     ForbiddenClass,
     /// A change to the constitution, a protected key, or a frontmatter.
@@ -105,6 +108,7 @@ impl Rule {
             Self::Frontmatter => "frontmatter",
             Self::Json => "json",
             Self::MissingDocument => "missing_document",
+            Self::Integration => "integration",
             Self::ForbiddenClass => "forbidden_class",
             Self::Immutable => "immutable",
             Self::Contamination => "contamination",
@@ -138,6 +142,7 @@ impl From<&crate::Error> for Rule {
             Error::MemoryAccess { .. } => Self::MemoryAccess,
             Error::Context { .. } => Self::Context,
             Error::Frontmatter { .. } => Self::Frontmatter,
+            Error::Integration { .. } => Self::Integration,
         }
     }
 }

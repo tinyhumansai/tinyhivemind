@@ -161,24 +161,35 @@ async fn run() -> anyhow::Result<()> {
             config.memory.engine
         );
     }
-    let mut manifest = manifest("pe1006_hive")?;
-    manifest.runtime.deployment_id =
-        std::env::var("OPENHUMAN_HIVE_DEPLOYMENT_ID").unwrap_or_else(|_| format!("pe{problem}"));
-    manifest.runtime.workspace = Some(run_dir.join("openhuman-runtime").display().to_string());
+    let mut package = manifest("pe1006_hive")?;
+    package.manifest.runtime.deployment_id = Some(
+        std::env::var("OPENHUMAN_HIVE_DEPLOYMENT_ID").unwrap_or_else(|_| format!("pe{problem}")),
+    );
+    package.manifest.runtime.workspace =
+        Some(run_dir.join("openhuman-runtime").display().to_string());
     let executable = std::env::current_exe()?;
-    for profile in &mut manifest.profiles {
-        if problem == "1008" {
-            profile.system_prompt = role_prompt(&problem, &profile.id);
+    if problem == "1008" {
+        for seat in &package.manifest.seats {
+            package
+                .documents
+                .insert(seat.prompt.clone(), role_prompt(&problem, &seat.id));
         }
-        let mcp = &mut profile.mcp[0];
-        mcp.endpoint = executable.display().to_string();
-        mcp.args = vec![
+    }
+    // Each seat's `tinyhive-<seat>` server is attributed to it by `--agent`.
+    for server in &mut package.manifest.mcp {
+        let seat = server
+            .id
+            .strip_prefix("tinyhive-")
+            .ok_or_else(|| anyhow::anyhow!("unexpected MCP server {}", server.id))?
+            .to_owned();
+        server.endpoint = executable.display().to_string();
+        server.args = vec![
             "--hive-tools".into(),
             "--agent".into(),
-            profile.id.clone(),
+            seat.clone(),
             "--outbox".into(),
             outbox_dir
-                .join(format!("{}.jsonl", profile.id))
+                .join(format!("{seat}.jsonl"))
                 .display()
                 .to_string(),
             "--memory".into(),
@@ -191,13 +202,13 @@ async fn run() -> anyhow::Result<()> {
             println!(
                 "Native CortexDB memory is unavailable; continuing with durable Markdown hive memory."
             );
-            manifest.runtime.memory_engine = "disabled".into();
+            package.manifest.runtime.memory_engine = tinyhivemind_lang::MemoryEngine::Disabled;
             None
         }
     };
-    let routing_policy = manifest.hives[0].routing.clone();
+    let routing_policy = package.manifest.policies.routing.clone();
     let deployment = deploy(
-        manifest,
+        vec![("pe1006_hive", package)],
         BuildOptions {
             memory_engine,
             config: Some(config),

@@ -114,6 +114,7 @@ fn supplied_clones_attach_once_and_drop_services_without_cycle() {
                             structured: None,
                             finish_reason: None,
                             answered_model: None,
+                            unapplied_steers: Vec::new(),
                         })
                     }),
                 )

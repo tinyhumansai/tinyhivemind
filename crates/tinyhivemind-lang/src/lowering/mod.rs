@@ -1,4 +1,5 @@
 //! Translate validated packages into existing core values and host requests.
+mod integration;
 mod types;
 use crate::{Package, Result};
 use tinyhivemind_core::embed::RouteCandidate;
@@ -46,11 +47,8 @@ pub fn lower(package: &Package) -> Result<LoweredHive> {
                 template: seat.template.clone(),
                 config: seat.config.clone(),
                 prompt,
-                model: seat.model.clone(),
-                tools: seat.tools.clone(),
-                mcp: seat.mcp.clone(),
-                skills: seat.skills.clone(),
                 memory,
+                integration: integration::seat(package, seat),
             }
         })
         .collect();
@@ -92,6 +90,7 @@ pub fn lower(package: &Package) -> Result<LoweredHive> {
         policies: package.manifest.policies.clone(),
         coordinator: package.manifest.coordinator.clone(),
         memory: package.memory.clone(),
+        integrations: integration::hive(&package.manifest),
     })
 }
 

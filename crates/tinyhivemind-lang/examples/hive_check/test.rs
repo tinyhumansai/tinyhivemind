@@ -96,3 +96,26 @@ fn an_accepted_edit_names_the_classes_it_changed() {
     let (diagnostics, _) = findings(&edited, None);
     assert_eq!(diagnostics.len(), 0, "{diagnostics:?}");
 }
+
+#[test]
+fn the_broken_integrations_package_reports_each_rule_once() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/broken/integrations");
+    let (found, _) = findings(&load(&dir).expect("the broken package loads"), None);
+    let located: Vec<(String, &str)> = found
+        .iter()
+        .map(|d| (d.pointer.clone().unwrap_or_default(), d.rule.name()))
+        .collect();
+    for expected in [
+        ("/seats/1/model", "reference"),
+        ("/tools/1/command/1", "missing_document"),
+        ("/runtime/session_store", "integration"),
+        ("/tools/0/argv/1", "integration"),
+        ("/profiles/2/model", "integration"),
+    ] {
+        assert!(
+            located.contains(&(expected.0.to_owned(), expected.1)),
+            "{expected:?} in {located:?}"
+        );
+    }
+    assert_eq!(found.len(), 5, "{located:?}");
+}

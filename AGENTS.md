@@ -50,9 +50,11 @@ is not advisory — do not add an exception to it to land a change.
 
 ## Project Structure
 
-This is a Rust 2024 virtual Cargo workspace with five packages. Core owns all
-host-neutral behavior; tools renders native tool definitions and records calls;
-OpenHuman is the only crate that links an agent harness.
+This is a Rust 2024 virtual Cargo workspace with six packages. Core owns all
+host-neutral behavior; lang is where a hive mind is defined, integrations
+included; tools renders native tool definitions and records calls; exec runs a
+package's executable tools and hooks; OpenHuman is the only crate that links an
+agent harness, and it deploys hive packages.
 
 ```text
 Cargo.toml
@@ -67,9 +69,10 @@ crates/
 │       ├── typesafe/      # System One wire and Jev router
 │       └── driver/        # host-neutral completion scheduling
 ├── tinyhivemind-tools/   # native TinyTools specs and episode call record
-├── tinyhivemind-openhuman/ # seat runners and host integration
+├── tinyhivemind-exec/    # runs a package's executable tools and script hooks
+├── tinyhivemind-openhuman/ # package deployment, seat runners, host integration
 ├── tinyhivemind-hives/    # durable cross-hive coordinator
-└── tinyhivemind-lang/     # pure hive packages, guarded edits and lineage
+└── tinyhivemind-lang/     # pure hive packages: structure, integrations, edits, lineage
 wiki/                    # GitHub wiki submodule
 docs/                    # specs, plans, ADRs, research, experiments
 examples/                # standalone integration proofs
@@ -83,8 +86,16 @@ fixed-point arithmetic and bounded rounds. `embed` owns host-neutral routing;
 combines routing and completion state over a host-bound handle.
 
 `tinyhivemind-tools` depends on core and `tinytools` to render served tools as
-`tinytools::ToolSpec`. The OpenHuman adapter depends on core and tools. The
-host owns agent sessions, the transcript, durable appends, and scheduling.
+`tinytools::ToolSpec`. `tinyhivemind-lang` declares what a hive's agents run
+with — providers, models, MCP servers, skills, executable tools, toolpacks,
+permissions, profiles, hooks, session, Jev, features and workflows — as data,
+and lowering resolves it per seat; it names no harness type and starts no
+process. `tinyhivemind-exec` runs those executable tools and hooks
+(`docs/specs/executable-tools.md`) and is not one of the pure crates. The
+OpenHuman adapter depends on core, hives, lang and exec, and deploys packages
+with `HiveDeployment::from_packages`; its former `HiveConfig` manifest format is
+retired (ADR 0034). The host owns agent sessions, the transcript, durable
+appends, and scheduling.
 
 Each feature area belongs in a focused module directory under a crate's `src/`.
 A module root explains the module, wires its pieces together, and exposes the
@@ -158,6 +169,11 @@ Supporting commands:
   The harness is documented in `crates/tinyhivemind-core/examples/bench/README.md`,
   its accepted behaviour in `docs/specs/benchmark-matrix.md`, and its findings
   on the wiki's `Benchmarks` page (`wiki/Benchmarks.md`).
+- `cargo run -p tinyhivemind-lang --example hive_check -- <dir>` — check a
+  hive package the way a compiler checks source.
+- `cargo run -p tinyhivemind-openhuman --example run_package -- <dir>
+  [--seat <id> --call <tool> --args <json>]` — summarise what each seat runs,
+  or call one of the package's executable tools as a seat would.
 - `.github/scripts/assert-pure.sh` — assert the pure crates took on no
   runtime, transport, or web-framework dependency.
 - `cargo doc --no-deps --all-features` — build the rustdoc CI also builds with

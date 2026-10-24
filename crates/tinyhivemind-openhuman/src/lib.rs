@@ -11,7 +11,40 @@
 //! host.register_agent(agent).await?;
 //! # Ok(()) }
 //! ```
-pub mod config;
+//!
+//! # Deploying a hive package
+//!
+//! A hive is defined by one `tinyhivemind-lang` package: structure,
+//! deliberation policy and everything its agents run with (provider, models,
+//! MCP servers, skills, permissions, workflows, executable tools and hooks).
+//! The earlier `HiveConfig` manifests are gone as an input; the deployment plan
+//! the adapter builds from is crate-internal and is produced from packages.
+//! [`language::PackageSource::load`] reads and checks a directory, and
+//! [`deploy::HiveDeployment::from_packages`] deploys one or more of them onto a
+//! single runtime, attaching each seat's executable tools and script hooks
+//! (run by `tinyhivemind-exec`).
+//!
+//! ```no_run
+//! use std::sync::Arc;
+//! use tinyhivemind_openhuman::deploy::{BuildOptions, EnvironmentSecrets, HiveDeployment};
+//! use tinyhivemind_openhuman::language::PackageSource;
+//!
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! let package = PackageSource::load("hives/release-desk")?;
+//! let deployment = Box::pin(HiveDeployment::from_packages(
+//!     vec![package],
+//!     Arc::new(EnvironmentSecrets),
+//!     BuildOptions::default(),
+//! ))
+//! .await?;
+//! let _host = deployment.host();
+//! # Ok(()) }
+//! ```
+//!
+//! What this crate does not hold: the host owns storage, transcripts and
+//! scheduling, and the language crate owns the definition, so the adapter keeps
+//! no schema of its own that a package could drift from.
+pub(crate) mod config;
 pub mod deploy;
 mod error;
 mod host;
@@ -21,7 +54,7 @@ mod memory;
 #[cfg(any(test, feature = "offline"))]
 pub mod offline;
 mod tools;
-pub use error::{Error, Result};
+pub use error::{ConfigError, Error, Result};
 pub use host::{
     AgentFactory, AgentFuture, HostedTurn, ManagementAuthorizer, ManagementRequest, OpenHumanHost,
     RegisteredAgent, SendAuthorizer, SendRequest, TURN_TIMEOUT, TurnHooks, TurnOptions,

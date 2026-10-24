@@ -6,7 +6,7 @@
 //! field of the same seat. Each decodes leniently into the same complete
 //! value, so serialization, and with it the round-trip unknown-field check in
 //! `document/mod.rs`, is unchanged.
-use super::{Policies, Seat, ToolAccess};
+use super::{Limits, Policies, Seat, ToolAccess};
 use serde::{Deserialize, Deserializer, de::Error as _};
 use serde_json::Value;
 use tinyhivemind_core::desk::{Desk, ResponderMode};
@@ -91,6 +91,20 @@ pub(super) struct SeatWire {
     mcp: Vec<String>,
     #[serde(default)]
     skills: Vec<String>,
+    #[serde(default)]
+    profile: Option<String>,
+    #[serde(default)]
+    agent_id: Option<String>,
+    #[serde(default)]
+    toolpacks: Vec<String>,
+    #[serde(default)]
+    hooks: Vec<String>,
+    #[serde(default)]
+    permissions: Option<String>,
+    #[serde(default)]
+    limits: Limits,
+    #[serde(default)]
+    context: Vec<String>,
 }
 
 impl From<SeatWire> for Seat {
@@ -106,6 +120,13 @@ impl From<SeatWire> for Seat {
             tools: wire.tools,
             mcp: wire.mcp,
             skills: wire.skills,
+            profile: wire.profile,
+            agent_id: wire.agent_id,
+            toolpacks: wire.toolpacks,
+            hooks: wire.hooks,
+            permissions: wire.permissions,
+            limits: wire.limits,
+            context: wire.context,
         }
     }
 }

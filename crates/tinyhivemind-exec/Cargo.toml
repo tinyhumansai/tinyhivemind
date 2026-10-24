@@ -1,0 +1,42 @@
+[package]
+name = "tinyhivemind-exec"
+description = "Runs the executable tools and hooks a hive package declares, as child processes under one language-neutral calling convention."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+publish = false
+# This crate spawns processes, so it is deliberately outside the pure crates
+# `.github/scripts/assert-pure.sh` guards. It names no `OpenHuman` type: a
+# host attaches `ProgramTool` as a native `tinytools::Tool` and calls
+# `HookRunner` around its own tool calls and turn ends.
+
+[dependencies]
+# The declarations this crate runs: `ExecTool`, `Hook`, `LoweredHook`,
+# `SecretRef` and the argv `placeholder` grammar.
+tinyhivemind-lang.workspace = true
+# The native tool trait `ProgramTool` implements and its result type.
+tinytools.workspace = true
+# `tinytools::Tool::execute` returns `anyhow::Result`; implementing it means
+# naming the type. Every tool failure is still reported as a `ToolResult`.
+anyhow.workspace = true
+# Async `Tool` methods.
+async-trait.workspace = true
+# Call arguments, hook event objects and `output: json` results.
+serde_json.workspace = true
+# The typed `Error`.
+thiserror.workspace = true
+# Child processes with piped stdio, their deadline, and the async reads and
+# writes of their pipes.
+tokio = { workspace = true, features = ["process", "io-util", "time", "rt"] }
+
+[dev-dependencies]
+# Async tests on a multi-threaded runtime.
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+# Temporary package roots for scripts a test edits.
+tempfile.workspace = true
+
+[lints]
+workspace = true

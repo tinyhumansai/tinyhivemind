@@ -60,3 +60,4 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a test-first sample
   surfaces, Jev-first desk routing, bounded hive invitations, and fallback.
 
 - [`2026-10-10-hive-language.md`](2026-10-10-hive-language.md) — implement the accepted hive language and adapter conversions.
+- [`2026-10-23-hive-language-integrations.md`](2026-10-23-hive-language-integrations.md) — bump OpenHuman to upstream main, give the language its integration sections, add executable tools, and deploy packages on OpenHuman in place of `HiveConfig`.

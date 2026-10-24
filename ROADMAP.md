@@ -10,7 +10,8 @@ consumer builds.
 
 | Phase | What lands | State |
 | --- | --- | --- |
-| OpenHuman configuration | One runtime, reusable Markdown profiles, persistent seats, narrowed hive permissions and native workflows; [accepted contract](docs/specs/openhuman-hive-config.md), [example manifests](examples/openhuman/hives/README.md) | Implemented for review in #113 |
+| Hive language integrations | OpenHuman at upstream main; `hive.json` gains runtime, providers, models, MCP, skills, executable tools, toolpacks, permissions, profiles, hooks, session, Jev, features and workflows; tools and hooks as scripts in any language (`tinyhivemind-exec`); OpenHuman deploys packages and `HiveConfig` is retired; [spec](docs/specs/hive-language-integrations.md), [executable tools](docs/specs/executable-tools.md), [ADR 0034](docs/adr/0034-the-hive-language-defines-the-deployment.md) | **done** |
+| OpenHuman configuration | One runtime, reusable Markdown profiles, persistent seats, narrowed hive permissions and native workflows; [accepted contract](docs/specs/openhuman-hive-config.md) | Implemented in #113; its manifest format is superseded by hive packages (ADR 0034) |
 | P0 | Reshape the TinyBus module template into a plain library workspace | **done** |
 | P1 | Chat identity: `MAIN_THREAD_ID`, `GENERAL_DESK`, `is_general_chat`, `same_conversation` | **done** |
 | P2 | Desk types, then the membership algebra behind `DeskSet<'a>` | **done** |

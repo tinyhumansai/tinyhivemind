@@ -13,6 +13,32 @@
 //! | `roles/*.md` | [`Package::documents`] | one charter per role |
 //! | `seats/*.md` | [`Package::documents`] | one prompt per seat, with optional JSON frontmatter |
 //! | `context/*.md` | [`Package::documents`] | shared documents split into stable `<!-- item:id -->` items |
+//! | `tools/*` | [`Package::documents`] | executable tool and hook sources, in any language |
+//! | `skills/<id>/…` | [`Package::documents`] | a skill bundle; `skills/<id>/SKILL.md` is required |
+//!
+//! # What the agents run with
+//!
+//! Besides who is in a hive and how it deliberates, `hive.json` says what its
+//! agents run on, in the sections `runtime`, `providers`, `models`, `mcp`,
+//! `skills`, `tools`, `toolpacks`, `permissions`, `profiles`, `hooks`,
+//! `session`, `jev`, `features` and `workflows` (see
+//! [`RuntimeSettings`], [`Provider`], [`Model`], [`McpServer`], [`Toolpack`],
+//! [`PermissionSet`], [`Profile`], [`Hook`] and [`Workflow`]). A seat names a
+//! `profile`, `model`, `toolpacks`, `hooks`, `permissions`, `limits` and extra
+//! `context`; each is resolved by [`lower`] with runtime defaults first, the
+//! seat's profile next, and the seat last. Every section is optional and
+//! defaults to empty, so a package without them is unchanged. The vocabulary
+//! is exactly what the `OpenHuman` harness can run: a setting it cannot honour
+//! is a located diagnostic, never silently dropped. Credentials are
+//! [`SecretRef`]s (`{"env": "NAME"}` or `{"store": "key"}`), never values.
+//!
+//! An [`ExecTool`] declares a tool as a program plus an argument schema. The
+//! program may be a script shipped under `tools/` or any binary on `PATH`;
+//! arguments reach it as JSON on stdin or through an `argv` template, and
+//! its stdout is the result. A [`Hook`] binds such a tool to a
+//! `pre_tool_use`, `post_tool_use` or `stop` event. The crate only declares
+//! and validates these; the `tinyhivemind-exec` crate runs them, and the
+//! convention is in `docs/specs/executable-tools.md`.
 //!
 //! # Editing a hive
 //!
@@ -23,7 +49,11 @@
 //! and either returns *every* violation as a located [`Diagnostic`]
 //! (`hive.json:/policies/episode/turn_budget: forbidden_class: ...`) or a
 //! [`Review`] holding the edit split into one [`patch::Patch`] per touched
-//! edit class. Those patches are the recorded form the host keeps in
+//! edit class. The `integration` class ([`patch::PatchClass::Integration`])
+//! owns the integration sections, a seat's integration fields and the files
+//! under `tools/` and `skills/`, which are edited whole; a constitution that
+//! does not permit it stops a hive from changing what its agents can run or
+//! reach. Those patches are the recorded form the host keeps in
 //! [`lineage`]; nobody has to author one. The `hive_check` example is the
 //! same check as a command an agent runs after editing.
 //!
@@ -40,7 +70,10 @@
 //!   [`validate_path`] and [`validate_namespace`] expose its path and
 //!   namespace checks on their own.
 //! - [`lower`] turns a valid package into a [`LoweredHive`]: core desks,
-//!   routing candidates, and per-seat factory inputs the host activates.
+//!   routing candidates, per-seat factory inputs the host activates, the
+//!   hive-wide [`LoweredIntegrations`], and each seat's resolved
+//!   [`LoweredSeatIntegration`] (model, MCP servers, skills, executable tools,
+//!   hooks, permissions, limits).
 //! - [`patch::apply`], [`patch::guard`] and [`patch::diff`] apply, check and
 //!   compute the recorded form of an edit, a classified [`patch::Patch`].
 //!   Memory learning operations, which are not files, are proposed this way.
@@ -51,7 +84,9 @@
 //! # What this crate does not hold
 //!
 //! It reads no files: the host collects the document map and hands it to
-//! [`parse`]. It runs no agents and calls no model: [`lower`] produces the
+//! [`parse`]. It runs no processes and resolves no credentials: an executable
+//! tool is declared here and run by `tinyhivemind-exec`, a [`SecretRef`] is
+//! resolved by the adapter at deployment. It runs no agents and calls no model: [`lower`] produces the
 //! inputs a host needs to create seats, and the host decides when to activate
 //! them. It owns no evaluation, archive storage, or memory store: those are
 //! host-owned, and [`lineage`] only folds records the host supplies. It does
@@ -112,6 +147,31 @@
 //! assert_eq!(episode.turn_budget, 8);
 //! assert_eq!(episode.quorum, Policies::default().episode.quorum);
 //! # Ok::<(), tinyhivemind_lang::Error>(())
+//! ```
+//!
+//! # Example: declaring an executable tool
+//!
+//! ```
+//! use tinyhivemind_lang::{ExecTool, SideEffects, ToolOutput, ToolStdin};
+//!
+//! // Only the name, description and command are required; everything else
+//! // defaults: JSON on stdin, text out, 60 s, and the permission gate treats
+//! // the call as a write.
+//! let tool: ExecTool = serde_json::from_value(serde_json::json!({
+//!     "id": "word_count",
+//!     "description": "Count the words of a text",
+//!     "command": ["python3", "tools/word_count.py"],
+//!     "args": {
+//!         "type": "object",
+//!         "properties": { "text": { "type": "string" } },
+//!         "required": ["text"]
+//!     }
+//! }))?;
+//! assert_eq!(tool.stdin, ToolStdin::Json);
+//! assert_eq!(tool.output, ToolOutput::Text);
+//! assert_eq!(tool.timeout_ms, 60_000);
+//! assert_eq!(tool.side_effects, SideEffects::Write);
+//! # Ok::<(), serde_json::Error>(())
 //! ```
 //!
 //! # Example: checking a direct edit
@@ -176,6 +236,9 @@ pub use check::{Review, check, check_packages};
 pub use diagnostic::{Diagnostic, Rule};
 pub use document::*;
 pub use error::{Error, Result};
-pub use lowering::{LoweredHive, LoweredMemoryBinding, LoweredSeat, lower};
+pub use lowering::{
+    LoweredHive, LoweredHook, LoweredIntegrations, LoweredMemoryBinding, LoweredModel, LoweredSeat,
+    LoweredSeatIntegration, lower,
+};
 pub use memory::*;
 pub use validation::{diagnose, validate, validate_namespace, validate_path};

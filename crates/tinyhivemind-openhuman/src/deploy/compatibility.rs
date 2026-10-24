@@ -154,7 +154,7 @@ fn children(config: &HiveConfig) -> DeployResult<()> {
                 ));
             }
             if child
-                .permission_profile
+                .permissions
                 .as_ref()
                 .and_then(|id| {
                     config

@@ -14,6 +14,8 @@ pub(super) struct Hooks {
     pub call: Option<openhuman_embed::budget::CallBudget>,
     memories: BTreeMap<String, crate::HiveMemoryStore>,
     recalled: Mutex<BTreeSet<(String, String, String)>>,
+    /// Each seat's `stop` script hooks, by seat id.
+    stops: BTreeMap<String, Arc<tinyhivemind_exec::HookRunner>>,
 }
 impl Hooks {
     #[cfg(test)]
@@ -31,7 +33,17 @@ impl Hooks {
             call: options.call_budget,
             memories,
             recalled: Mutex::new(BTreeSet::new()),
+            stops: BTreeMap::new(),
         }
+    }
+
+    /// Run each seat's `stop` script hooks on its finished replies.
+    pub(super) fn with_stops(
+        mut self,
+        stops: BTreeMap<String, Arc<tinyhivemind_exec::HookRunner>>,
+    ) -> Self {
+        self.stops = stops;
+        self
     }
 
     fn context_without_extra(&self, scope: &TurnScope) -> String {
@@ -192,8 +204,19 @@ impl TurnHooks for Hooks {
         self.extra.as_ref().and_then(|extra| extra.progress(scope))
     }
     fn wrap_turn<'a>(&'a self, scope: &'a TurnScope, turn: HostedTurn<'a>) -> HostedTurn<'a> {
-        match &self.extra {
+        let turn = match &self.extra {
             Some(extra) => extra.wrap_turn(scope, turn),
+            None => turn,
+        };
+        match self.stops.get(&scope.agent_id).cloned() {
+            // A stop hook observes the reply; it cannot start another turn.
+            Some(stop) => Box::pin(async move {
+                let outcome = turn.await;
+                if let Ok(done) = &outcome {
+                    stop.stop(&done.reply).await;
+                }
+                outcome
+            }),
             None => turn,
         }
     }

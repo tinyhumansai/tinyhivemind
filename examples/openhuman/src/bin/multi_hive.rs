@@ -135,15 +135,23 @@ async fn run(live: bool) -> Result<()> {
             .mount(&provider)
             .await;
     }
-    let mut config = manifest("multi_hive")?;
-    if !live {
-        config.runtime.provider = Default::default();
-        config.runtime.model.name = Some("fixture".into());
+    // The two hives are two packages; their shared seat must run on the same
+    // model in both, so each edit is applied to both.
+    let model = if live {
+        std::env::var("OPENROUTER_MODEL").unwrap_or_else(|_| "openai/gpt-oss-120b:nitro".into())
     } else {
-        config.runtime.model.name = Some(
-            std::env::var("OPENROUTER_MODEL")
-                .unwrap_or_else(|_| "openai/gpt-oss-120b:nitro".into()),
-        );
+        "fixture".into()
+    };
+    let mut packages = Vec::new();
+    for name in ["multi_hive/hive-a", "multi_hive/hive-b"] {
+        let mut package = manifest(name)?;
+        if !live {
+            package.manifest.runtime.provider = None;
+        }
+        for declared in &mut package.manifest.models {
+            declared.name.clone_from(&model);
+        }
+        packages.push((name, package));
     }
     let storage = Arc::new(MemoryStorage::new());
     let proof_dir = tempfile::tempdir()?;
@@ -153,7 +161,7 @@ async fn run(live: bool) -> Result<()> {
         openhuman_embed::HostTurnTools::advertised(vec![Box::new(ProofWrite(tool_path.clone()))])
     });
     let deployment = deploy(
-        config,
+        packages,
         BuildOptions {
             config: Some(tinyhivemind_openhuman::offline::config()),
             provider: (!live).then(|| {
@@ -253,7 +261,7 @@ async fn run(live: bool) -> Result<()> {
         );
     }
     println!(
-        "One runtime, three profiles, four seats, two hives; shared seat kept session {session}."
+        "One runtime, two packages, four seats, two hives; shared seat kept session {session}."
     );
     println!(
         "A wrote proof.txt; B refused the same tool, retained its failed-turn audit, and completed a fresh safe assignment after explicit host release."

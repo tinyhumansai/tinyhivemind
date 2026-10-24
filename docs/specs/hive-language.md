@@ -4,6 +4,8 @@ Status: Accepted for the initial host-neutral format. Implements issue #112.
 Implementation: [plan](../plans/2026-10-10-hive-language.md).
 Boundary: [ADR 0032](../adr/0032-hive-language-owns-the-wire-format.md).
 Editing: [checking direct edits](hive-language-checking.md), [ADR 0033](../adr/0033-editors-write-files-and-the-crate-checks-them.md).
+Integrations: [what the agents run with](hive-language-integrations.md) and
+[executable tools](executable-tools.md), [ADR 0034](../adr/0034-the-hive-language-defines-the-deployment.md).
 
 ## Purpose and ownership
 

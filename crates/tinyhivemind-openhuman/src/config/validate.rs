@@ -10,7 +10,7 @@ impl HiveConfig {
     ///
     /// # Errors
     /// Returns the first typed identity, reference, limit or authority failure.
-    pub fn validate(self) -> Result<ValidatedHiveConfig> {
+    pub(crate) fn validate(self) -> Result<ValidatedHiveConfig> {
         super::parse::reject_inline(
             &serde_json::to_value(&self).map_err(|_| ConfigError::Json)?,
             "config",
@@ -33,7 +33,7 @@ impl HiveConfig {
     ///
     /// # Errors
     /// Returns `UnknownProfile` if the seat references an absent template.
-    pub fn profile_for(&self, seat: &Seat) -> Result<&Profile> {
+    pub(crate) fn profile_for(&self, seat: &Seat) -> Result<&Profile> {
         self.profiles
             .iter()
             .find(|p| p.id == seat.profile)
@@ -41,7 +41,7 @@ impl HiveConfig {
     }
     /// Resolve a stable seat key to the `OpenHuman` identity used at runtime.
     #[must_use]
-    pub fn agent_id_for_seat(&self, seat_id: &str) -> Option<String> {
+    pub(crate) fn agent_id_for_seat(&self, seat_id: &str) -> Option<String> {
         self.seats
             .iter()
             .find(|seat| seat.id == seat_id)
@@ -51,7 +51,7 @@ impl HiveConfig {
     ///
     /// # Errors
     /// Returns unknown-profile or unknown-permission-reference errors.
-    pub fn permission_layers(
+    pub(crate) fn permission_layers(
         &self,
         seat: &Seat,
         member: Option<&Membership>,
@@ -60,7 +60,7 @@ impl HiveConfig {
         let mut layers = vec![];
         for reference in [
             self.runtime.permission_profile.as_ref(),
-            profile.permission_profile.as_ref(),
+            profile.permissions.as_ref(),
             seat.overrides.permission_profile.as_ref(),
             member.and_then(|m| m.permission_profile.as_ref()),
         ]
@@ -80,7 +80,7 @@ impl HiveConfig {
     ///
     /// # Errors
     /// Returns `UnknownProfile` or `ConflictingMcp` for conflicting named servers.
-    pub fn normalized_mcp(&self, seat: &Seat) -> Result<Vec<McpServer>> {
+    pub(crate) fn normalized_mcp(&self, seat: &Seat) -> Result<Vec<McpServer>> {
         let profile = self.profile_for(seat)?;
         let mut servers = std::collections::BTreeMap::new();
         for server in self
@@ -103,11 +103,7 @@ impl HiveConfig {
             .runtime
             .permission_profile
             .iter()
-            .chain(
-                self.profiles
-                    .iter()
-                    .filter_map(|p| p.permission_profile.as_ref()),
-            )
+            .chain(self.profiles.iter().filter_map(|p| p.permissions.as_ref()))
             .chain(
                 self.seats
                     .iter()
@@ -287,7 +283,7 @@ impl HiveConfig {
         for job in &self.workflows {
             if job.prompt.trim().is_empty()
                 || job.schedule.split_whitespace().count() != 5
-                || openhuman_core::cron::validate_schedule(
+                || tinyflows_schedule::validate_schedule(
                     &openhuman_core::cron::Schedule::Cron {
                         expr: job.schedule.clone(),
                         tz: None,
@@ -401,10 +397,11 @@ fn unique_agent_ids(config: &HiveConfig) -> Result<()> {
                 agent_id,
             });
         }
-        let reserved = openhuman_core::agent::harness::AgentDefinitionRegistry::builtins_only()
+        let reserved =
+            openhuman_core::agent_registry::host_definition::AgentDefinitionRegistry::builtins_only(
+            )
             .get(&agent_id)
-            .is_some()
-            || config.profiles.iter().any(|profile| profile.id == agent_id);
+            .is_some() || config.profiles.iter().any(|profile| profile.id == agent_id);
         if reserved {
             return Err(ConfigError::ReservedAgentId {
                 seat: seat.id.clone(),

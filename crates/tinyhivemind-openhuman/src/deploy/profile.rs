@@ -70,7 +70,7 @@ pub(super) fn definition(config: &HiveConfig, profile: &Profile) -> AgentDefinit
     if let Some(t) = profile.model.temperature {
         definition = definition.temperature(t);
     }
-    if let Some(policy) = profile.permission_profile.as_ref().and_then(|id| {
+    if let Some(policy) = profile.permissions.as_ref().and_then(|id| {
         config
             .permission_profiles
             .iter()
@@ -216,4 +216,42 @@ pub(super) fn seat(
         let id = id.clone();
         Box::pin(async move { permissions.decide(&id, None, context).await })
     }))
+}
+
+/// The runtime's tool groups narrowed by a seat's declared modes.
+///
+/// The runtime's disclosure is the ceiling: an agent may only narrow it, so
+/// a mode more exposed than the runtime's for that group is refused rather
+/// than quietly capped.
+pub(super) fn groups(
+    runtime: &openhuman_embed::ToolGroups,
+    modes: &std::collections::BTreeMap<String, tinyhivemind_lang::GroupMode>,
+) -> DeployResult<openhuman_embed::ToolGroups> {
+    use openhuman_embed::GroupMode as Native;
+    let rank = |mode: Native| match mode {
+        Native::Off => 0,
+        Native::Withheld => 1,
+        Native::Advertised => 2,
+    };
+    let mut groups = runtime.clone();
+    for (id, mode) in modes {
+        let unsupported = |why: &str| {
+            DeployError::Config(crate::config::ConfigError::UnsupportedSetting(format!(
+                "toolpack group {id}: {why}"
+            )))
+        };
+        if !openhuman_embed::ToolGroups::ids().any(|known| known == id) {
+            return Err(unsupported("unknown group"));
+        }
+        let native = match mode {
+            tinyhivemind_lang::GroupMode::Advertised => Native::Advertised,
+            tinyhivemind_lang::GroupMode::Withheld => Native::Withheld,
+            tinyhivemind_lang::GroupMode::Off => Native::Off,
+        };
+        if rank(native) > rank(runtime.mode(id)) {
+            return Err(unsupported("more exposed than the runtime allows"));
+        }
+        groups = groups.with(id, native);
+    }
+    Ok(groups)
 }

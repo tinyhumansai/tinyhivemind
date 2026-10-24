@@ -14,7 +14,7 @@ default-run = "tinyhivemind-openhuman-example"
 anyhow = "1"
 # The multi-hive host supplies one classified native filesystem proof tool.
 async-trait = "0.1"
-tinytools = { git = "https://github.com/tinyhumansai/tinytools", rev = "1cd9e9c4a117336e6f42d0c7936ed60e7476d88f" }
+tinytools = { git = "https://github.com/tinyhumansai/tinytools", rev = "3a01641f8ebd8a55656cd212f9a90638d958a447" }
 futures = "0.3"
 # The live hive uses OpenHuman's native runtime, agents, sessions, and TinyCortex module.
 openhuman-embed = { path = "../../vendor/openhuman/crates/openhuman-embed", default-features = false, features = ["mcp", "modules", "skills"] }
@@ -38,7 +38,7 @@ tinyhivemind-openhuman = { path = "../../crates/tinyhivemind-openhuman", feature
 # Pure core tool bookkeeping used by the research experiments.
 tinyhivemind-tools = { path = "../../crates/tinyhivemind-tools" }
 # The DeepSWE opt-in resolves the same durable engine for hive recall and OpenHuman.
-tinymemory-api = { git = "https://github.com/tinyhumansai/tinymemory", rev = "7973cac089afaad1068f14e4ded6f4a1724f79e3" }
+tinymemory-api = { git = "https://github.com/tinyhumansai/tinymemory", rev = "6018a91a773555efb50bf1959a6621292618e04a" }
 # Diagnostic only: OpenHuman sanitises a hosted-agent failure into a fixed
 # string, so the underlying reason is only visible through its own logging.
 env_logger = "0.11"
@@ -49,7 +49,7 @@ wait-timeout = "0.2"
 wiremock = "0.6"
 
 [dev-dependencies]
-tinymemory-api = { git = "https://github.com/tinyhumansai/tinymemory", rev = "7973cac089afaad1068f14e4ded6f4a1724f79e3", features = ["conformance"] }
+tinymemory-api = { git = "https://github.com/tinyhumansai/tinymemory", rev = "6018a91a773555efb50bf1959a6621292618e04a", features = ["conformance"] }
 
 # `tinyhivemind-openhuman` above is a member of the root workspace and inherits
 # its harness dependencies from there, which name git sources (see the root
@@ -67,23 +67,76 @@ openhuman-embed = { path = "../../vendor/openhuman/crates/openhuman-embed" }
 openhuman = { path = "../../vendor/openhuman/crates/openhuman-core" }
 
 [patch."https://github.com/tinyhumansai/tinytools"]
+# tinymcp's `tools` feature names tinytools by git rev so it can be built on its
+# own. Redirect it to the copy tinyagents vendors — the one the harness and
+# every host tool link — so there is exactly one `tinytools` package and one
+# `Tool` trait. Without this, MCP tools would not satisfy the harness's trait.
 tinytools = { path = "../../vendor/openhuman/vendor/tinyagents/vendor/tinytools/crates/tinytools" }
+tinytools-std = { path = "../../vendor/openhuman/vendor/tinyagents/vendor/tinytools/crates/tinytools-std" }
 tinytools-agent = { path = "../../vendor/openhuman/vendor/tinyagents/vendor/tinytools/crates/tinytools-agent" }
 
-# OpenHuman's workspace-level patches do not cross this standalone workspace
-# boundary. Keep the newer OpenHuman checkout's vendored memory and inference
-# crates unified with the copies its submodules provide.
 [patch."https://github.com/tinyhumansai/tinymemory"]
 tinymemory-api = { path = "../../vendor/openhuman/vendor/tinymemory/crates/tinymemory-api" }
 tinymemory-tools = { path = "../../vendor/openhuman/vendor/tinymemory/crates/tinymemory-tools" }
 tinymemory-integrations = { path = "../../vendor/openhuman/vendor/tinymemory/crates/tinymemory-integrations" }
 
-# Storage contracts must resolve to the harness copy across git and path users.
+[patch."https://github.com/tinyhumansai/tinyflows"]
+tinyflows-schedule = { path = "../../vendor/openhuman/vendor/tinyflows/crates/tinyflows-schedule" }
+
+[patch."https://github.com/tinyhumansai/tinybus"]
+# tinystoragedrivers-bus (and tinywallet, which names tinybus by git rev) name
+# tinybus by git. Redirect them to the in-tree copy so the graph holds exactly
+# one `tinybus` (one `Interface`, one `Connection`) and one module SDK instead of
+# a second set compiled only for the storage wire types.
+tinybus = { path = "../../vendor/openhuman/vendor/tinybus/crates/tinybus" }
+tinybus-macros = { path = "../../vendor/openhuman/vendor/tinybus/crates/tinybus-macros" }
+tinybus-module = { path = "../../vendor/openhuman/vendor/tinybus/crates/tinybus-module" }
+
+[patch."https://github.com/senamakel/tinybus"]
+# The v2 storage and TinyBox modules depend on the migration fork URL. Patch
+# that source identity to the same checkout as the canonical dependency above
+# so all bus interfaces share one Rust type identity.
+tinybus = { path = "../../vendor/openhuman/vendor/tinybus/crates/tinybus" }
+tinybus-macros = { path = "../../vendor/openhuman/vendor/tinybus/crates/tinybus-macros" }
+tinybus-module = { path = "../../vendor/openhuman/vendor/tinybus/crates/tinybus-module" }
+
 [patch."https://github.com/tinyhumansai/tinystoragedrivers"]
-tinystoragedrivers-core = { path = "../../vendor/openhuman/vendor/tinyagents/vendor/tinystoragedrivers/crates/tinystoragedrivers-core" }
-tinystoragedrivers-sqlite = { path = "../../vendor/openhuman/vendor/tinyagents/vendor/tinystoragedrivers/crates/tinystoragedrivers-sqlite" }
+# One editable checkout every module resolves onto. The v2 repository splits
+# the public facade, API, types and primitive implementations into separate
+# packages; only packages that exist in the pinned v2 checkout are patched.
+# scripts/ci/check-storage-owner.mjs enforces that resolved TSD packages stay
+# under this vendor directory.
+tinystoragedrivers = { path = "../../vendor/openhuman/vendor/tinystoragedrivers/crates/tinystoragedrivers" }
+tinystoragedrivers-api = { path = "../../vendor/openhuman/vendor/tinystoragedrivers/crates/tinystoragedrivers-api" }
+tinystoragedrivers-blob = { path = "../../vendor/openhuman/vendor/tinystoragedrivers/crates/tinystoragedrivers-blob" }
+tinystoragedrivers-bus = { path = "../../vendor/openhuman/vendor/tinystoragedrivers/crates/tinystoragedrivers-bus" }
+tinystoragedrivers-busproxy = { path = "../../vendor/openhuman/vendor/tinystoragedrivers/crates/tinystoragedrivers-busproxy" }
+tinystoragedrivers-connect = { path = "../../vendor/openhuman/vendor/tinystoragedrivers/crates/tinystoragedrivers-connect" }
+tinystoragedrivers-document = { path = "../../vendor/openhuman/vendor/tinystoragedrivers/crates/tinystoragedrivers-document" }
+tinystoragedrivers-kv = { path = "../../vendor/openhuman/vendor/tinystoragedrivers/crates/tinystoragedrivers-kv" }
+tinystoragedrivers-queue = { path = "../../vendor/openhuman/vendor/tinystoragedrivers/crates/tinystoragedrivers-queue" }
+tinystoragedrivers-secrets = { path = "../../vendor/openhuman/vendor/tinystoragedrivers/crates/tinystoragedrivers-secrets" }
+tinystoragedrivers-testkit = { path = "../../vendor/openhuman/vendor/tinystoragedrivers/crates/tinystoragedrivers-testkit" }
+tinystoragedrivers-types = { path = "../../vendor/openhuman/vendor/tinystoragedrivers/crates/tinystoragedrivers-types" }
+
+[patch."https://github.com/senamakel/tinystoragedrivers"]
+# The v2.1.0 owner APIs are published from the migration fork while the host
+# consumes their canonical module sources from the same pinned vendor tree.
+tinystoragedrivers = { path = "../../vendor/openhuman/vendor/tinystoragedrivers/crates/tinystoragedrivers" }
+tinystoragedrivers-api = { path = "../../vendor/openhuman/vendor/tinystoragedrivers/crates/tinystoragedrivers-api" }
+tinystoragedrivers-blob = { path = "../../vendor/openhuman/vendor/tinystoragedrivers/crates/tinystoragedrivers-blob" }
+tinystoragedrivers-bus = { path = "../../vendor/openhuman/vendor/tinystoragedrivers/crates/tinystoragedrivers-bus" }
+tinystoragedrivers-busproxy = { path = "../../vendor/openhuman/vendor/tinystoragedrivers/crates/tinystoragedrivers-busproxy" }
+tinystoragedrivers-connect = { path = "../../vendor/openhuman/vendor/tinystoragedrivers/crates/tinystoragedrivers-connect" }
+tinystoragedrivers-document = { path = "../../vendor/openhuman/vendor/tinystoragedrivers/crates/tinystoragedrivers-document" }
+tinystoragedrivers-kv = { path = "../../vendor/openhuman/vendor/tinystoragedrivers/crates/tinystoragedrivers-kv" }
+tinystoragedrivers-queue = { path = "../../vendor/openhuman/vendor/tinystoragedrivers/crates/tinystoragedrivers-queue" }
+tinystoragedrivers-secrets = { path = "../../vendor/openhuman/vendor/tinystoragedrivers/crates/tinystoragedrivers-secrets" }
+tinystoragedrivers-testkit = { path = "../../vendor/openhuman/vendor/tinystoragedrivers/crates/tinystoragedrivers-testkit" }
+tinystoragedrivers-types = { path = "../../vendor/openhuman/vendor/tinystoragedrivers/crates/tinystoragedrivers-types" }
 
 [patch."https://github.com/tinyhumansai/tinyinference"]
+# tinymemes depends on the Jev client by git; resolve it to the vendored copy.
 tinyinference-decisions = { path = "../../vendor/openhuman/vendor/tinyagents/vendor/tinyinference/crates/tinyinference-decisions" }
 tinyinference-core = { path = "../../vendor/openhuman/vendor/tinyagents/vendor/tinyinference/crates/tinyinference-core" }
 tinyinference-embeddings = { path = "../../vendor/openhuman/vendor/tinyagents/vendor/tinyinference/crates/tinyinference-embeddings" }
@@ -93,9 +146,21 @@ tinyinference-providers = { path = "../../vendor/openhuman/vendor/tinyagents/ven
 tinyinference-voice = { path = "../../vendor/openhuman/vendor/tinyagents/vendor/tinyinference/crates/tinyinference-voice" }
 
 [patch.crates-io]
+# Module crates name TinyAgents by version (with a nested-path patch of their
+# own for standalone builds); resolve those names to the one copy the host uses.
+tinyagents-live = { path = "../../vendor/openhuman/vendor/tinyagents/crates/tinyagents-live" }
+tinyagents-harness = { path = "../../vendor/openhuman/vendor/tinyagents/crates/tinyagents-harness" }
+tinyagents-hooks = { path = "../../vendor/openhuman/vendor/tinyagents/crates/tinyagents-hooks" }
+tinytools = { path = "../../vendor/openhuman/vendor/tinyagents/vendor/tinytools/crates/tinytools" }
+tinybus = { path = "../../vendor/openhuman/vendor/tinybus/crates/tinybus" }
+tinybus-macros = { path = "../../vendor/openhuman/vendor/tinybus/crates/tinybus-macros" }
+tinybus-module = { path = "../../vendor/openhuman/vendor/tinybus/crates/tinybus-module" }
 tinyinference-core = { path = "../../vendor/openhuman/vendor/tinyagents/vendor/tinyinference/crates/tinyinference-core" }
 tinyinference-embeddings = { path = "../../vendor/openhuman/vendor/tinyagents/vendor/tinyinference/crates/tinyinference-embeddings" }
 tinyinference-llm = { path = "../../vendor/openhuman/vendor/tinyagents/vendor/tinyinference/crates/tinyinference-llm" }
 tinyinference-local = { path = "../../vendor/openhuman/vendor/tinyagents/vendor/tinyinference/crates/tinyinference-local" }
 tinyinference-providers = { path = "../../vendor/openhuman/vendor/tinyagents/vendor/tinyinference/crates/tinyinference-providers" }
 tinyinference-voice = { path = "../../vendor/openhuman/vendor/tinyagents/vendor/tinyinference/crates/tinyinference-voice" }
+tinyflows = { path = "../../vendor/openhuman/vendor/tinyflows/crates/tinyflows" }
+tinychannels = { path = "../../vendor/openhuman/vendor/tinychannels" }
+tiny-artifacts = { path = "../../vendor/openhuman/vendor/tiny-artifacts/crates/tiny-artifacts" }

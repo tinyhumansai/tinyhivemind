@@ -1,8 +1,9 @@
-//! Assemble validated manifests on one `OpenHuman` runtime, without background work during construction.
+//! Assemble hive packages on one `OpenHuman` runtime, without background work during construction.
 mod compatibility;
 mod factory;
 mod hooks;
 mod memory_root;
+mod packages;
 mod permission;
 mod profile;
 mod rules;
@@ -40,22 +41,62 @@ impl std::fmt::Debug for HiveDeployment {
     }
 }
 impl HiveDeployment {
+    /// Deploy checked hive packages on one runtime: one hive per package,
+    /// seats shared by id, every integration the packages declare attached.
+    ///
+    /// # Errors
+    /// Packages that disagree about a shared seat or declaration, settings
+    /// the harness cannot honour, missing credentials, or refused
+    /// runtime/coordinator operations.
+    pub async fn from_packages(
+        packages: Vec<crate::language::PackageSource>,
+        secrets: Arc<dyn SecretResolver>,
+        mut options: BuildOptions,
+    ) -> DeployResult<Self> {
+        let mut native = options.config.clone().unwrap_or_default();
+        let (config, extras) = packages::prepare(&packages, &secrets, &mut native)?;
+        options.config = Some(native);
+        if extras.values().any(|seat| !seat.programs.is_empty()) {
+            options.classifier = Some(Arc::new(packages::ProgramEffects::new(
+                &extras,
+                options.classifier.take(),
+            )));
+        }
+        let validated = config.validate()?;
+        Box::pin(Self::build_plan(validated, secrets, options, extras)).await
+    }
     /// Build using in-process stores and no optional host ports.
+    #[cfg(test)]
     /// # Errors
     /// Unsupported settings, missing credentials or refused runtime/coordinator operations.
-    pub async fn build(
+    pub(crate) async fn build(
         config: ValidatedHiveConfig,
         secrets: Arc<dyn SecretResolver>,
     ) -> DeployResult<Self> {
         Box::pin(Self::build_with(config, secrets, BuildOptions::default())).await
     }
     /// Lower the manifest with injected native host ports, validating compatibility before boot.
+    #[cfg(test)]
     /// # Errors
     /// Unsupported settings, missing credentials or refused runtime/coordinator operations.
-    pub async fn build_with(
+    pub(crate) async fn build_with(
         validated: ValidatedHiveConfig,
         secrets: Arc<dyn SecretResolver>,
         options: BuildOptions,
+    ) -> DeployResult<Self> {
+        Box::pin(Self::build_plan(
+            validated,
+            secrets,
+            options,
+            packages::Extras::new(),
+        ))
+        .await
+    }
+    async fn build_plan(
+        validated: ValidatedHiveConfig,
+        secrets: Arc<dyn SecretResolver>,
+        options: BuildOptions,
+        extras: packages::Extras,
     ) -> DeployResult<Self> {
         let config = validated.into_config();
         runtime::preflight(&config, &options)?;
@@ -90,11 +131,14 @@ impl HiveDeployment {
         .map_err(|_| DeployError::Coordinator)?;
         let permissions = Arc::new(Permissions::new(config.clone(), &options));
         let memories = memory_stores(&config, memory_engine.as_ref())?;
-        let hooks = Arc::new(hooks::Hooks::with_memories(
-            permissions.clone(),
-            &options,
-            memories,
-        ));
+        let stops = extras
+            .iter()
+            .filter(|(_, exec)| !exec.hooks.is_empty())
+            .map(|(seat, exec)| (seat.clone(), exec.hooks.clone()))
+            .collect();
+        let hooks = Arc::new(
+            hooks::Hooks::with_memories(permissions.clone(), &options, memories).with_stops(stops),
+        );
         let factory = ManifestFactory::new(
             runtime.clone(),
             permissions.clone(),
@@ -117,15 +161,20 @@ impl HiveDeployment {
             .map_err(|_| DeployError::Coordinator)?;
         // Deployment owns every source in its replacement belt. Legacy hosts
         // retain supplied agents' own tools unless they explicitly opt in.
-        let tools = options.tools.clone().unwrap_or_else(|| {
-            Arc::new(|_| openhuman_embed::HostTurnTools::advertised(Vec::new()))
-        });
+        let tools = belt(&config, &extras, options.tools.clone(), &secrets);
         host = host
             .with_tools(tools)
             .map_err(|_| DeployError::Coordinator)?;
         let mut seats = BTreeMap::new();
         for seat in &config.seats {
-            let spec = profile::seat(&config, seat, secrets.as_ref(), permissions.clone())?;
+            let mut spec = profile::seat(&config, seat, secrets.as_ref(), permissions.clone())?;
+            let groups = &config.profile_for(seat)?.groups;
+            if !groups.is_empty() {
+                spec = spec.tool_groups(profile::groups(runtime.tool_groups(), groups)?);
+            }
+            if let Some(exec) = extras.get(&seat.id).filter(|exec| !exec.hooks.is_empty()) {
+                spec = spec.tool_hook(Arc::new(packages::ScriptHooks(exec.hooks.clone())));
+            }
             let agent = host
                 .register_spec_as(&runtime, &seat.id, spec)
                 .await
@@ -345,15 +394,14 @@ impl HiveDeployment {
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
         if scheduler.is_none() {
-            let config = self
-                .runtime
-                .core_runtime()
-                .context()
+            let context = self.runtime.core_runtime().context().clone();
+            let config = context
                 .embedder_config()
                 .cloned()
                 .ok_or(DeployError::Runtime)?;
+            let dispatch = openhuman_core::core::runtime::DispatchCtx::new(context);
             *scheduler = Some(tokio::spawn(async move {
-                let _ = Box::pin(openhuman_core::cron::scheduler::run(config)).await;
+                let _ = Box::pin(openhuman_core::cron::scheduler::run(&dispatch, config)).await;
             }));
         }
         Ok(())
@@ -459,3 +507,33 @@ impl Drop for HiveDeployment {
 }
 #[cfg(test)]
 mod test;
+
+/// Every turn's tool belt: the host's own source, then the turn's seat's
+/// executable tools, each made visible.
+fn belt(
+    config: &crate::config::HiveConfig,
+    extras: &packages::Extras,
+    host: Option<openhuman_embed::HostTools>,
+    secrets: &Arc<dyn SecretResolver>,
+) -> openhuman_embed::HostTools {
+    let by_agent: BTreeMap<String, packages::SeatExec> = extras
+        .iter()
+        .filter(|(_, exec)| !exec.programs.is_empty())
+        .filter_map(|(seat, exec)| Some((config.agent_id_for_seat(seat)?, exec.clone())))
+        .collect();
+    let exec_secrets: Arc<dyn tinyhivemind_exec::Secrets> =
+        Arc::new(packages::ExecSecrets(secrets.clone()));
+    Arc::new(move |turn| {
+        let mut belt = host.as_ref().map_or_else(
+            || openhuman_embed::HostTurnTools::advertised(Vec::new()),
+            |source| source(turn),
+        );
+        if let Some(seat) = by_agent.get(turn.agent_id()) {
+            for tool in packages::programs(seat, &exec_secrets) {
+                belt.visible.insert(tool.name().to_owned());
+                belt.tools.push(tool);
+            }
+        }
+        belt
+    })
+}

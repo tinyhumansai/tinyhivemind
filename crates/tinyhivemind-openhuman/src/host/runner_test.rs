@@ -30,40 +30,46 @@ fn async_context_loading_uses_the_turn_deadline() {
         .thread_stack_size(16 * 1024 * 1024)
         .build()
         .unwrap()
+        // Run on a worker thread: the runtime build future outgrows the test
+        // thread's default stack, and only the workers get the larger one.
         .block_on(async {
-            let backend = crate::offline::backend().await;
-            let runtime = Box::pin(
-                Runtime::builder()
-                    .config(crate::offline::config())
-                    .workspace(Workspace::Ephemeral)
-                    .backend_url(backend.uri())
-                    .build(),
-            )
+            tokio::spawn(async {
+                let backend = crate::offline::backend().await;
+                let runtime = Box::pin(
+                    Runtime::builder()
+                        .config(crate::offline::config())
+                        .workspace(Workspace::Ephemeral)
+                        .backend_url(backend.uri())
+                        .build(),
+                )
+                .await
+                .unwrap();
+                let agent = runtime.agent(AgentSpec::new("stalled-context")).unwrap();
+                let activation = Arc::new(Activation::default());
+                activation.activate();
+                let runner = SuppliedRunner {
+                    agent: Arc::new(tokio::sync::RwLock::new(Some(agent))),
+                    hooks: Arc::new(StalledContext),
+                    activation,
+                    timeout: Duration::from_secs(1),
+                    source: None,
+                };
+                let request = TurnRequest {
+                    turn_id: "turn".into(),
+                    scheduled_job_id: None,
+                    teammates: Vec::new(),
+                    agent_id: "stalled-context".into(),
+                    session_id: None,
+                    messages: Vec::new(),
+                    memberships: Vec::new(),
+                    episode: None,
+                    resumption: None,
+                };
+                let result = runner.run(request).await;
+                assert!(result.is_err_and(|error| error.to_string().contains("timed out")));
+            })
             .await
             .unwrap();
-            let agent = runtime.agent(AgentSpec::new("stalled-context")).unwrap();
-            let activation = Arc::new(Activation::default());
-            activation.activate();
-            let runner = SuppliedRunner {
-                agent: Arc::new(tokio::sync::RwLock::new(Some(agent))),
-                hooks: Arc::new(StalledContext),
-                activation,
-                timeout: Duration::from_secs(1),
-                source: None,
-            };
-            let request = TurnRequest {
-                turn_id: "turn".into(),
-                scheduled_job_id: None,
-                teammates: Vec::new(),
-                agent_id: "stalled-context".into(),
-                session_id: None,
-                messages: Vec::new(),
-                memberships: Vec::new(),
-                episode: None,
-                resumption: None,
-            };
-            let result = runner.run(request).await;
-            assert!(result.is_err_and(|error| error.to_string().contains("timed out")));
         });
 }
 #[test]

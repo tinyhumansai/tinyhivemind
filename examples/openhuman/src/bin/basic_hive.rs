@@ -121,7 +121,7 @@ async fn run(mode: Mode) -> Result<()> {
     };
     let storage = Arc::new(MemoryStorage::new());
     let deployment = deploy(
-        manifest("basic_hive")?,
+        vec![("basic_hive", manifest("basic_hive")?)],
         BuildOptions {
             config: Some(tinyhivemind_openhuman::offline::config()),
             backend_url: Some(backend.uri()),

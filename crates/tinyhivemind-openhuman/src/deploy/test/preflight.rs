@@ -106,7 +106,7 @@ fn child_instance_only_settings_are_explicitly_refused() -> anyhow::Result<()> {
     config.profiles[1].memory = None;
     assert!(runtime::preflight(&config, &BuildOptions::default()).is_ok());
     config.permission_profiles[0].send_destinations = Some(vec!["a".into()]);
-    config.profiles[1].permission_profile = Some("narrow".into());
+    config.profiles[1].permissions = Some("narrow".into());
     assert!(runtime::preflight(&config, &BuildOptions::default()).is_err());
     Ok(())
 }
@@ -136,7 +136,7 @@ fn logical_memory_roots_encode_without_collisions_and_reserve_native_agent_depth
         &"a".repeat(384),
     ] {
         let native = native_memory_root(root)?;
-        assert!(openhuman_core::memory::scope::validate_root(&native).is_ok());
+        assert!(tinymemory_tools::validate_root(&native).is_ok());
         assert_ne!(native_memory_root(&native).ok(), Some(native));
     }
     assert_ne!(

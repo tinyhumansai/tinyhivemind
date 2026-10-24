@@ -62,7 +62,7 @@ pub(super) fn hive_action_response(seat: &str, serial: u32, tool: &str) -> Respo
         _ => format!("{seat} {tool}"),
     };
     let arguments = json!({
-        "server":"tinyhive",
+        "server":format!("tinyhive-{seat}"),
         "tool":tool,
         "arguments":{"message":message}
     })

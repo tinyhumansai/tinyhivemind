@@ -9,52 +9,45 @@ use tinyhivemind_core::{
 };
 use tinyhivemind_hives::CoordinatorOptions;
 
-/// Credential location; never a resolved credential.
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord)]
-#[serde(rename_all = "snake_case")]
-pub enum SecretRef {
-    /// Environment variable name.
-    Env(String),
-    /// Host secret-store key.
-    Store(String),
-}
+/// Credential location; never a resolved credential. The language's own.
+pub(crate) use tinyhivemind_lang::SecretRef;
 /// Provider endpoint and credential reference.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct Provider {
+pub(crate) struct Provider {
     /// Provider selector; `openai` supports compatible endpoints.
-    pub kind: String,
+    pub(crate) kind: String,
     /// Optional compatible HTTP endpoint.
-    pub endpoint: Option<String>,
+    pub(crate) endpoint: Option<String>,
     /// Credential reference resolved only during deployment.
-    pub credential: Option<SecretRef>,
+    pub(crate) credential: Option<SecretRef>,
 }
 /// Model and sampling defaults.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct Model {
+pub(crate) struct Model {
     /// Provider model identifier.
-    pub name: Option<String>,
+    pub(crate) name: Option<String>,
     /// Sampling temperature, including zero.
-    pub temperature: Option<f64>,
+    pub(crate) temperature: Option<f64>,
     /// Maximum generated tokens per model request.
-    pub max_tokens: Option<u32>,
+    pub(crate) max_tokens: Option<u32>,
 }
 /// Turn resource limits; omission inherits the parent.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct Limits {
+pub(crate) struct Limits {
     /// Wall-clock timeout in milliseconds.
-    pub timeout_ms: Option<u64>,
+    pub(crate) timeout_ms: Option<u64>,
     /// Maximum model/tool iterations.
-    pub iterations: Option<usize>,
+    pub(crate) iterations: Option<usize>,
     /// Maximum monetary model spend in dollars.
-    pub budget_usd: Option<f64>,
+    pub(crate) budget_usd: Option<f64>,
 }
 /// Ordered access tiers, from least to greatest authority.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, Eq, PartialEq, Ord, PartialOrd)]
 #[serde(rename_all = "snake_case")]
-pub enum Access {
+pub(crate) enum Access {
     /// No mutating tools.
     ReadOnly,
     /// Human-supervised mutation.
@@ -66,7 +59,7 @@ pub enum Access {
 /// Shell/file confinement selection.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
-pub enum Sandbox {
+pub(crate) enum Sandbox {
     /// Access and path rules only.
     #[default]
     None,
@@ -78,7 +71,7 @@ pub enum Sandbox {
 /// Tool visibility selector.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
-pub enum ToolScope {
+pub(crate) enum ToolScope {
     /// Every registered tool subject to permission gates.
     #[default]
     Wildcard,
@@ -90,103 +83,103 @@ pub enum ToolScope {
 /// Immutable MCP connection and server tool selection.
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq, Ord, PartialOrd)]
 #[serde(deny_unknown_fields)]
-pub struct McpServer {
+pub(crate) struct McpServer {
     /// Unique connection name.
-    pub id: String,
+    pub(crate) id: String,
     /// `stdio`, `sse` or `http`.
-    pub transport: String,
+    pub(crate) transport: String,
     /// URL for network transports, executable for stdio.
-    pub endpoint: String,
+    pub(crate) endpoint: String,
     /// Stdio command arguments.
     #[serde(default)]
-    pub args: Vec<String>,
+    pub(crate) args: Vec<String>,
     /// Credential-bearing environment values, all references.
     #[serde(default)]
-    pub env: BTreeMap<String, SecretRef>,
+    pub(crate) env: BTreeMap<String, SecretRef>,
     /// Credential-bearing HTTP headers, all references.
     #[serde(default)]
-    pub headers: BTreeMap<String, SecretRef>,
+    pub(crate) headers: BTreeMap<String, SecretRef>,
     /// None exposes all server tools; Some limits them.
     #[serde(default)]
-    pub tools: Option<Vec<String>>,
+    pub(crate) tools: Option<Vec<String>>,
     /// Server tools denied independently of its allowlist.
     #[serde(default)]
-    pub deny_tools: Vec<String>,
+    pub(crate) deny_tools: Vec<String>,
 }
 /// Fixed lifetime agent memory binding.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct Memory {
+pub(crate) struct Memory {
     /// Logical namespace root; absent inherits the deployment memory root.
     /// Deployment encodes it with [`crate::deploy::native_memory_root`].
-    pub root: Option<String>,
+    pub(crate) root: Option<String>,
 }
 /// Named authority baseline or restriction.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct PermissionProfile {
+pub(crate) struct PermissionProfile {
     /// Unique profile id.
-    pub id: String,
+    pub(crate) id: String,
     /// Access tier.
-    pub access: Access,
+    pub(crate) access: Access,
     /// Sandbox confinement.
-    pub sandbox: Sandbox,
+    pub(crate) sandbox: Sandbox,
     /// None inherits unrestricted names; Some is a finite allowlist.
-    pub allow_tools: Option<Vec<String>>,
+    pub(crate) allow_tools: Option<Vec<String>>,
     /// Tool names always denied.
-    pub deny_tools: Vec<String>,
+    pub(crate) deny_tools: Vec<String>,
     /// Allowed direct/hive destination ids; None is unrestricted.
-    pub send_destinations: Option<Vec<String>>,
+    pub(crate) send_destinations: Option<Vec<String>>,
     /// Allowed send operations; None is unrestricted.
-    pub send_operations: Option<Vec<String>>,
+    pub(crate) send_operations: Option<Vec<String>>,
     /// Native total core approval policy; omission inherits.
-    pub approval: Option<ApprovalPolicy>,
+    pub(crate) approval: Option<ApprovalPolicy>,
     /// Native argument-sensitive tool rules; omission inherits.
-    pub tool_rules: Option<tinytools::ToolRules>,
+    pub(crate) tool_rules: Option<tinytools::ToolRules>,
 }
 /// Global runtime baseline, shared by every seat.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct RuntimeSection {
+pub(crate) struct RuntimeSection {
     /// Stable deployment identity used to derive `OpenHuman` agent ids.
     /// Change it to start fresh transcripts and agent homes.
-    pub deployment_id: String,
+    pub(crate) deployment_id: String,
     /// Logical memory root shared by this deployment; absent derives
     /// `deployment:<deployment_id>`.
-    pub memory_root: Option<String>,
+    pub(crate) memory_root: Option<String>,
     /// Provider connection.
-    pub provider: Provider,
+    pub(crate) provider: Provider,
     /// Default model settings.
-    pub model: Model,
+    pub(crate) model: Model,
     /// Workspace directory; absent creates an ephemeral workspace.
-    pub workspace: Option<String>,
+    pub(crate) workspace: Option<String>,
     /// Session store selector (`memory`, `sqlite`, or `host`).
-    pub session_store: String,
+    pub(crate) session_store: String,
     /// Memory engine selector (`disabled`, `memory`, or `host`).
-    pub memory_engine: String,
+    pub(crate) memory_engine: String,
     /// Optional named authority baseline.
-    pub permission_profile: Option<String>,
+    pub(crate) permission_profile: Option<String>,
     /// Baseline confinement.
-    pub sandbox: Sandbox,
+    pub(crate) sandbox: Sandbox,
     /// Global tool rules.
-    pub tool_rules: Option<tinytools::ToolRules>,
+    pub(crate) tool_rules: Option<tinytools::ToolRules>,
     /// Baseline MCP connections.
-    pub mcp: Vec<McpServer>,
+    pub(crate) mcp: Vec<McpServer>,
     /// Enabled skill directories.
-    pub skills: Vec<String>,
+    pub(crate) skills: Vec<String>,
     /// Autonomy tier.
-    pub autonomy: Access,
+    pub(crate) autonomy: Access,
     /// Runtime limit defaults.
-    pub limits: Limits,
+    pub(crate) limits: Limits,
     /// Global coordinator-turn bound across hives. Native cron has a separate
     /// scheduler ceiling with this value; direct turns bypass coordinator admission.
-    pub concurrency: usize,
+    pub(crate) concurrency: usize,
     /// Include installed user skills in the runtime.
-    pub include_user_skills: bool,
+    pub(crate) include_user_skills: bool,
     /// Maximum seats; omission leaves the deployment unbounded.
-    pub max_agents: Option<usize>,
+    pub(crate) max_agents: Option<usize>,
     /// Start scheduler services after deployment construction.
-    pub start_scheduler: bool,
+    pub(crate) start_scheduler: bool,
 }
 impl Default for RuntimeSection {
     fn default() -> Self {
@@ -215,85 +208,88 @@ impl Default for RuntimeSection {
 /// Reusable agent template.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct Profile {
+pub(crate) struct Profile {
     /// Unique template id.
-    pub id: String,
+    pub(crate) id: String,
     /// Optional builtin definition name.
-    pub definition_base: Option<String>,
+    pub(crate) definition_base: Option<String>,
     /// Replace the entire composed system prompt when true.
-    pub bare_prompt: bool,
+    pub(crate) bare_prompt: bool,
     /// Override user-skill discovery.
-    pub include_user_skills: Option<bool>,
+    pub(crate) include_user_skills: Option<bool>,
     /// Fixed system prompt body.
-    pub system_prompt: String,
+    pub(crate) system_prompt: String,
     /// Named Markdown context, in prompt composition order.
-    pub context: Vec<String>,
+    pub(crate) context: Vec<String>,
     /// Model/sampling overrides.
-    pub model: Model,
-    /// Optional authority restriction.
-    pub permission_profile: Option<String>,
+    pub(crate) model: Model,
+    /// Optional authority restriction; `permission_profile` on the wire.
+    #[serde(rename = "permission_profile")]
+    pub(crate) permissions: Option<String>,
     /// Tool visibility.
-    pub tool_scope: ToolScope,
+    pub(crate) tool_scope: ToolScope,
     /// Additional denied tool names.
-    pub deny_tools: Vec<String>,
+    pub(crate) deny_tools: Vec<String>,
     /// Additional immutable MCP servers.
-    pub mcp: Vec<McpServer>,
+    pub(crate) mcp: Vec<McpServer>,
     /// Additional enabled skills.
-    pub skills: Vec<String>,
+    pub(crate) skills: Vec<String>,
     /// Allowed subagent template ids.
-    pub subagents: Vec<String>,
+    pub(crate) subagents: Vec<String>,
     /// Fixed memory binding override.
-    pub memory: Option<Memory>,
+    pub(crate) memory: Option<Memory>,
     /// Turn limits.
-    pub limits: Limits,
+    pub(crate) limits: Limits,
+    /// Harness tool group modes, by group id.
+    pub(crate) groups: BTreeMap<String, tinyhivemind_lang::GroupMode>,
 }
 /// Typed dynamic or configured seat overrides; credential fields are absent.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct SeatOverrides {
+pub(crate) struct SeatOverrides {
     /// Replacement fixed system prompt body.
-    pub system_prompt: Option<String>,
+    pub(crate) system_prompt: Option<String>,
     /// Additional context references.
-    pub context: Vec<String>,
+    pub(crate) context: Vec<String>,
     /// Model/sampling overrides.
-    pub model: Model,
+    pub(crate) model: Model,
     /// Optional authority restriction.
-    pub permission_profile: Option<String>,
+    pub(crate) permission_profile: Option<String>,
     /// Optional tool visibility restriction.
-    pub tool_scope: Option<ToolScope>,
+    pub(crate) tool_scope: Option<ToolScope>,
     /// Additional denied tool names.
-    pub deny_tools: Vec<String>,
+    pub(crate) deny_tools: Vec<String>,
     /// Additional immutable MCP connections.
-    pub mcp: Vec<McpServer>,
+    pub(crate) mcp: Vec<McpServer>,
     /// Additional skills.
-    pub skills: Vec<String>,
+    pub(crate) skills: Vec<String>,
     /// Allowed subagent template ids; omission inherits.
-    pub subagents: Option<Vec<String>>,
+    pub(crate) subagents: Option<Vec<String>>,
     /// Fixed memory binding override.
-    pub memory: Option<Memory>,
+    pub(crate) memory: Option<Memory>,
     /// Turn limit overrides.
-    pub limits: Limits,
+    pub(crate) limits: Limits,
 }
 /// One persistent agent/session identity.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct Seat {
+pub(crate) struct Seat {
     /// OpenHuman-compatible agent id.
-    pub id: String,
+    pub(crate) id: String,
     /// Optional `OpenHuman` agent id. When absent, deployment lowers this to
     /// `<deployment_id>-<seat_id>` while coordinator configuration keeps the
     /// stable seat id.
-    pub agent_id: Option<String>,
+    pub(crate) agent_id: Option<String>,
     /// Reusable profile reference.
-    pub profile: String,
+    pub(crate) profile: String,
     /// Typed final seat settings.
-    pub overrides: SeatOverrides,
+    pub(crate) overrides: SeatOverrides,
 }
 impl Seat {
     /// `OpenHuman` agent id used for sessions, transcripts and the workspace
     /// profile, leaving [`Seat::id`] as the stable coordinator identity.
     #[must_use]
-    pub fn resolved_agent_id(&self, deployment_id: &str) -> String {
+    pub(crate) fn resolved_agent_id(&self, deployment_id: &str) -> String {
         self.agent_id
             .clone()
             .unwrap_or_else(|| format!("{deployment_id}-{}", self.id))
@@ -302,40 +298,40 @@ impl Seat {
 /// Per-hive captured overlay; cannot rebind memory or credentials.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct Membership {
+pub(crate) struct Membership {
     /// Existing seat id.
-    pub seat: String,
+    pub(crate) seat: String,
     /// Freeform nonempty routing/delegation role.
-    pub role: String,
+    pub(crate) role: String,
     /// Additional context references.
-    pub context: Vec<String>,
+    pub(crate) context: Vec<String>,
     /// Optional further authority restriction.
-    pub permission_profile: Option<String>,
+    pub(crate) permission_profile: Option<String>,
     /// Optional assertion of the immutable seat MCP set.
-    pub mcp: Option<Vec<McpServer>>,
+    pub(crate) mcp: Option<Vec<McpServer>>,
 }
 /// Hive membership and native policy values.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct HiveSpec {
+pub(crate) struct HiveSpec {
     /// Unique hive identity.
-    pub id: String,
+    pub(crate) id: String,
     /// Display name; empty falls back to id.
-    pub name: String,
+    pub(crate) name: String,
     /// Members, in declaration order.
-    pub members: Vec<Membership>,
+    pub(crate) members: Vec<Membership>,
     /// Shared recall namespace; does not rebind seats.
-    pub memory_root: Option<String>,
+    pub(crate) memory_root: Option<String>,
     /// Pure deliberation episode policy.
-    pub episode: EpisodePolicy,
+    pub(crate) episode: EpisodePolicy,
     /// Semantic completion routing policy.
-    pub routing: RoutingPolicy,
+    pub(crate) routing: RoutingPolicy,
     /// Per-hive scheduling settings.
-    pub coordinator: CoordinatorOptions,
+    pub(crate) coordinator: CoordinatorOptions,
     /// Pure deliberation task division policy.
-    pub division: DivisionPolicy,
+    pub(crate) division: DivisionPolicy,
     /// Completion turn walls.
-    pub conduct: ConductPolicy,
+    pub(crate) conduct: ConductPolicy,
 }
 impl Default for HiveSpec {
     fn default() -> Self {
@@ -371,7 +367,7 @@ impl Default for HiveSpec {
 /// Explicit workflow dispatch target.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum WorkflowTarget {
+pub(crate) enum WorkflowTarget {
     /// Native isolated agent cron session.
     Seat(String),
     /// Authorized coordinator hive message.
@@ -380,24 +376,24 @@ pub enum WorkflowTarget {
 /// Scheduled named prompt; services start separately.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct Workflow {
+pub(crate) struct Workflow {
     /// Unique job id.
-    pub id: String,
+    pub(crate) id: String,
     /// Cron expression, parsed before runtime construction.
-    pub schedule: String,
+    pub(crate) schedule: String,
     /// Authenticated deployment target.
-    pub target: WorkflowTarget,
+    pub(crate) target: WorkflowTarget,
     /// Prompt submitted when the job runs.
-    pub prompt: String,
+    pub(crate) prompt: String,
     /// Whether this job is enabled.
     #[serde(default = "enabled")]
-    pub enabled: bool,
+    pub(crate) enabled: bool,
     /// Maximum retry count.
     #[serde(default)]
-    pub retries: u32,
+    pub(crate) retries: u32,
     /// At most one invocation at once.
     #[serde(default = "enabled")]
-    pub single_flight: bool,
+    pub(crate) single_flight: bool,
 }
 fn enabled() -> bool {
     true
@@ -405,34 +401,29 @@ fn enabled() -> bool {
 /// Canonical configuration; parsing has no runtime or secret side effects.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct HiveConfig {
+pub(crate) struct HiveConfig {
     /// One runtime's defaults.
-    pub runtime: RuntimeSection,
+    pub(crate) runtime: RuntimeSection,
     /// Reusable agent templates.
-    pub profiles: Vec<Profile>,
+    pub(crate) profiles: Vec<Profile>,
     /// Named baseline and restriction policies.
-    pub permission_profiles: Vec<PermissionProfile>,
+    pub(crate) permission_profiles: Vec<PermissionProfile>,
     /// Persistent seats.
-    pub seats: Vec<Seat>,
+    pub(crate) seats: Vec<Seat>,
     /// Hives sharing the seats.
-    pub hives: Vec<HiveSpec>,
+    pub(crate) hives: Vec<HiveSpec>,
     /// Named cron workflows.
-    pub workflows: Vec<Workflow>,
+    pub(crate) workflows: Vec<Workflow>,
     /// Named Markdown context bodies, resolved by directory loading.
-    pub contexts: BTreeMap<String, String>,
+    pub(crate) contexts: BTreeMap<String, String>,
 }
 /// Manifest that passed all referential and authority checks.
 #[derive(Clone, Debug)]
-pub struct ValidatedHiveConfig(pub(super) HiveConfig);
+pub(crate) struct ValidatedHiveConfig(pub(super) HiveConfig);
 impl ValidatedHiveConfig {
-    /// Immutable validated manifest.
-    #[must_use]
-    pub fn config(&self) -> &HiveConfig {
-        &self.0
-    }
     /// Consume validation proof to recover an editable manifest.
     #[must_use]
-    pub fn into_config(self) -> HiveConfig {
+    pub(crate) fn into_config(self) -> HiveConfig {
         self.0
     }
 }

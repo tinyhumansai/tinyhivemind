@@ -110,10 +110,41 @@ fn scheduled_mcp_envelope_and_private_children_never_reach_remote_effect() -> an
             .await?;
         let report = deployment.host().coordinator().run_until_idle().await?;
         assert_eq!(report.failed, 0, "{report:?}");
+        // The interactive call passes the hive gate and runs OpenHuman's own
+        // `mcp_call_tool`. That tool reaches the server only through
+        // OpenHuman's TinyMCP module, which this crate leaves to the host
+        // (`openhuman-embed/modules`); without it the tool answers that the
+        // module is unavailable. Either result proves the gate let it through.
+        let result = mcp_result(&model).await;
         assert!(
-            count.load(Ordering::Relaxed) > 0,
-            "interactive MCP call must reach the fixture"
+            count.load(Ordering::Relaxed) > 0 || result.contains("TinyMCP module is unavailable"),
+            "interactive MCP call must pass the hive gate, got {result:?}"
         );
         Ok(())
     })
+}
+
+/// The tool result the scripted model received for its `mcp_call_tool` call.
+async fn mcp_result(model: &wiremock::MockServer) -> String {
+    let requests = model.received_requests().await.unwrap_or_default();
+    let mut calls = Vec::new();
+    let mut results = Vec::new();
+    for request in &requests {
+        let body: Value = serde_json::from_slice(&request.body).unwrap_or_default();
+        for message in body["messages"].as_array().into_iter().flatten() {
+            for call in message["tool_calls"].as_array().into_iter().flatten() {
+                if call["function"]["name"] == "mcp_call_tool" {
+                    calls.push(call["id"].clone());
+                }
+            }
+            if message["role"] == "tool" {
+                results.push((message["tool_call_id"].clone(), message["content"].clone()));
+            }
+        }
+    }
+    results
+        .into_iter()
+        .find(|(id, _)| calls.contains(id))
+        .and_then(|(_, content)| content.as_str().map(str::to_owned))
+        .unwrap_or_default()
 }

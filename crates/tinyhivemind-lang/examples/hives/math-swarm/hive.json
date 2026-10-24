@@ -50,7 +50,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "conjecture-02",
@@ -76,7 +87,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "conjecture-03",
@@ -102,7 +124,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "conjecture-04",
@@ -128,7 +161,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "conjecture-05",
@@ -154,7 +198,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "conjecture-06",
@@ -180,7 +235,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "conjecture-07",
@@ -206,7 +272,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "conjecture-08",
@@ -232,7 +309,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "conjecture-09",
@@ -258,7 +346,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "conjecture-10",
@@ -284,7 +383,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "compute-01",
@@ -310,7 +420,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "compute-02",
@@ -336,7 +457,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "compute-03",
@@ -362,7 +494,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "compute-04",
@@ -388,7 +531,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "compute-05",
@@ -414,7 +568,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "compute-06",
@@ -440,7 +605,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "compute-07",
@@ -466,7 +642,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "compute-08",
@@ -492,7 +679,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "compute-09",
@@ -518,7 +716,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "compute-10",
@@ -544,7 +753,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "prove-01",
@@ -570,7 +790,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "prove-02",
@@ -596,7 +827,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "prove-03",
@@ -622,7 +864,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "prove-04",
@@ -648,7 +901,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "prove-05",
@@ -674,7 +938,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "prove-06",
@@ -700,7 +975,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "prove-07",
@@ -726,7 +1012,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "prove-08",
@@ -752,7 +1049,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "prove-09",
@@ -778,7 +1086,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "prove-10",
@@ -804,7 +1123,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "verify-01",
@@ -830,7 +1160,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "verify-02",
@@ -856,7 +1197,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "verify-03",
@@ -882,7 +1234,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "verify-04",
@@ -908,7 +1271,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "verify-05",
@@ -934,7 +1308,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "verify-06",
@@ -960,7 +1345,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "verify-07",
@@ -986,7 +1382,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "verify-08",
@@ -1012,7 +1419,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "verify-09",
@@ -1038,7 +1456,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "verify-10",
@@ -1064,7 +1493,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "synthesis-01",
@@ -1090,7 +1530,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "synthesis-02",
@@ -1116,7 +1567,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "synthesis-03",
@@ -1142,7 +1604,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "synthesis-04",
@@ -1168,7 +1641,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "synthesis-05",
@@ -1194,7 +1678,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "synthesis-06",
@@ -1220,7 +1715,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "synthesis-07",
@@ -1246,7 +1752,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "synthesis-08",
@@ -1272,7 +1789,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "synthesis-09",
@@ -1298,7 +1826,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     },
     {
       "id": "synthesis-10",
@@ -1324,7 +1863,18 @@
         ]
       },
       "mcp": [],
-      "skills": []
+      "skills": [],
+      "profile": null,
+      "agent_id": null,
+      "toolpacks": [],
+      "hooks": [],
+      "permissions": null,
+      "limits": {
+        "timeout_ms": null,
+        "iterations": null,
+        "budget_usd": null
+      },
+      "context": []
     }
   ],
   "desks": [
@@ -1565,5 +2115,51 @@
       "interrupted": null,
       "pending_per_agent": null
     }
-  }
+  },
+  "runtime": {
+    "deployment_id": null,
+    "workspace": null,
+    "session_store": "memory",
+    "memory_engine": "disabled",
+    "autonomy": "supervised",
+    "sandbox": "none",
+    "concurrency": 4,
+    "max_agents": null,
+    "include_user_skills": false,
+    "start_scheduler": false,
+    "provider": null,
+    "model": null,
+    "permissions": null,
+    "toolpacks": [],
+    "limits": {
+      "timeout_ms": null,
+      "iterations": null,
+      "budget_usd": null
+    }
+  },
+  "providers": [],
+  "models": [],
+  "mcp": [],
+  "skills": [],
+  "tools": [],
+  "toolpacks": [],
+  "permissions": [],
+  "profiles": [],
+  "hooks": [],
+  "session": {
+    "compact_context": null,
+    "max_history_messages": null,
+    "tool_result_budget_bytes": null,
+    "max_tool_iterations": null,
+    "parallel_tools": null,
+    "agents_md": null
+  },
+  "jev": {
+    "ranker": "jev",
+    "route": "auto",
+    "base_url": null,
+    "top_k": 3
+  },
+  "features": {},
+  "workflows": []
 }
