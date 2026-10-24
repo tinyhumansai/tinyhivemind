@@ -117,9 +117,10 @@ impl Permissions {
         {
             return deny("episode action requires authenticated continuing session");
         }
-        let effect = if children
-            .iter()
-            .any(|id| context.tool_name == format!("delegate_{id}"))
+        let effect = if context.tool_name == "spawn_subagent"
+            && context.arguments["agent_id"]
+                .as_str()
+                .is_some_and(|target| children.iter().any(|id| id == target))
         {
             Effect::ReadOnly
         } else {

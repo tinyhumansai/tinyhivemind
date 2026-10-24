@@ -199,15 +199,20 @@ async fn declared_delegates_are_internal_but_child_rules_still_narrow_effects() 
     });
     config.profiles[0].subagents.push("helper".into());
     let engine = permissions(config, &BuildOptions::default());
+    let spawn = |agent_id: &str| {
+        let mut spawn = context("spawn_subagent");
+        spawn.arguments = serde_json::json!({"agent_id": agent_id, "prompt": "task"});
+        spawn
+    };
     assert!(
         !(engine
-            .decide("alice", Some(&scope("a")), &context("delegate_helper"))
+            .decide("alice", Some(&scope("a")), &spawn("helper"))
             .await)
             .is_deny()
     );
     assert!(
         (engine
-            .decide("alice", Some(&scope("a")), &context("delegate_unknown"))
+            .decide("alice", Some(&scope("a")), &spawn("unknown"))
             .await)
             .is_deny()
     );

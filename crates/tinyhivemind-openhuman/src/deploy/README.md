@@ -47,7 +47,7 @@ inherit an unrelated active hive's permissions. Tool rules requiring unavailable
 metadata refuse the call. `EffectClassifier::subject` and `rule_context` supply
 trusted application metadata; authored arguments cannot replace actor, session,
 hive, episode or scheduled-job identity. Unknown effects refuse execution.
-Declared `delegate_<profile>` tools coordinate internally; child calls retain
+Declared subagents, spawned through `spawn_subagent`, coordinate internally; child calls retain
 parent and child restrictions.
 
 Native tool denials abort a turn and remain failed/interrupted coordinator
