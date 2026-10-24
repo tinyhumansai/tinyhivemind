@@ -73,7 +73,7 @@ tinymemory-tools = { git = "https://github.com/tinyhumansai/tinymemory", rev = "
 # into the tinyflows scheduler crate. Git source pinned at the commit
 # OpenHuman's tree vendors and patched onto that copy below, so its
 # `Schedule` is the same type `openhuman::cron` re-exports.
-tinyflows-schedule = { git = "https://github.com/tinyhumansai/tinyflows", rev = "99fd391d43a9af943535cda5579f1e2246bafbdc" }
+tinyflows-schedule = { git = "https://github.com/tinyhumansai/tinyflows", rev = "26df306117c70b73a580e65ac99764a568824e69" }
 # Derive macros for the crate-wide error type in `crates/tinyhivemind-core/src/error/`.
 # Every dependency entry should carry a comment like this one saying why it is
 # here.
