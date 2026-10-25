@@ -350,7 +350,13 @@ pub(super) fn outside_package(
 ) {
     let keys: BTreeSet<_> = original.keys().chain(edited.keys()).collect();
     for key in keys {
-        if crate::document::carried(key) || [HIVE, CONSTITUTION, MEMORY].contains(&key.as_str()) {
+        let split = crate::document::split::SPLITS
+            .iter()
+            .any(|(file, _)| file == key);
+        if crate::document::carried(key)
+            || split
+            || [HIVE, CONSTITUTION, MEMORY].contains(&key.as_str())
+        {
             continue;
         }
         if original.get(key) != edited.get(key) {
@@ -358,8 +364,9 @@ pub(super) fn outside_package(
                 key,
                 None,
                 Rule::Unowned,
-                "not part of the package; only hive.json, constitution.json, memory.json, \
-                 markdown documents and files under tools/ and skills/ are read"
+                "not part of the package; only hive.json, agents.json, tools.json, desks.json, \
+                 constitution.json, memory.json, markdown documents and files under tools/ and \
+                 skills/ are read"
                     .into(),
             ));
         }

@@ -6,7 +6,7 @@
 //! [`diagnose_documents`] returns them all.
 mod defaults;
 mod integration;
-mod split;
+pub(crate) mod split;
 mod types;
 use crate::{
     Diagnostic, Error, Result,
