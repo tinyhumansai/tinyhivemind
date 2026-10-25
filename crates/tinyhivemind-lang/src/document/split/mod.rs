@@ -10,7 +10,7 @@
 //! file, it is reported in the split file. Every finding about a section
 //! that came from a split file is reported in that file, at the same JSON
 //! Pointer, so the split is invisible everywhere but in locations.
-use super::{Profile, Role, Seat, decode};
+use super::{Profile, Role, Seat, decode, json};
 use crate::{
     Error,
     diagnostic::{Findings, HIVE, escape},
@@ -128,13 +128,6 @@ pub(super) fn manifest(
         return None;
     }
     super::decode_value(HIVE, None, Value::Object(hive), found)
-}
-
-fn json(path: &str, message: String) -> Error {
-    Error::Json {
-        path: path.into(),
-        message,
-    }
 }
 
 /// The file a manifest finding belongs in: the split file that holds the

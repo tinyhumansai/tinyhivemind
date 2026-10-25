@@ -55,6 +55,14 @@ impl Findings {
         }
     }
 
+    /// Move each finding to the file `home` names for its file and pointer.
+    pub(crate) fn relocate<'a>(&mut self, home: impl Fn(&str, Option<&str>) -> &'a str) {
+        for finding in &mut self.0 {
+            let file = home(&finding.file, finding.pointer.as_deref()).to_owned();
+            finding.file = file;
+        }
+    }
+
     /// The first finding, as the error fail-fast validation returns.
     pub(crate) fn into_first(self) -> Result<()> {
         self.0.into_iter().next().map_or(Ok(()), |f| Err(f.error))

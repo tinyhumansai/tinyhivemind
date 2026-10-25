@@ -56,6 +56,7 @@ pub(crate) fn collect(documents: &BTreeMap<String, String>) -> (Option<Package>,
     let memory = decode(documents, MEMORY, &mut found);
     let (Some(manifest), Some(constitution), Some(memory)) = (manifest, constitution, memory)
     else {
+        found.relocate(|file, pointer| split::home(file, pointer, documents));
         return (None, found);
     };
     let package = Package {
