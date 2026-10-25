@@ -5,7 +5,9 @@ package's files into a `BTreeMap<String, String>` and calls `parse`; this
 module never opens a file.
 
 `parse` checks that every key is a safe relative path, decodes `hive.json`,
-`constitution.json` and `memory.json` (each required), keeps every other key
+`constitution.json` and `memory.json` (each required), assembles the optional
+`agents.json`, `tools.json` and `desks.json` into the manifest (see
+[`split/`](split/README.md)), keeps every other key
 ending in `.md`, and every key under `tools/` (executable sources) or `skills/`
 (skill bundles), as a document, and drops the rest, then runs `validate`. Every
 wire struct denies unknown fields, and a second pass rejects unknown fields
@@ -37,6 +39,7 @@ finding.
 | `mod.rs` | `parse`, `diagnose_documents`, JSON decoding, and the nested unknown-field check shared with `patch` |
 | `types.rs` | `Package`, `Manifest` and its sections, `Policies`, coordinator settings, and the seat's integration fields |
 | `integration/` | Wire types for the integration sections and executable tools; see [`integration/README.md`](integration/README.md) |
+| `split/` | The manifest split over `agents.json`, `tools.json` and `desks.json`, and where their findings are reported; see [`split/README.md`](split/README.md) |
 | `defaults.rs` | Wire defaults for policies, desks and seats that `#[serde(default)]` alone cannot give |
 | `test.rs` | Collected parse findings and their agreement with `parse` |
 

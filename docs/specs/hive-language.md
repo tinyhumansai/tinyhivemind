@@ -35,6 +35,34 @@ and unsupported schema/version values fail rather than disappearing during a
 round trip. The `$schema` value `https://tinyhumans.ai/schemas/hive/v1`
 identifies this wire version; parsing does not fetch that URI.
 
+### Splitting the manifest
+
+A large `hive.json` may move some of its top-level sections into three
+optional files at the package root, each a JSON object holding those sections
+under their usual keys:
+
+| File | May hold |
+| --- | --- |
+| `agents.json` | `roles`, `seats`, `profiles` |
+| `tools.json` | `tools`, `toolpacks`, `mcp`, `skills`, `hooks` |
+| `desks.json` | `desks`, `topology`, `referrals` |
+
+Everything else, and any of these sections not moved, stays in `hive.json`.
+Parsing assembles the files into the one manifest before decoding, so a split
+package decodes, validates, lowers, patches and has the same content identity
+as the same package written as one `hive.json`; moving a section from one file
+to another is no change at all. A section is declared in one file only: one
+written both in `hive.json` and in its split file is a `json` finding at the
+section's pointer in the split file, and a split file that holds a section it
+does not own, or is not an object, is a `json` finding in that file. Every
+other finding about a moved section, from validation or from `check`, names
+the split file at the same JSON Pointer it would have had in `hive.json`
+(`agents.json:/seats/0/role`). A schema error in `hive.json`'s own sections
+of a split package carries serde's message without a line and column, because
+the assembled manifest has no single source text. The serialized `Package`
+holds one manifest, so a host that writes a decoded package back to disk
+writes one `hive.json`.
+
 ### Optional fields and defaults
 
 Only what has no safe default is required. Omitting any other field is the
@@ -122,7 +150,9 @@ No dependency from the language to hives or OpenHuman is permitted.
   character, empty, `.` or `..` segment, or `:`), including keys that are then
   dropped.
 - `hive.json`, `constitution.json` and `memory.json` are required and decoded
-  into their typed sections.
+  into their typed sections; `agents.json`, `tools.json` and `desks.json` are
+  optional and assembled into the manifest (see
+  [Splitting the manifest](#splitting-the-manifest)).
 - Every other key ending in `.md` (any case) is kept in `documents`; every
   other file, such as `notes.txt`, is dropped.
 - A kept Markdown document no manifest entry references (a `README.md`, say)
