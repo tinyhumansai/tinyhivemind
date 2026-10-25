@@ -2,12 +2,13 @@
 //! validated and lowered into core values without opening storage.
 //!
 //! A *package* is a map from relative path to file contents. Three canonical
-//! JSON files carry the typed definition, and Markdown side documents carry
-//! the prose:
+//! JSON files carry the typed definition, a large manifest may be split over
+//! three optional ones, and Markdown side documents carry the prose:
 //!
 //! | Path | Decoded into | Holds |
 //! | --- | --- | --- |
 //! | `hive.json` | [`Manifest`] | roles, seats, desks, goals, missions, topology, referrals, context paths, core policies, coordinator settings |
+//! | `agents.json`, `tools.json`, `desks.json` | [`Manifest`] | optional: `hive.json` sections moved out of it (agents: roles, seats, profiles; tools: tools, toolpacks, mcp, skills, hooks; desks: desks, topology, referrals) |
 //! | `constitution.json` | [`Constitution`] | host-pinned caps, permitted edit classes, protected namespaces, canaries, opaque evaluator settings |
 //! | `memory.json` | [`MemorySpec`] | memory identities and seat bindings, never remembered contents |
 //! | `roles/*.md` | [`Package::documents`] | one charter per role |

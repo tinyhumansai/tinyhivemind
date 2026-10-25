@@ -55,6 +55,16 @@ impl Findings {
         }
     }
 
+    /// Move each finding to the file `home` names for its file and
+    /// pointer, if it names one.
+    pub(crate) fn relocate(&mut self, home: impl Fn(&str, Option<&str>) -> Option<&'static str>) {
+        for finding in &mut self.0 {
+            if let Some(file) = home(&finding.file, finding.pointer.as_deref()) {
+                file.clone_into(&mut finding.file);
+            }
+        }
+    }
+
     /// The first finding, as the error fail-fast validation returns.
     pub(crate) fn into_first(self) -> Result<()> {
         self.0.into_iter().next().map_or(Ok(()), |f| Err(f.error))

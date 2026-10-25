@@ -6,6 +6,7 @@
 //! [`diagnose_documents`] returns them all.
 mod defaults;
 mod integration;
+pub(crate) mod split;
 mod types;
 use crate::{
     Diagnostic, Error, Result,
@@ -50,11 +51,12 @@ pub(crate) fn collect(documents: &BTreeMap<String, String>) -> (Option<Package>,
     for path in documents.keys() {
         found.check(crate::validation::validate_path(path), path, None);
     }
-    let manifest = decode(documents, HIVE, &mut found);
+    let manifest = split::manifest(documents, &mut found);
     let constitution = decode(documents, CONSTITUTION, &mut found);
     let memory = decode(documents, MEMORY, &mut found);
     let (Some(manifest), Some(constitution), Some(memory)) = (manifest, constitution, memory)
     else {
+        found.relocate(|file, pointer| split::home(file, pointer, documents));
         return (None, found);
     };
     let package = Package {
@@ -68,6 +70,7 @@ pub(crate) fn collect(documents: &BTreeMap<String, String>) -> (Option<Package>,
             .collect(),
     };
     crate::validation::rules(&package, &mut found);
+    found.relocate(|file, pointer| split::home(file, pointer, documents));
     (Some(package), found)
 }
 
@@ -86,10 +89,6 @@ fn decode<T: serde::de::DeserializeOwned + serde::Serialize>(
     path: &str,
     found: &mut Findings,
 ) -> Option<T> {
-    let json = |message: String| Error::Json {
-        path: path.into(),
-        message,
-    };
     let Some(source) = documents.get(path) else {
         found.push(Error::MissingDocument { path: path.into() }, path, None);
         return None;
@@ -97,30 +96,55 @@ fn decode<T: serde::de::DeserializeOwned + serde::Serialize>(
     let input: serde_json::Value = match serde_json::from_str(source) {
         Ok(input) => input,
         Err(error) => {
-            found.push(json(error.to_string()), path, None);
+            found.push(json(path, error.to_string()), path, None);
             return None;
         }
     };
-    let decoded: T = match serde_json::from_value(input.clone()) {
+    decode_value(path, Some(source), &input, found)
+}
+
+fn json(path: &str, message: String) -> Error {
+    Error::Json {
+        path: path.into(),
+        message,
+    }
+}
+
+/// Decode `input`, read from `path`. With its `source` text, a schema error
+/// is located by line and column; an input assembled from several files has
+/// no one source, and reports serde's message alone.
+fn decode_value<T: serde::de::DeserializeOwned + serde::Serialize>(
+    path: &str,
+    source: Option<&str>,
+    input: &serde_json::Value,
+    found: &mut Findings,
+) -> Option<T> {
+    let decoded: T = match T::deserialize(input) {
         Ok(decoded) => decoded,
         Err(error) => {
             // Decoding the source text again locates the schema error by
             // line and column, which a decoded value has forgotten.
-            let located = serde_json::from_str::<T>(source).err().unwrap_or(error);
-            found.push(json(located.to_string()), path, None);
+            let located = source
+                .and_then(|source| serde_json::from_str::<T>(source).err())
+                .unwrap_or(error);
+            found.push(json(path, located.to_string()), path, None);
             return None;
         }
     };
     // The wire types serialize infallibly; were one ever to fail, a null
     // output simply skips the unknown-field comparison.
     let output = serde_json::to_value(&decoded).unwrap_or(serde_json::Value::Null);
-    if let Some(pointer) = positional(&input, &output) {
+    if let Some(pointer) = positional(input, &output) {
         let pointer = Some(pointer).filter(|pointer| !pointer.is_empty());
-        found.push(json("expected a JSON object".into()), path, pointer);
+        found.push(json(path, "expected a JSON object".into()), path, pointer);
         return None;
     }
-    if let Some(pointer) = unknown_field(&input, &output) {
-        found.push(json("unknown nested schema field".into()), path, pointer);
+    if let Some(pointer) = unknown_field(input, &output) {
+        found.push(
+            json(path, "unknown nested schema field".into()),
+            path,
+            pointer,
+        );
         return None;
     }
     Some(decoded)

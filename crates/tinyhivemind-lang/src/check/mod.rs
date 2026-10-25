@@ -45,6 +45,15 @@ pub fn check(
         undecoded(&base, edited, &mut out);
         vec![]
     };
+    // The rules locate manifest findings in `hive.json`; one about a section
+    // the edit keeps in a split file belongs in that file.
+    for diagnostic in &mut out {
+        if let Some(file) =
+            crate::document::split::home(&diagnostic.file, diagnostic.pointer.as_deref(), edited)
+        {
+            file.clone_into(&mut diagnostic.file);
+        }
+    }
     finish(&base, edit, out, &operations)
 }
 
