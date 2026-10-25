@@ -110,7 +110,9 @@ fn a_section_declared_in_two_files_is_reported_in_the_split_file() -> Result<()>
         [("agents.json".into(), Some("/seats".into()), Rule::Json)]
     );
     assert!(
-        diagnostics[0].message.contains("also declared in hive.json"),
+        diagnostics[0]
+            .message
+            .contains("also declared in hive.json"),
         "{}",
         diagnostics[0].message
     );
@@ -147,17 +149,22 @@ fn a_finding_about_a_moved_section_points_into_its_file() -> Result<()> {
     })?;
     let found = located(&files);
     assert!(
-        found.contains(&("agents.json".into(), Some("/seats/0/role".into()), Rule::Reference)),
+        found.contains(&(
+            "agents.json".into(),
+            Some("/seats/0/role".into()),
+            Rule::Reference
+        )),
         "{found:?}"
     );
     assert!(
-        found
-            .iter()
-            .any(|(file, pointer, _)| file == "desks.json"
-                && pointer.as_deref() == Some("/desks/0/members/0")),
+        found.iter().any(|(file, pointer, _)| file == "desks.json"
+            && pointer.as_deref() == Some("/desks/0/members/0")),
         "{found:?}"
     );
-    assert!(found.iter().all(|(file, ..)| file != "hive.json"), "{found:?}");
+    assert!(
+        found.iter().all(|(file, ..)| file != "hive.json"),
+        "{found:?}"
+    );
     Ok(())
 }
 
@@ -169,7 +176,9 @@ fn checking_an_edit_reports_it_in_the_split_file_it_was_made_in() -> Result<()> 
     edit(&mut edited, "agents.json", |agents| {
         agents["seats"][0]["config"]["max_iterations"] = json!(9);
     })?;
-    let diagnostics = check(&original, &edited).err().ok_or("a seat edit is forbidden")?;
+    let diagnostics = check(&original, &edited)
+        .err()
+        .ok_or("a seat edit is forbidden")?;
     assert_eq!(
         diagnostics
             .iter()
@@ -182,11 +191,11 @@ fn checking_an_edit_reports_it_in_the_split_file_it_was_made_in() -> Result<()> 
     // A permitted edit through hive.json checks the same split or not.
     let mut goal = original.clone();
     edit(&mut goal, "hive.json", |hive| {
-        hive["goals"][0]["title"] = json!("Settle every invoice");
+        hive["goals"][0]["description"] = json!("Settle every invoice");
     })?;
     let mut goal_single = single();
     edit(&mut goal_single, "hive.json", |hive| {
-        hive["goals"][0]["title"] = json!("Settle every invoice");
+        hive["goals"][0]["description"] = json!("Settle every invoice");
     })?;
     let (split_review, single_review) = (
         check(&original, &goal).map_err(|d| format!("{d:?}"))?,

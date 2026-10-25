@@ -140,7 +140,11 @@ fn decode_value<T: serde::de::DeserializeOwned + serde::Serialize>(
         return None;
     }
     if let Some(pointer) = unknown_field(&input, &output) {
-        found.push(json(path, "unknown nested schema field".into()), path, pointer);
+        found.push(
+            json(path, "unknown nested schema field".into()),
+            path,
+            pointer,
+        );
         return None;
     }
     Some(decoded)
