@@ -100,7 +100,7 @@ fn decode<T: serde::de::DeserializeOwned + serde::Serialize>(
             return None;
         }
     };
-    decode_value(path, Some(source), input, found)
+    decode_value(path, Some(source), &input, found)
 }
 
 fn json(path: &str, message: String) -> Error {
@@ -116,10 +116,10 @@ fn json(path: &str, message: String) -> Error {
 fn decode_value<T: serde::de::DeserializeOwned + serde::Serialize>(
     path: &str,
     source: Option<&str>,
-    input: serde_json::Value,
+    input: &serde_json::Value,
     found: &mut Findings,
 ) -> Option<T> {
-    let decoded: T = match serde_json::from_value(input.clone()) {
+    let decoded: T = match T::deserialize(input) {
         Ok(decoded) => decoded,
         Err(error) => {
             // Decoding the source text again locates the schema error by
@@ -134,12 +134,12 @@ fn decode_value<T: serde::de::DeserializeOwned + serde::Serialize>(
     // The wire types serialize infallibly; were one ever to fail, a null
     // output simply skips the unknown-field comparison.
     let output = serde_json::to_value(&decoded).unwrap_or(serde_json::Value::Null);
-    if let Some(pointer) = positional(&input, &output) {
+    if let Some(pointer) = positional(input, &output) {
         let pointer = Some(pointer).filter(|pointer| !pointer.is_empty());
         found.push(json(path, "expected a JSON object".into()), path, pointer);
         return None;
     }
-    if let Some(pointer) = unknown_field(&input, &output) {
+    if let Some(pointer) = unknown_field(input, &output) {
         found.push(
             json(path, "unknown nested schema field".into()),
             path,

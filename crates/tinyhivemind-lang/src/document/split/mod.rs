@@ -106,10 +106,9 @@ pub(super) fn manifest(
         found.push(Error::MissingDocument { path: HIVE.into() }, HIVE, None);
         return None;
     };
-    let mut hive = match serde_json::from_str::<Value>(source) {
-        Ok(Value::Object(hive)) => hive,
+    let Ok(Value::Object(mut hive)) = serde_json::from_str::<Value>(source) else {
         // Not an object: decoding `hive.json` alone reports it, located.
-        _ => return decode(documents, HIVE, found),
+        return decode(documents, HIVE, found);
     };
     let mut assembled = true;
     for (file, part) in parts? {
@@ -127,7 +126,7 @@ pub(super) fn manifest(
     if !assembled {
         return None;
     }
-    super::decode_value(HIVE, None, Value::Object(hive), found)
+    super::decode_value(HIVE, None, &Value::Object(hive), found)
 }
 
 /// The split file a finding against `file` at `pointer` belongs in: the one
