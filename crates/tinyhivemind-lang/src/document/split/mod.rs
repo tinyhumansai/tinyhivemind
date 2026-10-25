@@ -130,24 +130,21 @@ pub(super) fn manifest(
     super::decode_value(HIVE, None, Value::Object(hive), found)
 }
 
-/// The file a manifest finding belongs in: the split file that holds the
-/// section its pointer starts in, when `documents` has that file, and
-/// `file` otherwise.
-pub(crate) fn home<'a>(
-    file: &'a str,
+/// The split file a finding against `file` at `pointer` belongs in: the one
+/// in `documents` holding the section its pointer starts in. `None` keeps
+/// the finding where it is.
+pub(crate) fn home(
+    file: &str,
     pointer: Option<&str>,
     documents: &BTreeMap<String, String>,
-) -> &'a str {
-    if file != HIVE {
-        return file;
-    }
-    let Some(section) = pointer.and_then(|pointer| pointer.split('/').nth(1)) else {
-        return file;
-    };
+) -> Option<&'static str> {
+    let section = pointer?.split('/').nth(1)?;
     SPLITS
         .iter()
-        .find(|(split, sections)| sections.contains(&section) && documents.contains_key(*split))
-        .map_or(file, |(split, _)| split)
+        .find(|(split, sections)| {
+            file == HIVE && sections.contains(&section) && documents.contains_key(*split)
+        })
+        .map(|(split, _)| *split)
 }
 
 #[cfg(test)]
