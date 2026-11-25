@@ -62,6 +62,14 @@ impl Stat {
     }
 }
 
+/// Whether the kernel offers what a [`Tree`] needs: pidfds, and a `/proc` that
+/// lists children.
+pub(super) fn supported() -> bool {
+    Path::new("/proc/thread-self/children").exists()
+        && Stat::read(Path::new("/proc"), std::process::id()).is_some()
+        && pidfd_open(rustix::process::getpid(), PidfdFlags::empty()).is_ok()
+}
+
 /// The processes of one instance.
 pub(super) struct Tree {
     proc: PathBuf,
