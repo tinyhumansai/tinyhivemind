@@ -19,6 +19,8 @@ frontmatter and context markers on the Markdown file, memory findings in
 | `bounds.rs` | Policy and coordinator bounds against the constitution's caps |
 | `memory.rs` | Memory identities, bindings and reaches |
 | `integration.rs` | The integration sections: identities, references, shipped skill and tool files, bounds, and settings OpenHuman cannot run as written |
+| `harness.rs` | The `harnesses` section and `harness` fields: identities, references, isolation, and whether the capability table judges the package |
+| `capability.rs` | The capability table judged per seat, at each setting's location, plus the shared-OpenClaw provider rule and the reserved `turn`/`call` arguments |
 | `test/` | Fail-fast regressions and finding locations; see [`test/README.md`](test/README.md) |
 
 ## Integration rules
@@ -36,3 +38,22 @@ cannot run (`integration`): `sqlite` sessions with no workspace, a tool in both
 `allow_tools` and `deny_tools`, a delegated profile that sets what only an
 agent can, a `matcher` on a `stop` hook, an `argv` placeholder naming no
 argument, and a feature name outside `[a-z0-9_]+`.
+
+## Harness rules
+
+`harness.rs` reports a blank or duplicate harness id (`identity`), a
+`harness` on the runtime, a profile or a seat naming no declared harness
+(`reference`), and `isolation: deployment` on a kind other than `openclaw`
+(`integration`); `integration.rs` reports a harness on a delegated profile.
+Once a package declares or names a harness, `capability.rs` judges every seat
+against its kind's column of the capability table and reports each rejected
+setting once, at the field that sets it: the resolved provider's `kind`,
+`endpoint` or `credential` (or the `provider` field that should name one), a
+sandbox on the runtime or an applying permission set, `tool_rules`, a
+toolpack group turned on, a host session store or memory engine, a profile's
+`subagents` or `definition_base`, `jev`, each `session` setting, and
+`limits.iterations` above OpenHuman's cap at the layer that set it. Seats
+sharing one OpenClaw instance must resolve to one provider (reported at the
+harness's `isolation`), and a tool a judged seat receives may not declare an
+argument named `turn` or `call`. A package naming no harness is not judged:
+the linked adapter deploys it under its own limits.

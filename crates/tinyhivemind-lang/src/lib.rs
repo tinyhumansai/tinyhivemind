@@ -30,7 +30,10 @@
 //! seat's profile next, and the seat last. Every section is optional and
 //! defaults to empty, so a package without them is unchanged. The vocabulary
 //! is exactly what the `OpenHuman` harness can run: a setting it cannot honour
-//! is a located diagnostic, never silently dropped. Credentials are
+//! is a located diagnostic, never silently dropped. A seat may also name a
+//! [`Harness`] from the `harnesses` section, resolved the same way; naming
+//! one holds the package to that kind's column of the capability table
+//! ([`HarnessKind::support`]). Credentials are
 //! [`SecretRef`]s (`{"env": "NAME"}` or `{"store": "key"}`), never values.
 //!
 //! An [`ExecTool`] declares a tool as a program plus an argument schema. The

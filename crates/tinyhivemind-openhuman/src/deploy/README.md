@@ -21,6 +21,13 @@ classifier. `stop` script hooks are run by `hooks::wrap_turn` on a finished repl
 and only observe it: a turn is authorized by the coordinator's round, so a stop
 hook cannot start another.
 
+Before anything is built, `packages::harnesses` refuses a seat whose resolved
+harness is not `openhuman` (`DeployError::UnsupportedHarness`): only a process
+deployment can start another kind, and this adapter would otherwise accept the
+field and ignore it. Two packages declaring one harness id differently are a
+`ConflictingDeclaration`; a shared seat's harness is part of the seat
+integration that must already agree.
+
 A toolpack's tool groups apply under the runtime's ceiling (`profile::groups`):
 an agent may narrow the runtime's disclosure of a group but a mode more exposed
 than the runtime's is refused, as is an unknown group id.

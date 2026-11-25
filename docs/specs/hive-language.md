@@ -43,7 +43,7 @@ under their usual keys:
 
 | File | May hold |
 | --- | --- |
-| `agents.json` | `roles`, `seats`, `profiles` |
+| `agents.json` | `roles`, `seats`, `profiles`, `harnesses` |
 | `tools.json` | `tools`, `toolpacks`, `mcp`, `skills`, `hooks` |
 | `desks.json` | `desks`, `topology`, `referrals` |
 
@@ -68,7 +68,11 @@ writes one `hive.json`.
 Only what has no safe default is required. Omitting any other field is the
 same as writing its default, and serializing a package always writes every
 field, so a stored package is complete and its content identity does not
-depend on how tersely it was written.
+depend on how tersely it was written. The one exception is the harness
+vocabulary (`harnesses`, and `harness` on the runtime, a profile and a seat):
+absent, it is not written, so a package that predates it keeps its content
+id, and its two spellings of "nothing" that would not survive the round trip,
+`null` and an empty `harnesses` list, are decode errors.
 
 | File | Required | Omitted field → default |
 | --- | --- | --- |

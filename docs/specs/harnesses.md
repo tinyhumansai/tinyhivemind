@@ -5,12 +5,14 @@ Boundary: [ADR 0035](../adr/0035-a-harness-is-a-process.md),
 [ADR 0036](../adr/0036-hive-tools-are-served-over-loopback-mcp.md).
 Evidence: [the harness spike](../experiments/2026-11-25-process-harnesses.md).
 
-Implemented so far, by step 1 of the plan: the harness-neutral host crate, the
-harness port with the seat rules below, start verification, process supervision
-on Linux, and a conformance suite that a scripted fake harness passes. No client
-for a real harness, no MCP server and no `harnesses` section exist yet. Until the
-plan's removal phase lands, the linked OpenHuman adapter remains the way a
-package is deployed.
+Implemented so far, by steps 1 and 3 of the plan: the harness-neutral host
+crate, the harness port with the seat rules below, start verification, process
+supervision on Linux, a conformance suite that a scripted fake harness passes,
+and the package schema: the `harnesses` section, `harness` on runtime, profile
+and seat, the capability table in `tinyhivemind-lang` and its `check`
+diagnostics. No client for a real harness and no MCP server exist yet. Until
+the plan's removal phase lands, the linked OpenHuman adapter remains the way a
+package is deployed, and it refuses a seat whose harness is not `openhuman`.
 
 ## Problem
 
@@ -82,7 +84,9 @@ in it, and opens an MCP session for each of them on every run.
   executable tools; this rule keeps the process that *enforces* permissions out
   of reach of a package edit.
 - An absent field is not serialized, so an existing package keeps its content
-  id. A test pins one.
+  id. A test pins one. Written, `harness` is a string and `harnesses` holds at
+  least one entry: `null` and `[]` would not survive the round trip, so they
+  are decode errors. In a split package `harnesses` lives in `agents.json`.
 - `harnesses` and `runtime.harness` are in the `integration` edit class. A
   change to a seat's `harness` requires `integration` as well as `roster`, so a
   hive allowed to edit its roster cannot move a seat to another harness.
@@ -94,6 +98,22 @@ in it, and opens an MCP session for each of them on every run.
 `tinyhivemind-lang` holds one capability table per kind. `check` reports a field
 the resolved harness cannot honour under the existing `integration` rule, at the
 field's location.
+
+The table judges a package once it declares a harness or names one anywhere,
+and then every seat, the implicit `openhuman` ones included. A package that
+does neither is deployed by the linked adapter, which keeps its own limits
+(below), so the table does not judge it and every existing package stays
+valid. Plan step 6 flips this: with the link gone, every package is judged.
+
+In the table as data (`HarnessKind::support`), each rejected row also says
+what moves it: only a conformance test (provider shapes, `credential`, and
+OpenHuman's subagents, `definition_base`, `jev` and `session` tuning), a
+harness release then a test (OpenHuman's `tool_rules`), or a spec decision
+(everything else rejected). The OpenHuman eight-iteration cap below is a
+per-kind rule beside the table (`HarnessKind::iteration_cap`), reported at the
+layer that sets `limits.iterations`. No built-in tool can be turned on, so no
+hook can match one; `check` does not inspect hook matchers for built-in tool
+names.
 
 | Field | openhuman | openclaw | codex |
 | --- | --- | --- | --- |

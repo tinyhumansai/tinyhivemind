@@ -70,6 +70,7 @@ so scripts take part in the package's content identity and lineage.
 | `jev` | `{ranker, route, base_url?, top_k}` | native `agent.tool_search` |
 | `features` | `{name: bool}` | integration switches and tool environment |
 | `workflows` | `[{id, schedule, target, prompt, enabled, retries, single_flight}]` | native cron jobs |
+| `harnesses` | `[{id, kind, isolation?}]` | the harness each seat runs on ([harnesses](harnesses.md)); the linked adapter starts only `openhuman` |
 
 `runtime` fields: `deployment_id?`, `workspace?`, `session_store`
 (`memory` \| `sqlite` \| `host`, default `memory`), `memory_engine`
@@ -77,7 +78,8 @@ so scripts take part in the package's content identity and lineage.
 (`read_only` \| `supervised` \| `autonomous`, default `supervised`),
 `sandbox` (`none` \| `read_only` \| `sandboxed`), `concurrency` (default 4),
 `max_agents?`, `include_user_skills`, `start_scheduler`, and the defaults every
-seat inherits: `provider?`, `model?`, `permissions?`, `toolpacks`, `limits`.
+seat inherits: `provider?`, `model?`, `permissions?`, `toolpacks`, `limits`,
+`harness?`.
 
 `limits` is `{timeout_ms?, iterations?, budget_usd?}` wherever it appears.
 
@@ -161,7 +163,12 @@ identical.
   `subagents`) that sets a model, MCP servers, skills, toolpacks, hooks,
   subagents, a timeout or a budget, a `matcher` on a `stop` hook
   (stop has no tool), an `argv` placeholder that names no argument, and a
-  feature name outside `[a-z0-9_]+` (`integration`).
+  feature name outside `[a-z0-9_]+` (`integration`);
+- for harnesses: an undeclared harness (`reference`), a duplicate harness id
+  (`identity`), `deployment` isolation on a kind other than `openclaw`, a
+  harness on a delegated profile, and, once a package names a harness, every
+  setting the [capability table](harnesses.md#capabilities) rejects and an
+  executable tool argument named `turn` or `call` (`integration`).
 
 Permission narrowing (a hive overlay never widens the seat) and MCP agreement
 across packages are deployment checks in the adapter, because they need every
@@ -171,8 +178,11 @@ package at once.
 
 A new patch class, `integration`, owns `runtime`, `providers`, `models`,
 `mcp`, `skills`, `tools`, `toolpacks`, `permissions`, `profiles`, `hooks`,
-`session`, `jev`, `features`, `workflows`, the files under `tools/` and
-`skills/`, and the integration fields of a seat. A constitution that does not
+`session`, `jev`, `features`, `workflows`, `harnesses`, the files under
+`tools/` and `skills/`, and the integration fields of a seat. A seat's
+`harness` is recorded as a roster change, but moving a seat to another
+harness (its own field, or a `profile` that resolves elsewhere) also needs
+`integration` permitted. A constitution that does not
 list `integration` in `permitted_edits` forbids a self-edit from changing what
 its agents can run or reach. Prompts, roster and policies keep their classes.
 
