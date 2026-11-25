@@ -231,8 +231,9 @@ impl Instance {
     /// The pids of every member running now, the child among them.
     ///
     /// # Errors
-    /// [`Error::Table`] if the process table cannot be read and
-    /// [`Error::Unsupervised`] once the instance is stopped.
+    /// [`Error::Table`] if the process table cannot be read,
+    /// [`Error::Unproven`] if it cannot be read fast enough to find everyone,
+    /// and [`Error::Unsupervised`] once the instance is stopped.
     pub async fn members(&self) -> Result<Vec<u32>> {
         let (reply, members) = oneshot::channel();
         // Either end being gone shows below.

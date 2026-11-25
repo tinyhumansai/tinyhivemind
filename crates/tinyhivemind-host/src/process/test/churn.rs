@@ -1,9 +1,16 @@
 //! Stopping while processes come and go faster than the table can be read.
-use super::support::{Fixture, running, until};
-use crate::process::{Instance, StopPolicy};
+use super::support::{Fixture, PATIENCE, running, until};
+use crate::process::scope::{Root, Scope};
+use crate::process::supervisor::{Request, Supervisor};
+use crate::process::tree::Tree;
+use crate::process::{Error, Instance, StopPolicy};
 use anyhow::Result;
+use std::fs;
+use std::os::unix::process::CommandExt as _;
 use std::process::{Child, Command, Stdio};
+use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
+use tokio::sync::{oneshot, watch};
 
 /// Shells that start one process after another and belong to no instance.
 struct Forkers(Vec<Child>);
@@ -86,7 +93,10 @@ async fn a_bound_too_short_for_proof_is_kept_and_the_kill_still_happens() -> Res
     let _forkers = Forkers::start(16)?;
     let fixture = Fixture::new()?;
     let (instance, orphan) = stubborn(&fixture).await?;
-    instance.members().await?;
+    let deadline = Instant::now() + PATIENCE;
+    while !instance.members().await?.contains(&orphan) {
+        assert!(Instant::now() < deadline);
+    }
     let policy = StopPolicy {
         terminate: Duration::ZERO,
         kill: Duration::ZERO,
@@ -97,5 +107,45 @@ async fn a_bound_too_short_for_proof_is_kept_and_the_kill_still_happens() -> Res
     assert!(started.elapsed() < Duration::from_secs(5));
     // Already signalled: nothing else is asked of the instance.
     until(|| !running(orphan) && !running(instance.pid())).await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_table_that_cannot_be_read_is_an_error_after_the_group_was_killed() -> Result<()> {
+    let mut command = Command::new("/bin/sleep");
+    let root = Arc::new(Root::new(command.arg("300").process_group(0).spawn()?));
+    let pid = root.id();
+    // A table with this child in it, and an entry that is not a file.
+    let fixture = Fixture::new()?;
+    let entry = fixture.path(&pid.to_string());
+    fs::create_dir_all(&entry)?;
+    let line = format!("{pid} (sleep) S 1 0 0 0 -1 0 0 0 0 0 0 0 0 0 20 0 1 0 7 0 0\n");
+    fs::write(entry.join("stat"), line)?;
+    fs::create_dir_all(fixture.path("20/stat"))?;
+    let (requests, received) = mpsc::channel();
+    Supervisor {
+        scope: Scope::Tree(Tree::at(&fixture.path(""), "MARKER=x", pid)?),
+        root,
+        requests: received,
+        exit: watch::channel(None).0,
+        hurry: Arc::default(),
+        temporary: fixture.path("none"),
+    }
+    .start()?;
+    let (reply, members) = oneshot::channel();
+    requests.send(Request::Members(reply))?;
+    assert!(matches!(members.await?, Err(Error::Table(_))));
+    let (reply, stopped) = oneshot::channel();
+    let policy = StopPolicy {
+        kill: Duration::from_millis(300),
+        ..BOUNDS
+    };
+    requests.send(Request::Stop(policy, reply))?;
+    let error = stopped.await?.err();
+    assert!(
+        matches!(error, Some(Error::Table(_) | Error::Survivors { .. })),
+        "{error:?}"
+    );
+    assert!(!running(pid));
     Ok(())
 }

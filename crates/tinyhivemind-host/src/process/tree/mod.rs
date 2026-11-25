@@ -55,7 +55,9 @@ enum Evidence {
     Bare,
     /// It exited, or is gone.
     Gone,
-    /// It does not belong, or nothing says that it does.
+    /// It does not belong.
+    Other,
+    /// Nothing says that it does.
     None,
 }
 
@@ -174,7 +176,7 @@ impl Tree {
         }
         // A descendant cannot be older than the root, nor part of the kernel.
         if stat.start < self.root.start || stat.kernel {
-            return Ok(Evidence::None);
+            return Ok(Evidence::Other);
         }
         let directory = self.proc.join(stat.pid.to_string());
         let environ = match fs::read(directory.join("environ")) {
@@ -192,7 +194,7 @@ impl Tree {
         }
         let mut entries = environ.split(|byte| *byte == 0);
         if !entries.any(|entry| entry == self.marker) {
-            return Ok(Evidence::None);
+            return Ok(Evidence::Other);
         }
         // A pid that names a thread shows its process's environment.
         let Some(status) = present(fs::read_to_string(directory.join("status")))? else {

@@ -266,8 +266,9 @@ async fn a_tree_that_cannot_be_proven_gone_is_a_typed_error_and_can_be_retried()
         .await
         .err()
         .context("expected a failure")?;
+    // Whoever was found may be dead by the time it is reported.
     assert!(
-        matches!(&error, Error::Survivors { pids } if pids.contains(&root)),
+        matches!(&error, Error::Survivors { .. } | Error::Unproven),
         "{error}"
     );
     instance.stop(async {}, SHORT).await?;

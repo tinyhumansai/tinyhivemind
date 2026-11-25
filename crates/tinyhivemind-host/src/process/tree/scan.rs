@@ -24,6 +24,7 @@ use rustix::process::Signal;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io;
+use std::sync::{Mutex, MutexGuard, TryLockError};
 use std::time::{Duration, Instant};
 
 /// Pids before the last one that are looked at again after the first walk: a
@@ -33,17 +34,37 @@ const FORKING: u32 = 1024;
 const STORM: u32 = 50_000;
 /// How long a process may show no environment before that counts as having
 /// none. Inside `exec` it lasts microseconds, if nothing else has the CPU.
-const BARE: Duration = Duration::from_millis(200);
+pub(super) const BARE: Duration = Duration::from_millis(200);
 /// Rounds that wait for what they are unsure of. More are not needed: they wait
 /// for at most [`BARE`].
 const ROUNDS: usize = 256;
 /// The pause when a round has nothing new and only waits.
 const IDLE: Duration = Duration::from_millis(1);
 
+/// Longest one scan keeps the others of this host waiting.
+const TURN: Duration = Duration::from_millis(500);
+
+/// Wait to be the only scan of this host. The kernel looks pids up under one
+/// lock, so scans at the same time slow each other down more than they gain.
+fn turn(expired: &dyn Fn() -> bool) -> Option<MutexGuard<'static, ()>> {
+    static TURNS: Mutex<()> = Mutex::new(());
+    while !expired() {
+        match TURNS.try_lock() {
+            Ok(turn) => return Some(turn),
+            Err(TryLockError::Poisoned(turn)) => return Some(turn.into_inner()),
+            Err(TryLockError::WouldBlock) => std::thread::sleep(IDLE),
+        }
+    }
+    None
+}
+
 /// What one scan found.
 pub(in crate::process) struct Scan {
     /// The members alive when they were looked at.
     pub(in crate::process) live: Vec<Identity>,
+    /// Whether the scan ran its course, so that `live` is everyone, but for
+    /// who was forked meanwhile.
+    pub(in crate::process) complete: bool,
     /// Whether nobody was alive, for certain.
     pub(in crate::process) settled: bool,
     /// Why it could not settle, if something could not be read.
@@ -65,12 +86,13 @@ enum Judged {
 struct Pass {
     /// Every pid that needs no further look.
     seen: BTreeSet<u32>,
-    /// Looked at and not a member. None becomes one.
-    others: BTreeMap<u32, u64>,
+    /// Looked at and plainly not a member, so that its children are not.
+    others: BTreeSet<u32>,
     /// The host and its ancestors.
     line: BTreeSet<u32>,
-    /// Others that excused a child since the last confirmation.
-    parents: BTreeMap<u32, u64>,
+    /// Whether the kernel says which pid was last, and so that none was handed
+    /// out twice.
+    numbered: bool,
     /// Members, and everything that may still turn out to descend from one.
     stats: Vec<Stat>,
     members: BTreeMap<u32, Identity>,
@@ -86,15 +108,10 @@ struct Pass {
 impl Pass {
     /// Whether `stat` is the child of a process that is not a member and
     /// cannot have adopted one. Orphans go to an ancestor, so a child of one
-    /// of the host's own line may be a member's. To be confirmed.
-    fn is_anothers_child(&mut self, stat: &Stat) -> bool {
-        if self.line.contains(&stat.parent) {
-            return false;
-        }
-        let parent = self.others.get(&stat.parent);
-        self.parents
-            .extend(parent.map(|start| (stat.parent, *start)));
-        parent.is_some()
+    /// of the host's own line may be a member's. The parent is the process it
+    /// was when it was looked at, as no pid is handed out twice in one walk.
+    fn is_anothers_child(&self, stat: &Stat) -> bool {
+        self.numbered && self.others.contains(&stat.parent) && !self.line.contains(&stat.parent)
     }
 }
 
@@ -107,15 +124,19 @@ impl Tree {
         expired: &dyn Fn() -> bool,
     ) -> Scan {
         let mut pass = Pass::default();
-        let mut settled = false;
+        let mut complete = false;
         if order.is_some() {
             // A signalled parent no longer shows whose its children are.
             self.sample();
         }
         self.recall(&mut pass, order);
-        match self.walk(&mut pass, order, expired) {
-            Ok(done) => settled = done,
-            Err(error) => pass.failure = Some(error),
+        if let Some(_turn) = turn(expired) {
+            let started = Instant::now();
+            let expired = || expired() || started.elapsed() >= TURN;
+            match self.walk(&mut pass, order, &expired) {
+                Ok(done) => complete = done,
+                Err(error) => pass.failure = Some(error),
+            }
         }
         self.adopt(&mut pass, order);
         self.known.extend(pass.members.values().copied());
@@ -123,7 +144,8 @@ impl Tree {
         Scan {
             live: members.filter(|member| self.runs(*member)).collect(),
             // One that was alive may have forked unseen before it was killed.
-            settled: settled && !pass.alive && pass.failure.is_none(),
+            complete: complete && pass.failure.is_none(),
+            settled: complete && !pass.alive && pass.failure.is_none(),
             failure: pass.failure,
         }
     }
@@ -147,7 +169,12 @@ impl Tree {
                 Ok(_) => {
                     self.known.remove(&member);
                 }
-                Err(error) => pass.failure = Some(error),
+                Err(error) => {
+                    // As good as running until it can be read.
+                    pass.members.insert(member.pid, member);
+                    pass.alive = true;
+                    pass.failure = Some(error);
+                }
             }
         }
     }
@@ -161,6 +188,7 @@ impl Tree {
     ) -> io::Result<bool> {
         pass.line = self.line()?;
         let mut last = self.last_pid()?;
+        pass.numbered = last.is_some();
         self.look(pass, self.listed(pass)?, order, expired);
         // These may have been looked at before their owner was there to see.
         let mut window = FORKING;
@@ -173,15 +201,18 @@ impl Tree {
                     (fresh.collect(), window == 0)
                 }
                 (None, None) => (self.listed(pass)?, true),
-                // Started over from the lowest pid, or too far ahead.
-                _ => (self.listed(pass)?, false),
+                // Too far ahead.
+                (Some(last), Some(now)) if last <= now => (self.listed(pass)?, false),
+                // Started over from the lowest pid, so that one may be another
+                // process than was looked at.
+                _ => return Ok(false),
             };
             window = if whole || window > 0 { 0 } else { FORKING };
             last = now;
             let idle = fresh.is_empty();
             let unsure = pass.unsure.iter().copied().collect();
             self.look(pass, unsure, order, expired);
-            let gone = self.look(pass, fresh, order, expired) || !self.confirm(pass);
+            let gone = self.look(pass, fresh, order, expired);
             if whole && !gone && pass.rounds.len() < ROUNDS {
                 pass.rounds.push(pass.unsure.clone());
             }
@@ -262,7 +293,7 @@ impl Tree {
         }
         if !self.is_known(&stat) && pass.is_anothers_child(&stat) {
             pass.seen.insert(pid);
-            pass.others.insert(pid, stat.start);
+            pass.others.insert(pid);
             return Ok(Judged::Known);
         }
         match self.evidence(&stat)? {
@@ -284,30 +315,16 @@ impl Tree {
                     return Ok(Judged::Unsure);
                 }
             }
+            Evidence::Other => {
+                pass.others.insert(pid);
+            }
             Evidence::None => {}
         }
         pass.seen.insert(pid);
-        pass.others.insert(pid, stat.start);
         if stat.start >= self.root.start {
             pass.stats.push(stat);
         }
         Ok(Judged::Known)
-    }
-
-    /// Whether the parents that excused their children are still the processes
-    /// they were taken for. Only what is confirmed afterwards was so then.
-    fn confirm(&self, pass: &mut Pass) -> bool {
-        std::mem::take(&mut pass.parents)
-            .into_iter()
-            .all(
-                |(pid, start)| match Stat::is_now(&self.proc, Identity { pid, start }) {
-                    Ok(same) => same,
-                    Err(error) => {
-                        pass.failure = Some(error);
-                        false
-                    }
-                },
-            )
     }
 
     /// The host and its ancestors.

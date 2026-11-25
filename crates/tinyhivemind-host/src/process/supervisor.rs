@@ -25,7 +25,7 @@ const POLL: Duration = Duration::from_millis(5);
 /// be seen, such as a process kept waiting inside `exec` for very long.
 const PROOF: u32 = 2;
 /// Longest a question about who is running may take.
-const QUERY: Duration = Duration::from_secs(1);
+const QUERY: Duration = Duration::from_secs(10);
 /// How long a dropped instance's tree is pursued.
 const DROPPED: Duration = Duration::from_secs(30);
 
@@ -132,7 +132,8 @@ impl Supervisor {
         let look = self.scope.look(&self.root, exited, None, &expired);
         match look.failure {
             Some(failure) => Err(Error::Table(failure)),
-            None => Ok(look.live),
+            None if look.complete => Ok(look.live),
+            None => Err(Error::Unproven),
         }
     }
 

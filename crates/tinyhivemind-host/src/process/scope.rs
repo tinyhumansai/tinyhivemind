@@ -91,6 +91,8 @@ impl Drop for Root {
 pub(super) struct Look {
     /// The pids of the members alive when they were looked at.
     pub(super) live: Vec<u32>,
+    /// Whether these are all.
+    pub(super) complete: bool,
     /// Whether nobody was alive, for certain.
     pub(super) settled: bool,
     /// Why they may not be all, if something could not be read.
@@ -172,11 +174,13 @@ impl Scope {
                 }
                 let Scan {
                     live,
+                    complete,
                     settled,
                     failure,
                 } = tree.scan(order, expired);
                 Look {
                     live: live.iter().map(|member| member.pid).collect(),
+                    complete,
                     settled,
                     failure,
                 }
@@ -195,6 +199,7 @@ impl Scope {
                 let gone = test_kill_process_group(root.pid()) == Err(rustix::io::Errno::SRCH);
                 Look {
                     live: if gone { Vec::new() } else { vec![root.id()] },
+                    complete: true,
                     settled: true,
                     failure: None,
                 }
