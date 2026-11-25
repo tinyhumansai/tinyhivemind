@@ -1,7 +1,7 @@
 //! Stopping while processes come and go faster than the table can be read.
 use super::support::{Fixture, PATIENCE, running, until};
 use crate::process::scope::{Root, Scope};
-use crate::process::supervisor::{Request, Supervisor};
+use crate::process::supervisor::{Busy, Request, Supervisor, Ticket};
 use crate::process::tree::Tree;
 use crate::process::{Error, Instance, StopPolicy};
 use anyhow::Result;
@@ -10,7 +10,7 @@ use std::os::unix::process::CommandExt as _;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
-use tokio::sync::{oneshot, watch};
+use tokio::sync::watch;
 
 /// Shells that start one process after another and belong to no instance.
 struct Forkers(Vec<Child>);
@@ -138,14 +138,15 @@ async fn a_table_that_cannot_be_read_is_an_error_after_the_group_was_killed() ->
         root,
         requests: received,
         exit: watch::channel(None).0,
+        busy: watch::channel(Busy::Idle).0,
         hurry: Arc::default(),
         temporary: None,
     }
     .start()?;
-    let (reply, members) = oneshot::channel();
+    let (reply, _, members) = Ticket::new();
     requests.send(Request::Members(reply))?;
     assert!(matches!(members.await?, Err(Error::Table(_))));
-    let (reply, stopped) = oneshot::channel();
+    let (reply, _, stopped) = Ticket::new();
     let policy = StopPolicy {
         kill: Duration::from_millis(300),
         ..BOUNDS
@@ -181,6 +182,7 @@ async fn a_child_the_host_reaped_is_reported_lost_and_its_tree_is_still_stopped(
         root,
         requests: received,
         exit: watch::channel(None).0,
+        busy: watch::channel(Busy::Idle).0,
         hurry: Arc::default(),
         temporary: None,
     };
@@ -189,7 +191,7 @@ async fn a_child_the_host_reaped_is_reported_lost_and_its_tree_is_still_stopped(
     let exited = rustix::process::WaitIdOptions::EXITED;
     rustix::process::waitid(rustix::process::WaitId::Pid(process), exited)?;
     supervisor.start()?;
-    let (reply, stopped) = oneshot::channel();
+    let (reply, _, stopped) = Ticket::new();
     requests.send(Request::Stop(BOUNDS, reply))?;
     let exit = stopped.await??;
     assert_eq!((exit.code, exit.signal), (None, None));

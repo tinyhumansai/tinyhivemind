@@ -2,7 +2,7 @@
 use super::directory::{self, Temporary};
 use super::pipe::{JsonLines, Tail, drain};
 use super::scope::{Root, Scope, containment};
-use super::supervisor::{QUERY, Request, Supervisor};
+use super::supervisor::{Busy, QUERY, Request, Supervisor, Ticket};
 use super::types::{MARKER, Streams, TEMPORARY};
 use super::{Containment, Error, Exit, Launch, Result, StopPolicy};
 use rustix::process::Signal;
@@ -25,6 +25,7 @@ pub struct Instance {
     containment: Containment,
     pub(super) requests: mpsc::Sender<Request>,
     exit: watch::Receiver<Option<Exit>>,
+    busy: watch::Receiver<Busy>,
     hurry: Arc<AtomicBool>,
     lines: Option<JsonLines>,
     stdout: Tail,
@@ -87,11 +88,13 @@ impl Instance {
         let root = Arc::new(Root::new(child));
         let (requests, received) = mpsc::channel();
         let (exit, observed) = watch::channel(None);
+        let (busy, working) = watch::channel(Busy::Idle);
         let mut instance = Self {
             root: root.clone(),
             containment,
             requests,
             exit: observed,
+            busy: working,
             hurry: Arc::default(),
             lines: None,
             stdout: Tail::new(launch.log_limit),
@@ -107,6 +110,7 @@ impl Instance {
             scope,
             requests: received,
             exit,
+            busy,
             hurry: instance.hurry.clone(),
             temporary: Some(temporary),
         }
@@ -250,12 +254,13 @@ impl Instance {
         let (ticket, taken, members) = Ticket::new();
         // Either end being gone shows below.
         let _ = self.requests.send(Request::Members(ticket));
-        if !self.taken_up(taken).await {
-            return Err(Error::Unproven);
-        }
-        match tokio::time::timeout(QUERY + SLACK, members).await {
-            Ok(members) => members.unwrap_or(Err(Error::Unsupervised)),
-            Err(_) => Err(Error::Unproven),
+        match self.taken_up(taken).await {
+            Taken::Up => match tokio::time::timeout(QUERY + SLACK, members).await {
+                Ok(members) => members.unwrap_or(Err(Error::Unsupervised)),
+                Err(_) => Err(Error::Unproven),
+            },
+            Taken::Gone => Err(Error::Unsupervised),
+            Taken::Stuck => Err(Error::Unproven),
         }
     }
 
@@ -269,7 +274,8 @@ impl Instance {
     /// this future is dropped.
     ///
     /// # Errors
-    /// When `policy.kill` has passed: [`Error::Survivors`] if members are still
+    /// When `policy.kill` has passed, counted from when the supervisor takes
+    /// this up after what it is doing: [`Error::Survivors`] if members are still
     /// running, [`Error::Table`] if the process table could not be read, and
     /// [`Error::Unproven`] if it was not read fast enough to tell. Everyone
     /// found has been sent SIGKILL by then, but none of these means stopped;
@@ -283,23 +289,55 @@ impl Instance {
         // A closed channel means an earlier stop already proved it.
         let _ = self.requests.send(Request::Stop(policy, ticket));
         let bound = policy.terminate.saturating_add(policy.kill);
-        let stopped = if self.taken_up(taken).await {
-            tokio::time::timeout(bound.saturating_add(SLACK), stopped).await
-        } else {
-            Ok(Err(oneshot::error::RecvError::default()))
-                .filter(|_: &Result<_, _>| self.exit.has_changed().is_err())
-                .unwrap_or_else(|| tokio::time::timeout(Duration::ZERO, std::future::pending()).now_or_never())
+        let stopped = match self.taken_up(taken).await {
+            Taken::Up => tokio::time::timeout(bound.saturating_add(SLACK), stopped)
+                .await
+                .map(Result::ok)
+                .ok(),
+            Taken::Gone => Some(None),
+            Taken::Stuck => None,
         };
         match stopped {
-            Ok(Ok(stopped)) => stopped,
-            Ok(Err(_)) => self.exit().ok_or(Error::Unsupervised),
-            Err(_) => {
+            Some(Some(stopped)) => stopped,
+            Some(None) => self.exit().ok_or(Error::Unsupervised),
+            None => {
                 // The supervisor is stuck, so this is all that can be done.
                 self.root.signal_group(Signal::KILL);
                 Err(Error::Unproven)
             }
         }
     }
+
+    /// Wait for the supervisor to take up a request, for as long as what it is
+    /// doing is due to take, and then some.
+    async fn taken_up(&self, taken: oneshot::Receiver<()>) -> Taken {
+        let mut busy = self.busy.clone();
+        tokio::pin!(taken);
+        loop {
+            let left = match *busy.borrow_and_update() {
+                Busy::Idle => SLACK,
+                Busy::Until(Some(due)) => due
+                    .saturating_duration_since(std::time::Instant::now())
+                    .saturating_add(SLACK),
+                Busy::Until(None) => Duration::MAX,
+            };
+            tokio::select! {
+                up = &mut taken => return if up.is_ok() { Taken::Up } else { Taken::Gone },
+                changed = busy.changed() => if changed.is_err() {
+                    // Gone, maybe after it took this up.
+                    return if taken.await.is_ok() { Taken::Up } else { Taken::Gone };
+                },
+                () = tokio::time::sleep(left) => return Taken::Stuck,
+            }
+        }
+    }
+}
+
+/// What became of a request.
+enum Taken {
+    Up,
+    Gone,
+    Stuck,
 }
 
 impl Drop for Instance {
