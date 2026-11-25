@@ -238,7 +238,7 @@ pub use check::{Review, check, check_packages};
 pub use diagnostic::{Diagnostic, Rule};
 pub use document::*;
 pub use error::{Error, Result};
-pub use harness::HarnessKind;
+pub use harness::{Harness, HarnessKind, Isolation};
 pub use lowering::{
     LoweredHive, LoweredHook, LoweredIntegrations, LoweredMemoryBinding, LoweredModel, LoweredSeat,
     LoweredSeatIntegration, lower,
