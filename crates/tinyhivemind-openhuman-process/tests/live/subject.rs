@@ -2,7 +2,7 @@
 //! scripted model in `model.rs`, and the spike fixture's MCP stub, run by
 //! Node, for the host's tools.
 use crate::model::ScriptedModel;
-use crate::seat_support::{kill_all, processes_in, seat};
+use crate::seat_support::{done, kill_all, processes_in, seat};
 use std::fs;
 use std::os::unix::fs::PermissionsExt as _;
 use std::path::{Path, PathBuf};
@@ -173,7 +173,7 @@ impl Subject for LiveSubject {
     }
 
     fn misconfigure(&self) {
-        let _ = fs::write(self.root.path().join("misconfigured"), "");
+        done(&fs::write(self.root.path().join("misconfigured"), ""));
     }
 
     /// Built-in tools are off, so nothing can make this instance spawn.
