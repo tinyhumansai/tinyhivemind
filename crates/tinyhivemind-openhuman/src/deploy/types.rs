@@ -25,7 +25,7 @@ pub enum DeployError {
     #[error("workflow operation failed for {0}")]
     Workflow(String),
     /// A seat resolves to a harness this adapter cannot start: it links
-    /// OpenHuman and runs no harness process.
+    /// `OpenHuman` and runs no harness process.
     #[error("seat {seat} runs on the {kind} harness, which the linked adapter cannot start")]
     UnsupportedHarness {
         /// The seat.
