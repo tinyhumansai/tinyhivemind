@@ -170,7 +170,7 @@ async fn a_call_naming_another_turn_is_refused_whatever_its_call() {
         c.submit_action_in_turn(&stale, &episode, posted("hello")).await,
         Err(Error::StaleTurn { agent_id, turn_id }) if agent_id == "a" && turn_id == "0:0:a"
     ));
-    assert!(actions(&c, "a").is_empty());
+    assert_eq!(actions(&c, "a"), Vec::<EpisodeAction>::new());
     assert!(c.lock().unwrap().durable.running["a"].calls.is_empty());
     held.end().await;
 }
@@ -200,7 +200,7 @@ async fn a_call_without_an_identity_is_refused() {
             .await,
         Err(Error::InvalidIdentifier("call"))
     ));
-    assert!(actions(&c, "a").is_empty());
+    assert_eq!(actions(&c, "a"), Vec::<EpisodeAction>::new());
     held.end().await;
 }
 
@@ -244,7 +244,7 @@ async fn a_failed_commit_leaves_neither_the_effect_nor_its_record() {
     let stored = storage.load().await.unwrap();
     assert!(stored.running["a"].actions.is_empty());
     assert!(stored.running["a"].calls.is_empty());
-    assert!(actions(&c, "a").is_empty());
+    assert_eq!(actions(&c, "a"), Vec::<EpisodeAction>::new());
     // The same call then acts, once.
     c.submit_action_in_turn(&call, &episode, posted("hello"))
         .await

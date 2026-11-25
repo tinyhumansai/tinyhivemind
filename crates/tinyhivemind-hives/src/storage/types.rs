@@ -303,6 +303,22 @@ pub struct RunningTurn {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub calls: BTreeMap<String, CallRecord>,
 }
+impl RunningTurn {
+    /// A turn just claimed: nothing staged and no call made yet.
+    pub(crate) fn claimed(
+        request: TurnRequest,
+        turn: Option<Turn>,
+        delivery_sequence: Option<u64>,
+    ) -> Self {
+        Self {
+            request,
+            turn,
+            actions: Vec::new(),
+            delivery_sequence,
+            calls: BTreeMap::new(),
+        }
+    }
+}
 /// What one identified call of a running turn did, so that a retry of it is
 /// answered rather than repeated.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

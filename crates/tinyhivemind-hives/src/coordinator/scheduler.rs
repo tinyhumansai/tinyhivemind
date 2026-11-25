@@ -236,16 +236,8 @@ impl Coordinator {
                 episode,
                 resumption,
             };
-            next.running.insert(
-                agent_id.clone(),
-                RunningTurn {
-                    request: request.clone(),
-                    turn,
-                    actions: Vec::new(),
-                    delivery_sequence,
-                    calls: BTreeMap::new(),
-                },
-            );
+            let running = RunningTurn::claimed(request.clone(), turn, delivery_sequence);
+            next.running.insert(agent_id.clone(), running);
             selected.insert(agent_id);
             claims.push(Claim { runner, request });
         }
