@@ -1,6 +1,8 @@
 //! Hive seats on OpenHuman, each a supervised `openhuman-core` process.
 pub mod capability;
 mod config;
+mod error;
+mod instance;
 mod rpc;
 mod turn;
 
