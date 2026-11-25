@@ -1,6 +1,6 @@
 //! Admission of one HTTP request, before any JSON-RPC is read.
 //!
-//! In order: the `Host` must name this listener (`127.0.0.1:<port>` or
+//! In order: exactly one `Host` must name this listener (`127.0.0.1:<port>` or
 //! `localhost:<port>`), any `Origin` is refused, the path must be `/mcp`, the
 //! bearer must be a served seat's, the method must be POST (a GET for the
 //! optional event stream gets 405, as the Streamable HTTP transport allows),
@@ -34,12 +34,12 @@ async fn admit(
     request: Request<Incoming>,
 ) -> Result<Response<Full<Bytes>>, Response<Full<Bytes>>> {
     let headers = request.headers();
-    let host = headers
-        .get(header::HOST)
-        .and_then(|value| value.to_str().ok());
+    let mut hosts = headers.get_all(header::HOST).iter();
+    let host = hosts.next().and_then(|value| value.to_str().ok());
     let port = shared.port;
     let own = [format!("127.0.0.1:{port}"), format!("localhost:{port}")];
-    if !host.is_some_and(|host| own.iter().any(|own| own == host)) {
+    let named = host.is_some_and(|host| own.iter().any(|own| own == host));
+    if !named || hosts.next().is_some() {
         return Err(status(StatusCode::FORBIDDEN));
     }
     if headers.contains_key(header::ORIGIN) {
