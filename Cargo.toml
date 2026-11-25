@@ -41,7 +41,7 @@ tinyhivemind-host = { path = "crates/tinyhivemind-host" }
 hyper = { version = "1", default-features = false, features = ["server", "http1"] }
 # hyper's tokio I/O adapter, its timer (for the header read timeout) and the
 # graceful-shutdown watcher. Nothing else: no client, no auto-HTTP/2.
-hyper-util = { version = "0.1", default-features = false, features = ["tokio", "server-graceful"] }
+hyper-util = { version = "0.1", default-features = false, features = ["tokio", "http1", "server-graceful"] }
 # Bounded request bodies (`Limited`) and fixed response bodies (`Full`).
 http-body-util = "0.1"
 # Constant-time comparison of a presented bearer with each seat's.

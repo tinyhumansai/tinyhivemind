@@ -12,8 +12,8 @@ mod ledger;
 
 use crate::seat::{RESERVED, SeatTools};
 use crate::{Error, Result};
-pub(crate) use dispatch::{SeatState, UnknownTool, call};
-pub(crate) use ledger::{Ledger, Outcome};
+pub(crate) use dispatch::{SeatState, call};
+pub(crate) use ledger::Ledger;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
 use tinyhivemind_exec::HookRunner;
@@ -55,12 +55,24 @@ impl Catalog {
         let hive = Kind::all(managed).into_iter().map(|kind| {
             let reads = matches!(kind, Kind::ListHives | Kind::ListAgents | Kind::Read);
             let (name, schema) = (kind.name().to_owned(), kind.schema());
-            (name, kind.description().to_owned(), schema, Target::Hive(kind), !reads)
+            (
+                name,
+                kind.description().to_owned(),
+                schema,
+                Target::Hive(kind),
+                !reads,
+            )
         });
         let programs = seat.programs().iter().map(|tool| {
             let writes = tool.side_effects != SideEffects::Read;
             let target = Target::Program(tool.clone());
-            (tool.id.clone(), tool.description.clone(), tool.args.clone(), target, writes)
+            (
+                tool.id.clone(),
+                tool.description.clone(),
+                tool.args.clone(),
+                target,
+                writes,
+            )
         });
         for (name, description, schema, target, effectful) in hive.chain(programs) {
             if !names.insert(name.clone()) {

@@ -41,7 +41,11 @@ async fn a_bad_host_is_refused() {
             .header("host", host)
             .body(Full::new(Bytes::from(LIST)))
             .unwrap();
-        assert_eq!(send(addr, request).await.status, StatusCode::FORBIDDEN, "{host}");
+        assert_eq!(
+            send(addr, request).await.status,
+            StatusCode::FORBIDDEN,
+            "{host}"
+        );
     }
     let request = post(addr, Some(&hive.a.bearer), LIST.as_bytes())
         .header("host", format!("localhost:{}", addr.port()))
@@ -72,11 +76,16 @@ async fn an_oversized_body_is_refused() {
     };
     let hive = Hive::start_with(|services| services, |seat, _| seat, options).await;
     let addr = hive.server.local_addr();
-    let big = body(&json!({"jsonrpc": "2.0", "id": 1, "method": "ping", "params": {"pad": "x".repeat(100)}}));
+    let big = body(
+        &json!({"jsonrpc": "2.0", "id": 1, "method": "ping", "params": {"pad": "x".repeat(100)}}),
+    );
     let request = post(addr, Some(&hive.a.bearer), &big)
         .body(Full::new(Bytes::from(big.clone())))
         .unwrap();
-    assert_eq!(send(addr, request).await.status, StatusCode::PAYLOAD_TOO_LARGE);
+    assert_eq!(
+        send(addr, request).await.status,
+        StatusCode::PAYLOAD_TOO_LARGE
+    );
 }
 
 #[tokio::test]
@@ -122,7 +131,10 @@ async fn initialize_negotiates_every_version_the_harnesses_sent() {
             )
             .await;
         assert_eq!(response["result"]["protocolVersion"], version);
-        assert_eq!(response["result"]["capabilities"], json!({"tools": {"listChanged": false}}));
+        assert_eq!(
+            response["result"]["capabilities"],
+            json!({"tools": {"listChanged": false}})
+        );
         assert_eq!(response["result"]["serverInfo"]["name"], "hivemind");
     }
     let response = hive
@@ -172,7 +184,10 @@ async fn malformed_messages_get_json_rpc_errors() {
     let reply = send(addr, request).await;
     assert_eq!(reply.status, StatusCode::BAD_REQUEST);
     assert_eq!(reply.body.unwrap()["error"]["code"], -32700);
-    for message in [json!([{"jsonrpc": "2.0", "id": 1, "method": "ping"}]), json!({"id": 1})] {
+    for message in [
+        json!([{"jsonrpc": "2.0", "id": 1, "method": "ping"}]),
+        json!({"id": 1}),
+    ] {
         let reply = hive.a.message(&message).await;
         assert_eq!(reply.status, StatusCode::BAD_REQUEST);
         assert_eq!(reply.body.unwrap()["error"]["code"], -32600);

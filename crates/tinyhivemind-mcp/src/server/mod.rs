@@ -231,7 +231,11 @@ impl HiveToolServer {
     pub fn serve_seat(&self, seat: SeatTools) -> Result<ToolEndpoint> {
         let managed = self.shared.services.management.is_some();
         let state = SeatState::new(seat, Bearer::generate()?, managed, &self.shared.services)?;
-        let mut seats = self.shared.seats.write().unwrap_or_else(PoisonError::into_inner);
+        let mut seats = self
+            .shared
+            .seats
+            .write()
+            .unwrap_or_else(PoisonError::into_inner);
         let id = state.tools.seat().to_owned();
         if seats.iter().any(|served| served.tools.seat() == id) {
             return Err(Error::DuplicateSeat(id));
@@ -249,7 +253,11 @@ impl HiveToolServer {
     /// Stop serving the seat with this id; its bearer is refused from now
     /// on. Whether it was served.
     pub fn withdraw_seat(&self, seat_id: &str) -> bool {
-        let mut seats = self.shared.seats.write().unwrap_or_else(PoisonError::into_inner);
+        let mut seats = self
+            .shared
+            .seats
+            .write()
+            .unwrap_or_else(PoisonError::into_inner);
         let before = seats.len();
         seats.retain(|served| served.tools.seat() != seat_id);
         seats.len() != before
@@ -276,7 +284,11 @@ impl Drop for HiveToolServer {
 
 impl fmt::Debug for HiveToolServer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let seats = self.shared.seats.read().unwrap_or_else(PoisonError::into_inner);
+        let seats = self
+            .shared
+            .seats
+            .read()
+            .unwrap_or_else(PoisonError::into_inner);
         let ids: Vec<&str> = seats.iter().map(|seat| seat.tools.seat()).collect();
         f.debug_struct("HiveToolServer")
             .field("addr", &self.addr)

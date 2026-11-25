@@ -7,9 +7,9 @@
 //! turn means the older one has ended and its records are dropped. The
 //! records are this process's alone: at most once holds within one server
 //! process.
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Mutex, PoisonError};
-use serde_json::Value;
 
 /// What a call returned to the model.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -79,7 +79,9 @@ pub(crate) struct Ledger(Mutex<HashMap<String, Turn>>);
 impl Ledger {
     /// What is known of `identity` as a call of `tool` with `arguments`.
     pub(crate) fn lookup(&self, identity: &Identity, tool: &str, arguments: &Value) -> Known {
-        self.with_turn(identity, |calls| known(calls, &identity.call, tool, arguments))
+        self.with_turn(identity, |calls| {
+            known(calls, &identity.call, tool, arguments)
+        })
     }
 
     /// Record `identity` as started, unless it is known already.
@@ -113,7 +115,11 @@ impl Ledger {
         }
     }
 
-    fn with_turn<T>(&self, identity: &Identity, act: impl FnOnce(&mut HashMap<String, Entry>) -> T) -> T {
+    fn with_turn<T>(
+        &self,
+        identity: &Identity,
+        act: impl FnOnce(&mut HashMap<String, Entry>) -> T,
+    ) -> T {
         let mut seats = self.0.lock().unwrap_or_else(PoisonError::into_inner);
         let turn = seats.entry(identity.seat.clone()).or_default();
         if turn.turn != identity.turn {

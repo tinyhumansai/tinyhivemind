@@ -35,7 +35,12 @@ pub async fn send(addr: SocketAddr, request: Request<Full<Bytes>>) -> Reply {
     let response = sender.send_request(request).await.expect("response");
     let status = response.status();
     let headers = response.headers().clone();
-    let bytes = response.into_body().collect().await.expect("body").to_bytes();
+    let bytes = response
+        .into_body()
+        .collect()
+        .await
+        .expect("body")
+        .to_bytes();
     let body = (!bytes.is_empty()).then(|| serde_json::from_slice(&bytes).expect("json body"));
     Reply {
         status,
@@ -147,7 +152,8 @@ pub struct Hive {
     pub b: Client,
     pub endpoint: ToolEndpoint,
     pub workspace: tempfile::TempDir,
-    drain: Option<tokio::task::JoinHandle<tinyhivemind_hives::Result<tinyhivemind_hives::RunReport>>>,
+    drain:
+        Option<tokio::task::JoinHandle<tinyhivemind_hives::Result<tinyhivemind_hives::RunReport>>>,
 }
 impl Hive {
     /// Start with `services` adjusted by `configure` and seat `a` by `seat`.
@@ -204,7 +210,9 @@ impl Hive {
         let server = HiveToolServer::start(configure(Services::new(coordinator.clone())), options)
             .await
             .unwrap();
-        let endpoint = server.serve_seat(seat(SeatTools::new("a"), context)).unwrap();
+        let endpoint = server
+            .serve_seat(seat(SeatTools::new("a"), context))
+            .unwrap();
         let other = server.serve_seat(SeatTools::new("b")).unwrap();
         coordinator
             .send_as_host(SendMessage {
@@ -275,7 +283,12 @@ pub fn fixtures() -> PathBuf {
 
 /// An executable tool `id` running `tools/<script>.sh`, with `args` as its
 /// argument schema.
-pub fn tool(id: &str, script: &str, side_effects: &str, args: Value) -> tinyhivemind_lang::ExecTool {
+pub fn tool(
+    id: &str,
+    script: &str,
+    side_effects: &str,
+    args: Value,
+) -> tinyhivemind_lang::ExecTool {
     serde_json::from_value(json!({
         "id": id,
         "description": format!("fixture {script}"),

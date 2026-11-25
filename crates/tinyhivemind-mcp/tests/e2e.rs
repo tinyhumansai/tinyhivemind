@@ -17,7 +17,9 @@ async fn a_client_lists_tools_and_posts_as_seat_a_and_is_refused_as_seat_b() {
             .rpc("initialize", json!({"protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": {"name": "e2e", "version": "0"}}))
             .await;
         assert_eq!(init["result"]["protocolVersion"], "2025-11-25");
-        let note = client.message(&json!({"jsonrpc": "2.0", "method": "notifications/initialized"})).await;
+        let note = client
+            .message(&json!({"jsonrpc": "2.0", "method": "notifications/initialized"}))
+            .await;
         assert_eq!(note.status, StatusCode::ACCEPTED);
         // OpenClaw opens the optional event stream; it is not offered.
         let stream = Request::get("/mcp")
@@ -26,12 +28,23 @@ async fn a_client_lists_tools_and_posts_as_seat_a_and_is_refused_as_seat_b() {
             .header("accept", "text/event-stream")
             .body(Full::new(Bytes::new()))
             .unwrap();
-        assert_eq!(send(addr, stream).await.status, StatusCode::METHOD_NOT_ALLOWED);
-        let names: Vec<String> = client.tools().await.into_iter().map(|(name, _)| name).collect();
+        assert_eq!(
+            send(addr, stream).await.status,
+            StatusCode::METHOD_NOT_ALLOWED
+        );
+        let names: Vec<String> = client
+            .tools()
+            .await
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect();
         assert!(names.contains(&"hivemind_post".to_owned()));
     }
     let args = json!({"episode_id": hive.episode(), "body": "hello hive", "turn": hive.turn_id(), "call": "post-1"});
-    assert_eq!(hive.a.call("hivemind_post", args.clone()).await, (r#"{"accepted":true}"#.into(), false));
+    assert_eq!(
+        hive.a.call("hivemind_post", args.clone()).await,
+        (r#"{"accepted":true}"#.into(), false)
+    );
     let (text, refused) = hive.b.call("hivemind_post", args).await;
     assert!(refused, "{text}");
     hive.settle().await;

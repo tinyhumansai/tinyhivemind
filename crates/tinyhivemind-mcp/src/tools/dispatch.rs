@@ -40,7 +40,12 @@ pub(crate) struct SeatState {
 }
 
 impl SeatState {
-    pub(crate) fn new(tools: SeatTools, bearer: Bearer, managed: bool, services: &Services) -> crate::Result<Self> {
+    pub(crate) fn new(
+        tools: SeatTools,
+        bearer: Bearer,
+        managed: bool,
+        services: &Services,
+    ) -> crate::Result<Self> {
         tools.check()?;
         let hooks = HookRunner::new(
             tools.hooks().to_vec(),
@@ -96,7 +101,9 @@ pub(crate) async fn call(
         return Ok(run(services, seat, tool, &arguments, None).await);
     }
     let Some(turn) = take_text(object, "turn") else {
-        return Ok(Outcome::refused("missing argument turn: name your running turn"));
+        return Ok(Outcome::refused(
+            "missing argument turn: name your running turn",
+        ));
     };
     let Some(call) = take_text(object, "call").filter(|call| !call.trim().is_empty()) else {
         return Ok(Outcome::refused(
@@ -141,7 +148,9 @@ pub(crate) async fn call(
             Verdict::Deny(message) => Outcome::refused(message),
             Verdict::Allow => {
                 let outcome = run(services, seat, tool, &arguments, Some(&identity)).await;
-                seat.hooks.post_tool_use(name, &arguments, &outcome.text).await;
+                seat.hooks
+                    .post_tool_use(name, &arguments, &outcome.text)
+                    .await;
                 outcome
             }
         },

@@ -27,31 +27,40 @@ const INTERNAL_ERROR: i64 = -32603;
 /// Answer the JSON-RPC message in `body` as `seat`.
 pub(super) async fn answer(shared: &Arc<Shared>, seat: Arc<SeatState>, body: &[u8]) -> Answer {
     let Ok(message) = serde_json::from_slice::<Value>(body) else {
-        return Answer::Reply(StatusCode::BAD_REQUEST, error(&Value::Null, PARSE_ERROR, "parse error"));
+        return Answer::Reply(
+            StatusCode::BAD_REQUEST,
+            error(&Value::Null, PARSE_ERROR, "parse error"),
+        );
     };
     if message.is_array() {
         let refused = error(&Value::Null, INVALID_REQUEST, "batches are not supported");
         return Answer::Reply(StatusCode::BAD_REQUEST, refused);
     }
     let id = message.get("id").cloned();
-    let method = message.get("method").and_then(Value::as_str);
     let replied = message.get("result").is_some() || message.get("error").is_some();
-    match (message.get("jsonrpc").and_then(Value::as_str), method, &id) {
-        (Some("2.0"), Some(_), None) | (Some("2.0"), None, Some(_)) if method.is_some() || replied => {
-            Answer::Accepted
-        }
-        (Some("2.0"), Some(method), Some(id)) => {
+    let invalid = |id: Option<&Value>| {
+        let id = id.unwrap_or(&Value::Null);
+        Answer::Reply(
+            StatusCode::BAD_REQUEST,
+            error(id, INVALID_REQUEST, "invalid request"),
+        )
+    };
+    if message.get("jsonrpc").and_then(Value::as_str) != Some("2.0") {
+        return invalid(id.as_ref());
+    }
+    match (message.get("method").and_then(Value::as_str), id) {
+        (Some(method), Some(id)) => {
             let params = message.get("params").cloned().unwrap_or(Value::Null);
             let reply = match request(shared, seat, method, params).await {
                 Ok(result) => json!({"jsonrpc": "2.0", "id": id, "result": result}),
-                Err((code, text)) => error(id, code, &text),
+                Err((code, text)) => error(&id, code, &text),
             };
             Answer::Reply(StatusCode::OK, reply)
         }
-        _ => Answer::Reply(
-            StatusCode::BAD_REQUEST,
-            error(id.as_ref().unwrap_or(&Value::Null), INVALID_REQUEST, "invalid request"),
-        ),
+        // A notification, or the client's answer to a request: nothing to say.
+        (Some(_), None) => Answer::Accepted,
+        (None, Some(_)) if replied => Answer::Accepted,
+        (None, id) => invalid(id.as_ref()),
     }
 }
 
@@ -86,7 +95,11 @@ async fn request(
 
 /// Run a `tools/call` on its own task, so that a client hanging up does not
 /// cancel a call halfway and leave its outcome unknown.
-async fn call(shared: &Arc<Shared>, seat: Arc<SeatState>, params: Value) -> Result<Value, (i64, String)> {
+async fn call(
+    shared: &Arc<Shared>,
+    seat: Arc<SeatState>,
+    params: Value,
+) -> Result<Value, (i64, String)> {
     let Some(name) = params["name"].as_str().map(str::to_owned) else {
         return Err((INVALID_PARAMS, "tools/call needs a tool name".into()));
     };

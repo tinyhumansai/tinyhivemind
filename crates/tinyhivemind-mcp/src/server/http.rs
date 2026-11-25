@@ -34,7 +34,9 @@ async fn admit(
     request: Request<Incoming>,
 ) -> Result<Response<Full<Bytes>>, Response<Full<Bytes>>> {
     let headers = request.headers();
-    let host = headers.get(header::HOST).and_then(|value| value.to_str().ok());
+    let host = headers
+        .get(header::HOST)
+        .and_then(|value| value.to_str().ok());
     let port = shared.port;
     let own = [format!("127.0.0.1:{port}"), format!("localhost:{port}")];
     if !host.is_some_and(|host| own.iter().any(|own| own == host)) {
@@ -63,7 +65,9 @@ async fn admit(
             .insert(header::ALLOW, HeaderValue::from_static("POST"));
         return Err(refused);
     }
-    let version = headers.get("mcp-protocol-version").map(HeaderValue::as_bytes);
+    let version = headers
+        .get("mcp-protocol-version")
+        .map(HeaderValue::as_bytes);
     if version.is_some_and(|version| !PROTOCOL_VERSIONS.iter().any(|v| v.as_bytes() == version)) {
         return Err(status(StatusCode::BAD_REQUEST));
     }
