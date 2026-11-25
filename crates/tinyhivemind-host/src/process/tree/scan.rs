@@ -1,0 +1,295 @@
+//! Finding every member, and knowing when there is none.
+//!
+//! The process table cannot be read at one instant, so a process that forks
+//! and exits could stay ahead of the reader for ever. A scan follows it. Pids
+//! are handed out in ascending order, and the kernel says which was last, so
+//! after one walk of the whole table a scan looks at just the pids handed out
+//! since, over and over. Each such round takes microseconds.
+//!
+//! **When a scan is settled.** Consider a member alive at the end, and its
+//! ancestors back to one that was alive when the scan began. That first one
+//! was looked at: if it was alive, the scan found a member. If it was dead, it
+//! had forked the next one before it died, so the next one was there when it
+//! was looked at in turn, its pid being the higher; and so on, until one is
+//! found alive. The argument holds as long as every pid handed out is looked
+//! at, in order. It fails only for pids looked at too late, after their owner
+//! died and left a child whose pid is not among those looked at yet. So a
+//! round is final if none of its pids turned out to be gone, and a process
+//! nobody asked about cannot prevent that: it is alive and plainly someone
+//! else's, or a zombie whose parent plainly is.
+use super::{Evidence, Identity, Stat, Tree, present};
+use rustix::process::Signal;
+use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
+use std::io;
+use std::time::{Duration, Instant};
+
+/// Pids before the last one that are looked at again after the first walk: a
+/// process being forked has its pid before it can be listed.
+const FORKING: u32 = 1024;
+/// More new pids than this are cheaper to list than to try one by one.
+const STORM: u32 = 50_000;
+/// How long a process may show no environment before that counts as having
+/// none. Inside `exec` it lasts microseconds, if nothing else has the CPU.
+const BARE: Duration = Duration::from_millis(200);
+/// The pause when a round has nothing new and only waits.
+const IDLE: Duration = Duration::from_millis(1);
+
+/// What one scan found.
+pub(in crate::process) struct Scan {
+    /// The members alive when they were looked at.
+    pub(in crate::process) live: Vec<Identity>,
+    /// Whether these are all, so that none means none.
+    pub(in crate::process) settled: bool,
+    /// Why it could not settle, if something could not be read.
+    pub(in crate::process) failure: Option<io::Error>,
+}
+
+/// What a scan has seen so far.
+#[derive(Default)]
+struct Pass {
+    /// Every pid that needs no further look.
+    seen: BTreeSet<u32>,
+    /// Looked at and not a member. None becomes one.
+    others: BTreeMap<u32, u64>,
+    /// Members, and everything that may still turn out to descend from one.
+    stats: Vec<Stat>,
+    members: BTreeMap<u32, Identity>,
+    /// Bare, to be looked at again.
+    unsure: BTreeSet<u32>,
+    failure: Option<io::Error>,
+}
+
+impl Tree {
+    /// Find the members, signalling each with `order` the moment it is found,
+    /// until the result is settled or `expired`.
+    pub(in crate::process) fn scan(
+        &mut self,
+        order: Option<Signal>,
+        expired: &dyn Fn() -> bool,
+    ) -> Scan {
+        let mut pass = Pass::default();
+        let mut settled = false;
+        self.recall(&mut pass, order);
+        match self.walk(&mut pass, order, expired) {
+            Ok(done) => settled = done,
+            Err(error) => pass.failure = Some(error),
+        }
+        self.adopt(&mut pass, order);
+        self.known.extend(pass.members.values().copied());
+        let members = pass
+            .stats
+            .iter()
+            .filter(|stat| !stat.dead && self.known.contains(&stat.identity()))
+            .map(Stat::identity);
+        Scan {
+            live: members.collect::<BTreeSet<_>>().into_iter().collect(),
+            settled: settled && pass.failure.is_none(),
+            failure: pass.failure,
+        }
+    }
+
+    /// Start with the members known already, whatever comes of the walk.
+    fn recall(&mut self, pass: &mut Pass, order: Option<Signal>) {
+        for member in self.known.clone() {
+            match Stat::read(&self.proc, member.pid) {
+                Ok(Some(stat)) if stat.identity() == member => {
+                    self.found(pass, stat, order);
+                }
+                Ok(_) => {}
+                Err(error) => pass.failure = Some(error),
+            }
+        }
+    }
+
+    /// Look at the whole table, then at what is new until nothing matters.
+    fn walk(
+        &mut self,
+        pass: &mut Pass,
+        order: Option<Signal>,
+        expired: &dyn Fn() -> bool,
+    ) -> io::Result<bool> {
+        let mut last = self.last_pid()?;
+        self.look(pass, self.listed(pass)?, order, expired);
+        // These may have been looked at before their owner was there to see.
+        let mut from = last.map(|last| last.saturating_sub(FORKING));
+        let mut first = true;
+        loop {
+            if expired() || (pass.failure.is_some() && !first) {
+                return Ok(false);
+            }
+            let now = self.last_pid()?;
+            let fresh = match (from, now) {
+                // In order, and not started over from the lowest pid.
+                (Some(from), Some(now)) if from <= now && Some(now) >= last && now - from <= STORM => {
+                    (from + 1..=now).filter(|pid| !pass.seen.contains(pid)).collect()
+                }
+                _ => {
+                    first = true;
+                    self.listed(pass)?
+                }
+            };
+            (last, from) = (now, now);
+            let idle = fresh.is_empty();
+            let unsure: Vec<u32> = pass.unsure.iter().copied().collect();
+            let gone = self.look(pass, unsure, order, expired) | self.look(pass, fresh, order, expired);
+            if !gone && !first && pass.unsure.is_empty() && !expired() {
+                return Ok(pass.failure.is_none());
+            }
+            first = false;
+            if idle {
+                std::thread::sleep(IDLE);
+            }
+        }
+    }
+
+    /// The last pid handed out, if the kernel says.
+    fn last_pid(&self) -> io::Result<Option<u32>> {
+        let path = self.proc.join("sys/kernel/ns_last_pid");
+        let last = present(fs::read_to_string(path))?;
+        Ok(last.and_then(|last| last.trim().parse().ok()))
+    }
+
+    /// The listed pids that need a look, in ascending order.
+    fn listed(&self, pass: &Pass) -> io::Result<Vec<u32>> {
+        let mut pids = Vec::new();
+        for entry in fs::read_dir(&self.proc)? {
+            let name = entry?.file_name();
+            let pid = name.to_str().and_then(|name| name.parse().ok());
+            pids.extend(pid.filter(|pid| !pass.seen.contains(pid)));
+        }
+        pids.sort_unstable();
+        Ok(pids)
+    }
+
+    /// Look at `pids`, and say whether any was gone too soon to judge.
+    fn look(
+        &mut self,
+        pass: &mut Pass,
+        pids: Vec<u32>,
+        order: Option<Signal>,
+        expired: &dyn Fn() -> bool,
+    ) -> bool {
+        let mut gone = false;
+        for pid in pids {
+            if expired() {
+                return true;
+            }
+            match self.judge(pass, pid, order) {
+                Ok(judged) => gone |= !judged,
+                // What cannot be read is not gone.
+                Err(error) => pass.failure = Some(error),
+            }
+        }
+        gone
+    }
+
+    /// Look at one process. False if it was gone.
+    fn judge(&mut self, pass: &mut Pass, pid: u32, order: Option<Signal>) -> io::Result<bool> {
+        let Some(stat) = Stat::read(&self.proc, pid)? else {
+            pass.unsure.remove(&pid);
+            return Ok(false);
+        };
+        let evidence = self.evidence(&stat)?;
+        pass.unsure.remove(&pid);
+        match evidence {
+            Evidence::Member => {
+                self.found(pass, stat, order);
+                return Ok(true);
+            }
+            Evidence::Gone => {
+                if !self.is_anothers_child(pass, &stat)? {
+                    return Ok(false);
+                }
+            }
+            Evidence::Bare => {
+                let since = *self
+                    .bare
+                    .entry(stat.identity())
+                    .or_insert_with(Instant::now);
+                if since.elapsed() < BARE && !self.is_anothers_child(pass, &stat)? {
+                    pass.unsure.insert(pid);
+                    return Ok(true);
+                }
+            }
+            Evidence::None => {}
+        }
+        pass.seen.insert(pid);
+        pass.others.insert(pid, stat.start);
+        if stat.start >= self.root.start {
+            pass.stats.push(stat);
+        }
+        Ok(true)
+    }
+
+    /// Whether `stat` is the child of a process that is not a member and
+    /// cannot have adopted one. Orphans go to an ancestor, so a child of one
+    /// of the host's own line may be a member's.
+    fn is_anothers_child(&self, pass: &Pass, stat: &Stat) -> io::Result<bool> {
+        let Some(start) = pass.others.get(&stat.parent) else {
+            return Ok(false);
+        };
+        let parent = Identity {
+            pid: stat.parent,
+            start: *start,
+        };
+        Ok(!self.line()?.contains(&parent.pid) && Stat::is_now(&self.proc, parent)?)
+    }
+
+    /// The host and its ancestors.
+    fn line(&self) -> io::Result<BTreeSet<u32>> {
+        let mut line = BTreeSet::from([0, 1]);
+        let mut next = self.host;
+        while line.insert(next) {
+            next = match Stat::read(&self.proc, next)? {
+                Some(stat) => stat.parent,
+                None => 1,
+            };
+        }
+        Ok(line)
+    }
+
+    /// Add a member, and signal it.
+    fn found(&mut self, pass: &mut Pass, stat: Stat, order: Option<Signal>) {
+        let member = stat.identity();
+        pass.seen.insert(stat.pid);
+        pass.others.remove(&stat.pid);
+        pass.members.insert(stat.pid, member);
+        if let Some(order) = order
+            && !stat.dead
+        {
+            self.signal(member, order);
+        }
+        pass.stats.push(stat);
+    }
+
+    /// Add the descendants of members among those seen.
+    fn adopt(&mut self, pass: &mut Pass, order: Option<Signal>) {
+        // Until nothing is added: the table is not ordered by descent.
+        loop {
+            let added: Vec<Identity> = pass
+                .stats
+                .iter()
+                .filter(|stat| !pass.members.contains_key(&stat.pid))
+                .filter(|stat| {
+                    pass.members.get(&stat.parent).is_some_and(|parent| {
+                        let now = Stat::read(&self.proc, stat.pid).ok().flatten();
+                        now.is_some_and(|now| {
+                            now.start == stat.start && self.is_child(&now, *parent).unwrap_or(false)
+                        })
+                    })
+                })
+                .map(Stat::identity)
+                .collect();
+            if added.is_empty() {
+                return;
+            }
+            for member in added {
+                pass.members.insert(member.pid, member);
+                if let Some(order) = order {
+                    self.signal(member, order);
+                }
+            }
+        }
+    }
+}

@@ -10,80 +10,52 @@
 //!
 //! Membership is of an [`Identity`], a pid *and* its start time, so a reused
 //! pid is never mistaken for the process that had it.
+mod scan;
+mod stat;
+
+pub(super) use scan::Scan;
+pub(super) use stat::Identity;
+
 use rustix::io::Errno;
 use rustix::process::{Pid, PidfdFlags, Signal, pidfd_open, pidfd_send_signal};
+use stat::{Stat, present};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-
-/// One process, for as long as it exists.
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub(super) struct Identity {
-    pub(super) pid: u32,
-    /// Start time in clock ticks since boot.
-    pub(super) start: u64,
-}
-
-/// What one reading of `/proc/<pid>/stat` says.
-struct Stat {
-    pid: u32,
-    parent: u32,
-    group: u32,
-    start: u64,
-    /// Exited and waiting to be reaped, with no thread left.
-    dead: bool,
-}
-
-impl Stat {
-    /// `None` if there is no such process or the line is not understood.
-    fn read(proc: &Path, pid: u32) -> Option<Self> {
-        let line = fs::read_to_string(proc.join(pid.to_string()).join("stat")).ok()?;
-        // The command name may itself hold spaces and parentheses.
-        let (_, rest) = line.rsplit_once(')')?;
-        let fields: Vec<&str> = rest.split_ascii_whitespace().collect();
-        let number = |index: usize| fields.get(index)?.parse::<u64>().ok();
-        let exited = matches!(*fields.first()?, "Z" | "X");
-        Some(Self {
-            pid,
-            parent: u32::try_from(number(1)?).ok()?,
-            group: u32::try_from(number(2)?).ok()?,
-            // A leader that exited before its threads reads as a zombie.
-            dead: exited && number(17)? <= 1,
-            start: number(19)?,
-        })
-    }
-
-    fn identity(&self) -> Identity {
-        Identity {
-            pid: self.pid,
-            start: self.start,
-        }
-    }
-}
+use std::time::Instant;
 
 /// Whether the kernel offers what a [`Tree`] needs: pidfds, and a `/proc` that
 /// lists children.
 pub(super) fn supported() -> bool {
     Path::new("/proc/thread-self/children").exists()
-        && Stat::read(Path::new("/proc"), std::process::id()).is_some()
+        && matches!(
+            Stat::read(Path::new("/proc"), std::process::id()),
+            Ok(Some(_))
+        )
         && pidfd_open(rustix::process::getpid(), PidfdFlags::empty()).is_ok()
 }
 
-/// Listings of the process table in one scan. Each takes a millisecond or so
-/// and a scan normally needs two or three.
-const LISTINGS: usize = 1000;
-/// Looks at a process that shows no environment, which it does not while it is
-/// inside `exec`, before that counts as having none.
-const LOOKS: u32 = 3;
+/// Whether any readable process was started with the environment `entry`.
+pub(super) fn in_use(entry: &[u8]) -> io::Result<bool> {
+    for process in fs::read_dir("/proc")? {
+        let environ = fs::read(process?.path().join("environ"));
+        if environ.is_ok_and(|environ| environ.split(|byte| *byte == 0).any(|e| e == entry)) {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
 
 /// What a process shows on its own.
 enum Evidence {
     /// It belongs to the instance.
     Member,
-    /// Its environment is empty, so far.
+    /// Its environment is empty: so far, as it is inside `exec`, or for good.
     Bare,
-    /// Nothing.
+    /// It exited, or is gone.
+    Gone,
+    /// It does not belong, or nothing says that it does.
     None,
 }
 
@@ -93,10 +65,16 @@ pub(super) struct Tree {
     /// The whole `NAME=value` environment entry.
     marker: Vec<u8>,
     root: Identity,
+    /// The root's parent, which is the host.
+    host: u32,
     /// Whether the root is unreaped, which reserves its pid as a group id.
     held: bool,
     /// Members seen alive, kept after a parent exits.
     known: BTreeSet<Identity>,
+    /// Since when a process has been bare.
+    bare: BTreeMap<Identity, Instant>,
+    /// Already sent SIGTERM.
+    asked: BTreeSet<Identity>,
 }
 
 impl Tree {
@@ -106,16 +84,18 @@ impl Tree {
         Self::at(Path::new("/proc"), marker, root)
     }
 
-    fn at(proc: &Path, marker: &str, root: u32) -> io::Result<Self> {
-        let root = Stat::read(proc, root)
-            .ok_or(io::ErrorKind::NotFound)?
-            .identity();
+    /// [`Self::new`], over the process table at `proc`.
+    pub(super) fn at(proc: &Path, marker: &str, root: u32) -> io::Result<Self> {
+        let root = Stat::read(proc, root)?.ok_or(io::ErrorKind::NotFound)?;
         Ok(Self {
             proc: proc.to_path_buf(),
             marker: marker.as_bytes().to_vec(),
-            root,
+            root: root.identity(),
+            host: root.parent,
             held: true,
-            known: BTreeSet::from([root]),
+            known: BTreeSet::from([root.identity()]),
+            bare: BTreeMap::new(),
+            asked: BTreeSet::new(),
         })
     }
 
@@ -129,16 +109,18 @@ impl Tree {
     /// Cheap enough to repeat while the instance runs: it reads only the
     /// instance's own entries. A descendant seen here stays a member after its
     /// parents die, even if it cleared its environment and left the group.
+    /// What cannot be read is left for the next time.
     pub(super) fn sample(&mut self) {
-        self.known.retain(|member| {
-            Stat::read(&self.proc, member.pid).is_some_and(|stat| stat.identity() == *member)
-        });
+        self.known
+            .retain(|member| Stat::is_now(&self.proc, *member).unwrap_or(true));
+        let known = &self.known;
+        self.bare.retain(|process, _| !known.contains(process));
         let mut queue: Vec<Identity> = self.known.iter().copied().collect();
         while let Some(parent) = queue.pop() {
             for pid in self.listed_children(parent.pid) {
-                if let Some(child) = Stat::read(&self.proc, pid)
+                if let Ok(Some(child)) = Stat::read(&self.proc, pid)
                     && !self.known.contains(&child.identity())
-                    && self.is_child(&child, parent)
+                    && self.is_child(&child, parent).unwrap_or(false)
                 {
                     self.known.insert(child.identity());
                     queue.push(child.identity());
@@ -169,122 +151,63 @@ impl Tree {
     /// at that moment, and `parent`'s identity is confirmed afterwards. If the
     /// pid still has the start time it had before, it was that process all
     /// along.
-    fn is_child(&self, child: &Stat, parent: Identity) -> bool {
-        child.parent == parent.pid
-            && Stat::read(&self.proc, parent.pid).is_some_and(|stat| stat.identity() == parent)
-    }
-
-    /// Every live member, by walking the whole process table until a listing
-    /// of it shows no process that was not looked at.
-    ///
-    /// One listing would not do: by the time its last entry is read, a process
-    /// that was not in it may have been forked by one that was and is gone.
-    pub(super) fn scan(&mut self) -> io::Result<Vec<Identity>> {
-        let mut seen = BTreeSet::new();
-        let mut bare = BTreeMap::new();
-        let mut stats = Vec::new();
-        let mut members = BTreeMap::new();
-        for _ in 0..LISTINGS {
-            let fresh = self.unseen(&seen)?;
-            if fresh.is_empty() {
-                return Ok(self.keep(&stats, members));
-            }
-            for pid in fresh {
-                // A descendant cannot be older than the root.
-                let stat = Stat::read(&self.proc, pid).filter(|stat| stat.start >= self.root.start);
-                let Some(stat) = stat else {
-                    seen.insert(pid);
-                    continue;
-                };
-                match self.evidence(&stat) {
-                    Evidence::Member => {
-                        members.insert(pid, stat.identity());
-                    }
-                    Evidence::Bare if *bare.entry(pid).or_insert(0) < LOOKS => {
-                        bare.entry(pid).and_modify(|looks| *looks += 1);
-                        continue;
-                    }
-                    Evidence::Bare | Evidence::None => {}
-                }
-                seen.insert(pid);
-                stats.push(stat);
-            }
-        }
-        Err(io::Error::other("it never held still"))
-    }
-
-    /// The listed pids that are not `seen`.
-    fn unseen(&self, seen: &BTreeSet<u32>) -> io::Result<Vec<u32>> {
-        let mut fresh = Vec::new();
-        for entry in fs::read_dir(&self.proc)? {
-            let name = entry?.file_name();
-            let pid = name.to_str().and_then(|name| name.parse().ok());
-            fresh.extend(pid.filter(|pid| !seen.contains(pid)));
-        }
-        Ok(fresh)
-    }
-
-    /// Add the descendants of `members` among `stats`, remember them all, and
-    /// return the live ones.
-    fn keep(&mut self, stats: &[Stat], mut members: BTreeMap<u32, Identity>) -> Vec<Identity> {
-        // Until nothing is added: the table is not ordered by descent, and
-        // pids wrap.
-        loop {
-            let added: Vec<Identity> = stats
-                .iter()
-                .filter(|stat| !members.contains_key(&stat.pid))
-                .filter(|stat| {
-                    members.get(&stat.parent).is_some_and(|parent| {
-                        Stat::read(&self.proc, stat.pid).is_some_and(|now| {
-                            now.start == stat.start && self.is_child(&now, *parent)
-                        })
-                    })
-                })
-                .map(Stat::identity)
-                .collect();
-            if added.is_empty() {
-                break;
-            }
-            members.extend(added.into_iter().map(|member| (member.pid, member)));
-        }
-        self.known = members.into_values().collect();
-        self.known.insert(self.root);
-        stats
-            .iter()
-            .filter(|stat| !stat.dead && self.known.contains(&stat.identity()))
-            .map(Stat::identity)
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect()
+    fn is_child(&self, child: &Stat, parent: Identity) -> io::Result<bool> {
+        Ok(child.parent == parent.pid && Stat::is_now(&self.proc, parent)?)
     }
 
     /// What `stat` shows on its own.
-    fn evidence(&self, stat: &Stat) -> Evidence {
+    fn evidence(&self, stat: &Stat) -> io::Result<Evidence> {
         if self.known.contains(&stat.identity()) || (self.held && stat.group == self.root.pid) {
-            return Evidence::Member;
+            return Ok(Evidence::Member);
         }
-        let environ = fs::read(self.proc.join(stat.pid.to_string()).join("environ"));
-        let Ok(environ) = environ else {
-            return Evidence::None;
+        if stat.dead {
+            return Ok(Evidence::Gone);
+        }
+        // A descendant cannot be older than the root, nor part of the kernel.
+        if stat.start < self.root.start || stat.kernel {
+            return Ok(Evidence::None);
+        }
+        let directory = self.proc.join(stat.pid.to_string());
+        let environ = match fs::read(directory.join("environ")) {
+            // Another user's, or not to be read by anyone: no evidence.
+            Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
+                return Ok(Evidence::None);
+            }
+            read => present(read)?,
         };
-        if environ.is_empty() && !stat.dead {
-            return Evidence::Bare;
+        let Some(environ) = environ else {
+            return Ok(Evidence::Gone);
+        };
+        if environ.is_empty() {
+            return Ok(Evidence::Bare);
         }
-        let marked = environ
-            .split(|byte| *byte == 0)
-            .any(|entry| entry == self.marker);
+        let mut entries = environ.split(|byte| *byte == 0);
+        if !entries.any(|entry| entry == self.marker) {
+            return Ok(Evidence::None);
+        }
+        // A pid that names a thread shows its process's environment.
+        let Some(status) = present(fs::read_to_string(directory.join("status")))? else {
+            return Ok(Evidence::Gone);
+        };
+        let leader = status.lines().find_map(|line| line.strip_prefix("Tgid:"));
+        if leader.is_some_and(|leader| leader.trim() != stat.pid.to_string()) {
+            return Ok(Evidence::None);
+        }
         // It was the environment of the process `stat` describes.
-        let same = || Stat::read(&self.proc, stat.pid).is_some_and(|now| now.start == stat.start);
-        if marked && same() {
-            Evidence::Member
+        if Stat::is_now(&self.proc, stat.identity())? {
+            Ok(Evidence::Member)
         } else {
-            Evidence::None
+            Ok(Evidence::Gone)
         }
     }
 
-    /// Signal a member found by [`Self::scan`].
-    pub(super) fn signal(&self, member: Identity, signal: Signal) -> rustix::io::Result<()> {
-        self::signal(&self.proc, member, signal)
+    /// Signal `member`: with SIGTERM once, with anything else every time.
+    fn signal(&mut self, member: Identity, signal: Signal) {
+        if signal == Signal::TERM && !self.asked.insert(member) {
+            return;
+        }
+        // One that cannot be signalled is still there at the next look.
+        let _ = self::signal(&self.proc, member, signal);
     }
 }
 
@@ -293,7 +216,7 @@ impl Tree {
 /// The pidfd is opened before the identity is checked, so it names either
 /// `member` or a process that was already dead when a later owner of the pid
 /// was read. Either way no other process can receive the signal.
-fn signal(proc: &Path, member: Identity, signal: Signal) -> rustix::io::Result<()> {
+fn signal(proc: &Path, member: Identity, signal: Signal) -> io::Result<()> {
     let Some(pid) = i32::try_from(member.pid).ok().and_then(Pid::from_raw) else {
         return Ok(());
     };
@@ -302,12 +225,12 @@ fn signal(proc: &Path, member: Identity, signal: Signal) -> rustix::io::Result<(
         Err(Errno::SRCH | Errno::INVAL) => return Ok(()),
         opened => opened?,
     };
-    if Stat::read(proc, member.pid).is_none_or(|stat| stat.identity() != member) {
+    if !Stat::is_now(proc, member)? {
         return Ok(());
     }
     match pidfd_send_signal(handle, signal) {
         Err(Errno::SRCH) => Ok(()),
-        sent => sent,
+        sent => Ok(sent?),
     }
 }
 
