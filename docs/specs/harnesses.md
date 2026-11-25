@@ -122,9 +122,9 @@ point, not a promise: a row moves when a conformance test proves the setting.
 A `sandbox` is rejected because executable tools on this path run from the host's
 MCP server, where nothing confines them yet, and a harness's own sandbox does not
 reach them. `autonomy` and `access` are judged by the MCP server before hooks and
-dispatch: `read_only` refuses every state-changing call; `supervised`, the
-default, sends each state-changing executable tool and proxied MCP call to the
-host's approver and refuses it when there is none; `autonomous` adds no gate.
+dispatch, for executable tools not declared `side_effects = "read"` and every
+proxied MCP call: `read_only` refuses them; `supervised`, the default, sends each
+to the host's approver and refuses it when there is none; `autonomous` adds no gate.
 Hive tools stay under send and management policy, as on the linked path. The
 harness's own approval prompts are never relied on.
 
@@ -354,8 +354,11 @@ seat; per-turn usage; exact model-visible tool list; no process left after stop.
 Call identity: a retry of one call acts once and returns the first result; two
 identical calls under different `call` values in one turn both act; a reused
 `call` with different arguments, or another tool, is refused; a missing `call` is
-refused; an executable tool retried while its outcome is unknown is refused and
+refused; a retried read with a hook reruns neither; an executable tool retried while its outcome is unknown is refused and
 runs once.
+
+Runtime gates: `read_only` refuses an effectful tool; `supervised` without an
+approver refuses it; a `sandbox` other than `none` fails `check`.
 
 Providers: each accepted row reaches exactly the declared endpoint; each rejected
 row fails `check` at its location; with the declared endpoint down the turn fails

@@ -38,7 +38,7 @@ commits a whole `StoredState` in one compare-and-swap, so the change is:
   their behaviour for the linked adapter.
 
 In the server: the started and finished record for executable tools, proxied MCP
-calls and `create_agent`.
+calls, `create_agent` and any call a hook matches, and the `autonomy` gate.
 
 Done when tests refuse: a wrong bearer, another seat's episode, a stale `turn`, a
 call with no running turn, a forged actor, a bad `Host`, any `Origin`, an
@@ -50,7 +50,8 @@ values both act; reuse with different arguments or another tool is refused, as
 are a missing `call` and a retry whose outcome is unknown; a failed commit leaves
 neither effect nor record; the record survives a storage reload of a running turn
 and an older snapshot still loads; after a coordinator restart the retry is
-refused; a hook-denied call records nothing and may be corrected; two sends with
+refused; a hook-denied call is recorded, a retry reruns no hook, and a corrected call uses
+a new `call`; two sends with
 one `message_id` under different calls are one message.
 
 ## 3. Schema
