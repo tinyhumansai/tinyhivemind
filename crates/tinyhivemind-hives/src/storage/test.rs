@@ -290,7 +290,7 @@ const OLDER_RUNNING_TURN: &str = r#"{
 }"#;
 
 #[test]
-fn a_running_turn_from_before_call_records_loads_with_none() {
+fn a_running_turn_from_before_call_records_loads_with_no_calls() {
     let turn: RunningTurn = serde_json::from_str(OLDER_RUNNING_TURN).unwrap();
     assert!(turn.calls.is_empty());
     assert_eq!(turn.delivery_sequence, Some(3));
