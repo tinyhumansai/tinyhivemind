@@ -1,5 +1,6 @@
 //! The fake harness as a subject of the conformance suite.
 use super::client::{FakeHarness, Fault};
+use rustix::process::{Pid, Signal, kill_process};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::fs;
@@ -88,25 +89,27 @@ impl Subject for FakeSubject {
             ModelStep::Hang => Value::Null,
         };
         let steps = self.control().join("steps");
-        fs::write(steps.join(format!("{number:04}")), step.to_string())?;
+        done(fs::write(
+            steps.join(format!("{number:04}")),
+            step.to_string(),
+        ));
     }
 
     fn model_calls(&self) -> Vec<ModelCall> {
         let mut calls = BTreeMap::new();
         for entry in self.entries() {
-            let number = entry["call"].as_u64().context("missing")?;
-            let state = match entry["state"].as_str().context("missing")? {
-                "answered" => CallState::Answered,
-                "aborted" => CallState::Aborted,
+            let state = match entry["state"].as_str() {
+                Some("answered") => CallState::Answered,
+                Some("aborted") => CallState::Aborted,
                 // A model call ends with the process that makes it.
                 _ if !Path::new(&format!("/proc/{}/cwd", entry["pid"])).exists() => {
                     CallState::Aborted
                 }
                 _ => CallState::Open,
             };
-            let seen = entry["seen"].as_u64();
-            let call = calls.entry(number).or_insert(ModelCall {
-                seen: usize::try_from(seen.unwrap_or(0))?,
+            let seen = entry["seen"].as_u64().unwrap_or_default();
+            let call = calls.entry(entry["call"].as_u64()).or_insert(ModelCall {
+                seen: usize::try_from(seen).unwrap_or(usize::MAX),
                 state,
             });
             call.state = state;
@@ -116,7 +119,7 @@ impl Subject for FakeSubject {
 
     fn lose_sessions(&self) {
         let state = self.root.path().join("instance/state");
-        fs::remove_file(state.join("session.json"))?;
+        done(fs::remove_file(state.join("session.json")));
     }
 
     fn offer(&self, fault: ToolFault) {
@@ -125,13 +128,15 @@ impl Subject for FakeSubject {
             ToolFault::Extra => "extra",
             ToolFault::Missing => "missing",
         };
-        fs::write(self.control().join("tools"), text)?;
+        done(fs::write(self.control().join("tools"), text));
     }
 
     /// Whatever runs in this subject's instance directory.
     fn processes(&self) -> Vec<u32> {
         let instance = self.root.path().join("instance");
-        fs::read_dir("/proc")?
+        fs::read_dir("/proc")
+            .into_iter()
+            .flatten()
             .flatten()
             .filter_map(|entry| entry.file_name().to_str()?.parse().ok())
             .filter(|pid: &u32| {
@@ -153,14 +158,14 @@ impl Subject for FakeSubject {
         let harness = lock(&self.current).clone();
         let report = self.control().join("escapee");
         Box::pin(async move {
-            harness?.escape().await;
-            for _ in 0..3000 {
+            done(harness?.escape().await);
+            // The suite bounds the wait.
+            loop {
                 if let Ok(pid) = fs::read_to_string(&report) {
                     return pid.parse().ok();
                 }
-                tokio::time::sleep(Duration::from_millis(10)).await;
+                tokio::time::sleep(Duration::from_millis(5)).await;
             }
-            panic!("the escapee never reported");
         })
     }
 }
@@ -169,8 +174,9 @@ impl Subject for FakeSubject {
 impl Drop for FakeSubject {
     fn drop(&mut self) {
         for pid in self.processes() {
-            let pid = rustix::process::Pid::from_raw(pid.cast_signed()).context("missing")?;
-            let _ = rustix::process::kill_process(pid, rustix::process::Signal::KILL);
+            if let Some(pid) = Pid::from_raw(pid.cast_signed()) {
+                let _ = kill_process(pid, Signal::KILL);
+            }
         }
     }
 }
