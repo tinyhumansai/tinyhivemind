@@ -14,7 +14,7 @@ async fn a_cooperative_child_is_stopped_by_the_cancel_future_alone() -> Result<(
         let path = fixture.path("cancel");
         let exited = instance.exited();
         async move {
-            std::fs::write(path, "")?;
+            let _ = std::fs::write(path, "");
             exited.await;
         }
     };
@@ -102,27 +102,28 @@ async fn leaves_nothing(script: &str) -> Result<()> {
 }
 
 #[tokio::test]
-async fn a_grandchild_in_its_own_session_is_stopped() {
+async fn a_grandchild_in_its_own_session_is_stopped() -> Result<()> {
     leaves_nothing("setsid sh $OUT/stay & exec sleep 300").await
 }
 
 #[tokio::test]
-async fn a_grandchild_whose_parent_died_is_stopped() {
+async fn a_grandchild_whose_parent_died_is_stopped() -> Result<()> {
     leaves_nothing("(sh $OUT/stay &); exec sleep 300").await
 }
 
 #[tokio::test]
-async fn an_orphan_in_its_own_session_is_stopped() {
+async fn an_orphan_in_its_own_session_is_stopped() -> Result<()> {
     leaves_nothing("(setsid sh $OUT/stay &); exec sleep 300").await
 }
 
 #[tokio::test]
-async fn an_orphan_that_ignores_sigterm_is_stopped() {
+async fn an_orphan_that_ignores_sigterm_is_stopped() -> Result<()> {
     leaves_nothing("trap '' TERM; (setsid sh $OUT/stay &); exec sleep 300").await
 }
 
 #[tokio::test]
-async fn a_descendant_that_cleared_its_environment_is_stopped_while_its_parent_lives() {
+async fn a_descendant_that_cleared_its_environment_is_stopped_while_its_parent_lives() -> Result<()>
+{
     leaves_nothing("setsid env -i OUT=$OUT /bin/sh $OUT/stay & exec sleep 300").await
 }
 

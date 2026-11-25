@@ -5,16 +5,16 @@ use anyhow::{Context as _, Result};
 use std::fs;
 use std::os::unix::fs::{PermissionsExt, symlink};
 
-fn mode(path: &std::path::Path) -> u32 {
-    fs::metadata(path)?.permissions().mode() & 0o777
+fn mode(path: &std::path::Path) -> Result<u32> {
+    Ok(fs::metadata(path)?.permissions().mode() & 0o777)
 }
 
 #[test]
 fn both_directories_are_private_and_survive_being_reopened() -> Result<()> {
     let fixture = Fixture::new()?;
     let dir = fixture.dir()?;
-    assert_eq!(mode(dir.root()), 0o700);
-    assert_eq!(mode(dir.state()), 0o700);
+    assert_eq!(mode(dir.root())?, 0o700);
+    assert_eq!(mode(dir.state())?, 0o700);
     fs::write(dir.state().join("session"), "s1")?;
     let again = fixture.dir()?;
     assert_eq!(fs::read_to_string(again.state().join("session"))?, "s1");
@@ -28,7 +28,7 @@ fn an_existing_open_directory_is_made_private() -> Result<()> {
     fs::create_dir(&root)?;
     fs::set_permissions(&root, fs::Permissions::from_mode(0o755))?;
     fixture.dir()?;
-    assert_eq!(mode(&root), 0o700);
+    assert_eq!(mode(&root)?, 0o700);
     Ok(())
 }
 
@@ -50,7 +50,7 @@ fn a_symlink_or_a_file_is_not_an_instance_directory() -> Result<()> {
 #[test]
 fn another_users_directory_is_refused() -> Result<()> {
     if rustix::process::geteuid().is_root() {
-        return;
+        return Ok(());
     }
     let refused = InstanceDir::create("/usr")
         .err()

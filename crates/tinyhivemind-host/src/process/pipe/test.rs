@@ -1,6 +1,6 @@
 //! Framing, bounds and cancellation of the piped streams.
 use super::{JsonLines, Limits, LineError, Tail, drain};
-use anyhow::{Context as _, Result};
+use anyhow::{Context as _, Result, bail};
 use serde_json::{Value, json};
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream, duplex};
@@ -21,8 +21,7 @@ fn connect(limits: Limits) -> (JsonLines, DuplexStream, DuplexStream) {
 }
 
 async fn finish(mut pipe: DuplexStream, bytes: &[u8]) -> Result<()> {
-    pipe.write_all(bytes).await?;
-    Ok(())
+    Ok(pipe.write_all(bytes).await?)
 }
 
 #[tokio::test]
@@ -31,16 +30,14 @@ async fn each_value_is_one_line_in_each_direction() -> Result<()> {
     lines.sender.send(&json!({"a": "x\ny"})).await?;
     lines.sender.send(&json!(2)).await?;
     let reply = finish(child_out, b"{\"b\":1}\n\n[3]\n\"unterminated\"");
-    let (received, ()) = tokio::join!(
-        async {
-            let mut received = Vec::new();
-            while let Some(value) = lines.receiver.recv().await {
-                received.push(value?);
-            }
-            received
-        },
-        reply
-    );
+    let receive = async {
+        let mut received = Vec::new();
+        while let Some(value) = lines.receiver.recv().await {
+            received.push(value?);
+        }
+        Ok(received)
+    };
+    let (received, ()) = tokio::try_join!(receive, reply)?;
     assert_eq!(
         received,
         [json!({"b": 1}), json!([3]), json!("unterminated")]
@@ -104,7 +101,7 @@ async fn a_child_that_writes_unread_lines_is_drained_and_the_loss_is_reported() 
                 assert!(matches!(error, LineError::Overflow { limit: 256 }));
                 break;
             }
-            None => panic!("the loss was not reported"),
+            None => bail!("the loss was not reported"),
         }
     }
     assert!((1..1000).contains(&values));

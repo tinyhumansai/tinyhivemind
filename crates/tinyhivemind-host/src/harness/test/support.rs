@@ -1,9 +1,8 @@
 //! A scripted runner in this process, and plans to start seats with.
 use crate::harness::{CancelFuture, CancellableRunner, Error, SeatPlan};
-use anyhow::{Context as _, Result};
 use serde_json::Value;
 use std::path::Path;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use tinyhivemind_hives::{AgentRunner, TurnDisposition, TurnFuture, TurnOutcome, TurnRequest};
 use tinyhivemind_lang::{LoweredSeat, LoweredSeatIntegration};
 use tokio::sync::Semaphore;
@@ -35,6 +34,10 @@ pub(super) fn request(turn_id: &str, session_id: Option<&str>) -> TurnRequest {
     }
 }
 
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
 /// What a scripted turn does.
 #[derive(Clone)]
 pub(super) enum Turn {
@@ -49,10 +52,10 @@ pub(super) enum Turn {
 /// A runner that keeps a log, plays a script, and whose cancellations wait for
 /// a permit.
 pub(super) struct Scripted {
-    pub(super) log: Mutex<Vec<String>>,
+    log: Mutex<Vec<String>>,
     turns: Mutex<Vec<Turn>>,
     pub(super) permits: Semaphore,
-    pub(super) refuse_cancel: Mutex<bool>,
+    refuse_cancel: Mutex<bool>,
 }
 
 impl Scripted {
@@ -65,10 +68,14 @@ impl Scripted {
         })
     }
     pub(super) fn log(&self) -> Vec<String> {
-        self.log.lock().unwrap_or_else(PoisonError::into_inner).clone()
+        lock(&self.log).clone()
+    }
+    /// From now on, refuse to cancel or stop refusing.
+    pub(super) fn refuse_cancel(&self, refuse: bool) {
+        *lock(&self.refuse_cancel) = refuse;
     }
     fn note(&self, entry: String) {
-        self.log.lock().unwrap_or_else(PoisonError::into_inner).push(entry);
+        lock(&self.log).push(entry);
     }
 }
 
@@ -82,8 +89,8 @@ impl AgentRunner for Handle {
         Box::pin(async move {
             let session = request.session_id.as_deref().unwrap_or("none");
             this.note(format!("run {} {session}", request.turn_id));
-            let turn = this.turns.lock().unwrap_or_else(PoisonError::into_inner).pop().context("missing")?;
-            match turn {
+            let turn = lock(&this.turns).pop();
+            match turn.ok_or(Error::Harness("the script is over".into()))? {
                 Turn::Session(session_id) => Ok(TurnOutcome {
                     session_id: session_id.into(),
                     reply: None,
@@ -102,8 +109,10 @@ impl CancellableRunner for Handle {
         let turn_id = turn_id.to_owned();
         Box::pin(async move {
             this.note(format!("cancel {turn_id}"));
-            this.permits.acquire().await?.forget();
-            if *this.refuse_cancel.lock().unwrap_or_else(PoisonError::into_inner) {
+            if let Ok(permit) = this.permits.acquire().await {
+                permit.forget();
+            }
+            if *lock(&this.refuse_cancel) {
                 return Err(Error::Harness("will not stop".into()));
             }
             this.note(format!("cancelled {turn_id}"));

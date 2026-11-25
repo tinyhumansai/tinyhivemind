@@ -11,7 +11,7 @@ fn seat(inner: &Arc<Scripted>) -> SeatRunner {
 }
 
 /// Yield until the log is `expected`.
-async fn logged(inner: &Scripted, expected: &[&str]) -> Result<()> {
+async fn logged(inner: &Scripted, expected: &[&str]) {
     let reached = async {
         while inner.log() != expected {
             tokio::task::yield_now().await;
@@ -23,15 +23,11 @@ async fn logged(inner: &Scripted, expected: &[&str]) -> Result<()> {
         "{:?} never became {expected:?}",
         inner.log()
     );
-    Ok(())
 }
 
-async fn refusal(seat: &SeatRunner, turn_id: &str, session: Option<&str>) -> String {
-    seat.run(request(turn_id, session))
-        .await
-        .err()
-        .context("expected a failure")?
-        .to_string()
+async fn refusal(seat: &SeatRunner, turn_id: &str, session: Option<&str>) -> Result<String> {
+    let ended = seat.run(request(turn_id, session)).await;
+    Ok(ended.err().context("the turn was not refused")?.to_string())
 }
 
 #[tokio::test]
@@ -59,7 +55,7 @@ async fn a_second_turn_waits_for_the_first_and_its_cancellation() -> Result<()> 
 async fn a_failed_turn_is_cancelled_before_its_error_is_returned() -> Result<()> {
     let inner = Scripted::new(&[Turn::Fail, Turn::Session("s")]);
     let seat = seat(&inner);
-    assert!(refusal(&seat, "t1", None).await.contains("scripted"));
+    assert!(refusal(&seat, "t1", None).await?.contains("scripted"));
     assert_eq!(inner.log(), ["run t1 none", "cancel t1", "cancelled t1"]);
     seat.run(request("t2", None)).await?;
     Ok(())
@@ -70,7 +66,7 @@ async fn a_turn_past_its_timeout_is_cancelled_and_the_seat_stays_usable() -> Res
     let inner = Scripted::new(&[Turn::Session("s"), Turn::Hang, Turn::Session("s")]);
     let seat = seat(&inner).with_timeout(Some(Duration::from_millis(50)));
     seat.run(request("t1", None)).await?;
-    assert!(refusal(&seat, "t2", Some("s")).await.contains("50ms"));
+    assert!(refusal(&seat, "t2", Some("s")).await?.contains("50ms"));
     assert!(inner.log().contains(&"cancelled t2".to_owned()));
     seat.run(request("t3", Some("s"))).await?;
     Ok(())
@@ -81,8 +77,8 @@ async fn a_turn_that_cannot_be_shown_to_have_stopped_blocks_the_seat_until_it_is
     let inner = Scripted::new(&[Turn::Fail, Turn::Session("s")]);
     inner.refuse_cancel(true);
     let seat = seat(&inner);
-    assert!(refusal(&seat, "t1", None).await.contains("will not stop"));
-    let blocked = refusal(&seat, "t2", None).await;
+    assert!(refusal(&seat, "t1", None).await?.contains("will not stop"));
+    let blocked = refusal(&seat, "t2", None).await?;
     assert!(blocked.contains("t1"), "{blocked}");
     assert!(!inner.log().iter().any(|entry| entry.starts_with("run t2")));
     inner.refuse_cancel(false);
@@ -110,15 +106,11 @@ async fn an_abandoned_turn_whose_cancellation_failed_is_cancelled_again() -> Res
 fn a_turn_abandoned_with_its_runtime_is_cancelled_before_the_next() -> Result<()> {
     let inner = Scripted::new(&[Turn::Hang, Turn::Session("s")]);
     let seat = seat(&inner);
-    let first = seat.run(request("t1", None));
+    let mut first = seat.run(request("t1", None));
     // Dropped outside any runtime, so there is nothing to cancel it on.
     let runtime = tokio::runtime::Runtime::new()?;
-    let mut first = Some(first);
     runtime.block_on(async {
-        let polled = tokio::time::timeout(
-            Duration::from_millis(10),
-            first.as_mut().context("missing")?,
-        );
+        let polled = tokio::time::timeout(Duration::from_millis(10), &mut first);
         assert!(polled.await.is_err());
     });
     drop(runtime);
@@ -142,10 +134,10 @@ async fn a_turn_id_runs_once_whatever_became_of_it() -> Result<()> {
     }
     third.abort();
     for turn in ["t1", "t2", "t3"] {
-        let refused = refusal(&seat, turn, Some("s")).await;
+        let refused = refusal(&seat, turn, Some("s")).await?;
         assert!(refused.contains("already started"), "{refused}");
     }
-    assert!(refusal(&seat, "", Some("s")).await.contains("no turn id"));
+    assert!(refusal(&seat, "", Some("s")).await?.contains("no turn id"));
     let runs = inner
         .log()
         .iter()
@@ -173,7 +165,7 @@ async fn a_turn_dropped_while_it_waited_never_started() -> Result<()> {
 #[tokio::test]
 async fn an_empty_session_is_an_error() {
     let inner = Scripted::new(&[Turn::Session(" ")]);
-    let refused = refusal(&seat(&inner), "t1", None).await;
+    let refused = refusal(&seat(&inner), "t1", None).await?;
     assert!(refused.contains("empty session"), "{refused}");
 }
 
@@ -186,7 +178,7 @@ async fn a_changed_session_is_an_error_and_the_seat_keeps_its_own() -> Result<()
     ]);
     let seat = seat(&inner);
     seat.run(request("t1", None)).await?;
-    let refused = refusal(&seat, "t2", Some("s")).await;
+    let refused = refusal(&seat, "t2", Some("s")).await?;
     assert!(refused.contains("other"), "{refused}");
     seat.run(request("t3", Some("s"))).await?;
     Ok(())
@@ -197,7 +189,7 @@ async fn a_request_for_another_session_never_reaches_the_harness() -> Result<()>
     let inner = Scripted::new(&[Turn::Session("s")]);
     let seat = seat(&inner);
     seat.run(request("t1", Some("s"))).await?;
-    let refused = refusal(&seat, "t2", Some("other")).await;
+    let refused = refusal(&seat, "t2", Some("other")).await?;
     assert!(refused.contains("other"), "{refused}");
     assert_eq!(inner.log().len(), 1);
     Ok(())
@@ -206,7 +198,7 @@ async fn a_request_for_another_session_never_reaches_the_harness() -> Result<()>
 #[tokio::test]
 async fn a_resumed_session_must_come_back_as_itself() {
     let inner = Scripted::new(&[Turn::Session("new")]);
-    let refused = refusal(&seat(&inner), "t1", Some("old")).await;
+    let refused = refusal(&seat(&inner), "t1", Some("old")).await?;
     assert!(
         refused.contains("old") && refused.contains("new"),
         "{refused}"

@@ -50,7 +50,7 @@ fn a_missing_or_unexpected_or_repeated_tool_is_refused() -> Result<()> {
         expected()
             .verify(42, "0.64.15", tools(names))
             .err()
-            .context("expected a failure")?
+            .context("a wrong tool list was accepted")
     };
     for (names, missing, unexpected) in [
         (&["ask"][..], &["post"][..], &[][..]),
@@ -58,7 +58,7 @@ fn a_missing_or_unexpected_or_repeated_tool_is_refused() -> Result<()> {
         (&["shell"], &["ask", "post"], &["shell"]),
         (&["ask", "post", "post"], &[], &["post"]),
     ] {
-        let mismatch = found(names);
+        let mismatch = found(names)?;
         assert_eq!(
             mismatch,
             Mismatch::Tools {
@@ -67,7 +67,7 @@ fn a_missing_or_unexpected_or_repeated_tool_is_refused() -> Result<()> {
             }
         );
     }
-    let error: Error = found(&["ask"]).into();
+    let error: Error = found(&["ask"])?.into();
     assert!(error.to_string().contains("post"), "{error}");
     Ok(())
 }

@@ -31,7 +31,7 @@ impl Entry {
             environ: "PATH=/bin\0",
         }
     }
-    fn write(&self, proc: &Path) {
+    fn write(&self, proc: &Path) -> Result<()> {
         let directory = proc.join(self.pid.to_string());
         let task = directory.join("task").join(self.pid.to_string());
         fs::create_dir_all(&task)?;
@@ -41,37 +41,36 @@ impl Entry {
             self.pid, self.state, self.parent, self.group, self.group, self.threads, self.start
         );
         fs::write(directory.join("stat"), stat)?;
-        fs::write(directory.join("environ"), self.environ)?;
+        Ok(fs::write(directory.join("environ"), self.environ)?)
     }
 }
 
-fn table(entries: &[Entry]) -> tempfile::TempDir {
+fn table(entries: &[Entry]) -> Result<tempfile::TempDir> {
     let proc = tempfile::tempdir()?;
     for entry in entries {
-        entry.write(proc.path());
+        entry.write(proc.path())?;
     }
     // Entries that are not processes are skipped.
     fs::create_dir(proc.path().join("sys"))?;
-    proc
+    Ok(proc)
 }
 
-fn tree(proc: &tempfile::TempDir) -> Tree {
-    Tree::at(proc.path(), MARKER, 10)?
+fn tree(proc: &tempfile::TempDir) -> Result<Tree> {
+    Ok(Tree::at(proc.path(), MARKER, 10)?)
 }
 
-fn pids(tree: &mut Tree) -> Vec<u32> {
-    tree.scan()?.into_iter().map(|member| member.pid).collect()
+fn pids(tree: &mut Tree) -> Result<Vec<u32>> {
+    Ok(tree.scan()?.into_iter().map(|member| member.pid).collect())
 }
 
 fn children(proc: &tempfile::TempDir, pid: u32, list: &str) -> Result<()> {
     let task = format!("{pid}/task/{pid}/children");
-    fs::write(proc.path().join(task), list)?;
-    Ok(())
+    Ok(fs::write(proc.path().join(task), list)?)
 }
 
 #[test]
 fn a_stat_line_is_read_past_a_hostile_command_name() -> Result<()> {
-    let proc = table(&[Entry::new(10, 1, 100)]);
+    let proc = table(&[Entry::new(10, 1, 100)])?;
     let stat = Stat::read(proc.path(), 10).context("missing")?;
     assert_eq!((stat.parent, stat.group, stat.start), (1, 10, 100));
     assert!(!stat.dead);
@@ -83,7 +82,7 @@ fn a_stat_line_is_read_past_a_hostile_command_name() -> Result<()> {
 
 #[test]
 fn a_root_that_is_not_running_has_no_tree() {
-    let proc = table(&[]);
+    let proc = table(&[])?;
     assert!(Tree::at(proc.path(), MARKER, 10).is_err());
 }
 
@@ -95,8 +94,8 @@ fn descendants_are_members_however_deep() {
         Entry::new(11, 10, 101),
         Entry::new(10, 1, 100),
         Entry::new(20, 1, 104),
-    ]);
-    assert_eq!(pids(&mut tree(&proc)), [10, 11, 12, 13]);
+    ])?;
+    assert_eq!(pids(&mut tree(&proc)?)?, [10, 11, 12, 13]);
 }
 
 #[test]
@@ -107,27 +106,27 @@ fn a_reparented_process_is_known_by_its_marker_alone() {
     other.environ = "TINYHIVEMIND_INSTANCE=abcd\0";
     let mut embedded = Entry::new(32, 1, 105);
     embedded.environ = "X=TINYHIVEMIND_INSTANCE=abc\0";
-    let proc = table(&[Entry::new(10, 1, 100), orphan, other, embedded]);
-    assert_eq!(pids(&mut tree(&proc)), [10, 30]);
+    let proc = table(&[Entry::new(10, 1, 100), orphan, other, embedded])?;
+    assert_eq!(pids(&mut tree(&proc)?)?, [10, 30]);
 }
 
 #[test]
 fn a_process_older_than_the_root_is_never_a_member() {
     let mut older = Entry::new(5, 1, 99);
     older.environ = "TINYHIVEMIND_INSTANCE=abc\0";
-    let proc = table(&[Entry::new(10, 1, 100), older]);
-    assert_eq!(pids(&mut tree(&proc)), [10]);
+    let proc = table(&[Entry::new(10, 1, 100), older])?;
+    assert_eq!(pids(&mut tree(&proc)?)?, [10]);
 }
 
 #[test]
 fn the_roots_process_group_is_the_instances() {
     let mut grouped = Entry::new(40, 1, 105);
     grouped.group = 10;
-    let proc = table(&[Entry::new(10, 1, 100), grouped]);
-    assert_eq!(pids(&mut tree(&proc)), [10, 40]);
-    let mut released = tree(&proc);
+    let proc = table(&[Entry::new(10, 1, 100), grouped])?;
+    assert_eq!(pids(&mut tree(&proc)?)?, [10, 40]);
+    let mut released = tree(&proc)?;
     released.release();
-    assert_eq!(pids(&mut released), [10]);
+    assert_eq!(pids(&mut released)?, [10]);
 }
 
 #[test]
@@ -137,49 +136,49 @@ fn the_dead_are_not_survivors_but_a_threaded_zombie_leader_is() {
     let mut leader = Entry::new(12, 10, 101);
     leader.state = 'Z';
     leader.threads = 3;
-    let proc = table(&[Entry::new(10, 1, 100), zombie, leader]);
-    assert_eq!(pids(&mut tree(&proc)), [10, 12]);
+    let proc = table(&[Entry::new(10, 1, 100), zombie, leader])?;
+    assert_eq!(pids(&mut tree(&proc)?)?, [10, 12]);
 }
 
 #[test]
 fn a_sampled_descendant_stays_a_member_after_it_is_reparented() -> Result<()> {
-    let proc = table(&[Entry::new(10, 1, 100), Entry::new(11, 10, 101)]);
-    Entry::new(12, 11, 102).write(proc.path());
-    children(&proc, 10, "11 ");
-    children(&proc, 11, "12 ");
-    let mut tree = tree(&proc);
+    let proc = table(&[Entry::new(10, 1, 100), Entry::new(11, 10, 101)])?;
+    Entry::new(12, 11, 102).write(proc.path())?;
+    children(&proc, 10, "11 ")?;
+    children(&proc, 11, "12 ")?;
+    let mut tree = tree(&proc)?;
     tree.sample();
     fs::remove_dir_all(proc.path().join("11"))?;
-    Entry::new(12, 1, 102).write(proc.path());
-    assert_eq!(pids(&mut tree), [10, 12]);
+    Entry::new(12, 1, 102).write(proc.path())?;
+    assert_eq!(pids(&mut tree)?, [10, 12]);
     Ok(())
 }
 
 #[test]
 fn a_reused_pid_is_not_the_process_that_had_it() {
-    let proc = table(&[Entry::new(10, 1, 100), Entry::new(11, 10, 101)]);
-    children(&proc, 10, "11");
-    let mut tree = tree(&proc);
+    let proc = table(&[Entry::new(10, 1, 100), Entry::new(11, 10, 101)])?;
+    children(&proc, 10, "11")?;
+    let mut tree = tree(&proc)?;
     tree.sample();
-    Entry::new(11, 1, 900).write(proc.path());
+    Entry::new(11, 1, 900).write(proc.path())?;
     // A child of the new owner of the pid is not ours either.
-    Entry::new(12, 11, 901).write(proc.path());
-    assert_eq!(pids(&mut tree), [10]);
+    Entry::new(12, 11, 901).write(proc.path())?;
+    assert_eq!(pids(&mut tree)?, [10]);
 }
 
 #[test]
 fn a_stale_children_list_does_not_adopt_a_stranger() {
-    let proc = table(&[Entry::new(10, 1, 100), Entry::new(11, 1, 101)]);
-    children(&proc, 10, "11 999 junk");
-    let mut tree = tree(&proc);
+    let proc = table(&[Entry::new(10, 1, 100), Entry::new(11, 1, 101)])?;
+    children(&proc, 10, "11 999 junk")?;
+    let mut tree = tree(&proc)?;
     tree.sample();
-    assert_eq!(pids(&mut tree), [10]);
+    assert_eq!(pids(&mut tree)?, [10]);
 }
 
 #[test]
 fn an_unreadable_table_is_an_error_and_not_an_empty_tree() {
-    let proc = table(&[Entry::new(10, 1, 100)]);
-    let mut tree = tree(&proc);
+    let proc = table(&[Entry::new(10, 1, 100)])?;
+    let mut tree = tree(&proc)?;
     drop(proc);
     assert!(tree.scan().is_err());
 }
@@ -190,10 +189,9 @@ fn alive(proc: &Path, member: Identity) -> bool {
 }
 
 /// The identity of a real process.
-fn identity(pid: u32) -> Identity {
-    Stat::read(Path::new("/proc"), pid)
-        .context("missing")?
-        .identity()
+fn identity(pid: u32) -> Result<Identity> {
+    let stat = Stat::read(Path::new("/proc"), pid);
+    Ok(stat.context("no such process")?.identity())
 }
 
 #[test]
@@ -203,7 +201,7 @@ fn a_signal_reaches_the_process_it_names_and_no_later_owner_of_its_pid() -> Resu
         .arg("300")
         .stdin(Stdio::null())
         .spawn()?;
-    let real = identity(child.id());
+    let real = identity(child.id())?;
     let stale = Identity {
         start: real.start + 1,
         ..real
@@ -224,9 +222,9 @@ fn a_signal_reaches_the_process_it_names_and_no_later_owner_of_its_pid() -> Resu
 fn a_signal_the_kernel_refuses_is_an_error() -> Result<()> {
     // Nothing unprivileged may signal init; root may, so it is skipped there.
     if rustix::process::geteuid().is_root() {
-        return;
+        return Ok(());
     }
-    let refused = signal(Path::new("/proc"), identity(1), Signal::TERM);
+    let refused = signal(Path::new("/proc"), identity(1)?, Signal::TERM);
     assert_eq!(
         refused.err().context("expected a failure")?,
         rustix::io::Errno::PERM
