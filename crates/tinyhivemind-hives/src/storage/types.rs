@@ -297,4 +297,20 @@ pub struct RunningTurn {
     pub actions: Vec<EpisodeAction>,
     /// Accepted direct message sequence when present.
     pub delivery_sequence: Option<u64>,
+    /// Identified calls this turn made, by the caller's `call`, each recorded
+    /// in the transaction that made its effect. Absent from snapshots written
+    /// before calls were identified, and gone with the turn.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub calls: BTreeMap<String, CallRecord>,
+}
+/// What one identified call of a running turn did, so that a retry of it is
+/// answered rather than repeated.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CallRecord {
+    /// The tool the call named.
+    pub tool: String,
+    /// Its arguments, without the call's own identity.
+    pub arguments: serde_json::Value,
+    /// What the coordinator returned.
+    pub result: serde_json::Value,
 }

@@ -254,6 +254,7 @@ fn retention_keeps_a_settled_episode_a_running_turn_still_reports_to() {
             turn: None,
             actions: Vec::new(),
             delivery_sequence: None,
+            calls: BTreeMap::new(),
         },
     );
     RetentionPolicy {

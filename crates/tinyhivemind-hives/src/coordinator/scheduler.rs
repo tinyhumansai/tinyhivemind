@@ -243,6 +243,7 @@ impl Coordinator {
                     turn,
                     actions: Vec::new(),
                     delivery_sequence,
+                    calls: BTreeMap::new(),
                 },
             );
             selected.insert(agent_id);
