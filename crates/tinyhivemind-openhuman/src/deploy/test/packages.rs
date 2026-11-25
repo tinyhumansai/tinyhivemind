@@ -258,7 +258,7 @@ fn packages_must_agree_on_a_harness_declared_under_one_id() -> anyhow::Result<()
         matches!(
             &refused,
             Err(DeployError::Config(crate::config::ConfigError::ConflictingDeclaration { section, id }))
-                if section == "harnesses" && id == "oh"
+                if section == "harnesses" && id == "claw"
         ),
         "{refused:?}"
     );
