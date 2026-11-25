@@ -48,6 +48,7 @@ pub mod harness;
 pub mod journal;
 pub mod language;
 pub mod policy;
+#[cfg(unix)]
 pub mod process;
 pub mod tools;
 pub mod turn;
