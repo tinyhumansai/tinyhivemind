@@ -3,7 +3,10 @@ use super::{
     support::*,
     turns::{message, source},
 };
-use crate::{config::Profile, deploy::HiveDeployment};
+use crate::{
+    config::{Profile, Validate as _},
+    deploy::HiveDeployment,
+};
 use serde_json::{Value, json};
 use std::sync::{
     Arc, PoisonError,

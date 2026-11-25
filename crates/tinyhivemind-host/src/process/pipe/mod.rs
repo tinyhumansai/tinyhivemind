@@ -154,21 +154,25 @@ struct Queue {
 }
 
 impl Queue {
-    fn push(&mut self, length: usize, entry: impl FnOnce() -> Result<Value, LineError>) {
+    /// Whether a line of `length` bytes still fits. The first that does not
+    /// ends the stream.
+    fn admits(&mut self, length: usize) -> bool {
         if self.overflowed || self.entries.is_closed() {
-            return;
+            return false;
         }
-        let mut cost = length + ENTRY_COST;
-        let mut entry: Box<dyn FnOnce() -> Result<Value, LineError>> = Box::new(entry);
-        if self.waiting.load(Ordering::Acquire) + cost > self.limit {
+        let waiting = self.waiting.load(Ordering::Acquire);
+        if waiting + length + ENTRY_COST > self.limit {
             self.overflowed = true;
             let limit = self.limit;
-            cost = 0;
-            entry = Box::new(move || Err(LineError::Overflow { limit }));
+            self.push(0, Err(LineError::Overflow { limit }));
         }
+        !self.overflowed
+    }
+
+    fn push(&self, cost: usize, entry: Result<Value, LineError>) {
         self.waiting.fetch_add(cost, Ordering::AcqRel);
         // A receiver dropped meanwhile wants none of it.
-        let _ = self.entries.send((cost, entry()));
+        let _ = self.entries.send((cost, entry));
     }
 }
 
@@ -212,10 +216,14 @@ fn extend(line: &mut Vec<u8>, bytes: &[u8], too_long: &mut bool, limit: usize) {
 }
 
 fn end_line(line: &mut Vec<u8>, too_long: &mut bool, limit: usize, queue: &mut Queue) {
-    if std::mem::take(too_long) {
-        queue.push(0, || Err(LineError::TooLong { limit }));
-    } else if !line.trim_ascii().is_empty() {
-        queue.push(line.len(), || Ok(serde_json::from_slice(line)?));
+    let overlong = std::mem::take(too_long);
+    if (overlong || !line.trim_ascii().is_empty()) && queue.admits(line.len()) {
+        let entry = if overlong {
+            Err(LineError::TooLong { limit })
+        } else {
+            serde_json::from_slice(line).map_err(LineError::from)
+        };
+        queue.push(line.len() + ENTRY_COST, entry);
     }
     line.clear();
 }

@@ -2,6 +2,8 @@
 // Test assertions deliberately panic on invalid fixture construction.
 #![allow(clippy::unwrap_used)]
 use super::*;
+use crate::{ManagementRequest, Result};
+use tinyhivemind_hives::{Destination, HiveInfo, SendMessage};
 #[tokio::test]
 async fn stable_vocabulary_has_one_schema_and_rejects_impersonation() {
     assert_eq!(Kind::all(false).len(), 9);

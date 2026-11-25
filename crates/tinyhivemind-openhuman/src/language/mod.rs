@@ -5,8 +5,8 @@
 //! memory binding.
 use crate::{Error, Result};
 use openhuman_embed::MemoryBinding;
-pub use tinyhivemind_host::language::{PackageSource, coordinator_options, management_request};
 pub(crate) use tinyhivemind_host::language::plan;
+pub use tinyhivemind_host::language::{PackageSource, coordinator_options, management_request};
 use tinyhivemind_lang::{LoweredMemoryBinding, MemoryKind};
 
 /// Extract the harness binding from a portable agent memory identity.

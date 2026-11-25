@@ -22,10 +22,9 @@ fn host_failures_keep_their_variant_and_text() {
             Host::Coordinator(tinyhivemind_hives::Error::UnknownAgent("a".into())),
             |e| matches!(e, Error::Coordinator(_)),
         ),
-        (
-            Host::Json(serde::de::Error::custom("bad")),
-            |e| matches!(e, Error::Json(_)),
-        ),
+        (Host::Json(serde::de::Error::custom("bad")), |e| {
+            matches!(e, Error::Json(_))
+        }),
         (Host::Host("the host's own words".into()), |e| {
             matches!(e, Error::Harness(_))
         }),

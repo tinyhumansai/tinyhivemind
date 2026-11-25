@@ -10,7 +10,10 @@ mod rules;
 mod runtime;
 mod types;
 mod workflow;
-use crate::{OpenHumanHost, config::ValidatedHiveConfig};
+use crate::{
+    OpenHumanHost,
+    config::{Validate as _, ValidatedHiveConfig},
+};
 pub use factory::ManifestFactory;
 pub use memory_root::native_memory_root;
 use permission::Permissions;

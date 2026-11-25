@@ -1,9 +1,9 @@
 //! Registration and execution of host-owned agent handles.
-mod activation;
+mod bridge;
 mod runner;
 mod types;
 use crate::{Error, HiveMemory, Result};
-pub(crate) use activation::Activation;
+use bridge::SendPolicy;
 use openhuman_embed::{Agent, AgentSpec, HostTools, HostTurnTools, Runtime};
 use runner::SuppliedRunner;
 use std::{
@@ -12,6 +12,7 @@ use std::{
     time::Duration,
 };
 use tinyhivemind_hives::{AgentRegistration, Coordinator};
+pub(crate) use tinyhivemind_host::activation::Activation;
 pub use types::*;
 
 pub(crate) struct Inner {
@@ -23,7 +24,7 @@ pub(crate) struct Inner {
     memory: Option<HiveMemory>,
     extra_tools: Option<HostTools>,
     turn_timeout: Duration,
-    pub send_policy: Option<Arc<dyn SendAuthorizer>>,
+    send_policy: Option<SendPolicy>,
 }
 struct Entry {
     /// `None` while a replacement is being built, or after one failed.
@@ -109,7 +110,7 @@ impl OpenHumanHost {
     /// Refuse changed settings once agents or another host clone exist.
     pub fn with_send_policy(mut self, policy: Arc<dyn SendAuthorizer>) -> Result<Self> {
         let inner = self.configurable_inner()?;
-        inner.send_policy = Some(policy);
+        inner.send_policy = Some(SendPolicy(policy));
         Ok(self)
     }
     /// Bound every supplied agent turn by `timeout` instead of
@@ -418,63 +419,6 @@ impl OpenHumanHost {
     #[must_use]
     pub fn coordinator(&self) -> &Coordinator {
         &self.inner.coordinator
-    }
-    /// Execute an authorized management request.
-    /// # Errors
-    /// Disabled management, host denial, factory, runtime or coordinator errors.
-    pub async fn manage(
-        &self,
-        actor: &str,
-        request: ManagementRequest,
-    ) -> Result<serde_json::Value> {
-        let management = self
-            .inner
-            .management
-            .as_ref()
-            .ok_or(Error::ManagementDisabled)?;
-        management.authorizer.authorize(actor, &request)?;
-        match request {
-            ManagementRequest::CreateHive(hive) => {
-                self.coordinator().create_hive(hive.clone()).await?;
-                Ok(serde_json::to_value(hive)?)
-            }
-            ManagementRequest::CreateAgent {
-                template,
-                coordinator_id,
-                config,
-                memory,
-            } => {
-                if let Some(memory) = &memory {
-                    crate::language::validate_binding(memory)?;
-                }
-                let agent = management
-                    .factory
-                    .create_with_memory(template, config, memory.as_deref().cloned())
-                    .await?;
-                if let Some(memory) = &memory {
-                    let installed = &agent.config().memory;
-                    if installed.agent_id.as_deref() != Some(memory.agent_id.as_str())
-                        || installed.root.as_deref() != Some(memory.root.as_str())
-                    {
-                        return Err(Error::UnboundSeat {
-                            seat: agent.id().to_owned(),
-                            reason: "factory did not install the requested memory binding".into(),
-                        });
-                    }
-                }
-                let id = coordinator_id.unwrap_or_else(|| agent.id().to_owned());
-                self.register_as(agent, &id).await?;
-                Ok(serde_json::json!({"agent_id":id}))
-            }
-            ManagementRequest::JoinHive { hive_id, agent_id } => {
-                self.coordinator().join_hive(&hive_id, &agent_id).await?;
-                Ok(serde_json::json!({"joined":true}))
-            }
-            ManagementRequest::LeaveHive { hive_id, agent_id } => {
-                self.coordinator().leave_hive(&hive_id, &agent_id).await?;
-                Ok(serde_json::json!({"left":true}))
-            }
-        }
     }
 }
 #[cfg(test)]
