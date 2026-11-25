@@ -33,6 +33,12 @@ pub(crate) enum Error {
         /// Its tools, by the names it serves them under.
         missing: Vec<String>,
     },
+    /// The seat's session is gone from the instance; no new one is started.
+    #[error("the instance has no thread {0}")]
+    Resume(String),
+    /// The turn's request could not be rendered as its message.
+    #[error("the turn could not be rendered: {0}")]
+    Render(String),
     /// A file of the instance could not be written or read.
     #[error("{what}: {source}")]
     Io {
@@ -56,6 +62,10 @@ impl From<Error> for harness::Error {
             Error::Refused(refusal) => Self::Refused(Box::new(refusal)),
             Error::Process(error) => Self::Process(error),
             Error::Mismatch(mismatch) => Self::Mismatch(mismatch),
+            Error::Resume(session_id) => Self::Resume {
+                reason: format!("the instance has no thread {session_id}"),
+                session_id,
+            },
             other => Self::Harness(other.to_string()),
         }
     }

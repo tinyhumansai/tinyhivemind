@@ -14,7 +14,7 @@ pub(crate) const SERVER: &str = "hivemind";
 
 /// A fake instance with a written config.
 pub(crate) struct Fixture {
-    pub(crate) root: tempfile::TempDir,
+    pub(crate) _root: tempfile::TempDir,
     pub(crate) control: PathBuf,
     pub(crate) written: Written,
     pub(crate) client: Client,
@@ -74,7 +74,7 @@ impl Fixture {
         let client = Client::new(fake.port, TOKEN);
         let client = client.unwrap_or_else(|error| unreachable!("a client: {error}"));
         Self {
-            root,
+            _root: root,
             control,
             written,
             client,

@@ -25,7 +25,7 @@ pub(super) struct Seat {
     turns: AtomicU64,
 }
 
-fn take(active: &Mutex<Option<Active>>) -> Option<Active> {
+fn current(active: &Mutex<Option<Active>>) -> Option<Active> {
     active.lock().unwrap_or_else(PoisonError::into_inner).clone()
 }
 
@@ -131,7 +131,7 @@ impl Seat {
 
     /// Cancel the submitted turn and show it stopped, or kill the instance.
     async fn cancel(&self) -> Result<()> {
-        let Some(active) = take(&self.active) else {
+        let Some(active) = current(&self.active) else {
             return Ok(());
         };
         let mut live = self.live.lock().await;
@@ -159,7 +159,7 @@ impl Seat {
         let Some(live) = self.live.lock().await.take() else {
             return Ok(());
         };
-        let active = take(&self.active);
+        let active = current(&self.active);
         let cancel = async {
             if let Some(active) = &active {
                 // Best effort: the stop that follows ends the turn anyway.
