@@ -220,18 +220,18 @@ fn signal(proc: &Path, member: Identity, signal: Signal) -> rustix::io::Result<(
     let Some(pid) = i32::try_from(member.pid).ok().and_then(Pid::from_raw) else {
         return Ok(());
     };
-    let gone = |result: rustix::io::Result<()>| match result {
-        Err(Errno::SRCH) => Ok(()),
-        other => other,
-    };
     let handle = match pidfd_open(pid, PidfdFlags::empty()) {
-        Err(Errno::SRCH) => return Ok(()),
+        // EINVAL: the pid is now a thread of some other process.
+        Err(Errno::SRCH | Errno::INVAL) => return Ok(()),
         opened => opened?,
     };
     if !Stat::read(proc, member.pid).is_some_and(|stat| stat.identity() == member) {
         return Ok(());
     }
-    gone(pidfd_send_signal(handle, signal))
+    match pidfd_send_signal(handle, signal) {
+        Err(Errno::SRCH) => Ok(()),
+        sent => sent,
+    }
 }
 
 #[cfg(test)]
