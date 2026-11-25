@@ -202,3 +202,66 @@ fn a_package_seat_runs_a_shell_tool_and_an_unknown_group_is_refused() -> anyhow:
         Ok(())
     })
 }
+
+/// A package from `examples/hives/<name>` of the language crate.
+fn example(name: &str) -> anyhow::Result<PackageSource> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../tinyhivemind-lang/examples/hives")
+        .join(name);
+    Ok(PackageSource::read(&root)?)
+}
+
+#[test]
+fn a_seat_on_any_harness_but_openhuman_is_refused_before_deployment() -> anyhow::Result<()> {
+    let refused = packages::harnesses(&[example("mixed-harnesses")?]);
+    assert!(
+        matches!(
+            &refused,
+            Err(DeployError::UnsupportedHarness { seat, kind })
+                if seat == "scout" && *kind == tinyhivemind_lang::HarnessKind::OpenClaw
+        ),
+        "{refused:?}"
+    );
+    assert_eq!(
+        refused.err().map(|error| error.to_string()).as_deref(),
+        Some("seat scout runs on the openclaw harness, which the linked adapter cannot start")
+    );
+    // No harness anywhere, or an explicit `openhuman` one, deploys as today.
+    packages::harnesses(&[example("integrations")?])?;
+    let mut explicit = example("mixed-harnesses")?.package().clone();
+    explicit.manifest.harnesses.truncate(1);
+    explicit.manifest.harnesses[0].kind = tinyhivemind_lang::HarnessKind::OpenHuman;
+    explicit.manifest.harnesses[0].isolation = None;
+    explicit.manifest.seats[1].harness = Some("claw".into());
+    explicit.manifest.seats[2].harness = Some("claw".into());
+    explicit.manifest.profiles[0].harness = None;
+    let root = example("mixed-harnesses")?.root().to_path_buf();
+    packages::harnesses(&[PackageSource::new(&root, &explicit)?])?;
+    Ok(())
+}
+
+#[test]
+fn packages_must_agree_on_a_harness_declared_under_one_id() -> anyhow::Result<()> {
+    let first = example("integrations")?;
+    let mut package = first.package().clone();
+    package.manifest.harnesses = vec![tinyhivemind_lang::Harness {
+        id: "oh".into(),
+        kind: tinyhivemind_lang::HarnessKind::OpenHuman,
+        isolation: None,
+    }];
+    let root = first.root().to_path_buf();
+    let one = PackageSource::new(&root, &package)?;
+    package.manifest.harnesses[0].kind = tinyhivemind_lang::HarnessKind::Codex;
+    let other = PackageSource::new(&root, &package)?;
+    packages::harnesses(&[one.clone(), one.clone()])?;
+    let refused = packages::harnesses(&[one, other]);
+    assert!(
+        matches!(
+            &refused,
+            Err(DeployError::Config(crate::config::ConfigError::ConflictingDeclaration { section, id }))
+                if section == "harnesses" && id == "oh"
+        ),
+        "{refused:?}"
+    );
+    Ok(())
+}

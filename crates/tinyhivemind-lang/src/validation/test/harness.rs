@@ -292,3 +292,39 @@ fn an_executable_tool_may_not_declare_the_reserved_turn_or_call_arguments() {
         assert_eq!(integration_pointers(&found), [pointer.as_str()]);
     }
 }
+
+#[test]
+fn a_seat_prompt_frontmatter_may_restate_its_own_harness_only() {
+    let with = |frontmatter: &str| {
+        let mut docs = example("mixed-harnesses");
+        let body = docs["seats/scout.md"].clone();
+        docs.insert(
+            "seats/scout.md".into(),
+            format!("---\n{frontmatter}\n---\n{body}"),
+        );
+        diagnose_documents(&docs).1
+    };
+    assert_eq!(with(r#"{"id": "scout", "harness": "claw"}"#), vec![]);
+    for wrong in [
+        r#"{"harness": "codex"}"#,
+        // The seat has a harness; frontmatter cannot unset it.
+        r#"{"harness": null}"#,
+    ] {
+        let found = with(wrong);
+        assert!(
+            found
+                .iter()
+                .any(|d| d.rule == Rule::Frontmatter && d.file == "seats/scout.md"),
+            "{wrong}: {found:?}"
+        );
+    }
+    // A seat without a harness has no `harness` key to restate, not even null.
+    let mut docs = example("mixed-harnesses");
+    let body = docs["seats/lead.md"].clone();
+    docs.insert(
+        "seats/lead.md".into(),
+        format!("---\n{{\"harness\": null}}\n---\n{body}"),
+    );
+    let found = diagnose_documents(&docs).1;
+    assert!(found.iter().any(|d| d.rule == Rule::Frontmatter), "{found:?}");
+}
