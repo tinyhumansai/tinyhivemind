@@ -1,6 +1,7 @@
 //! A scripted Chat Completions model on loopback, played by the host's
 //! conformance steps: each request takes the next step, and a hanging one
 //! notices when the caller hangs up.
+#[allow(dead_code, reason = "shared with the fake surface")]
 #[path = "../support/http.rs"]
 mod http;
 
