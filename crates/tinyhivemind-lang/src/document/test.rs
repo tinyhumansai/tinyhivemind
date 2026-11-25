@@ -118,3 +118,14 @@ fn a_decoded_but_invalid_package_is_returned_with_its_findings() {
     );
     assert_eq!(parse(&docs), Err(Error::Schema));
 }
+
+#[test]
+fn an_argv_template_names_its_arguments_and_which_are_optional() {
+    let tool: ExecTool = serde_json::from_value(json!({
+        "id": "t", "description": "d", "command": ["tools/run.sh"],
+        "argv": ["--in", "{path}", "{limit?}", "{}", "{not closed", "x{name}", "{a b}"],
+    }))
+    .expect("a declared tool");
+    assert_eq!(tool.placeholders(), [("path", false), ("limit", true)]);
+    assert_eq!(tool.package_program(), Some("tools/run.sh"));
+}
