@@ -77,7 +77,7 @@ fn a_harness_entry_rejects_unknown_fields_a_missing_kind_and_null() {
 }
 
 /// A minimal manifest with one seat, extended by `extra`.
-fn manifest(extra: serde_json::Value) -> serde_json::Value {
+fn manifest(extra: &serde_json::Value) -> serde_json::Value {
     let mut manifest = json!({
         "$schema": "https://tinyhumans.ai/schemas/hive/v1",
         "version": 1,
@@ -93,7 +93,7 @@ fn manifest(extra: serde_json::Value) -> serde_json::Value {
 
 #[test]
 fn an_absent_harness_is_not_serialized_anywhere() {
-    let decoded: Manifest = serde_json::from_value(manifest(json!({}))).unwrap();
+    let decoded: Manifest = serde_json::from_value(manifest(&json!({}))).unwrap();
     let wire = serde_json::to_value(&decoded).unwrap();
     assert!(wire.get("harnesses").is_none());
     assert!(wire["runtime"].get("harness").is_none());
@@ -115,7 +115,7 @@ fn an_absent_harness_is_not_serialized_anywhere() {
 
 #[test]
 fn a_named_harness_is_carried_on_runtime_profile_and_seat() {
-    let mut input = manifest(json!({
+    let mut input = manifest(&json!({
         "harnesses": [{"id": "codex", "kind": "codex"}],
         "runtime": {"harness": "codex"},
         "profiles": [{"id": "p", "harness": "codex"}]
@@ -140,12 +140,12 @@ fn a_named_harness_is_carried_on_runtime_profile_and_seat() {
 /// rather than a silent omission.
 #[test]
 fn an_explicit_null_harness_or_an_empty_harnesses_list_does_not_decode() {
-    let mut seat_null = manifest(json!({}));
+    let mut seat_null = manifest(&json!({}));
     seat_null["seats"][0]["harness"] = json!(null);
     for bad in [
-        manifest(json!({"harnesses": []})),
-        manifest(json!({"runtime": {"harness": null}})),
-        manifest(json!({"profiles": [{"id": "p", "harness": null}]})),
+        manifest(&json!({"harnesses": []})),
+        manifest(&json!({"runtime": {"harness": null}})),
+        manifest(&json!({"profiles": [{"id": "p", "harness": null}]})),
         seat_null,
     ] {
         assert!(

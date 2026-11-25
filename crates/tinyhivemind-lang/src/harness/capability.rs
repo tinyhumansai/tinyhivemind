@@ -190,7 +190,7 @@ impl HarnessKind {
     }
 
     /// The model iterations a turn stops at, when the released harness fixes
-    /// them: OpenHuman ends a custom agent after eight and reports a normal
+    /// them: `OpenHuman` ends a custom agent after eight and reports a normal
     /// end, so a package asking for more is rejected until it is
     /// configurable.
     #[must_use]

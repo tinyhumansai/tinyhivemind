@@ -168,8 +168,8 @@ fn seat_context_documents_lower_with_their_contents() {
     assert!(context[0].1.contains("imperative"));
 }
 
-/// The `integrations` package with harnesses `oh` (OpenHuman), `claw`
-/// (OpenClaw) and `codex` declared.
+/// The `integrations` package with harnesses `oh` (`openhuman`), `claw`
+/// (`openclaw`) and `codex` declared.
 fn with_harnesses() -> Package {
     let mut package = integrations();
     package.manifest.harnesses = [

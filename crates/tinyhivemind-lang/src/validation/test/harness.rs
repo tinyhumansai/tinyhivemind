@@ -66,7 +66,7 @@ fn an_undeclared_harness_is_an_unresolved_reference() {
     // With no `harnesses` section at all, a named harness still resolves
     // nowhere.
     let found = after("integrations", |m| {
-        m["seats"][0]["harness"] = json!("codex")
+        m["seats"][0]["harness"] = json!("codex");
     });
     assert!(has(&found, Rule::Reference, "/seats/0/harness"));
 }

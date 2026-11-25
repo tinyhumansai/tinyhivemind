@@ -2,7 +2,7 @@
 //! and isolation, then the capability table once a package names a harness.
 //!
 //! A package that declares no harness and names none is deployed by the
-//! linked OpenHuman adapter, which keeps its own limits, so the capability
+//! linked `OpenHuman` adapter, which keeps its own limits, so the capability
 //! table does not judge it. One that does is judged whole, its implicit
 //! `openhuman` seats included: those run as a process too.
 use super::{capability, identities, reference};

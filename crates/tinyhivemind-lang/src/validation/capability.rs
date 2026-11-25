@@ -214,17 +214,17 @@ impl Judge<'_, '_> {
             |v| &v.id,
         );
         for k in permissions {
-            let set = &m.permissions[k];
-            if set.sandbox != Sandbox::None {
-                let field = format!("permissions.{}.sandbox", set.id);
+            let layer = &m.permissions[k];
+            if layer.sandbox != Sandbox::None {
+                let field = format!("permissions.{}.sandbox", layer.id);
                 self.reject(
                     Capability::Sandbox,
                     field,
                     format!("/permissions/{k}/sandbox"),
                 );
             }
-            if !set.tool_rules.is_null() {
-                let field = format!("permissions.{}.tool_rules", set.id);
+            if !layer.tool_rules.is_null() {
+                let field = format!("permissions.{}.tool_rules", layer.id);
                 let at = format!("/permissions/{k}/tool_rules");
                 self.reject(Capability::BuiltinToolRules, field, at);
             }
@@ -299,11 +299,11 @@ impl Judge<'_, '_> {
             model.map(|k| (&m.models[k].limits, format!("/models/{k}"))),
             Some((&m.runtime.limits, "/runtime".to_owned())),
         ];
-        let set = layers
+        let resolved = layers
             .into_iter()
             .flatten()
             .find_map(|(limits, at)| Some((limits.iterations?, at)));
-        if let Some((iterations, at)) = set
+        if let Some((iterations, at)) = resolved
             && iterations > cap
         {
             self.found.push(
