@@ -32,26 +32,34 @@ async fn a_wrong_or_missing_bearer_is_refused() {
     }
 }
 
+fn to_host(addr: std::net::SocketAddr, bearer: &str, hosts: &[&str]) -> Request<Full<Bytes>> {
+    let mut builder = Request::post("/mcp").header("authorization", format!("Bearer {bearer}"));
+    let _ = addr;
+    for host in hosts {
+        builder = builder.header("host", *host);
+    }
+    builder.body(Full::new(Bytes::from(LIST))).unwrap()
+}
+
 #[tokio::test]
 async fn a_bad_host_is_refused() {
     let hive = hive().await;
     let addr = hive.server.local_addr();
-    for host in ["evil.example", "127.0.0.1:1", "localhost"] {
-        let request = post(addr, Some(&hive.a.bearer), LIST.as_bytes())
-            .header("host", host)
-            .body(Full::new(Bytes::from(LIST)))
-            .unwrap();
-        assert_eq!(
-            send(addr, request).await.status,
-            StatusCode::FORBIDDEN,
-            "{host}"
-        );
+    let own = format!("127.0.0.1:{}", addr.port());
+    let named = format!("localhost:{}", addr.port());
+    for hosts in [
+        vec!["evil.example"],
+        vec!["127.0.0.1:1"],
+        vec!["localhost"],
+        vec![own.as_str(), "evil.example"],
+    ] {
+        let reply = send(addr, to_host(addr, &hive.a.bearer, &hosts)).await;
+        assert_eq!(reply.status, StatusCode::FORBIDDEN, "{hosts:?}");
     }
-    let request = post(addr, Some(&hive.a.bearer), LIST.as_bytes())
-        .header("host", format!("localhost:{}", addr.port()))
-        .body(Full::new(Bytes::from(LIST)))
-        .unwrap();
-    assert_eq!(send(addr, request).await.status, StatusCode::OK);
+    for host in [own.as_str(), named.as_str()] {
+        let reply = send(addr, to_host(addr, &hive.a.bearer, &[host])).await;
+        assert_eq!(reply.status, StatusCode::OK, "{host}");
+    }
 }
 
 #[tokio::test]
