@@ -1,7 +1,7 @@
 //! Identified calls: one effect per (agent, turn, call), recorded with it.
 use super::transactions::Recording;
 use super::*;
-use crate::{SqliteStorage, Storage};
+use crate::{CallRecord, SqliteStorage, Storage};
 use serde_json::{Value, json};
 use tokio::sync::{Notify, mpsc};
 
