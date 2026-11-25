@@ -148,6 +148,7 @@ pub struct Hive {
     pub endpoint: ToolEndpoint,
     pub workspace: tempfile::TempDir,
     requests: mpsc::UnboundedReceiver<TurnRequest>,
+    drain: Option<tokio::task::JoinHandle<tinyhivemind_hives::Result<tinyhivemind_hives::RunReport>>>,
 }
 impl Hive {
     /// Start with `services` adjusted by `configure` and seat `a` by `seat`.
@@ -218,7 +219,7 @@ impl Hive {
             })
             .await
             .unwrap();
-        tokio::spawn({
+        let drain = tokio::spawn({
             let coordinator = coordinator.clone();
             async move { coordinator.run_until_idle().await }
         });
@@ -233,7 +234,22 @@ impl Hive {
             endpoint,
             workspace,
             requests,
+            drain: Some(drain),
         }
+    }
+    /// Let `a`'s turn end and the coordinator go idle.
+    pub async fn settle(&mut self) {
+        self.finish.notify_one();
+        if let Some(drain) = self.drain.take() {
+            drain.await.unwrap().unwrap();
+        }
+    }
+    /// Messages `sender` wrote with exactly `body`, in the whole transcript.
+    pub fn written(&self, sender: &str, body: &str) -> usize {
+        let rows = self.coordinator.read_transcript(None).unwrap();
+        rows.iter()
+            .filter(|row| row.sender == sender && row.body == body)
+            .count()
     }
     /// The episode `a`'s turn works on.
     pub fn episode(&self) -> String {
@@ -242,11 +258,6 @@ impl Hive {
     /// `a`'s running turn id.
     pub fn turn_id(&self) -> String {
         self.turn.turn_id.clone()
-    }
-    /// Posts `a` has staged in its running turn, by body.
-    pub fn posts(&self) -> usize {
-        let rows = self.coordinator.read_hive("a", "work", None, None).unwrap();
-        rows.len()
     }
     /// Lines `file` holds in the seat's workspace.
     pub fn lines(&self, file: &str) -> usize {
