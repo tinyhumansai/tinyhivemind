@@ -129,3 +129,20 @@ fn the_binary_lets_a_turn_run_past_the_seats_own_limit() {
     assert_eq!(turn_secs(Some(Duration::from_secs(5))), 600);
     assert_eq!(turn_secs(Some(Duration::from_secs(3600))), 3660);
 }
+
+#[test]
+fn compaction_puts_the_recovery_tool_before_the_model_whatever_the_allowlist() {
+    let available = ["juice_retrieve".to_owned(), "mcp_s_post_1".to_owned()];
+    let agent = serde_json::json!({"id": crate::config::AGENT_ID, "tool_allowlist": ["mcp_s_post_1"]});
+    let on = serde_json::json!({"agent_registry": {"entries": [agent.clone()]}});
+    assert_eq!(super::verify::visible(&on, &available), ["mcp_s_post_1", "juice_retrieve"]);
+    let off = serde_json::json!({"agent_registry": {"entries": [agent]}, "context": {"compaction_enabled": false}});
+    assert_eq!(super::verify::visible(&off, &available), ["mcp_s_post_1"]);
+}
+
+#[test]
+fn the_written_config_turns_compaction_off() {
+    let settings = Fixture::written_for_test().settings();
+    let compaction = settings.iter().find(|(name, _)| name == "context.compaction_enabled");
+    assert_eq!(compaction.map(|(_, value)| value.clone()), Some(serde_json::json!(false)));
+}

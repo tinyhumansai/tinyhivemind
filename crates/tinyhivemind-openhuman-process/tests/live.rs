@@ -153,7 +153,10 @@ async fn live_the_spike_gate_holds_through_the_runner() -> Result<()> {
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
     let again = runner.run(request("t3", "PLAIN again", Some(&session))).await?;
-    assert_eq!(again.reply.as_deref(), Some("MOCK_REPLY turns=3"));
+    // The same thread, without the cancelled turn's message: the binary keeps
+    // only turns that ended, as the spike saw too.
+    assert_eq!(again.reply.as_deref(), Some("MOCK_REPLY turns=2"));
+    assert_eq!(again.session_id, session);
 
     harness.stop("scout").await?;
     assert!(seat_support::processes_in(&root.path().join("instance")).is_empty());

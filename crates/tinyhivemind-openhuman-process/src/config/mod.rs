@@ -19,7 +19,8 @@
 //!   `"*"` with a denylist let `mcp_call_tool` post as another seat;
 //! - `auto_approve` exactly the hive tools, whose policy is the host's;
 //! - memory, recall, conversation memory, search, hooks, suggestions and
-//!   token compression off.
+//!   token compression off, and tool-output compaction too: while it is on,
+//!   0.64.15 adds `juice_retrieve` to every allowlist.
 //!
 //! The top-level `embeddings_provider` is not written: 0.64.15 rewrites any
 //! value to its hosted default on load, and nothing embeds with memory off.
@@ -105,6 +106,7 @@ impl Written {
                 "ccr_enabled": false,
                 "repl_handle_enabled": false,
             },
+            "context": {"compaction_enabled": false},
             "hooks": {"enabled": false},
             "web_chat": {"suggestions_enabled": false},
             "agent_registry": {"entries": [{

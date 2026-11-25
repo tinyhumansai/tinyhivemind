@@ -82,6 +82,21 @@ impl Fixture {
         }
     }
 
+    /// The config every fixture writes, without a fake.
+    pub(crate) fn written_for_test() -> Written {
+        let tools = hashed_tools();
+        Written::new(&Input {
+            model: &model(),
+            seat: "scout",
+            prompt: "You scout.",
+            server: SERVER,
+            url: "http://127.0.0.1:1/mcp",
+            bearer: "bearer",
+            tools: &tools,
+            turn_secs: 600,
+        })
+    }
+
     pub(crate) async fn new() -> Self {
         Self::with(&[]).await
     }

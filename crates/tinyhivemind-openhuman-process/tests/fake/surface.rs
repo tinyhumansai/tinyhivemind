@@ -12,7 +12,8 @@
 //! - events go to `/events` subscribers of the turn's `client_id`, and an
 //!   `approval_request` carries the approval's id as its `request_id`;
 //! - a new message on a busy thread interrupts the turn on it;
-//! - the custom agent ends after eight iterations as if it had finished.
+//! - the custom agent ends after eight iterations as if it had finished;
+//! - compaction is on unless the config turns it off.
 //!
 //! It is driven through files in a control directory shared with the test:
 //! `steps/` (the scripted model, in name order), `calls.jsonl` (each model
@@ -438,6 +439,9 @@ fn effective(setup: &Setup) -> Value {
         .and_then(|table| serde_json::to_value(table).ok());
     let mut config = parsed.unwrap_or_else(|| json!({"schema_version": 13}));
     config["embeddings_provider"] = json!("openhuman");
+    if config["context"]["compaction_enabled"].is_null() {
+        config["context"]["compaction_enabled"] = json!(true);
+    }
     if let Some(servers) = config["mcp_client"]["servers"].as_array_mut() {
         for server in servers {
             server["timeout_secs"] = json!(30);

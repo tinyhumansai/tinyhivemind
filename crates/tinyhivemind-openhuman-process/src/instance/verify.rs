@@ -63,15 +63,25 @@ pub(crate) async fn discover(
     }
 }
 
+/// The tool 0.64.15 adds to any allowlist while tool-output compaction is
+/// on, so that the model can recover a compacted result.
+const RECOVERY: &str = "juice_retrieve";
+
 /// The tools the model sees: the agent's effective allowlist, of those the
-/// instance has.
-fn visible(config: &Value, available: &[String]) -> Vec<String> {
+/// instance has, and the recovery tool unless compaction is off, which the
+/// binary defaults it to.
+pub(super) fn visible(config: &Value, available: &[String]) -> Vec<String> {
     let entries = config["agent_registry"]["entries"].as_array().cloned();
     let agent = entries.unwrap_or_default().into_iter().find(|entry| entry["id"] == AGENT_ID);
     let allowed = agent.map(|agent| agent["tool_allowlist"].clone()).unwrap_or(Value::Null);
     let allowed = allowed.as_array().cloned().unwrap_or_default();
     let names = allowed.iter().filter_map(Value::as_str);
-    names.filter(|name| available.iter().any(|tool| tool == name)).map(str::to_owned).collect()
+    let mut seen: Vec<String> =
+        names.filter(|name| available.iter().any(|tool| tool == name)).map(str::to_owned).collect();
+    if config["context"]["compaction_enabled"] != false {
+        seen.push(RECOVERY.to_owned());
+    }
+    seen
 }
 
 /// Hold the instance at `client` against the child `pid`, the pinned
