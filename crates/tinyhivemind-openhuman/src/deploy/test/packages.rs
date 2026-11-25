@@ -213,7 +213,7 @@ fn example(name: &str) -> anyhow::Result<PackageSource> {
 
 #[test]
 fn a_seat_on_any_harness_but_openhuman_is_refused_before_deployment() -> anyhow::Result<()> {
-    let refused = packages::harnesses(&[example("mixed-harnesses")?]);
+    let refused = crate::deploy::packages::harnesses(&[example("mixed-harnesses")?]);
     assert!(
         matches!(
             &refused,
@@ -227,7 +227,7 @@ fn a_seat_on_any_harness_but_openhuman_is_refused_before_deployment() -> anyhow:
         Some("seat scout runs on the openclaw harness, which the linked adapter cannot start")
     );
     // No harness anywhere, or an explicit `openhuman` one, deploys as today.
-    packages::harnesses(&[example("integrations")?])?;
+    crate::deploy::packages::harnesses(&[example("integrations")?])?;
     let mut explicit = example("mixed-harnesses")?.package().clone();
     explicit.manifest.harnesses.truncate(1);
     explicit.manifest.harnesses[0].kind = tinyhivemind_lang::HarnessKind::OpenHuman;
@@ -236,7 +236,7 @@ fn a_seat_on_any_harness_but_openhuman_is_refused_before_deployment() -> anyhow:
     explicit.manifest.seats[2].harness = Some("claw".into());
     explicit.manifest.profiles[0].harness = None;
     let root = example("mixed-harnesses")?.root().to_path_buf();
-    packages::harnesses(&[PackageSource::new(&root, &explicit)?])?;
+    crate::deploy::packages::harnesses(&[PackageSource::new(&root, &explicit)?])?;
     Ok(())
 }
 
@@ -253,8 +253,8 @@ fn packages_must_agree_on_a_harness_declared_under_one_id() -> anyhow::Result<()
     let one = PackageSource::new(&root, &package)?;
     package.manifest.harnesses[0].kind = tinyhivemind_lang::HarnessKind::Codex;
     let other = PackageSource::new(&root, &package)?;
-    packages::harnesses(&[one.clone(), one.clone()])?;
-    let refused = packages::harnesses(&[one, other]);
+    crate::deploy::packages::harnesses(&[one.clone(), one.clone()])?;
+    let refused = crate::deploy::packages::harnesses(&[one, other]);
     assert!(
         matches!(
             &refused,
