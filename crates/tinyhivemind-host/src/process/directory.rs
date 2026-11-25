@@ -66,8 +66,7 @@ impl InstanceDir {
     pub(super) async fn temporary(&self, token: &str) -> Result<Temporary> {
         let lease = self.lock()?;
         let started = Instant::now();
-        // Held by whoever tidies up, and by a process forked meanwhile until
-        // it execs.
+        // Held by whoever tidies up.
         while let Err(refused) = lease.try_lock_shared() {
             match refused {
                 TryLockError::WouldBlock if started.elapsed() < TIDYING => {
@@ -82,7 +81,7 @@ impl InstanceDir {
         Ok(Temporary {
             path,
             spent: true,
-            _lease: lease,
+            lease,
         })
     }
 
@@ -107,9 +106,17 @@ impl InstanceDir {
                     let _ = fs::remove_dir_all(path);
                 }
             }
+            unlock(&lock);
         }
         Ok(())
     }
+}
+
+/// Let go of `lock` for good. Closing it would not do: a child forked by some
+/// other thread at this moment has it too, until it execs.
+pub(super) fn unlock(lock: &File) {
+    // It is let go of at the latest then.
+    let _ = lock.unlock();
 }
 
 /// Whether `path` is a temporary directory of ours that no process uses.
@@ -145,7 +152,7 @@ pub(super) struct Temporary {
     path: PathBuf,
     /// Whether nothing uses it, so that it goes when this does.
     spent: bool,
-    _lease: File,
+    lease: File,
 }
 
 impl Temporary {
@@ -165,6 +172,7 @@ impl Drop for Temporary {
             // A leftover directory is private and harmless.
             let _ = fs::remove_dir_all(&self.path);
         }
+        unlock(&self.lease);
     }
 }
 

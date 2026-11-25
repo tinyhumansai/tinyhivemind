@@ -140,3 +140,21 @@ fn nothing_is_removed_that_a_process_of_a_crashed_host_still_uses() -> Result<()
     assert!(!exists(&temporary));
     Ok(())
 }
+
+#[test]
+fn tidying_lets_go_of_the_lock_even_if_a_forked_child_still_has_it() -> Result<()> {
+    let fixture = Fixture::new()?;
+    let path = fixture.dir()?.root().join("lock");
+    let lock = fs::File::options().write(true).open(path)?;
+    lock.try_lock()?;
+    // What a fork would leave with a child that has not got to its exec.
+    let inherited = lock.try_clone()?;
+    crate::process::directory::unlock(&lock);
+    drop(lock);
+    let temporary = fixture.dir()?.root().join("tmp-0badf00d");
+    fs::create_dir(&temporary)?;
+    fixture.dir()?;
+    assert_eq!(exists(&temporary), !cfg!(target_os = "linux"));
+    drop(inherited);
+    Ok(())
+}
