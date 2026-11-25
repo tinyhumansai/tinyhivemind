@@ -104,6 +104,9 @@ field's location.
 | provider `inherit`, or no provider at all | rejected | rejected | rejected |
 | provider `credential` | rejected | rejected | rejected |
 | hooks and permissions on hive and executable tools | yes, host side | yes, host side | yes, host side |
+| `sandbox` `none` or absent, on `runtime` and `permissions` | yes | yes | yes |
+| `sandbox` `read_only` or `sandboxed` | rejected | rejected | rejected |
+| `autonomy` and `permissions.access` | yes, host side | yes, host side | yes, host side |
 | built-in tool groups | exact allowlist | off | off |
 | `tool_rules` on built-in tools | rejected until a release has them | rejected | rejected |
 | hooks on built-in tools | rejected | rejected | rejected |
@@ -115,6 +118,15 @@ field's location.
 Built-in tools start **off** for every kind. Turning one on is a later change
 that must first show its permissions are enforced. "Rejected" is the starting
 point, not a promise: a row moves when a conformance test proves the setting.
+
+A `sandbox` is rejected because executable tools on this path run from the host's
+MCP server, where nothing confines them yet, and a harness's own sandbox does not
+reach them. `autonomy` and `access` are judged by the MCP server before hooks and
+dispatch: `read_only` refuses every state-changing call; `supervised`, the
+default, sends each state-changing executable tool and proxied MCP call to the
+host's approver and refuses it when there is none; `autonomous` adds no gate.
+Hive tools stay under send and management policy, as on the linked path. The
+harness's own approval prompts are never relied on.
 
 Two consequences follow. A package that relies on OpenHuman's built-in tools
 with hooks or argument rules cannot move to the process harness yet, and that
@@ -256,16 +268,20 @@ no harness supplies a stable invocation id.
 
 State-changing means everything but the list and read hive tools and executable
 tools with `side_effects = "read"`. A proxied MCP call always counts as changing
-state. A call refused before it acts, by validation, policy or a hook, records
-nothing.
+state, and so does **any** call a package hook matches, reads included: a hook is
+an executable and may act. A call refused by validation or policy, before any hook
+runs, records nothing. When a hook matches, "started" is recorded before the first
+hook, so a retry reruns no hook: it gets the recorded result or refusal, or is
+refused while the outcome is unknown.
 
-- **Coordinator actions** (post, ask, broadcast, complete, sends, create, join and
+- **Coordinator actions** with no matching hook (post, ask, broadcast, complete, sends, create, join and
   leave hive): the record and its result are written in the same transaction as
   the effect, so neither exists without the other and a restart of the server
   alone does not lose it. A coordinator restart interrupts every running turn, so
   a later retry is refused by its `turn` rather than answered from the record.
-  The record may therefore be dropped when its turn ends.
-- **Executable tools, proxied MCP calls and `create_agent`** act outside the
+  The record may therefore be dropped when its turn ends. A hooked coordinator
+  action has both records: this one for the action, the next for its hooks.
+- **Executable tools, proxied MCP calls, `create_agent` and any hooked call** act outside the
   coordinator's transaction. The server records "started" before it runs one, and
   the result after. A retry gets the recorded result or, while the outcome is
   unknown, a refusal. This is at most once **within one server process**; the
