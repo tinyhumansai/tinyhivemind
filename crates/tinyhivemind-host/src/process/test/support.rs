@@ -16,6 +16,24 @@ pub(super) const SHORT: StopPolicy = StopPolicy {
     kill: PATIENCE,
 };
 
+/// What every script starts with. A test that is killed leaves its children
+/// behind, so none of them may run for ever: each loop ends by itself after
+/// `LIMIT` seconds of the first script that started it, or 20000 rounds,
+/// whichever comes first, and nothing sleeps for longer.
+const PRELUDE: &str = r#"
+LIMIT=120
+# One deadline for a script and everything it starts.
+: "${END:=$(( $(date +%s) + LIMIT ))}"
+export END
+deadline=$END
+# A round: false once the time or the rounds are up.
+round() { rounds=$(( ${rounds:-0} + 1 )); [ $rounds -le 20000 ] && [ $(date +%s) -lt $deadline ]; }
+# Wait for the file $1, or for the limit.
+await() { while [ ! -e "$1" ] && round; do sleep 0.01; done; }
+# Turn, doing nothing, until the limit.
+spin() { while round; do sleep 0.01; done; }
+"#;
+
 /// A temporary instance, and where its children report.
 pub(super) struct Fixture {
     root: tempfile::TempDir,
@@ -37,12 +55,17 @@ impl Fixture {
     pub(super) fn shell(&self, script: &str) -> Result<Launch> {
         Ok(Launch::new("/bin/sh", self.dir()?)
             .arg("-c")
-            .arg(script)
+            .arg(format!("{PRELUDE}{script}"))
             .env("OUT", self.root.path())
             .env("PATH", "/usr/bin:/bin"))
     }
     /// A script children can run as `sh $OUT/name`.
     pub(super) fn script(&self, name: &str, body: &str) -> Result<()> {
+        let body = if body.starts_with("#!") {
+            body.to_owned()
+        } else {
+            format!("{PRELUDE}{body}")
+        };
         Ok(fs::write(self.path(name), body)?)
     }
     pub(super) async fn start(&self, script: &str) -> Result<Instance> {

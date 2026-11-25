@@ -107,7 +107,7 @@ fn what_a_crashed_host_left_is_removed_when_the_instance_is_opened_again() -> Re
 async fn nothing_is_removed_under_a_running_instance_of_the_same_directory() -> Result<()> {
     let fixture = Fixture::new()?;
     let instance = fixture
-        .start("echo $TMPDIR > $OUT/tmp; exec sleep 300")
+        .start("echo $TMPDIR > $OUT/tmp; exec sleep 120")
         .await?;
     until(|| fixture.read("tmp").ends_with('\n')).await;
     let temporary = fixture.read("tmp").trim().to_owned();

@@ -24,13 +24,13 @@ fn main() -> std::io::Result<()> {
     Ok(())
 }
 
-/// Leave the process group, report, and stay.
+/// Leave the process group, report, and stay for two minutes at most, so that
+/// one left by a killed test ends by itself.
 fn escapee(report: &Path) -> std::io::Result<()> {
     rustix::process::setsid()?;
     write_whole(report, &std::process::id().to_string())?;
-    loop {
-        std::thread::park();
-    }
+    std::thread::sleep(std::time::Duration::from_secs(120));
+    Ok(())
 }
 
 /// So that a reader never sees half of it.

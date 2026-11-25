@@ -9,7 +9,7 @@ use std::time::Duration;
 async fn dropping_kills_the_process_group() -> Result<()> {
     let fixture = Fixture::new()?;
     let instance = fixture
-        .start("trap '' TERM; sh -c 'echo $$ > $OUT/pid; exec sleep 300' & while :; do sleep 0.01; done")
+        .start("trap '' TERM; sh -c 'echo $$ > $OUT/pid; exec sleep 120' & spin")
         .await?;
     let (root, grandchild) = (instance.pid(), fixture.pid("pid").await?);
     drop(instance);
@@ -20,7 +20,7 @@ async fn dropping_kills_the_process_group() -> Result<()> {
 #[tokio::test]
 async fn dropping_kills_the_process_group_itself_and_not_through_the_supervisor() -> Result<()> {
     let fixture = Fixture::new()?;
-    let mut instance = fixture.start("trap '' TERM; exec sleep 300").await?;
+    let mut instance = fixture.start("trap '' TERM; exec sleep 120").await?;
     let root = instance.pid();
     let (unheard, _) = std::sync::mpsc::channel();
     // The supervisor keeps waiting for requests and is never told.
@@ -36,7 +36,7 @@ async fn dropping_kills_the_process_group_itself_and_not_through_the_supervisor(
 async fn dropping_also_kills_an_orphan_in_its_own_session_and_cleans_up() -> Result<()> {
     let fixture = Fixture::new()?;
     let instance = fixture
-        .start("(setsid sh -c 'echo $$ > $OUT/pid; exec sleep 300' &); echo $TMPDIR > $OUT/tmp; exec sleep 300")
+        .start("(setsid sh -c 'echo $$ > $OUT/pid; exec sleep 120' &); echo $TMPDIR > $OUT/tmp; exec sleep 120")
         .await?;
     let orphan = fixture.pid("pid").await?;
     until(|| fixture.read("tmp").ends_with('\n')).await;
@@ -53,7 +53,7 @@ fn dropping_needs_no_runtime() -> Result<()> {
     let runtime = tokio::runtime::Runtime::new()?;
     let (instance, orphan) = runtime.block_on(async {
         let instance = fixture
-            .start("setsid sh -c 'echo $$ > $OUT/pid; exec sleep 300' & exec sleep 300")
+            .start("setsid sh -c 'echo $$ > $OUT/pid; exec sleep 120' & exec sleep 120")
             .await?;
         let pid = fixture.pid("pid").await?;
         anyhow::Ok((instance, pid))

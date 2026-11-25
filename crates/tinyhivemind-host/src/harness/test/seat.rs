@@ -77,8 +77,10 @@ async fn a_turn_that_cannot_be_shown_to_have_stopped_blocks_the_seat_until_it_is
     let inner = Scripted::new(&[Turn::Fail, Turn::Session("s")]);
     inner.refuse_cancel(true);
     let seat = seat(&inner);
-    assert!(refusal(&seat, "t1", None).await?.contains("will not stop"));
+    let refused = refusal(&seat, "t1", None).await?;
+    assert!(refused.contains("will not stop") && refused.contains("scripted"), "{refused}");
     let blocked = refusal(&seat, "t2", None).await?;
+    assert!(blocked.contains("scripted"), "the first reason is kept: {blocked}");
     assert!(blocked.contains("t1"), "{blocked}");
     assert!(!inner.log().iter().any(|entry| entry.starts_with("run t2")));
     inner.refuse_cancel(false);
@@ -233,8 +235,11 @@ async fn a_cancellation_that_never_ends_is_given_up_and_blocks_the_seat_with_an_
             "{refused}"
         );
     }
-    // The host stopped the instance, so nothing of any turn is left.
-    seat.instance_stopped().await;
+    // The host stopped the instance, so nothing of that turn is left; a turn
+    // that is not the one in doubt settles nothing.
+    assert!(!seat.instance_stopped("t2").await);
+    assert!(refusal(&seat, "t2", None).await?.contains("t1"));
+    assert!(seat.instance_stopped("t1").await);
     seat.run(request("t2", None)).await?;
     assert!(
         refusal(&seat, "t1", None)

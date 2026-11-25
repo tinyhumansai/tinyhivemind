@@ -20,7 +20,11 @@ impl Forkers {
         let mut forkers = Self(Vec::new());
         for _ in 0..count {
             let mut shell = Command::new("/bin/sh");
-            shell.args(["-c", "while :; do /bin/true; done"]);
+            // Ends by itself within a minute, should the test not end it.
+            let script = "read up _ < /proc/uptime; end=$(( ${up%.*} + 60 )); i=0; \
+                while [ $i -lt 100000 ]; do i=$((i+1)); read now _ < /proc/uptime; \
+                [ ${now%.*} -lt $end ] || exit 0; /bin/true; done";
+            shell.args(["-c", script]);
             forkers.0.push(shell.stdin(Stdio::null()).spawn()?);
         }
         Ok(forkers)
@@ -52,9 +56,9 @@ const BOUNDS: StopPolicy = StopPolicy {
 
 /// An instance with an orphan in its own session that ignores SIGTERM.
 async fn stubborn(fixture: &Fixture) -> Result<(Instance, u32)> {
-    fixture.script("stay", "echo $$ > $OUT/pid; exec sleep 300")?;
+    fixture.script("stay", "echo $$ > $OUT/pid; exec sleep 120")?;
     let instance = fixture
-        .start("trap '' TERM; (setsid sh $OUT/stay &); exec sleep 300")
+        .start("trap '' TERM; (setsid sh $OUT/stay &); exec sleep 120")
         .await?;
     let orphan = fixture.pid("pid").await?;
     Ok((instance, orphan))
@@ -63,9 +67,13 @@ async fn stubborn(fixture: &Fixture) -> Result<(Instance, u32)> {
 #[tokio::test]
 async fn an_instance_that_forks_without_pause_is_stopped_and_proven() -> Result<()> {
     let fixture = Fixture::new()?;
-    fixture.script("chain", "echo $$ >> $OUT/pids; setsid sh $OUT/chain & exit")?;
+    // Each link counts down the links left, and none outlives the limit.
+    fixture.script(
+        "chain",
+        "echo $$ >> $OUT/pids; [ $1 -gt 0 ] && round && setsid sh $OUT/chain $(( $1 - 1 )) & exit",
+    )?;
     let instance = fixture
-        .start("trap '' TERM; for i in 1 2 3 4; do setsid sh $OUT/chain & done; exec sleep 300")
+        .start("trap '' TERM; for i in 1 2 3 4; do setsid sh $OUT/chain 20000 & done; exec sleep 120")
         .await?;
     until(|| fixture.read("pids").lines().count() > 200).await;
     instance.stop(async {}, BOUNDS).await?;
@@ -156,7 +164,7 @@ async fn a_child_the_host_reaped_is_reported_lost_and_its_tree_is_still_stopped(
     let mut command = Command::new("/bin/sh");
     command.args([
         "-c",
-        "setsid sh -c 'echo $$ > $OUT/pid; exec sleep 300' & exec sleep 300",
+        "setsid sh -c 'echo $$ > $OUT/pid; exec sleep 120' & exec sleep 120",
     ]);
     command
         .env("OUT", fixture.path(""))
@@ -191,7 +199,7 @@ async fn a_child_the_host_reaped_is_reported_lost_and_its_tree_is_still_stopped(
 async fn a_supervisor_that_is_stuck_does_not_hold_up_a_stop_past_its_bounds() -> Result<()> {
     // As reading the entry of a process that hangs in the kernel would.
     let fixture = Fixture::new()?;
-    let mut instance = fixture.start("trap '' TERM; exec sleep 300").await?;
+    let mut instance = fixture.start("trap '' TERM; exec sleep 120").await?;
     let root = instance.pid();
     let (unheard, _kept) = mpsc::channel();
     let supervisor = std::mem::replace(&mut instance.requests, unheard);

@@ -173,7 +173,7 @@ fn an_exit_is_named_by_its_code_or_signal() {
 #[tokio::test]
 async fn readiness_is_the_probe_unless_the_child_exits_or_the_deadline_passes() -> Result<()> {
     let fixture = Fixture::new()?;
-    let instance = fixture.start("exec sleep 300").await?;
+    let instance = fixture.start("exec sleep 120").await?;
     let ready = instance.ready(async { Ok::<_, Error>(5) }, PATIENCE).await;
     assert_eq!(ready?, 5);
     let late = instance
