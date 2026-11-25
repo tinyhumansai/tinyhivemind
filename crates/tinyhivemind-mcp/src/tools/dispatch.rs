@@ -143,8 +143,8 @@ pub(crate) async fn call(
     if let Some(answer) = answered(ledger.start(&identity, name, &arguments), &identity) {
         return Ok(answer);
     }
-    let outcome = match tool.hooked {
-        true => match seat.hooks.pre_tool_use(name, &arguments).await {
+    let outcome = if tool.hooked {
+        match seat.hooks.pre_tool_use(name, &arguments).await {
             Verdict::Deny(message) => Outcome::refused(message),
             Verdict::Allow => {
                 let outcome = run(services, seat, tool, &arguments, Some(&identity)).await;
@@ -153,8 +153,9 @@ pub(crate) async fn call(
                     .await;
                 outcome
             }
-        },
-        false => run(services, seat, tool, &arguments, Some(&identity)).await,
+        }
+    } else {
+        run(services, seat, tool, &arguments, Some(&identity)).await
     };
     ledger.finish(&identity, outcome.clone());
     Ok(outcome)

@@ -24,15 +24,10 @@ pub(super) async fn handle(
     shared: Arc<Shared>,
     request: Request<Incoming>,
 ) -> Result<Response<Full<Bytes>>, Infallible> {
-    Ok(match admit(&shared, request).await {
-        Ok(response) | Err(response) => response,
-    })
+    Ok(admit(&shared, request).await)
 }
 
-async fn admit(
-    shared: &Arc<Shared>,
-    request: Request<Incoming>,
-) -> Result<Response<Full<Bytes>>, Response<Full<Bytes>>> {
+async fn admit(shared: &Arc<Shared>, request: Request<Incoming>) -> Response<Full<Bytes>> {
     let headers = request.headers();
     let mut hosts = headers.get_all(header::HOST).iter();
     let host = hosts.next().and_then(|value| value.to_str().ok());
@@ -40,13 +35,13 @@ async fn admit(
     let own = [format!("127.0.0.1:{port}"), format!("localhost:{port}")];
     let named = host.is_some_and(|host| own.iter().any(|own| own == host));
     if !named || hosts.next().is_some() {
-        return Err(status(StatusCode::FORBIDDEN));
+        return status(StatusCode::FORBIDDEN);
     }
     if headers.contains_key(header::ORIGIN) {
-        return Err(status(StatusCode::FORBIDDEN));
+        return status(StatusCode::FORBIDDEN);
     }
     if request.uri().path() != "/mcp" {
-        return Err(status(StatusCode::NOT_FOUND));
+        return status(StatusCode::NOT_FOUND);
     }
     let presented = headers
         .get(header::AUTHORIZATION)
@@ -56,20 +51,20 @@ async fn admit(
         refused
             .headers_mut()
             .insert(header::WWW_AUTHENTICATE, HeaderValue::from_static("Bearer"));
-        return Err(refused);
+        return refused;
     };
     if request.method() != Method::POST {
         let mut refused = status(StatusCode::METHOD_NOT_ALLOWED);
         refused
             .headers_mut()
             .insert(header::ALLOW, HeaderValue::from_static("POST"));
-        return Err(refused);
+        return refused;
     }
     let version = headers
         .get("mcp-protocol-version")
         .map(HeaderValue::as_bytes);
     if version.is_some_and(|version| !PROTOCOL_VERSIONS.iter().any(|v| v.as_bytes() == version)) {
-        return Err(status(StatusCode::BAD_REQUEST));
+        return status(StatusCode::BAD_REQUEST);
     }
     let limit = shared.options.max_body_bytes;
     let declared = headers
@@ -77,18 +72,18 @@ async fn admit(
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.parse::<usize>().ok());
     if declared.is_some_and(|length| length > limit) {
-        return Err(status(StatusCode::PAYLOAD_TOO_LARGE));
+        return status(StatusCode::PAYLOAD_TOO_LARGE);
     }
     let body = Limited::new(request.into_body(), limit).collect();
     let bytes = match tokio::time::timeout(shared.options.body_timeout, body).await {
-        Err(_) => return Err(status(StatusCode::REQUEST_TIMEOUT)),
+        Err(_) => return status(StatusCode::REQUEST_TIMEOUT),
         Ok(Err(error)) if error.downcast_ref::<LengthLimitError>().is_some() => {
-            return Err(status(StatusCode::PAYLOAD_TOO_LARGE));
+            return status(StatusCode::PAYLOAD_TOO_LARGE);
         }
-        Ok(Err(_)) => return Err(status(StatusCode::BAD_REQUEST)),
+        Ok(Err(_)) => return status(StatusCode::BAD_REQUEST),
         Ok(Ok(collected)) => collected.to_bytes(),
     };
-    Ok(match rpc::answer(shared, seat, &bytes).await {
+    match rpc::answer(shared, seat, &bytes).await {
         Answer::Accepted => status(StatusCode::ACCEPTED),
         Answer::Reply(code, message) => {
             let mut response = Response::new(Full::new(Bytes::from(message.to_string())));
@@ -99,7 +94,7 @@ async fn admit(
             );
             response
         }
-    })
+    }
 }
 
 /// An empty response with `code`.

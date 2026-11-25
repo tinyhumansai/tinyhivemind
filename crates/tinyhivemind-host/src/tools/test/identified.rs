@@ -143,8 +143,8 @@ async fn an_identified_send_retried_returns_the_first_receipt() -> Result<()> {
     let send = identified(&request, "s1", Kind::SendAgent, args)?;
     let receipt = belt.call(&send).await?;
     assert_eq!(belt.call(&send).await?, receipt);
-    let sent = coordinator.read_direct("a", "b", None)?;
-    assert_eq!(sent.len(), 1);
+    let delivered = coordinator.read_direct("a", "b", None)?;
+    assert_eq!(delivered.len(), 1);
     finish.notify_one();
     Ok(())
 }

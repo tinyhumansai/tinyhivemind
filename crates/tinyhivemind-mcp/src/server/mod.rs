@@ -30,9 +30,10 @@ use tokio::net::TcpListener;
 use tokio::sync::{Semaphore, watch};
 use tokio::task::JoinHandle;
 
-/// The MCP protocol revisions served, newest first. Codex 0.171 asked for
-/// `2025-06-18`, OpenHuman 0.64.15 and OpenClaw for `2025-11-25`; an
-/// initialize asking for anything else is answered with the newest.
+/// The MCP protocol revisions served, newest first. In the harness spike
+/// `Codex` 0.171 asked for `2025-06-18`, and `OpenHuman` 0.64.15 and
+/// `OpenClaw` for `2025-11-25`; an initialize asking for anything else is
+/// answered with the newest.
 pub const PROTOCOL_VERSIONS: [&str; 3] = ["2025-11-25", "2025-06-18", "2025-03-26"];
 
 /// What the server dispatches through: the coordinator and the host's ports.
