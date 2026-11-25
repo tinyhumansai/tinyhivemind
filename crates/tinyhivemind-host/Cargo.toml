@@ -15,12 +15,33 @@ publish = false
 [dependencies]
 # Durable coordination: the `AgentRunner` seam, actions and turn payloads.
 tinyhivemind-hives.workspace = true
+# Conduct, routing and approval policies a deployment plan carries.
+tinyhivemind-core.workspace = true
+# Hive packages, checked and lowered into a deployment plan.
+tinyhivemind-lang.workspace = true
+# `ToolRules`, the argument rules of a plan's permission profiles. It names no
+# harness; its `async-trait` and `anyhow` stay behind its own `Tool` trait.
+tinytools.workspace = true
+# Wire forms of policy requests and plans.
+serde.workspace = true
+# Tool schemas, arguments and results.
+serde_json.workspace = true
 # Typed errors.
 thiserror.workspace = true
 # Child processes, their deadlines and pipes.
 tokio = { workspace = true, features = ["process", "io-util", "time", "rt", "sync", "macros"] }
 
+[target.'cfg(unix)'.dependencies]
+# Signals, pidfds and `waitid` without reaping, for `process`. The workspace
+# forbids `unsafe`, so the raw calls have to live behind a safe wrapper, and
+# `std` offers neither a signal other than SIGKILL nor a pidfd. rustix is
+# already in this lockfile through `tempfile`, licensed
+# `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT`, and builds on 1.65.
+rustix = { version = "1.1", default-features = false, features = ["std", "process"] }
+
 [dev-dependencies]
+# Fallible tests over several error types.
+anyhow.workspace = true
 # Async tests on a multi-threaded runtime.
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 # Temporary instance directories.

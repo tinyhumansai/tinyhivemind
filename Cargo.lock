@@ -3571,9 +3571,16 @@ dependencies = [
 name = "tinyhivemind-host"
 version = "0.2.1"
 dependencies = [
+ "anyhow",
+ "rustix 1.1.5",
+ "serde",
+ "serde_json",
  "tempfile",
  "thiserror",
+ "tinyhivemind-core",
  "tinyhivemind-hives",
+ "tinyhivemind-lang",
+ "tinytools",
  "tokio",
 ]
 
