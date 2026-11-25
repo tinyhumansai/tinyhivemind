@@ -60,6 +60,11 @@ pub enum Error {
         /// group's id alone.
         pids: Vec<u32>,
     },
+    /// Everyone found was killed, but the time ran out before it was clear that
+    /// nobody was missed, as when processes are started faster than they can
+    /// be looked at.
+    #[error("the instance could not be proven gone in time")]
+    Unproven,
     /// The supervisor thread is gone without having proven the tree stopped.
     #[error("the supervisor of the instance is gone")]
     Unsupervised,

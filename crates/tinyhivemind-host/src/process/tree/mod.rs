@@ -113,8 +113,8 @@ impl Tree {
     pub(super) fn sample(&mut self) {
         self.known
             .retain(|member| Stat::is_now(&self.proc, *member).unwrap_or(true));
-        let known = &self.known;
-        self.bare.retain(|process, _| !known.contains(process));
+        self.bare
+            .retain(|process, _| Stat::is_now(&self.proc, *process).unwrap_or(true));
         let mut queue: Vec<Identity> = self.known.iter().copied().collect();
         while let Some(parent) = queue.pop() {
             for pid in self.listed_children(parent.pid) {

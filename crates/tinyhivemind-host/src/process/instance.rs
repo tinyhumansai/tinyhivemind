@@ -250,9 +250,11 @@ impl Instance {
     /// this future is dropped.
     ///
     /// # Errors
-    /// [`Error::Survivors`] if members are still running when `policy.kill`
-    /// has passed, and [`Error::Table`] if the process table cannot be read.
-    /// Neither means stopped; calling again tries again.
+    /// When `policy.kill` has passed: [`Error::Survivors`] if members are still
+    /// running, [`Error::Table`] if the process table could not be read, and
+    /// [`Error::Unproven`] if it was not read fast enough to tell. Everyone
+    /// found has been sent SIGKILL by then, but none of these means stopped;
+    /// calling again tries again.
     pub async fn stop(&self, cancel: impl Future<Output = ()>, policy: StopPolicy) -> Result<Exit> {
         tokio::select! {
             _ = self.exited() => {}

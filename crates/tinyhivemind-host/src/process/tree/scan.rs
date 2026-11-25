@@ -96,7 +96,9 @@ impl Tree {
                 Ok(Some(stat)) if stat.identity() == member => {
                     self.found(pass, stat, order);
                 }
-                Ok(_) => {}
+                Ok(_) => {
+                    self.known.remove(&member);
+                }
                 Err(error) => pass.failure = Some(error),
             }
         }
@@ -112,35 +114,33 @@ impl Tree {
         let mut last = self.last_pid()?;
         self.look(pass, self.listed(pass)?, order, expired);
         // These may have been looked at before their owner was there to see.
-        let mut from = last.map(|last| last.saturating_sub(FORKING));
-        let mut first = true;
-        loop {
-            if expired() || (pass.failure.is_some() && !first) {
-                return Ok(false);
-            }
+        let mut window = FORKING;
+        while !expired() && (pass.failure.is_none() || window > 0) {
             let now = self.last_pid()?;
-            let fresh = match (from, now) {
-                // In order, and not started over from the lowest pid.
-                (Some(from), Some(now)) if from <= now && Some(now) >= last && now - from <= STORM => {
-                    (from + 1..=now).filter(|pid| !pass.seen.contains(pid)).collect()
+            let (fresh, whole) = match (last, now) {
+                (Some(last), Some(now)) if last <= now && now - last <= STORM => {
+                    let from = last.saturating_sub(window) + 1;
+                    let fresh = (from..=now).filter(|pid| !pass.seen.contains(pid));
+                    (fresh.collect(), window == 0)
                 }
-                _ => {
-                    first = true;
-                    self.listed(pass)?
-                }
+                (None, None) => (self.listed(pass)?, true),
+                // Started over from the lowest pid, or too far ahead.
+                _ => (self.listed(pass)?, false),
             };
-            (last, from) = (now, now);
+            window = if whole || window > 0 { 0 } else { FORKING };
+            last = now;
             let idle = fresh.is_empty();
-            let unsure: Vec<u32> = pass.unsure.iter().copied().collect();
-            let gone = self.look(pass, unsure, order, expired) | self.look(pass, fresh, order, expired);
-            if !gone && !first && pass.unsure.is_empty() && !expired() {
-                return Ok(pass.failure.is_none());
+            let unsure = pass.unsure.iter().copied().collect();
+            let mut gone = self.look(pass, unsure, order, expired);
+            gone |= self.look(pass, fresh, order, expired);
+            if whole && !gone && pass.unsure.is_empty() {
+                return Ok(true);
             }
-            first = false;
             if idle {
                 std::thread::sleep(IDLE);
             }
         }
+        Ok(false)
     }
 
     /// The last pid handed out, if the kernel says.
@@ -199,6 +199,8 @@ impl Tree {
             }
             Evidence::Gone => {
                 if !self.is_anothers_child(pass, &stat)? {
+                    // A zombie stays one. Its children may be anyone's.
+                    pass.seen.insert(pid);
                     return Ok(false);
                 }
             }

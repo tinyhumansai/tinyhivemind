@@ -1,5 +1,5 @@
 //! Attribution over a fabricated process table, and signalling real ones.
-use super::{Identity, Stat, Tree, signal};
+use super::{Identity, Scan, Stat, Tree, signal};
 use anyhow::{Context as _, Result};
 use rustix::process::Signal;
 use std::fs;
@@ -18,6 +18,9 @@ struct Entry {
     state: char,
     threads: u64,
     environ: &'static str,
+    /// The process this is a thread of: itself, usually.
+    leader: u32,
+    flags: u64,
 }
 
 impl Entry {
@@ -30,6 +33,8 @@ impl Entry {
             state: 'S',
             threads: 1,
             environ: "PATH=/bin\0",
+            leader: pid,
+            flags: 0,
         }
     }
     fn write(&self, proc: &Path) -> Result<()> {
@@ -38,10 +43,19 @@ impl Entry {
         fs::create_dir_all(&task)?;
         // A name holding spaces and parentheses must not shift the fields.
         let stat = format!(
-            "{} (a) b (c) {} {} {} {} 0 -1 0 0 0 0 0 0 0 0 0 20 0 {} 0 {} 0 0\n",
-            self.pid, self.state, self.parent, self.group, self.group, self.threads, self.start
+            "{} (a) b (c) {} {} {} {} 0 -1 {} 0 0 0 0 0 0 0 0 20 0 {} 0 {} 0 0\n",
+            self.pid,
+            self.state,
+            self.parent,
+            self.group,
+            self.group,
+            self.flags,
+            self.threads,
+            self.start
         );
         fs::write(directory.join("stat"), stat)?;
+        let status = format!("Name:\tx\nTgid:\t{}\n", self.leader);
+        fs::write(directory.join("status"), status)?;
         Ok(fs::write(directory.join("environ"), self.environ)?)
     }
 }
@@ -52,8 +66,22 @@ fn table(entries: &[Entry]) -> Result<tempfile::TempDir> {
         entry.write(proc.path())?;
     }
     // Entries that are not processes are skipped.
-    fs::create_dir(proc.path().join("sys"))?;
+    fs::create_dir_all(proc.path().join("sys/kernel"))?;
     Ok(proc)
+}
+
+/// Have the kernel say which pid it handed out last.
+fn last_pid(proc: &Path, pid: u32) -> Result<()> {
+    Ok(fs::write(
+        proc.join("sys/kernel/ns_last_pid"),
+        format!("{pid}\n"),
+    )?)
+}
+
+/// Look, without signalling anyone: the pids here are not this test's.
+fn scan(tree: &mut Tree) -> Scan {
+    let started = std::time::Instant::now();
+    tree.scan(None, &|| started.elapsed().as_secs() >= 10)
 }
 
 fn tree(proc: &tempfile::TempDir) -> Result<Tree> {
@@ -61,7 +89,9 @@ fn tree(proc: &tempfile::TempDir) -> Result<Tree> {
 }
 
 fn pids(tree: &mut Tree) -> Result<Vec<u32>> {
-    Ok(tree.scan()?.into_iter().map(|member| member.pid).collect())
+    let scan = scan(tree);
+    assert!(scan.failure.is_none() && scan.settled);
+    Ok(scan.live.into_iter().map(|member| member.pid).collect())
 }
 
 fn children(proc: &tempfile::TempDir, pid: u32, list: &str) -> Result<()> {
@@ -72,12 +102,12 @@ fn children(proc: &tempfile::TempDir, pid: u32, list: &str) -> Result<()> {
 #[test]
 fn a_stat_line_is_read_past_a_hostile_command_name() -> Result<()> {
     let proc = table(&[Entry::new(10, 1, 100)])?;
-    let stat = Stat::read(proc.path(), 10).context("missing")?;
+    let stat = Stat::read(proc.path(), 10)?.context("missing")?;
     assert_eq!((stat.parent, stat.group, stat.start), (1, 10, 100));
     assert!(!stat.dead);
-    assert!(Stat::read(proc.path(), 11).is_none());
+    assert!(Stat::read(proc.path(), 11)?.is_none());
     fs::write(proc.path().join("10/stat"), "10 (x) S 1")?;
-    assert!(Stat::read(proc.path(), 10).is_none());
+    assert!(Stat::read(proc.path(), 10).is_err());
     Ok(())
 }
 
@@ -241,22 +271,24 @@ fn a_process_without_an_environment_is_looked_at_only_so_often() -> Result<()> {
 }
 
 #[test]
-fn an_unreadable_table_is_an_error_and_not_an_empty_tree() -> Result<()> {
+fn an_unreadable_table_is_a_failure_and_not_an_empty_tree() -> Result<()> {
     let proc = table(&[Entry::new(10, 1, 100)])?;
     let mut tree = tree(&proc)?;
     drop(proc);
-    assert!(tree.scan().is_err());
+    let found = scan(&mut tree);
+    assert!(found.failure.is_some() && !found.settled);
     Ok(())
 }
 
 /// Whether `member` is running.
 fn alive(proc: &Path, member: Identity) -> bool {
-    Stat::read(proc, member.pid).is_some_and(|stat| !stat.dead && stat.identity() == member)
+    let stat = Stat::read(proc, member.pid).ok().flatten();
+    stat.is_some_and(|stat| !stat.dead && stat.identity() == member)
 }
 
 /// The identity of a real process.
 fn identity(pid: u32) -> Result<Identity> {
-    let stat = Stat::read(Path::new("/proc"), pid);
+    let stat = Stat::read(Path::new("/proc"), pid)?;
     Ok(stat.context("no such process")?.identity())
 }
 
@@ -291,9 +323,7 @@ fn a_signal_the_kernel_refuses_is_an_error() -> Result<()> {
         return Ok(());
     }
     let refused = signal(Path::new("/proc"), identity(1)?, Signal::TERM);
-    assert_eq!(
-        refused.err().context("expected a failure")?,
-        rustix::io::Errno::PERM
-    );
+    let refused = refused.err().context("init was signalled")?;
+    assert_eq!(refused.kind(), std::io::ErrorKind::PermissionDenied);
     Ok(())
 }

@@ -6,7 +6,7 @@
 //! its pid, and so its process group id, from being given to anyone else.
 use super::scope::{Root, Scope};
 use super::{Error, Exit, Result, StopPolicy};
-use rustix::process::{WaitId, WaitIdOptions, waitid};
+use rustix::process::{Signal, WaitId, WaitIdOptions, waitid};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -21,9 +21,11 @@ const TICK: Duration = Duration::from_millis(20);
 const SAMPLE: Duration = Duration::from_millis(100);
 /// The pause between looks at the tree while stopping it.
 const POLL: Duration = Duration::from_millis(5);
-/// Looks in a row that must find nobody. One is not proof: reading the process
-/// table is not atomic, and a process inside `exec` shows no environment.
-const PROOF: u32 = 3;
+/// Looks in a row that must settle on nobody. One would do but for what cannot
+/// be seen, such as a process kept waiting inside `exec` for very long.
+const PROOF: u32 = 2;
+/// Longest a question about who is running may take.
+const QUERY: Duration = Duration::from_secs(1);
 /// How long a dropped instance's tree is pursued.
 const DROPPED: Duration = Duration::from_secs(30);
 
@@ -64,8 +66,7 @@ impl Supervisor {
             self.exited();
             match self.requests.recv_timeout(TICK) {
                 Ok(Request::Members(reply)) => {
-                    let exited = self.exited();
-                    let _ = reply.send(self.scope.members(&self.root, exited));
+                    let _ = reply.send(self.members());
                 }
                 Ok(Request::Stop(policy, reply)) => {
                     let stopped = self.stop(&policy);
@@ -123,18 +124,30 @@ impl Supervisor {
         self.kill(policy.kill)
     }
 
+    /// Who is running now.
+    fn members(&mut self) -> Result<Vec<u32>> {
+        let exited = self.exited();
+        let started = Instant::now();
+        let expired = || started.elapsed() >= QUERY;
+        let look = self.scope.look(&self.root, exited, None, &expired);
+        match look.failure {
+            Some(failure) => Err(Error::Table(failure)),
+            None => Ok(look.live),
+        }
+    }
+
     /// Ask every member to end, for as long as `bound` allows.
     fn terminate(&mut self, bound: Duration) {
         let started = Instant::now();
-        while started.elapsed() < bound && !self.hurry.load(Ordering::Acquire) {
+        let hurry = self.hurry.clone();
+        let expired = || started.elapsed() >= bound || hurry.load(Ordering::Acquire);
+        while !expired() {
             let exited = self.exited();
-            let members = self.scope.members(&self.root, exited);
-            if members.is_ok_and(|members| members.is_empty())
-                || (exited && !self.scope.sees_past_the_child())
-            {
+            let order = Some(Signal::TERM);
+            let look = self.scope.look(&self.root, exited, order, &expired);
+            if look.is_proof() || (exited && !self.scope.sees_past_the_child()) {
                 return;
             }
-            self.scope.terminate(&self.root);
             thread::sleep(POLL);
         }
     }
@@ -142,28 +155,21 @@ impl Supervisor {
     /// Kill every member until nobody is found, and give up the child.
     fn kill(&mut self, bound: Duration) -> Result<Exit> {
         let started = Instant::now();
+        let expired = || started.elapsed() >= bound;
         let mut proof = 0;
         loop {
             let exited = self.exited();
             if exited {
                 self.scope.settle(&self.root);
             }
-            let members = match self.scope.members(&self.root, exited) {
-                // The table may be readable the next time.
-                Err(_) if started.elapsed() < bound => {
-                    proof = 0;
-                    thread::sleep(POLL);
-                    continue;
-                }
-                members => members?,
-            };
-            if members.is_empty() {
+            let order = Some(Signal::KILL);
+            let look = self.scope.look(&self.root, exited, order, &expired);
+            if look.is_proof() {
                 proof += 1;
             } else {
                 proof = 0;
-                self.scope.kill(&self.root);
-                if started.elapsed() >= bound {
-                    return Err(Error::Survivors { pids: members });
+                if expired() {
+                    return Err(look.into_error());
                 }
             }
             let exit = *self.exit.borrow();

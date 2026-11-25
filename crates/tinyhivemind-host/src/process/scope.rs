@@ -1,10 +1,8 @@
 //! The child itself, and which processes stopping it covers.
 #[cfg(target_os = "linux")]
-use super::tree::{Identity, Tree};
-use super::{Containment, Error, Result};
+use super::tree::{Scan, Tree};
+use super::{Containment, Error};
 use rustix::process::{Pid, Signal, kill_process_group, test_kill_process_group};
-#[cfg(target_os = "linux")]
-use std::collections::BTreeSet;
 use std::io;
 use std::process::Child;
 use std::sync::{Mutex, PoisonError};
@@ -48,7 +46,10 @@ impl Root {
     /// Signal the child's process group, all of it at once.
     ///
     /// Only while the child is unreaped, under the lock that reaping takes:
-    /// after that the group id may be someone else's.
+    /// after that the group id may be someone else's. A host that reaps the
+    /// child behind the supervisor's back breaks this, until that is noticed
+    /// within a tick, 20 ms. In between, the id could have gone to a new group
+    /// only if the pids wrapped around in that time.
     pub(super) fn signal_group(&self, signal: Signal) {
         let child = self.child.lock().unwrap_or_else(PoisonError::into_inner);
         if child.is_some() {
@@ -74,12 +75,40 @@ impl Root {
 
 impl Drop for Root {
     /// A child nobody released, because its instance failed to start, is
-    /// killed and reaped. This waits, but only for a SIGKILL to take effect.
+    /// killed, and reaped on a thread of its own: this may run on an async
+    /// worker, which must not wait.
     fn drop(&mut self) {
         self.signal_group(Signal::KILL);
         let child = self.child.get_mut().unwrap_or_else(PoisonError::into_inner);
-        if let Some(child) = child {
-            let _ = child.wait();
+        if let Some(mut child) = child.take() {
+            // Without a thread it stays a zombie until the host ends.
+            let _ = std::thread::Builder::new().spawn(move || child.wait());
+        }
+    }
+}
+
+/// What one look found.
+pub(super) struct Look {
+    /// The pids of the members alive when they were looked at.
+    pub(super) live: Vec<u32>,
+    /// Whether these are all, so that none means none.
+    pub(super) settled: bool,
+    /// Why they may not be all, if something could not be read.
+    pub(super) failure: Option<io::Error>,
+}
+
+impl Look {
+    /// Whether nobody is left.
+    pub(super) fn is_proof(&self) -> bool {
+        self.live.is_empty() && self.settled
+    }
+
+    /// Why this does not prove that nobody is left.
+    pub(super) fn into_error(self) -> Error {
+        match self.failure {
+            _ if !self.live.is_empty() => Error::Survivors { pids: self.live },
+            Some(failure) => Error::Table(failure),
+            None => Error::Unproven,
         }
     }
 }
@@ -88,13 +117,7 @@ impl Drop for Root {
 pub(super) enum Scope {
     /// The whole tree.
     #[cfg(target_os = "linux")]
-    Tree {
-        tree: Tree,
-        /// Found by the last look.
-        live: Vec<Identity>,
-        /// Already sent SIGTERM.
-        asked: BTreeSet<Identity>,
-    },
+    Tree(Tree),
     /// The process group, and whether it was sent SIGTERM.
     Group { asked: bool },
 }
@@ -105,11 +128,7 @@ impl Scope {
     pub(super) fn of(containment: Containment, marker: &str, root: &Root) -> io::Result<Self> {
         #[cfg(target_os = "linux")]
         if containment == Containment::Tree {
-            return Ok(Self::Tree {
-                tree: Tree::new(marker, root.id())?,
-                live: Vec::new(),
-                asked: BTreeSet::new(),
-            });
+            return Ok(Self::Tree(Tree::new(marker, root.id())?));
         }
         // Elsewhere a group is all there is, whoever its members are.
         let _ = (containment, marker, root);
@@ -120,7 +139,7 @@ impl Scope {
     pub(super) fn sample(&mut self) {
         match self {
             #[cfg(target_os = "linux")]
-            Self::Tree { tree, .. } => tree.sample(),
+            Self::Tree(tree) => tree.sample(),
             Self::Group { .. } => {}
         }
     }
@@ -129,31 +148,62 @@ impl Scope {
     pub(super) fn release(&mut self) {
         match self {
             #[cfg(target_os = "linux")]
-            Self::Tree { tree, .. } => tree.release(),
+            Self::Tree(tree) => tree.release(),
             Self::Group { .. } => {}
         }
     }
 
-    /// Who is running, given whether the child exited. A child that has not
-    /// is always among them.
-    pub(super) fn members(&mut self, root: &Root, exited: bool) -> Result<Vec<u32>> {
-        let mut members: Vec<u32> = match self {
+    /// Who is running, given whether the child exited. A child that has not is
+    /// always among them. Each is sent `order` as soon as it is found, and the
+    /// child's group before anyone is looked for.
+    pub(super) fn look(
+        &mut self,
+        root: &Root,
+        exited: bool,
+        order: Option<Signal>,
+        expired: &dyn Fn() -> bool,
+    ) -> Look {
+        let mut look = match self {
             #[cfg(target_os = "linux")]
-            Self::Tree { tree, live, .. } => {
-                *live = tree.scan().map_err(Error::Table)?;
-                live.iter().map(|member| member.pid).collect()
+            Self::Tree(tree) => {
+                if order == Some(Signal::KILL) {
+                    // All at once: a signalled process cannot fork.
+                    root.signal_group(Signal::KILL);
+                }
+                let Scan {
+                    live,
+                    settled,
+                    failure,
+                } = tree.scan(order, expired);
+                Look {
+                    live: live.iter().map(|member| member.pid).collect(),
+                    settled,
+                    failure,
+                }
             }
-            // An unreaped child counts, so this cannot be empty before
-            // `settle`.
-            Self::Group { .. } => match test_kill_process_group(root.pid()) {
-                Err(rustix::io::Errno::SRCH) => Vec::new(),
-                _ => vec![root.id()],
-            },
+            Self::Group { asked } => {
+                // A group answers at once.
+                let _ = expired;
+                // Once each, like everyone in a tree.
+                match order {
+                    Some(Signal::TERM) if std::mem::replace(asked, true) => {}
+                    Some(order) => root.signal_group(order),
+                    None => {}
+                }
+                // An unreaped child counts, so this cannot be empty before
+                // `settle`.
+                let gone = test_kill_process_group(root.pid()) == Err(rustix::io::Errno::SRCH);
+                Look {
+                    live: if gone { Vec::new() } else { vec![root.id()] },
+                    settled: true,
+                    failure: None,
+                }
+            }
         };
-        if !exited && !members.contains(&root.id()) {
-            members.push(root.id());
+        if !exited && !look.live.contains(&root.id()) {
+            look.live.push(root.id());
         }
-        Ok(members)
+        look
     }
 
     /// Whether members can be told apart from the child's own zombie.
@@ -166,7 +216,7 @@ impl Scope {
     pub(super) fn settle(&self, root: &Root) {
         match self {
             #[cfg(target_os = "linux")]
-            Self::Tree { .. } => {}
+            Self::Tree(_) => {}
             // The child's zombie counts as its group's, so whether the rest is
             // gone shows only once it is reaped, and the group can be
             // signalled only before that.
@@ -174,41 +224,6 @@ impl Scope {
                 root.signal_group(Signal::KILL);
                 root.release();
             }
-        }
-    }
-
-    /// Ask everyone found by the last look to end, once each.
-    pub(super) fn terminate(&mut self, root: &Root) {
-        match self {
-            #[cfg(target_os = "linux")]
-            Self::Tree { tree, live, asked } => {
-                for member in live.iter().filter(|member| asked.insert(**member)) {
-                    // Refused means it outlives the grace period, and shows up
-                    // again when it cannot be killed either.
-                    let _ = tree.signal(*member, Signal::TERM);
-                }
-            }
-            Self::Group { asked } => {
-                if !std::mem::replace(asked, true) {
-                    root.signal_group(Signal::TERM);
-                }
-            }
-        }
-    }
-
-    /// Kill everyone found by the last look.
-    pub(super) fn kill(&self, root: &Root) {
-        // The group first, and at once: a signalled process cannot fork.
-        root.signal_group(Signal::KILL);
-        match self {
-            #[cfg(target_os = "linux")]
-            Self::Tree { tree, live, .. } => {
-                for member in live {
-                    // One that cannot be signalled is still there next look.
-                    let _ = tree.signal(*member, Signal::KILL);
-                }
-            }
-            Self::Group { .. } => {}
         }
     }
 }
