@@ -78,9 +78,15 @@ async fn a_turn_that_cannot_be_shown_to_have_stopped_blocks_the_seat_until_it_is
     inner.refuse_cancel(true);
     let seat = seat(&inner);
     let refused = refusal(&seat, "t1", None).await?;
-    assert!(refused.contains("will not stop") && refused.contains("scripted"), "{refused}");
+    assert!(
+        refused.contains("will not stop") && refused.contains("scripted"),
+        "{refused}"
+    );
     let blocked = refusal(&seat, "t2", None).await?;
-    assert!(blocked.contains("scripted"), "the first reason is kept: {blocked}");
+    assert!(
+        blocked.contains("scripted"),
+        "the first reason is kept: {blocked}"
+    );
     assert!(blocked.contains("t1"), "{blocked}");
     assert!(!inner.log().iter().any(|entry| entry.starts_with("run t2")));
     inner.refuse_cancel(false);

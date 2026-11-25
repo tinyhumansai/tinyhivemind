@@ -209,7 +209,9 @@ async fn a_tree_that_keeps_forking_is_stopped() -> Result<()> {
         "echo $$ >> $OUT/pids; sleep 0.02; [ $1 -gt 0 ] && round && setsid sh $OUT/chain $(( $1 - 1 )) & exit",
     )?;
     let instance = fixture
-        .start("trap '' TERM; for i in 1 2 3 4; do setsid sh $OUT/chain 2000 & done; exec sleep 120")
+        .start(
+            "trap '' TERM; for i in 1 2 3 4; do setsid sh $OUT/chain 2000 & done; exec sleep 120",
+        )
         .await?;
     until(|| fixture.read("pids").lines().count() > 40).await;
     instance.stop(async {}, SHORT).await?;
@@ -293,9 +295,8 @@ async fn abandoning_a_stop_does_not_abandon_the_kill() -> Result<()> {
 #[tokio::test]
 async fn without_tree_containment_the_process_group_is_stopped_and_proven() -> Result<()> {
     let fixture = Fixture::new()?;
-    let launch = fixture.shell(
-        "trap '' TERM; sh -c 'echo $$ > $OUT/pid; exec sleep 120' & spin",
-    )?;
+    let launch =
+        fixture.shell("trap '' TERM; sh -c 'echo $$ > $OUT/pid; exec sleep 120' & spin")?;
     let instance = Instance::contained(launch, Containment::ProcessGroup).await?;
     assert_eq!(instance.containment(), Containment::ProcessGroup);
     let grandchild = fixture.pid("pid").await?;
@@ -327,7 +328,9 @@ async fn a_process_group_is_a_survivor_until_it_is_gone() -> Result<()> {
 #[tokio::test]
 async fn a_stop_waiting_behind_another_gets_its_bounds_from_when_it_is_taken_up() -> Result<()> {
     let fixture = Fixture::new()?;
-    let instance = fixture.start("trap '' TERM; echo $$ > $OUT/up; spin").await?;
+    let instance = fixture
+        .start("trap '' TERM; echo $$ > $OUT/up; spin")
+        .await?;
     fixture.pid("up").await?;
     // The first waits out a grace period longer than the second's bounds.
     let patient = StopPolicy {

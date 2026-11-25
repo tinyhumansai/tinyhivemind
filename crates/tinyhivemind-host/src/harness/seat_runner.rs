@@ -42,7 +42,7 @@ pub trait CancellableRunner: AgentRunner {
 ///   worked, each further turn tries again first and is refused with
 ///   [`Error::Unsettled`] if it cannot either. The way out is to stop the
 ///   instance, with [`super::Harness::stop`], and start the seat again or, if
-///   this runner is kept, call [`SeatRunner::instance_stopped`].
+///   this runner is kept, call [`SeatRunner::instance_stopped`] with the turn.
 /// - **Parked is ended.** [`TurnDisposition::Parked`] promises, like
 ///   [`TurnDisposition::Completed`], that the harness's own turn is over: the
 ///   release comes as another turn with another id. A client must not return
@@ -229,14 +229,14 @@ impl Turn {
         let outcome = match ended {
             Ok(outcome) => outcome,
             Err(error) => {
-                self.settle().await?;
+                self.settle(error.to_string()).await?;
                 return Err(error);
             }
         };
         self.keep(&outcome.session_id)?;
-        match outcome.disposition {
+        match &outcome.disposition {
             // Says that the turn failed, not that the harness is done with it.
-            TurnDisposition::Failed(_) => self.settle().await?,
+            TurnDisposition::Failed(reason) => self.settle(reason.clone()).await?,
             TurnDisposition::Completed | TurnDisposition::Parked => self.end(),
         }
         Ok(outcome)
@@ -264,11 +264,12 @@ impl Turn {
         Ok(())
     }
 
-    /// The run ended in a way that does not say that the turn stopped.
-    async fn settle(&mut self) -> Result<()> {
+    /// The run ended in `ended`, which does not say that the turn stopped.
+    async fn settle(&mut self, ended: String) -> Result<()> {
         if let Some(seat) = &mut self.seat {
+            seat.unsettled = Some((self.id.clone(), Some(ended)));
             // Dropped while waiting here, the turn is cancelled again.
-            let settled = settle(self.inner.as_ref(), self.limits, seat, self.id.clone()).await;
+            let settled = settle(self.inner.as_ref(), self.limits, seat).await;
             self.seat = None;
             return settled;
         }
@@ -286,10 +287,9 @@ impl Drop for Turn {
         if let Ok(runtime) = tokio::runtime::Handle::try_current() {
             let inner = self.inner.clone();
             let limits = self.limits;
-            let id = std::mem::take(&mut self.id);
             runtime.spawn(async move {
                 // A failure leaves the same doubt.
-                let _ = settle(inner.as_ref(), limits, &mut seat, id).await;
+                let _ = settle(inner.as_ref(), limits, &mut seat).await;
             });
         }
     }

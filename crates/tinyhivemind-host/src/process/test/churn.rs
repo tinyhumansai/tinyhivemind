@@ -73,7 +73,9 @@ async fn an_instance_that_forks_without_pause_is_stopped_and_proven() -> Result<
         "echo $$ >> $OUT/pids; [ $1 -gt 0 ] && round && setsid sh $OUT/chain $(( $1 - 1 )) & exit",
     )?;
     let instance = fixture
-        .start("trap '' TERM; for i in 1 2 3 4; do setsid sh $OUT/chain 20000 & done; exec sleep 120")
+        .start(
+            "trap '' TERM; for i in 1 2 3 4; do setsid sh $OUT/chain 20000 & done; exec sleep 120",
+        )
         .await?;
     until(|| fixture.read("pids").lines().count() > 200).await;
     instance.stop(async {}, BOUNDS).await?;
