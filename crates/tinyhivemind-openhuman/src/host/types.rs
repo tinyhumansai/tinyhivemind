@@ -1,8 +1,12 @@
 //! Host extension points and supplied handle types.
 use crate::{Error, Result};
 use openhuman_embed::Agent;
-use std::{future::Future, path::PathBuf, pin::Pin, sync::Arc, time::Duration};
-use tinyhivemind_hives::{Destination, EpisodeContext, HiveInfo, TurnDisposition, TurnRequest};
+use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
+use tinyhivemind_hives::TurnDisposition;
+pub use tinyhivemind_host::{
+    policy::{ManagementRequest, SendRequest},
+    turn::{TurnOptions, TurnScope},
+};
 use tinyhivemind_lang::LoweredMemoryBinding;
 /// Default maximum duration of a supplied agent turn.
 pub const TURN_TIMEOUT: Duration = Duration::from_mins(5);
@@ -35,6 +39,8 @@ pub trait AgentFactory: Send + Sync {
     }
 }
 /// Explicit opt-in management authorization.
+///
+/// [`tinyhivemind_host::policy::ManagementAuthorizer`] with the adapter's error.
 pub trait ManagementAuthorizer: Send + Sync {
     /// Authorize before any factory or coordinator mutation.
     /// # Errors
@@ -43,6 +49,7 @@ pub trait ManagementAuthorizer: Send + Sync {
 }
 /// Host policy over what an agent may send, mirroring [`ManagementAuthorizer`].
 ///
+/// [`tinyhivemind_host::policy::SendAuthorizer`] with the adapter's error.
 /// Consulted by `hivemind_send_agent`, `hivemind_send_hive`, `hivemind_ask` and
 /// `hivemind_broadcast` before they execute. A refusal is returned to the model
 /// as the tool's error text; the turn continues.
@@ -64,152 +71,12 @@ pub trait SendAuthorizer: Send + Sync {
         self.authorize(actor, request)
     }
 }
-/// Outbound operation offered to the host [`SendAuthorizer`].
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-pub enum SendRequest {
-    /// Direct message to a registered agent.
-    Agent {
-        /// Recipient agent identity.
-        agent_id: String,
-        /// Message text.
-        body: String,
-    },
-    /// Message to a hive the actor belongs to.
-    Hive {
-        /// Hive identity.
-        hive_id: String,
-        /// Message text.
-        body: String,
-        /// Existing conversation root, when replying in a thread.
-        thread: Option<u64>,
-        /// Private readers; empty means every member.
-        only_for: Vec<String>,
-    },
-    /// Question to peers in the actor's active episode.
-    Ask {
-        /// Episode the question is asked in.
-        episode_id: String,
-        /// Asked peers.
-        agents: Vec<String>,
-        /// Question text.
-        body: String,
-    },
-    /// Work routed across the actor's active episode.
-    Broadcast {
-        /// Episode the work is broadcast in.
-        episode_id: String,
-        /// Work text.
-        body: String,
-    },
-}
-/// Management operation offered to the host authorizer.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
-pub enum ManagementRequest {
-    /// Create a hive using known agents.
-    CreateHive(HiveInfo),
-    /// Create a configured agent through a host-defined template.
-    CreateAgent {
-        /// Template reference.
-        template: String,
-        /// Optional coordinator identity, separate from factory-owned settings.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        coordinator_id: Option<String>,
-        /// Nonsecret host-validated settings.
-        config: serde_json::Value,
-        /// Portable memory contract, applied by the factory before registration.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        memory: Option<Box<LoweredMemoryBinding>>,
-    },
-    /// Join a registered agent to a hive.
-    JoinHive {
-        /// Hive identity.
-        hive_id: String,
-        /// Agent identity.
-        agent_id: String,
-    },
-    /// Leave a hive without deleting its history.
-    LeaveHive {
-        /// Hive identity.
-        hive_id: String,
-        /// Agent identity.
-        agent_id: String,
-    },
-}
 /// Future wrapped by a host turn scope.
 pub type HostedTurn<'a> =
     Pin<Box<dyn Future<Output = Result<openhuman_embed::TurnOutcome>> + Send + 'a>>;
 /// Drained progress channel owned by the host.
 pub type TurnProgressSink =
     tokio::sync::mpsc::Sender<openhuman_embed::agent_progress::AgentProgress>;
-/// What one turn is about, derived from its [`TurnRequest`].
-///
-/// Every hook receives it, so a host can route live progress, attribute an
-/// approval, or file a card per hive, episode and thread rather than per agent.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct TurnScope {
-    /// Durable reservation identity from the authoritative coordinator request.
-    pub turn_id: String,
-    /// Native session authenticated by the runner before any hooks execute.
-    pub session_id: Option<String>,
-    /// Durable trusted scheduled provenance; cannot be supplied by message text.
-    pub scheduled_job_id: Option<String>,
-    /// The agent taking the turn.
-    pub agent_id: String,
-    /// Active conductor assignment, absent for a direct message.
-    pub episode: Option<EpisodeContext>,
-    /// Identities of the messages delivered in this turn, in order.
-    pub message_ids: Vec<String>,
-    /// Distinct senders of those messages, in first-seen order.
-    pub senders: Vec<String>,
-    /// The hive for an episode turn; otherwise the delivered message's
-    /// destination, which is the agent itself.
-    pub destination: Destination,
-    /// Conversation root the turn answers, when it answers one.
-    pub thread: Option<u64>,
-}
-impl TurnScope {
-    /// Derive the scope of `request`.
-    #[must_use]
-    pub fn from_request(request: &TurnRequest) -> Self {
-        let first = request.messages.first();
-        let mut senders: Vec<String> = Vec::new();
-        for message in &request.messages {
-            if !senders.contains(&message.sender) {
-                senders.push(message.sender.clone());
-            }
-        }
-        let destination = match (&request.episode, first) {
-            (Some(episode), _) => Destination::Hive(episode.hive_id.clone()),
-            (None, Some(message)) => message.destination.clone(),
-            (None, None) => Destination::Agent(request.agent_id.clone()),
-        };
-        Self {
-            turn_id: request.turn_id.clone(),
-            scheduled_job_id: request.scheduled_job_id.clone(),
-            session_id: request.session_id.clone(),
-            agent_id: request.agent_id.clone(),
-            episode: request.episode.clone(),
-            message_ids: request
-                .messages
-                .iter()
-                .map(|message| message.message_id.clone())
-                .collect(),
-            senders,
-            destination,
-            thread: request
-                .episode
-                .as_ref()
-                .map_or_else(|| first.and_then(|message| message.thread), |e| e.thread),
-        }
-    }
-}
-/// Per-turn settings a host chooses in [`TurnHooks::prepare`].
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct TurnOptions {
-    /// Working directory for the agent's filesystem and shell tools this
-    /// turn; `None` keeps the agent's own.
-    pub cwd: Option<PathBuf>,
-}
 /// Optional per-turn options, progress, usage, approval and scope hooks.
 ///
 /// Called in order: `turn_timeout`, `context`, `prepare`, `configure`,
@@ -282,7 +149,3 @@ pub(super) struct Management {
     pub factory: Arc<dyn AgentFactory>,
     pub authorizer: Arc<dyn ManagementAuthorizer>,
 }
-
-#[cfg(test)]
-#[path = "types_test.rs"]
-mod test;

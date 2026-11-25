@@ -1,7 +1,7 @@
 //! Referential validation and conservative authority intersection.
 use super::{
-    ConfigError, HarnessRules, HiveConfig, Limits, McpServer, Membership, Model, PermissionProfile, Profile,
-    Result, Sandbox, Seat, ToolScope, ValidatedHiveConfig, WorkflowTarget,
+    ConfigError, HarnessRules, HiveConfig, Limits, McpServer, Membership, Model, PermissionProfile,
+    Profile, Result, Sandbox, Seat, ToolScope, ValidatedHiveConfig, WorkflowTarget,
 };
 use std::collections::BTreeSet;
 
@@ -392,10 +392,7 @@ fn unique_agent_ids(config: &HiveConfig, harness: &dyn HarnessRules) -> Result<(
             });
         }
         let reserved = harness.reserves_agent_id(&agent_id)
-            || config
-                .profiles
-                .iter()
-                .any(|profile| profile.id == agent_id);
+            || config.profiles.iter().any(|profile| profile.id == agent_id);
         if reserved {
             return Err(ConfigError::ReservedAgentId {
                 seat: seat.id.clone(),

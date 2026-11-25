@@ -11,10 +11,7 @@ fn send_request_wire_shape_is_explicit() -> Result<(), serde_json::Error> {
     };
     let wire = serde_json::json!({"Hive":{"hive_id":"h","body":"b","thread":3,"only_for":[]}});
     assert_eq!(serde_json::to_value(&request)?, wire);
-    assert_eq!(
-        serde_json::from_value::<SendRequest>(wire)?,
-        request
-    );
+    assert_eq!(serde_json::from_value::<SendRequest>(wire)?, request);
     Ok(())
 }
 #[test]

@@ -59,9 +59,11 @@ fn read_schema_and_validator_require_exactly_one_destination() {
     assert_eq!(schema["required"], json!([]));
     for field in ["hive_id", "agent_id", "thread"] {
         let description = &schema["properties"][field]["description"];
-        assert!(description.as_str().is_some_and(|text| {
-            text.contains("hive_id") || text.contains("agent_id")
-        }));
+        assert!(
+            description
+                .as_str()
+                .is_some_and(|text| { text.contains("hive_id") || text.contains("agent_id") })
+        );
     }
     for (args, refusal) in [
         (json!({}), ArgumentError::OneDestination),
@@ -103,10 +105,7 @@ fn a_call_exists_only_with_valid_arguments() {
         }))
     ));
     assert!(matches!(
-        refused(
-            Kind::Ask,
-            json!({"episode_id":"e","body":"b","agents":[1]})
-        ),
+        refused(Kind::Ask, json!({"episode_id":"e","body":"b","agents":[1]})),
         Some(Error::Arguments(ArgumentError::Invalid {
             name: "agents",
             expected: "array"

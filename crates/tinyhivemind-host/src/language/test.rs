@@ -99,4 +99,3 @@ fn coordinator_settings_map_all_retention_bounds() {
     assert_eq!(options.retention.interrupted, Some(6));
     assert_eq!(options.retention.pending_per_agent, Some(9));
 }
-

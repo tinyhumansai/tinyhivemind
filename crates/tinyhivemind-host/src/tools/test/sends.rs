@@ -14,7 +14,10 @@ type Seen = (String, Option<String>, SendRequest);
 struct NoSecrets(Mutex<Vec<Seen>>);
 impl NoSecrets {
     fn seen(&self) -> Vec<Seen> {
-        self.0.lock().unwrap_or_else(PoisonError::into_inner).clone()
+        self.0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
     }
 }
 impl SendAuthorizer for NoSecrets {
