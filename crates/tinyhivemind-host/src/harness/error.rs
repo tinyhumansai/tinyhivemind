@@ -15,6 +15,10 @@ pub enum Error {
     /// The started instance is not what was asked for.
     #[error(transparent)]
     Mismatch(#[from] Mismatch),
+    /// The seat asks for something this harness cannot honour, so it is not
+    /// started. The client's own error says what, and may be downcast to it.
+    #[error("the seat cannot run on this harness: {0}")]
+    Refused(#[source] Box<dyn std::error::Error + Send + Sync>),
     /// The harness refused a call, broke its protocol or went away.
     #[error("harness failed: {0}")]
     Harness(String),

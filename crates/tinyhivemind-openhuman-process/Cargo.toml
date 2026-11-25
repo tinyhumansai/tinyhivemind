@@ -48,7 +48,7 @@ serde_json.workspace = true
 # Typed errors.
 thiserror.workspace = true
 # Deadlines, the seat's locks and the close signal of a running turn.
-tokio = { workspace = true, features = ["time", "sync", "macros", "rt"] }
+tokio = { workspace = true, features = ["time", "sync", "macros", "rt", "net", "io-util"] }
 # The fake child reads the config the runner wrote, as `openhuman-core` does.
 toml = { version = "0.8", optional = true }
 # The fake child's grandchild leaves its session with `setsid`; the workspace
