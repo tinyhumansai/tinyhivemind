@@ -154,6 +154,43 @@ async fn a_descendant_seen_before_it_was_orphaned_is_stopped_though_it_cleared_i
     assert!(!running(escapee));
 }
 
+/// Whether a descendant that cleared its environment is stopped, given `wait`
+/// for the supervisor to notice it before its parent dies.
+async fn noticed_within(wait: Duration) -> bool {
+    let fixture = Fixture::new();
+    fixture.script("stay", STAY);
+    fixture.script(
+        "middle",
+        "setsid env -i OUT=$OUT /bin/sh $OUT/stay & until [ -e $OUT/go ]; do sleep 0.01; done",
+    );
+    let instance = fixture
+        .start("sh $OUT/middle; echo 1 > $OUT/left; exec sleep 300")
+        .await;
+    let escapee = fixture.pid("pid").await;
+    tokio::time::sleep(wait).await;
+    fixture.script("go", "");
+    until(|| fixture.read("left") == "1\n").await;
+    instance.stop(async {}, SHORT).await.unwrap();
+    let escaped = running(escapee);
+    if escaped {
+        let pid = rustix::process::Pid::from_raw(i32::try_from(escapee).unwrap()).unwrap();
+        rustix::process::kill_process(pid, rustix::process::Signal::KILL).unwrap();
+    }
+    !escaped
+}
+
+#[tokio::test]
+async fn a_running_instance_is_sampled_without_being_asked() {
+    // The wait is doubled rather than trusted: on a loaded machine the
+    // supervisor may be late, but without sampling no wait is long enough.
+    for tenths in [2, 4, 8, 16, 32, 64] {
+        if noticed_within(Duration::from_millis(100 * tenths)).await {
+            return;
+        }
+    }
+    panic!("the tree was never sampled");
+}
+
 #[tokio::test]
 async fn a_tree_that_keeps_forking_is_stopped() {
     let fixture = Fixture::new();

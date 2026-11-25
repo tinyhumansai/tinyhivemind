@@ -20,7 +20,7 @@ use tokio::sync::{oneshot, watch};
 pub struct Instance {
     root: Arc<Root>,
     containment: Containment,
-    requests: mpsc::Sender<Request>,
+    pub(super) requests: mpsc::Sender<Request>,
     exit: watch::Receiver<Option<Exit>>,
     hurry: Arc<AtomicBool>,
     lines: Option<JsonLines>,

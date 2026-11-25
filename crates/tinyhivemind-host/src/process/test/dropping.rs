@@ -13,6 +13,19 @@ async fn dropping_kills_the_process_group() {
     until(|| !running(root) && !running(grandchild)).await;
 }
 
+#[tokio::test]
+async fn dropping_kills_the_process_group_itself_and_not_through_the_supervisor() {
+    let fixture = Fixture::new();
+    let mut instance = fixture.start("trap '' TERM; exec sleep 300").await;
+    let root = instance.pid();
+    let (unheard, _) = std::sync::mpsc::channel();
+    // The supervisor keeps waiting for requests and is never told.
+    let supervisor = std::mem::replace(&mut instance.requests, unheard);
+    drop(instance);
+    until(|| !running(root)).await;
+    drop(supervisor);
+}
+
 #[cfg(target_os = "linux")]
 #[tokio::test]
 async fn dropping_also_kills_an_orphan_in_its_own_session_and_cleans_up() {
