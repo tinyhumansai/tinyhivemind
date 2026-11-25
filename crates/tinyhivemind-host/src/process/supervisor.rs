@@ -113,7 +113,7 @@ impl Supervisor {
                 }
                 Err(RecvTimeoutError::Timeout) => {}
             }
-            self.busy.send_replace(Busy::Idle);
+            self.set_busy(Busy::Idle);
             if sampled.elapsed() >= SAMPLE {
                 self.scope.sample();
                 sampled = Instant::now();
@@ -121,10 +121,18 @@ impl Supervisor {
         }
     }
 
+    /// Tell whoever waits, if anything changed.
+    fn set_busy(&self, busy: Busy) {
+        self.busy.send_if_modified(|was| {
+            let changed = *was != busy;
+            *was = busy;
+            changed
+        });
+    }
+
     /// Say that a request is taken up, and by when it is to be done.
     fn take_up(&self, taken: oneshot::Sender<()>, bound: Duration) {
-        self.busy
-            .send_replace(Busy::Until(Instant::now().checked_add(bound)));
+        self.set_busy(Busy::Until(Instant::now().checked_add(bound)));
         let _ = taken.send(());
     }
 

@@ -292,7 +292,7 @@ impl Instance {
         let stopped = match self.taken_up(taken).await {
             Taken::Up => tokio::time::timeout(bound.saturating_add(SLACK), stopped)
                 .await
-                .map(|answer| answer.ok())
+                .map(std::result::Result::ok)
                 .ok(),
             Taken::Gone => Some(None),
             Taken::Stuck => None,
