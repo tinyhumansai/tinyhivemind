@@ -48,7 +48,8 @@ passes! {
 
 /// `case` must fail a harness with `fault`.
 async fn catches(fault: Fault, case: Case) -> Result<()> {
-    let ended = case.run(&FakeSubject::new(fault)?).await?;
+    let subject = FakeSubject::new(fault)?;
+    let ended = case.run(&subject).await;
     let failure = ended.err().context("the fault was not caught")?;
     assert_eq!(failure.case, case);
     assert!(!failure.reason.is_empty());
