@@ -4,12 +4,13 @@
 //! implements [`Subject`] around its harness and a scripted model, and runs
 //! every [`Case`], each on a fresh subject:
 //!
-//! ```ignore
+//! ```text
 //! #[tokio::test]
-//! async fn conforms() {
+//! async fn conforms() -> Result<(), Failure> {
 //!     for case in Case::ALL {
-//!         case.run(&MySubject::new()).await.unwrap();
+//!         case.run(&MySubject::new()).await?;
 //!     }
+//!     Ok(())
 //! }
 //! ```
 //!

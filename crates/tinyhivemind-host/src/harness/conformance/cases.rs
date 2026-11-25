@@ -12,8 +12,13 @@ use tokio::time::Instant;
 
 type Outcome<T = ()> = Result<T, String>;
 
-/// The limit the timeout case sets.
-const LIMIT: Duration = Duration::from_millis(300);
+/// The limits the timeout case tries: each is long enough for a turn that is
+/// answered, and a longer one is tried if a turn did not even reach the model.
+const LIMITS: [Duration; 3] = [
+    Duration::from_secs(2),
+    Duration::from_secs(8),
+    Duration::from_secs(25),
+];
 /// How long a turn that must not start is given to start anyway.
 const QUIET: Duration = Duration::from_millis(200);
 const POLL: Duration = Duration::from_millis(5);
@@ -117,15 +122,9 @@ impl Seat<'_> {
         within(self.subject, &format!("turn {turn}"), run).await
     }
 
-    /// Run a turn and require that it fails, whichever way a runner says so.
+    /// Run a turn and require that it fails.
     async fn fail(&self, turn: &str, session: Option<&str>) -> Outcome {
-        match self.run(turn, session).await? {
-            Err(_) => Ok(()),
-            Ok(outcome) => ensure(
-                matches!(outcome.disposition, TurnDisposition::Failed(_)),
-                || format!("turn {turn} ended as {:?}", outcome.disposition),
-            ),
-        }
+        failed(turn, self.run(turn, session).await?)
     }
 
     async fn stop(&self) -> Outcome {
@@ -145,6 +144,17 @@ impl Seat<'_> {
         ensure(found >= Some(seen), || {
             format!("turn {turn} saw {found:?} user messages, not {seen} or more")
         })
+    }
+}
+
+/// Whichever way a runner says so.
+fn failed(turn: &str, ended: tinyhivemind_hives::Result<TurnOutcome>) -> Outcome {
+    match ended {
+        Err(_) => Ok(()),
+        Ok(outcome) => ensure(
+            matches!(outcome.disposition, TurnDisposition::Failed(_)),
+            || format!("turn {turn} ended as {:?}", outcome.disposition),
+        ),
     }
 }
 
@@ -258,19 +268,20 @@ pub(super) async fn resume_failure_is_an_error(subject: &dyn Subject) -> Outcome
 }
 
 pub(super) async fn timeout_stops_the_turn(subject: &dyn Subject) -> Outcome {
-    let seat = start_limited(subject, Some(LIMIT)).await?;
-    // Within the limit even on a slow machine, or the case is worth nothing.
     subject.script(ModelStep::Hang);
-    seat.fail("t1", None).await?;
-    call_is(subject, 0, CallState::Aborted).await?;
-    seat.stop().await?;
-    drop(seat);
-    // A turn without the limit shows that the seat goes on.
-    let seat = start(subject).await?;
-    subject.script(reply("two", 1));
-    let session = seat.complete("t2", None).await?.session_id;
-    seat.goes_on("t3", &session, 2).await?;
-    seat.stop().await
+    for limit in LIMITS {
+        let seat = start_limited(subject, Some(limit)).await?;
+        seat.fail("t1", None).await?;
+        if !subject.model_calls().is_empty() {
+            call_is(subject, 0, CallState::Aborted).await?;
+            subject.script(reply("two", 1));
+            let session = seat.complete("t2", None).await?.session_id;
+            seat.goes_on("t3", &session, 2).await?;
+            return seat.stop().await;
+        }
+        seat.stop().await?;
+    }
+    Err("no turn reached the model within its limit".into())
 }
 
 pub(super) async fn drop_stops_the_turn(subject: &dyn Subject) -> Outcome {
@@ -296,9 +307,11 @@ pub(super) async fn kill_mid_turn(subject: &dyn Subject) -> Outcome {
     let pid = i32::try_from(seat.events.started()?.pid).map_err(text)?;
     let pid = rustix::process::Pid::from_raw(pid).ok_or("the instance has no pid")?;
     rustix::process::kill_process(pid, rustix::process::Signal::KILL).map_err(text)?;
-    let ended = within(subject, "the killed turn", run).await?.map_err(text)?;
-    ensure(ended.is_err(), || "the killed turn did not fail".into())?;
+    let ended = within(subject, "the killed turn", run).await?;
+    failed("t2", ended.map_err(text)?)?;
     seat.goes_on("t3", &session, 2).await?;
+    // Asked for again, it stays failed.
+    seat.fail("t2", Some(&session)).await?;
     let expected = [CallState::Answered, CallState::Aborted, CallState::Answered];
     calls_are(subject, &expected)?;
     seat.stop().await

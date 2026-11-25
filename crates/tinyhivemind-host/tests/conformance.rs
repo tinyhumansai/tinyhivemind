@@ -74,6 +74,7 @@ async fn a_runner_without_the_seat_rules_is_caught() {
     catches(Fault::Unguarded, Case::TimeoutStopsTheTurn).await;
     catches(Fault::Unguarded, Case::DropStopsTheTurn).await;
     catches(Fault::Unguarded, Case::NoTurnTwice).await;
+    catches(Fault::Unguarded, Case::OneTurnAtATime).await;
 }
 
 #[tokio::test]
