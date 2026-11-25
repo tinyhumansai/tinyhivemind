@@ -37,7 +37,10 @@ impl Held {
     }
 }
 /// Register `ids`, each holding its turns open, in a hive `work`.
-async fn holding(c: &Coordinator, ids: &[&str]) -> (mpsc::UnboundedReceiver<TurnRequest>, Arc<Notify>) {
+async fn holding(
+    c: &Coordinator,
+    ids: &[&str],
+) -> (mpsc::UnboundedReceiver<TurnRequest>, Arc<Notify>) {
     let (started, requests) = mpsc::unbounded_channel();
     let finish = Arc::new(Notify::new());
     for id in ids {
@@ -144,7 +147,8 @@ async fn reusing_a_call_with_other_arguments_or_another_tool_is_refused() {
         body: "hello".into(),
     };
     assert!(matches!(
-        c.submit_action_in_turn(&other_tool, &episode, complete).await,
+        c.submit_action_in_turn(&other_tool, &episode, complete)
+            .await,
         Err(Error::CallReused(_))
     ));
     assert_eq!(actions(&c, "a"), [posted("hello")]);
@@ -175,7 +179,8 @@ async fn a_call_with_no_running_turn_is_refused() {
     let episode = held.episode();
     held.end().await;
     assert!(matches!(
-        c.submit_action_in_turn(&call, &episode, posted("hello")).await,
+        c.submit_action_in_turn(&call, &episode, posted("hello"))
+            .await,
         Err(Error::StaleTurn { .. })
     ));
 }
@@ -187,7 +192,8 @@ async fn a_call_without_an_identity_is_refused() {
     let episode = held.episode();
     let blank = held.post("  ", "hello");
     assert!(matches!(
-        c.submit_action_in_turn(&blank, &episode, posted("hello")).await,
+        c.submit_action_in_turn(&blank, &episode, posted("hello"))
+            .await,
         Err(Error::InvalidIdentifier("call"))
     ));
     assert!(actions(&c, "a").is_empty());
@@ -204,7 +210,8 @@ async fn another_seats_episode_is_refused_and_records_nothing() {
         json!({"episode_id": "episode:99", "body": "hello"}),
     );
     assert!(matches!(
-        c.submit_action_in_turn(&call, "episode:99", posted("hello")).await,
+        c.submit_action_in_turn(&call, "episode:99", posted("hello"))
+            .await,
         Err(Error::StaleEpisode(_))
     ));
     assert!(c.lock().unwrap().durable.running["a"].calls.is_empty());
@@ -214,9 +221,13 @@ async fn another_seats_episode_is_refused_and_records_nothing() {
 #[tokio::test]
 async fn a_failed_commit_leaves_neither_the_effect_nor_its_record() {
     let storage = Arc::new(Recording::default());
-    let c = Coordinator::new("runtime".into(), storage.clone(), CoordinatorOptions::default())
-        .await
-        .unwrap();
+    let c = Coordinator::new(
+        "runtime".into(),
+        storage.clone(),
+        CoordinatorOptions::default(),
+    )
+    .await
+    .unwrap();
     let held = hold(&c).await;
     let call = held.post("post-1", "hello");
     let episode = held.episode();
@@ -269,9 +280,13 @@ async fn the_record_survives_a_storage_reload_of_a_running_turn() {
 #[tokio::test]
 async fn after_a_coordinator_restart_the_retry_is_refused() {
     let storage = Arc::new(MemoryStorage::new());
-    let c = Coordinator::new("runtime".into(), storage.clone(), CoordinatorOptions::default())
-        .await
-        .unwrap();
+    let c = Coordinator::new(
+        "runtime".into(),
+        storage.clone(),
+        CoordinatorOptions::default(),
+    )
+    .await
+    .unwrap();
     let held = hold(&c).await;
     let call = held.post("post-1", "hello");
     let episode = held.episode();
@@ -293,9 +308,13 @@ async fn after_a_coordinator_restart_the_retry_is_refused() {
 #[tokio::test]
 async fn the_record_goes_when_its_turn_ends() {
     let storage = Arc::new(MemoryStorage::new());
-    let c = Coordinator::new("runtime".into(), storage.clone(), CoordinatorOptions::default())
-        .await
-        .unwrap();
+    let c = Coordinator::new(
+        "runtime".into(),
+        storage.clone(),
+        CoordinatorOptions::default(),
+    )
+    .await
+    .unwrap();
     let held = hold(&c).await;
     let call = held.post("post-1", "hello");
     c.submit_action_in_turn(&call, &held.episode(), posted("hello"))
@@ -316,7 +335,10 @@ fn direct(id: &str, sender: &str) -> SendMessage {
 async fn a_retried_send_acts_once_and_returns_the_first_receipt() {
     let c = setup().await;
     let (mut requests, finish) = holding(&c, &["a"]).await;
-    add(&c, "b", |request| Box::pin(async move { Ok(done(&request)) })).await;
+    add(&c, "b", |request| {
+        Box::pin(async move { Ok(done(&request)) })
+    })
+    .await;
     c.send_as_host(message("task", Destination::Agent("a".into())))
         .await
         .unwrap();
@@ -336,7 +358,10 @@ async fn a_retried_send_acts_once_and_returns_the_first_receipt() {
     assert_eq!(first, again);
     // Two calls with one `message_id` and one payload are one message.
     let other = held.call("send-2", "hivemind_send_agent", json!({"body": "hi"}));
-    assert_eq!(c.send_in_turn(&other, direct("note", "a")).await.unwrap(), first);
+    assert_eq!(
+        c.send_in_turn(&other, direct("note", "a")).await.unwrap(),
+        first
+    );
     let notes = c
         .read_transcript(None)
         .unwrap()
@@ -373,7 +398,11 @@ async fn a_retried_join_acts_once_and_returns_the_first_result() {
     c.join_hive_in_turn(&call, "side", "a").await.unwrap();
     c.leave_hive("side", "a").await.unwrap();
     c.join_hive_in_turn(&call, "side", "a").await.unwrap();
-    let side = c.list_hives().unwrap().into_iter().find(|h| h.hive_id == "side");
+    let side = c
+        .list_hives()
+        .unwrap()
+        .into_iter()
+        .find(|h| h.hive_id == "side");
     assert!(side.unwrap().members.is_empty());
     held.end().await;
 }
@@ -388,7 +417,11 @@ async fn hive_management_in_a_turn_acts_and_is_recorded() {
         description: None,
         members: vec!["a".into()],
     };
-    let create = held.call("create-1", "hivemind_create_hive", json!({"hive_id": "side"}));
+    let create = held.call(
+        "create-1",
+        "hivemind_create_hive",
+        json!({"hive_id": "side"}),
+    );
     c.create_hive_in_turn(&create, hive.clone()).await.unwrap();
     let leave = held.call(
         "leave-1",
@@ -400,7 +433,11 @@ async fn hive_management_in_a_turn_acts_and_is_recorded() {
     // Neither retry acts again: the hive is not recreated and `a` stays.
     c.create_hive_in_turn(&create, hive).await.unwrap();
     c.leave_hive_in_turn(&leave, "side", "a").await.unwrap();
-    let side = c.list_hives().unwrap().into_iter().find(|h| h.hive_id == "side");
+    let side = c
+        .list_hives()
+        .unwrap()
+        .into_iter()
+        .find(|h| h.hive_id == "side");
     assert_eq!(side.unwrap().members, ["a"]);
     let calls = c.lock().unwrap().durable.running["a"].calls.clone();
     assert_eq!(calls.keys().collect::<Vec<_>>(), ["create-1", "leave-1"]);
