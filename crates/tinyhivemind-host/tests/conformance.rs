@@ -81,7 +81,7 @@ caught! {
     a_resumed_session_without_its_history_is_caught:
         Forgetful in ResumesAfterRestart as "saw Some(1) user messages",
     a_new_session_in_place_of_a_lost_one_is_caught:
-        NewSession in ResumeFailureIsAnError as "turn t2 ended as Completed",
+        NewSession in ResumeFailureIsAnError as "are [Answered, Answered], not [Answered]",
     a_timeout_that_cancels_nothing_is_caught:
         IgnoresCancel in TimeoutStopsTheTurn as "model call 0 is Some(Open)",
     a_drop_that_cancels_nothing_is_caught:
