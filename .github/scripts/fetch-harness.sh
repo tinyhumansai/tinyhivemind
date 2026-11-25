@@ -39,7 +39,7 @@ fi
 mkdir -p "$dest"
 dest="$(cd "$dest" && pwd)"
 asset="$dest/$(basename "$url")"
-if ! echo "$sha  $asset" | sha256sum -c --status 2>/dev/null; then
+if ! echo "$sha  $asset" | sha256sum -c --status >/dev/null 2>&1; then
   curl -fsSL --proto '=https' -o "$asset.partial" "$url"
   mv "$asset.partial" "$asset"
 fi
