@@ -144,7 +144,7 @@ async fn logs_are_bounded_and_always_drained() -> Result<()> {
 }
 
 #[tokio::test]
-async fn an_exit_is_observed_with_its_code_or_signal() {
+async fn an_exit_is_observed_with_its_code_or_signal() -> Result<()> {
     let fixture = Fixture::new()?;
     let instance = fixture.start("exit 7").await?;
     let exit = Exit {
@@ -157,6 +157,7 @@ async fn an_exit_is_observed_with_its_code_or_signal() {
     let instance = fixture.start("kill -9 $$").await?;
     let exit = instance.exited().await;
     assert_eq!((exit.code, exit.signal), (None, Some(9)));
+    Ok(())
 }
 
 #[tokio::test]

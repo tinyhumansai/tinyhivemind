@@ -4,7 +4,7 @@ use crate::process::Instance;
 use anyhow::Result;
 
 #[tokio::test]
-async fn dropping_kills_the_process_group() {
+async fn dropping_kills_the_process_group() -> Result<()> {
     let fixture = Fixture::new()?;
     let instance = fixture
         .start("trap '' TERM; sh -c 'echo $$ > $OUT/pid; exec sleep 300' & while :; do sleep 0.01; done")
@@ -12,10 +12,11 @@ async fn dropping_kills_the_process_group() {
     let (root, grandchild) = (instance.pid(), fixture.pid("pid").await?);
     drop(instance);
     until(|| !running(root) && !running(grandchild)).await;
+    Ok(())
 }
 
 #[tokio::test]
-async fn dropping_kills_the_process_group_itself_and_not_through_the_supervisor() {
+async fn dropping_kills_the_process_group_itself_and_not_through_the_supervisor() -> Result<()> {
     let fixture = Fixture::new()?;
     let mut instance = fixture.start("trap '' TERM; exec sleep 300").await?;
     let root = instance.pid();
@@ -25,11 +26,12 @@ async fn dropping_kills_the_process_group_itself_and_not_through_the_supervisor(
     drop(instance);
     until(|| !running(root)).await;
     drop(supervisor);
+    Ok(())
 }
 
 #[cfg(target_os = "linux")]
 #[tokio::test]
-async fn dropping_also_kills_an_orphan_in_its_own_session_and_cleans_up() {
+async fn dropping_also_kills_an_orphan_in_its_own_session_and_cleans_up() -> Result<()> {
     let fixture = Fixture::new()?;
     let instance = fixture
         .start("(setsid sh -c 'echo $$ > $OUT/pid; exec sleep 300' &); echo $TMPDIR > $OUT/tmp; exec sleep 300")
@@ -40,6 +42,7 @@ async fn dropping_also_kills_an_orphan_in_its_own_session_and_cleans_up() {
     drop(instance);
     until(|| !running(orphan)).await;
     until(|| !std::path::Path::new(&temporary).exists()).await;
+    Ok(())
 }
 
 #[test]
@@ -67,7 +70,7 @@ fn dropping_needs_no_runtime() -> Result<()> {
 }
 
 #[tokio::test]
-async fn dropping_a_start_that_is_never_awaited_to_the_end_leaves_nothing() {
+async fn dropping_a_start_that_is_never_awaited_to_the_end_leaves_nothing() -> Result<()> {
     let fixture = Fixture::new()?;
     let launch = fixture.shell("echo $$ > $OUT/pid; exec sleep 300")?;
     let started = tokio::spawn(Instance::start(launch));
@@ -75,4 +78,5 @@ async fn dropping_a_start_that_is_never_awaited_to_the_end_leaves_nothing() {
     started.abort();
     drop(started.await);
     until(|| !running(root)).await;
+    Ok(())
 }

@@ -79,13 +79,13 @@ async fn a_turn_past_its_timeout_is_cancelled_and_the_seat_stays_usable() -> Res
 #[tokio::test]
 async fn a_turn_that_cannot_be_shown_to_have_stopped_blocks_the_seat_until_it_is() -> Result<()> {
     let inner = Scripted::new(&[Turn::Fail, Turn::Session("s")]);
-    *inner.refuse_cancel.lock()? = true;
+    inner.refuse_cancel(true);
     let seat = seat(&inner);
     assert!(refusal(&seat, "t1", None).await.contains("will not stop"));
     let blocked = refusal(&seat, "t2", None).await;
     assert!(blocked.contains("t1"), "{blocked}");
     assert!(!inner.log().iter().any(|entry| entry.starts_with("run t2")));
-    *inner.refuse_cancel.lock()? = false;
+    inner.refuse_cancel(false);
     // Refused before it started, so this is not a replay.
     seat.run(request("t2", None)).await?;
     Ok(())
@@ -94,13 +94,13 @@ async fn a_turn_that_cannot_be_shown_to_have_stopped_blocks_the_seat_until_it_is
 #[tokio::test]
 async fn an_abandoned_turn_whose_cancellation_failed_is_cancelled_again() -> Result<()> {
     let inner = Scripted::new(&[Turn::Hang, Turn::Session("s")]);
-    *inner.refuse_cancel.lock()? = true;
+    inner.refuse_cancel(true);
     let seat = seat(&inner);
     let first = tokio::spawn(seat.run(request("t1", None)));
     logged(&inner, &["run t1 none"]).await;
     first.abort();
     logged(&inner, &["run t1 none", "cancel t1"]).await;
-    *inner.refuse_cancel.lock()? = false;
+    inner.refuse_cancel(false);
     seat.run(request("t2", None)).await?;
     assert!(inner.log().contains(&"run t2 none".to_owned()));
     Ok(())

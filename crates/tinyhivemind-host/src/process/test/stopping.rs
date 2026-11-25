@@ -275,7 +275,7 @@ async fn a_tree_that_cannot_be_proven_gone_is_a_typed_error_and_can_be_retried()
 }
 
 #[tokio::test]
-async fn abandoning_a_stop_does_not_abandon_the_kill() {
+async fn abandoning_a_stop_does_not_abandon_the_kill() -> Result<()> {
     let fixture = Fixture::new()?;
     let instance = fixture
         .start("trap '' TERM; echo $$ > $OUT/up; while :; do sleep 0.01; done")
@@ -285,6 +285,7 @@ async fn abandoning_a_stop_does_not_abandon_the_kill() {
         tokio::time::timeout(Duration::from_millis(20), instance.stop(async {}, SHORT)).await;
     assert!(gave_up.is_err());
     until(|| !running(root)).await;
+    Ok(())
 }
 
 #[tokio::test]

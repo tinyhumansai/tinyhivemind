@@ -3,7 +3,7 @@ use crate::harness::{CancelFuture, CancellableRunner, Error, SeatPlan};
 use anyhow::{Context as _, Result};
 use serde_json::Value;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, PoisonError};
 use tinyhivemind_hives::{AgentRunner, TurnDisposition, TurnFuture, TurnOutcome, TurnRequest};
 use tinyhivemind_lang::{LoweredSeat, LoweredSeatIntegration};
 use tokio::sync::Semaphore;
@@ -65,10 +65,10 @@ impl Scripted {
         })
     }
     pub(super) fn log(&self) -> Vec<String> {
-        self.log.lock()?.clone()
+        self.log.lock().unwrap_or_else(PoisonError::into_inner).clone()
     }
     fn note(&self, entry: String) {
-        self.log.lock()?.push(entry);
+        self.log.lock().unwrap_or_else(PoisonError::into_inner).push(entry);
     }
 }
 
@@ -82,7 +82,7 @@ impl AgentRunner for Handle {
         Box::pin(async move {
             let session = request.session_id.as_deref().unwrap_or("none");
             this.note(format!("run {} {session}", request.turn_id));
-            let turn = this.turns.lock()?.pop().context("missing")?;
+            let turn = this.turns.lock().unwrap_or_else(PoisonError::into_inner).pop().context("missing")?;
             match turn {
                 Turn::Session(session_id) => Ok(TurnOutcome {
                     session_id: session_id.into(),
@@ -103,7 +103,7 @@ impl CancellableRunner for Handle {
         Box::pin(async move {
             this.note(format!("cancel {turn_id}"));
             this.permits.acquire().await?.forget();
-            if *this.refuse_cancel.lock()? {
+            if *this.refuse_cancel.lock().unwrap_or_else(PoisonError::into_inner) {
                 return Err(Error::Harness("will not stop".into()));
             }
             this.note(format!("cancelled {turn_id}"));
