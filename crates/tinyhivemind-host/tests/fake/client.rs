@@ -1,8 +1,9 @@
 //! A client for the fake child, over the same port a real one implements.
+use rustix::process::{Pid, Signal, kill_process};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 use tinyhivemind_hives::{AgentRunner, TurnDisposition, TurnFuture, TurnOutcome, TurnRequest};
 use tinyhivemind_host::harness::{
@@ -22,7 +23,8 @@ const STOP: StopPolicy = StopPolicy {
 
 /// One thing this client, or its child, does wrong.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Fault {
+pub(crate) enum Fault {
+    /// Nothing.
     None,
     /// The child starts a new session when it cannot resume.
     NewSession,
@@ -46,6 +48,10 @@ pub enum Fault {
     LeavesFailedStart,
 }
 
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
 /// What every seat of one fake harness shares.
 #[derive(Clone)]
 struct Shared {
@@ -55,13 +61,13 @@ struct Shared {
 }
 
 /// The fake harness.
-pub struct FakeHarness {
+pub(crate) struct FakeHarness {
     shared: Shared,
     seats: Arc<Mutex<BTreeMap<String, Arc<Seat>>>>,
 }
 
 impl FakeHarness {
-    pub fn new(program: PathBuf, control: PathBuf, fault: Fault) -> Self {
+    pub(crate) fn new(program: PathBuf, control: PathBuf, fault: Fault) -> Self {
         Self {
             shared: Shared {
                 program,
@@ -163,8 +169,8 @@ impl Seat {
             .take_lines()
             .ok_or_else(|| Error::Harness("no lines".into()))?;
         let mut live = Live { instance, lines };
-        lock(&*self.total) = 0;
-        lock(&*self.pid) = live.instance.pid();
+        *lock(&self.total) = 0;
+        *lock(&self.pid) = live.instance.pid();
         match self.verify(&mut live).await {
             Ok(()) => Ok(live),
             Err(error) if self.shared.fault == Fault::LeavesFailedStart => {
@@ -276,7 +282,7 @@ impl Seat {
             input_tokens: tokens,
             ..TurnUsage::default()
         };
-        let earlier = std::mem::replace(&mut lock(&*self.total), total);
+        let earlier = std::mem::replace(&mut *lock(&self.total), total);
         let earlier = if self.shared.fault == Fault::TotalUsage {
             0
         } else {
@@ -312,7 +318,7 @@ impl Seat {
                 // The turn ended first. What it used is not the next one's.
                 Ok(answer) => {
                     if let Some(total) = answer["total"].as_u64() {
-                        lock(&*self.total) = total;
+                        *lock(&self.total) = total;
                     }
                 }
                 Err(_) => {
@@ -325,9 +331,9 @@ impl Seat {
 
     async fn stop(&self) -> Result<()> {
         if self.shared.fault == Fault::LeavesOrphans {
-            let pid = lock(&i32::try_from(*self.pid))?;
-            let pid = rustix::process::Pid::from_raw(pid).context("missing")?;
-            let _ = rustix::process::kill_process(pid, rustix::process::Signal::KILL);
+            if let Some(pid) = Pid::from_raw(lock(&self.pid).cast_signed()) {
+                let _ = kill_process(pid, Signal::KILL);
+            }
             std::mem::forget(self.live.lock().await.take());
             return Ok(());
         }
@@ -338,20 +344,22 @@ impl Seat {
         Ok(())
     }
 
-    pub async fn escape(&self) {
+    async fn escape(&self) -> Result<()> {
         if let Some(live) = self.live.lock().await.as_mut() {
             live.send(&json!({"op": "escape"})).await?;
         }
+        Ok(())
     }
 }
 
 impl FakeHarness {
     /// Have every running seat leave a grandchild in a session of its own.
-    pub async fn escape(&self) {
+    pub(crate) async fn escape(&self) -> Result<()> {
         let seats: Vec<_> = lock(&self.seats).values().cloned().collect();
         for seat in seats {
-            seat.escape().await;
+            seat.escape().await?;
         }
+        Ok(())
     }
 }
 

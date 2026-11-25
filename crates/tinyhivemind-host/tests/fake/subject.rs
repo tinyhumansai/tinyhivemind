@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 use tinyhivemind_host::harness::conformance::{
     CallState, EscapeFuture, ModelCall, ModelStep, Subject, ToolFault,
@@ -13,8 +13,17 @@ use tinyhivemind_host::harness::conformance::{
 use tinyhivemind_host::harness::{Harness, SeatPlan, ToolEndpoint};
 use tinyhivemind_lang::{LoweredSeat, LoweredSeatIntegration};
 
+/// The result of something the test itself does, which has to work.
+fn done<T: std::fmt::Debug, E: std::fmt::Debug>(result: Result<T, E>) {
+    assert!(result.is_ok(), "{result:?}");
+}
+
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
 /// Fresh durable state and a scripted model.
-pub struct FakeSubject {
+pub(crate) struct FakeSubject {
     root: tempfile::TempDir,
     fault: Fault,
     steps: AtomicUsize,
@@ -22,15 +31,15 @@ pub struct FakeSubject {
 }
 
 impl FakeSubject {
-    pub fn new(fault: Fault) -> Self {
+    pub(crate) fn new(fault: Fault) -> std::io::Result<Self> {
         let root = tempfile::tempdir()?;
         fs::create_dir_all(root.path().join("control/steps"))?;
-        Self {
+        Ok(Self {
             root,
             fault,
             steps: AtomicUsize::new(0),
             current: Mutex::default(),
-        }
+        })
     }
     fn control(&self) -> PathBuf {
         self.root.path().join("control")
@@ -48,7 +57,7 @@ impl Subject for FakeSubject {
     fn harness(&self) -> Arc<dyn Harness> {
         let program = PathBuf::from(env!("CARGO_BIN_EXE_tinyhivemind-fake-harness"));
         let harness = Arc::new(FakeHarness::new(program, self.control(), self.fault));
-        *self.current.lock()? = Some(harness.clone());
+        *lock(&self.current) = Some(harness.clone());
         harness
     }
 
@@ -141,7 +150,7 @@ impl Subject for FakeSubject {
     }
 
     fn escapee(&self) -> EscapeFuture {
-        let harness = self.current.lock()?.clone();
+        let harness = lock(&self.current).clone();
         let report = self.control().join("escapee");
         Box::pin(async move {
             harness?.escape().await;
