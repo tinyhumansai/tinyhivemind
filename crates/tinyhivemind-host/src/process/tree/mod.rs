@@ -115,7 +115,11 @@ impl Tree {
             .retain(|member| Stat::is_now(&self.proc, *member).unwrap_or(true));
         self.bare
             .retain(|process, _| Stat::is_now(&self.proc, *process).unwrap_or(true));
-        let mut queue: Vec<Identity> = self.known.iter().copied().collect();
+        self.sample_under(self.known.iter().copied().collect());
+    }
+
+    /// Remember the present descendants of the members in `queue`.
+    fn sample_under(&mut self, mut queue: Vec<Identity>) {
         while let Some(parent) = queue.pop() {
             for pid in self.listed_children(parent.pid) {
                 if let Ok(Some(child)) = Stat::read(&self.proc, pid)

@@ -39,7 +39,7 @@ const IDLE: Duration = Duration::from_millis(1);
 pub(in crate::process) struct Scan {
     /// The members alive when they were looked at.
     pub(in crate::process) live: Vec<Identity>,
-    /// Whether these are all, so that none means none.
+    /// Whether nobody was alive, for certain.
     pub(in crate::process) settled: bool,
     /// Why it could not settle, if something could not be read.
     pub(in crate::process) failure: Option<io::Error>,
@@ -55,6 +55,8 @@ struct Pass {
     /// Members, and everything that may still turn out to descend from one.
     stats: Vec<Stat>,
     members: BTreeMap<u32, Identity>,
+    /// Whether a member was alive when it was looked at.
+    alive: bool,
     /// Bare, to be looked at again.
     unsure: BTreeSet<u32>,
     failure: Option<io::Error>,
@@ -70,6 +72,10 @@ impl Tree {
     ) -> Scan {
         let mut pass = Pass::default();
         let mut settled = false;
+        if order.is_some() {
+            // A signalled parent no longer shows whose its children are.
+            self.sample();
+        }
         self.recall(&mut pass, order);
         match self.walk(&mut pass, order, expired) {
             Ok(done) => settled = done,
@@ -77,15 +83,21 @@ impl Tree {
         }
         self.adopt(&mut pass, order);
         self.known.extend(pass.members.values().copied());
-        let members = pass
-            .stats
-            .iter()
-            .filter(|stat| !stat.dead && self.known.contains(&stat.identity()))
-            .map(Stat::identity);
+        let members = pass.members.values().copied();
         Scan {
-            live: members.collect::<BTreeSet<_>>().into_iter().collect(),
-            settled: settled && pass.failure.is_none(),
+            live: members.filter(|member| self.runs(*member)).collect(),
+            // One that was alive may have forked unseen before it was killed.
+            settled: settled && !pass.alive && pass.failure.is_none(),
             failure: pass.failure,
+        }
+    }
+
+    /// Whether `member` runs, as far as can be told.
+    fn runs(&self, member: Identity) -> bool {
+        match Stat::read(&self.proc, member.pid) {
+            Ok(Some(stat)) => !stat.dead && stat.identity() == member,
+            Ok(None) => false,
+            Err(_) => true,
         }
     }
 
@@ -257,9 +269,13 @@ impl Tree {
         pass.seen.insert(stat.pid);
         pass.others.remove(&stat.pid);
         pass.members.insert(stat.pid, member);
+        pass.alive |= !stat.dead;
         if let Some(order) = order
             && !stat.dead
         {
+            if self.known.insert(member) {
+                self.sample_under(vec![member]);
+            }
             self.signal(member, order);
         }
         pass.stats.push(stat);
@@ -288,6 +304,7 @@ impl Tree {
             }
             for member in added {
                 pass.members.insert(member.pid, member);
+                pass.alive = true;
                 if let Some(order) = order {
                     self.signal(member, order);
                 }

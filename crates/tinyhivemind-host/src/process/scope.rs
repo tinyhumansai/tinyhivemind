@@ -91,7 +91,7 @@ impl Drop for Root {
 pub(super) struct Look {
     /// The pids of the members alive when they were looked at.
     pub(super) live: Vec<u32>,
-    /// Whether these are all, so that none means none.
+    /// Whether nobody was alive, for certain.
     pub(super) settled: bool,
     /// Why they may not be all, if something could not be read.
     pub(super) failure: Option<io::Error>,

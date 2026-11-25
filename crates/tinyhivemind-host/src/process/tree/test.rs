@@ -90,7 +90,7 @@ fn tree(proc: &tempfile::TempDir) -> Result<Tree> {
 
 fn pids(tree: &mut Tree) -> Result<Vec<u32>> {
     let scan = scan(tree);
-    assert!(scan.failure.is_none() && scan.settled);
+    assert!(scan.failure.is_none());
     Ok(scan.live.into_iter().map(|member| member.pid).collect())
 }
 
