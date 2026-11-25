@@ -25,6 +25,7 @@ does.
 
 | date | question | answer |
 | --- | --- | --- |
+| [2026-11-25](2026-11-25-process-harnesses.md) | Can OpenHuman, OpenClaw and Codex run as child processes in a hive? | Yes against a scripted model: each called a hive tool as the right seat, resumed and cancelled. OpenClaw replays a crashed turn and costs over 1 GB, and a linked baseline was measured but is not like for like |
 | [2026-10-11](2026-10-11-euler-hive-live.md) | Can a hive defined entirely in the hive language attempt live Euler problems with web search, sandboxed Python and CortexDB memory? | Yes for the design problem: correct on both full runs, about $0.40 each. The harder equilibrium problem reproduced every sample but never reached the right sum: two runs committed wrong answers. The runs exposed host defects, now fixed and tested. With the fixes in place, verify objected to the wrong value and the run ended `no_decision`. |
 | [2026-10-11](2026-10-11-math-hive-scale.md) | Offline, does a math hive decide better at one, five, or fifty seats? | Swarm of 50 was right on 50/50 seeds, one seat on 64%, and the five-seat panel on 58%: 28% of panel runs exhausted their budget. The swarm also has exact residue seats the panel lacks, so size alone is not isolated |
 | [2026-10-10](2026-10-10-live-hive-language.md) | Can a live model propose a guarded hive edit and evaluate the lowered candidate? | Three repeated smoke runs accepted a 3/3 correction and rejected a 0/3 negative control; lineage and immutable-setting guards held. |
