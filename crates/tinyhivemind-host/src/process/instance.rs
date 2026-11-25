@@ -2,7 +2,7 @@
 use super::directory::{self, Temporary};
 use super::pipe::{JsonLines, Tail, drain};
 use super::scope::{Root, Scope, containment};
-use super::supervisor::{Request, Supervisor};
+use super::supervisor::{QUERY, Request, Supervisor};
 use super::types::{MARKER, Streams, TEMPORARY};
 use super::{Containment, Error, Exit, Launch, Result, StopPolicy};
 use rustix::process::Signal;
@@ -15,6 +15,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, mpsc};
 use std::time::Duration;
 use tokio::sync::{oneshot, watch};
+
+/// How far the supervisor may overrun its bounds before it counts as stuck.
+const SLACK: Duration = Duration::from_secs(2);
 
 /// One supervised child and everything it spawned. See [`super`].
 pub struct Instance {
@@ -247,7 +250,10 @@ impl Instance {
         let (reply, members) = oneshot::channel();
         // Either end being gone shows below.
         let _ = self.requests.send(Request::Members(reply));
-        members.await.unwrap_or(Err(Error::Unsupervised))
+        match tokio::time::timeout(QUERY + SLACK, members).await {
+            Ok(members) => members.unwrap_or(Err(Error::Unsupervised)),
+            Err(_) => Err(Error::Unproven),
+        }
     }
 
     /// Stop the whole tree and prove it gone.
@@ -273,9 +279,15 @@ impl Instance {
         let (reply, stopped) = oneshot::channel();
         // A closed channel means an earlier stop already proved it.
         let _ = self.requests.send(Request::Stop(policy, reply));
-        match stopped.await {
-            Ok(stopped) => stopped,
-            Err(_) => self.exit().ok_or(Error::Unsupervised),
+        let bound = policy.terminate.saturating_add(policy.kill);
+        match tokio::time::timeout(bound.saturating_add(SLACK), stopped).await {
+            Ok(Ok(stopped)) => stopped,
+            Ok(Err(_)) => self.exit().ok_or(Error::Unsupervised),
+            Err(_) => {
+                // The supervisor is stuck, so this is all that can be done.
+                self.root.signal_group(Signal::KILL);
+                Err(Error::Unproven)
+            }
         }
     }
 }

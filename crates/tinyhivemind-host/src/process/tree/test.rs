@@ -234,6 +234,15 @@ fn interrupt(
     }))
 }
 
+/// Answer whoever reads the entry at `path` with `line`, and later readers too.
+fn answer(path: &Path, mut pipe: fs::File, line: &[u8]) -> Result<()> {
+    // Replaced before it is answered: a later reader must not find the pipe.
+    let plain = path.with_extension("plain");
+    fs::write(&plain, line)?;
+    fs::rename(plain, path)?;
+    Ok(pipe.write_all(line)?)
+}
+
 fn marked(pid: u32, start: u64) -> Entry {
     let mut member = Entry::new(pid, 1, start);
     member.environ = "TINYHIVEMIND_INSTANCE=abc\0";
@@ -250,16 +259,12 @@ fn appears_during_a_scan(says_last: bool) -> Result<()> {
     }
     let line = fs::read(proc.path().join("20/stat"))?;
     let table = proc.path().to_path_buf();
-    let late = interrupt(&proc.path().join("20/stat"), move |mut pipe| {
+    let late = interrupt(&proc.path().join("20/stat"), move |pipe| {
         marked(30, 102).write(&table)?;
         if says_last {
             last_pid(&table, 30)?;
         }
-        pipe.write_all(&line)?;
-        // Later looks read a plain file.
-        let path = table.join("20/stat");
-        fs::remove_file(&path)?;
-        Ok(fs::write(path, line)?)
+        answer(&table.join("20/stat"), pipe, &line)
     })?;
     assert_eq!(pids(&mut tree(&proc)?), [10, 30]);
     assert!(late.join().is_ok_and(|added| added.is_ok()));
@@ -364,12 +369,9 @@ fn a_pid_that_was_gone_too_soon_is_followed_up_and_does_not_stay_in_the_way() ->
     last_pid(proc.path(), 20)?;
     let line = fs::read(proc.path().join("20/stat"))?;
     let table = proc.path().to_path_buf();
-    let late = interrupt(&proc.path().join("20/stat"), move |mut pipe| {
+    let late = interrupt(&proc.path().join("20/stat"), move |pipe| {
         last_pid(&table, 40)?;
-        pipe.write_all(&line)?;
-        let path = table.join("20/stat");
-        fs::remove_file(&path)?;
-        Ok(fs::write(path, line)?)
+        answer(&table.join("20/stat"), pipe, &line)
     })?;
     let found = scan(&mut tree(&proc)?);
     assert!(found.settled && found.live.is_empty());
@@ -387,11 +389,9 @@ fn add_interrupted(
     Entry::new(pid, 1, 101).write(table)?;
     let path = table.join(format!("{pid}/stat"));
     let line = fs::read(&path)?;
-    let late = interrupt(&path.clone(), move |mut pipe| {
+    let late = interrupt(&path.clone(), move |pipe| {
         then()?;
-        pipe.write_all(&line)?;
-        fs::remove_file(&path)?;
-        Ok(fs::write(path, line)?)
+        answer(&path, pipe, &line)
     })?;
     if last > 0 {
         last_pid(table, last)?;

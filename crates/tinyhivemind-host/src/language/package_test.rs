@@ -35,7 +35,8 @@ fn a_package_is_loaded_with_the_directory_it_came_from() -> anyhow::Result<()> {
     std::fs::write(root.path().join(".hidden"), [0xff, 0xfe])?;
     let source = PackageSource::load(root.path())?;
     assert_eq!(source.root(), root.path());
-    assert!(!source.lowered().seats.is_empty());
+    let seats = &source.package().manifest.seats;
+    assert_eq!(source.lowered().seats.len(), seats.len());
     let hidden = source
         .package()
         .documents
@@ -57,7 +58,7 @@ fn a_package_read_unchecked_can_be_edited_and_is_checked_then() -> anyhow::Resul
     let Some(ConfigError::Package { diagnostics, .. }) = refused else {
         anyhow::bail!("an unknown role was accepted: {refused:?}");
     };
-    assert!(!diagnostics.is_empty());
+    assert!(diagnostics.iter().any(|found| found.file == "hive.json"));
     Ok(())
 }
 

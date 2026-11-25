@@ -44,11 +44,17 @@ const IDLE: Duration = Duration::from_millis(1);
 /// Longest one scan keeps the others of this host waiting.
 const TURN: Duration = Duration::from_millis(500);
 
-/// Wait to be the only scan of this host. The kernel looks pids up under one
-/// lock, so scans at the same time slow each other down more than they gain.
-fn turn(expired: &dyn Fn() -> bool) -> Option<MutexGuard<'static, ()>> {
+/// Longest one waits for its turn. Nobody keeps it that long unless it is stuck,
+/// as reading the entry of a process that hangs in the kernel is.
+const QUEUE: Duration = Duration::from_secs(2);
+
+/// Wait to be the only scan of this host, which is worth waiting for but not
+/// needed: the kernel looks pids up under one lock, so scans at the same time
+/// slow each other down more than they gain.
+pub(in crate::process) fn turn(expired: &dyn Fn() -> bool) -> Option<MutexGuard<'static, ()>> {
     static TURNS: Mutex<()> = Mutex::new(());
-    while !expired() {
+    let started = Instant::now();
+    while !expired() && started.elapsed() < QUEUE {
         match TURNS.try_lock() {
             Ok(turn) => return Some(turn),
             Err(TryLockError::Poisoned(turn)) => return Some(turn.into_inner()),
@@ -130,14 +136,14 @@ impl Tree {
             self.sample();
         }
         self.recall(&mut pass, order);
-        if let Some(_turn) = turn(expired) {
-            let started = Instant::now();
-            let expired = || expired() || started.elapsed() >= TURN;
-            match self.walk(&mut pass, order, &expired) {
-                Ok(done) => complete = done,
-                Err(error) => pass.failure = Some(error),
-            }
+        let turn = turn(expired);
+        let started = Instant::now();
+        let expired = || expired() || started.elapsed() >= TURN;
+        match self.walk(&mut pass, order, &expired) {
+            Ok(done) => complete = done,
+            Err(error) => pass.failure = Some(error),
         }
+        drop(turn);
         self.adopt(&mut pass, order);
         self.known.extend(pass.members.values().copied());
         let members = pass.members.values().copied();

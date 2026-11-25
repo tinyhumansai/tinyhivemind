@@ -25,7 +25,7 @@ const POLL: Duration = Duration::from_millis(5);
 /// be seen, such as a process kept waiting inside `exec` for very long.
 const PROOF: u32 = 2;
 /// Longest a question about who is running may take.
-const QUERY: Duration = Duration::from_secs(10);
+pub(super) const QUERY: Duration = Duration::from_secs(5);
 /// How long a dropped instance's tree is pursued.
 const DROPPED: Duration = Duration::from_secs(30);
 

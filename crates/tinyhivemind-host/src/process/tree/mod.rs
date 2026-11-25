@@ -14,6 +14,8 @@ mod scan;
 mod stat;
 
 pub(super) use scan::Scan;
+#[cfg(test)]
+pub(super) use scan::turn;
 pub(super) use stat::Identity;
 
 use rustix::io::Errno;

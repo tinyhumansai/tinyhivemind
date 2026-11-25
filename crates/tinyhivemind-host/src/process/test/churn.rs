@@ -186,3 +186,53 @@ async fn a_child_the_host_reaped_is_reported_lost_and_its_tree_is_still_stopped(
     assert!(!running(orphan));
     Ok(())
 }
+
+#[tokio::test]
+async fn a_supervisor_that_is_stuck_does_not_hold_up_a_stop_past_its_bounds() -> Result<()> {
+    // As reading the entry of a process that hangs in the kernel would.
+    let fixture = Fixture::new()?;
+    let mut instance = fixture.start("trap '' TERM; exec sleep 300").await?;
+    let root = instance.pid();
+    let (unheard, _kept) = mpsc::channel();
+    let supervisor = std::mem::replace(&mut instance.requests, unheard);
+    let policy = StopPolicy {
+        terminate: Duration::from_millis(10),
+        kill: Duration::from_millis(10),
+        ..BOUNDS
+    };
+    let stopping = instance.stop(async {}, policy);
+    let error = tokio::time::timeout(PATIENCE, stopping).await?.err();
+    assert!(matches!(error, Some(Error::Unproven)), "{error:?}");
+    // What can be done without it is.
+    until(|| !running(root)).await;
+    let members = tokio::time::timeout(PATIENCE, instance.members()).await?;
+    assert!(matches!(members, Err(Error::Unproven)));
+    drop(supervisor);
+    Ok(())
+}
+
+#[test]
+fn a_scan_that_is_stuck_does_not_hold_up_the_others() -> Result<()> {
+    let stuck = std::thread::spawn(|| {
+        let turn = crate::process::tree::turn(&|| false);
+        std::thread::sleep(Duration::from_secs(6));
+        drop(turn);
+    });
+    let child = Command::new("/bin/sleep")
+        .arg("300")
+        .process_group(0)
+        .spawn()?;
+    let root = Root::new(child);
+    let mut tree = Tree::new("MARKER=x", root.id())?;
+    let mut found = tree.scan(None, &|| stuck.is_finished());
+    while !found.complete && !stuck.is_finished() {
+        found = tree.scan(None, &|| stuck.is_finished());
+    }
+    assert!(
+        found.complete,
+        "nothing was found before the other was done"
+    );
+    assert_eq!(found.live.len(), 1);
+    assert!(stuck.join().is_ok());
+    Ok(())
+}
