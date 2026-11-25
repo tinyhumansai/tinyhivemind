@@ -17,9 +17,10 @@ set -euo pipefail
 # whose vocabulary dependency includes `anyhow` and `async-trait`.
 pure_crates=("tinyhivemind-core" "tinyhivemind-lang")
 tool_crates=("tinyhivemind-tools")
-# Host runs harnesses as processes (ADR 0035), so it may hold a runtime, but it
-# must never link one.
-host_crates=("tinyhivemind-host")
+# Host runs harnesses as processes (ADR 0035), and the MCP server serves them
+# hive tools over loopback (ADR 0036), so both may hold a runtime and a
+# listener, but neither may link a harness.
+host_crates=("tinyhivemind-host" "tinyhivemind-mcp")
 
 forbidden_pure='tokio|futures|async-trait|axum|hyper|reqwest|ureq|curl|anyhow|rusqlite|git2|openhuman|tinyagents|tinytools'
 # Whole families: `openhuman-embed`, `tinyagents-harness` and so on.

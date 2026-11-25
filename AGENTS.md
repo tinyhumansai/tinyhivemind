@@ -53,7 +53,7 @@ is not advisory — do not add an exception to it to land a change.
 
 ## Project Structure
 
-This is a Rust 2024 virtual Cargo workspace with seven packages. Core owns all
+This is a Rust 2024 virtual Cargo workspace with eight packages. Core owns all
 host-neutral behavior; lang is where a hive mind is defined, integrations
 included; tools renders native tool definitions and records calls; exec runs a
 package's executable tools and hooks; host is the harness-neutral
@@ -75,6 +75,7 @@ crates/
 ├── tinyhivemind-tools/   # native TinyTools specs and episode call record
 ├── tinyhivemind-exec/    # runs a package's executable tools and script hooks
 ├── tinyhivemind-host/      # hive tool belt, policies, package plans, harness processes
+├── tinyhivemind-mcp/       # hive and package tools served to harness processes over loopback MCP
 ├── tinyhivemind-openhuman/ # package deployment, seat runners, host integration
 ├── tinyhivemind-hives/    # durable cross-hive coordinator
 └── tinyhivemind-lang/     # pure hive packages: structure, integrations, edits, lineage
