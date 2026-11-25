@@ -3,6 +3,7 @@ use super::{Identity, Stat, Tree, signal};
 use anyhow::{Context as _, Result};
 use rustix::process::Signal;
 use std::fs;
+use std::io::Write as _;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
@@ -180,6 +181,52 @@ fn a_stale_children_list_does_not_adopt_a_stranger() -> Result<()> {
     let mut tree = tree(&proc)?;
     tree.sample();
     assert_eq!(pids(&mut tree)?, [10]);
+    Ok(())
+}
+
+#[test]
+fn a_process_that_appears_during_a_scan_is_found_by_it() -> Result<()> {
+    // Reading the bystander's entry waits for the thread below, which adds a
+    // member first. One pass over a listing made before that misses it, as it
+    // would miss a process that forks and exits faster than the table is read.
+    let proc = table(&[Entry::new(10, 1, 100), Entry::new(20, 1, 101)])?;
+    let pipe = proc.path().join("20/stat");
+    let line = fs::read(&pipe)?;
+    fs::remove_file(&pipe)?;
+    assert!(Command::new("mkfifo").arg(&pipe).status()?.success());
+    let table = proc.path().to_path_buf();
+    let late = std::thread::spawn(move || -> Result<()> {
+        let mut pipe = fs::File::options().write(true).open(pipe)?;
+        let mut member = Entry::new(30, 1, 102);
+        member.environ = "TINYHIVEMIND_INSTANCE=abc\0";
+        member.write(&table)?;
+        Ok(pipe.write_all(&line)?)
+    });
+    assert_eq!(pids(&mut tree(&proc)?)?, [10, 30]);
+    assert!(late.join().is_ok_and(|added| added.is_ok()));
+    Ok(())
+}
+
+#[test]
+fn a_process_whose_environment_is_not_there_yet_is_looked_at_again() -> Result<()> {
+    // As it is inside `exec`.
+    let mut member = Entry::new(30, 1, 102);
+    member.environ = "";
+    let proc = table(&[Entry::new(10, 1, 100), member])?;
+    let pipe = proc.path().join("30/environ");
+    fs::remove_file(&pipe)?;
+    assert!(Command::new("mkfifo").arg(&pipe).status()?.success());
+    let late = std::thread::spawn(move || -> Result<()> {
+        // Empty at first, then what it was started with.
+        drop(fs::File::options().write(true).open(&pipe)?);
+        fs::remove_file(&pipe)?;
+        Ok(fs::write(&pipe, "TINYHIVEMIND_INSTANCE=abc\0")?)
+    });
+    let mut tree = tree(&proc)?;
+    let found = pids(&mut tree)?;
+    assert!(late.join().is_ok_and(|shown| shown.is_ok()));
+    // The scan that met the empty one, or at the latest the next.
+    assert!(found == [10, 30] || pids(&mut tree)? == [10, 30]);
     Ok(())
 }
 
