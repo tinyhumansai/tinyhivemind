@@ -289,14 +289,14 @@ pub fn tool(
     side_effects: &str,
     args: Value,
 ) -> tinyhivemind_lang::ExecTool {
-    serde_json::from_value(json!({
+    let mut declaration = json!({
         "id": id,
         "description": format!("fixture {script}"),
         "command": [format!("tools/{script}.sh")],
-        "args": args,
         "side_effects": side_effects,
-    }))
-    .expect("a valid tool")
+    });
+    declaration["args"] = args;
+    serde_json::from_value(declaration).expect("a valid tool")
 }
 
 /// A hook `id` on `event` for tools `matcher`, running `tools/<script>.sh`.
