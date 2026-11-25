@@ -247,9 +247,12 @@ impl Instance {
     /// [`Error::Unproven`] if it cannot be read fast enough to find everyone,
     /// and [`Error::Unsupervised`] once the instance is stopped.
     pub async fn members(&self) -> Result<Vec<u32>> {
-        let (reply, members) = oneshot::channel();
+        let (ticket, taken, members) = Ticket::new();
         // Either end being gone shows below.
-        let _ = self.requests.send(Request::Members(reply));
+        let _ = self.requests.send(Request::Members(ticket));
+        if !self.taken_up(taken).await {
+            return Err(Error::Unproven);
+        }
         match tokio::time::timeout(QUERY + SLACK, members).await {
             Ok(members) => members.unwrap_or(Err(Error::Unsupervised)),
             Err(_) => Err(Error::Unproven),
@@ -276,11 +279,18 @@ impl Instance {
             _ = self.exited() => {}
             _ = tokio::time::timeout(policy.cancel, cancel) => {}
         }
-        let (reply, stopped) = oneshot::channel();
+        let (ticket, taken, stopped) = Ticket::new();
         // A closed channel means an earlier stop already proved it.
-        let _ = self.requests.send(Request::Stop(policy, reply));
+        let _ = self.requests.send(Request::Stop(policy, ticket));
         let bound = policy.terminate.saturating_add(policy.kill);
-        match tokio::time::timeout(bound.saturating_add(SLACK), stopped).await {
+        let stopped = if self.taken_up(taken).await {
+            tokio::time::timeout(bound.saturating_add(SLACK), stopped).await
+        } else {
+            Ok(Err(oneshot::error::RecvError::default()))
+                .filter(|_: &Result<_, _>| self.exit.has_changed().is_err())
+                .unwrap_or_else(|| tokio::time::timeout(Duration::ZERO, std::future::pending()).now_or_never())
+        };
+        match stopped {
             Ok(Ok(stopped)) => stopped,
             Ok(Err(_)) => self.exit().ok_or(Error::Unsupervised),
             Err(_) => {

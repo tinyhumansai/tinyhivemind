@@ -29,14 +29,39 @@ pub(super) const QUERY: Duration = Duration::from_secs(5);
 /// How long a dropped instance's tree is pursued.
 const DROPPED: Duration = Duration::from_secs(30);
 
-/// What an instance asks of its supervisor.
+/// What an instance asks of its supervisor, and whom to tell that it is taken
+/// up and what came of it.
 pub(super) enum Request {
     /// Who is running now?
-    Members(oneshot::Sender<Result<Vec<u32>>>),
+    Members(Ticket<Vec<u32>>),
     /// Terminate, then kill, then prove.
-    Stop(StopPolicy, oneshot::Sender<Result<Exit>>),
+    Stop(StopPolicy, Ticket<Exit>),
     /// The instance was dropped: kill.
     Abandon,
+}
+
+/// Where the answer to a request goes.
+pub(super) struct Ticket<T> {
+    pub(super) taken: oneshot::Sender<()>,
+    pub(super) answer: oneshot::Sender<Result<T>>,
+}
+
+impl<T> Ticket<T> {
+    /// A ticket, and where its taking up and its answer arrive.
+    pub(super) fn new() -> (Self, oneshot::Receiver<()>, oneshot::Receiver<Result<T>>) {
+        let (taken, up) = oneshot::channel();
+        let (answer, answered) = oneshot::channel();
+        (Self { taken, answer }, up, answered)
+    }
+}
+
+/// What the supervisor is doing.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum Busy {
+    /// Waiting for a request, and watching.
+    Idle,
+    /// Working on a request that is due by then, if ever.
+    Until(Option<Instant>),
 }
 
 /// The thread's state.
@@ -45,6 +70,7 @@ pub(super) struct Supervisor {
     pub(super) scope: Scope,
     pub(super) requests: Receiver<Request>,
     pub(super) exit: watch::Sender<Option<Exit>>,
+    pub(super) busy: watch::Sender<Busy>,
     /// Set by a drop: skip the rest of the grace period.
     pub(super) hurry: Arc<AtomicBool>,
     /// Removed once the tree is proven gone.
@@ -65,13 +91,15 @@ impl Supervisor {
         loop {
             self.exited();
             match self.requests.recv_timeout(TICK) {
-                Ok(Request::Members(reply)) => {
-                    let _ = reply.send(self.members());
+                Ok(Request::Members(ticket)) => {
+                    self.take_up(ticket.taken, QUERY);
+                    let _ = ticket.answer.send(self.members());
                 }
-                Ok(Request::Stop(policy, reply)) => {
+                Ok(Request::Stop(policy, ticket)) => {
+                    self.take_up(ticket.taken, policy.terminate.saturating_add(policy.kill));
                     let stopped = self.stop(&policy);
                     let done = stopped.is_ok();
-                    let _ = reply.send(stopped);
+                    let _ = ticket.answer.send(stopped);
                     if done {
                         return;
                     }
@@ -85,11 +113,19 @@ impl Supervisor {
                 }
                 Err(RecvTimeoutError::Timeout) => {}
             }
+            self.busy.send_replace(Busy::Idle);
             if sampled.elapsed() >= SAMPLE {
                 self.scope.sample();
                 sampled = Instant::now();
             }
         }
+    }
+
+    /// Say that a request is taken up, and by when it is to be done.
+    fn take_up(&self, taken: oneshot::Sender<()>, bound: Duration) {
+        self.busy
+            .send_replace(Busy::Until(Instant::now().checked_add(bound)));
+        let _ = taken.send(());
     }
 
     /// Whether the child exited, without reaping it. Publishes how.
