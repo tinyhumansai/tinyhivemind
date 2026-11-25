@@ -1,0 +1,67 @@
+model_catalog_json = "@CATALOG@"
+model = "mock"
+model_provider = "mock"
+approval_policy = "never"
+sandbox_mode = "read-only"
+web_search = "disabled"
+check_for_update_on_startup = false
+project_doc_max_bytes = 0
+cli_auth_credentials_store = "file"
+include_permissions_instructions = false
+include_apps_instructions = false
+include_environment_context = false
+[model_providers.mock]
+name = "mock"
+base_url = "http://127.0.0.1:@FIXTURE_PORT@/v1"
+env_key = "MOCK_KEY"
+wire_api = "responses"
+supports_websockets = false
+request_max_retries = 0
+stream_max_retries = 0
+[analytics]
+enabled = false
+[feedback]
+enabled = false
+[otel]
+exporter = "none"
+trace_exporter = "none"
+metrics_exporter = "none"
+[history]
+persistence = "none"
+[skills]
+include_instructions = false
+[skills.bundled]
+enabled = false
+[agents]
+enabled = false
+[features]
+view_image = false
+multi_agent_v2 = false
+shell_tool = false
+unified_exec = false
+multi_agent = false
+goals = false
+apps = false
+plugins = false
+remote_plugin = false
+plugin_sharing = false
+tool_suggest = false
+skill_search = false
+skill_mcp_dependency_install = false
+image_generation = false
+browser_use = false
+browser_use_external = false
+computer_use = false
+in_app_browser = false
+sleep_tool = false
+code_mode_host = false
+hooks = false
+shell_snapshot = false
+workspace_dependencies = false
+daemon_auto_start = false
+memories = false
+fast_mode = false
+api_key_model_discovery = false
+[tools]
+[tools.experimental_request_user_input]
+enabled = false

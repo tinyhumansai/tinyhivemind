@@ -24,15 +24,40 @@ conformance suite; a test shows a grandchild in its own session is also stopped.
 Streamable HTTP server over the dispatch of step 1, with per-seat bearers and the
 `turn` check. Choose the HTTP dependency in this step and record why.
 
+[Call identity](../specs/harnesses.md#call-identity) is not yet possible and needs
+a change in `tinyhivemind-hives` first. Today `Coordinator::submit_action` appends
+to `RunningTurn::actions` with no identity, `send` knows only the global
+`message_id`, and create, join and leave hive know neither. `update` already
+commits a whole `StoredState` in one compare-and-swap, so the change is:
+
+- a serde-defaulted call record on `RunningTurn` (`call` to tool, arguments and
+  result), so older snapshots load and it goes when the turn ends;
+- identity-carrying variants of `submit_action`, `send` and the hive management
+  calls that check `turn_id`, look up, act and record inside one `update`;
+- a typed error for reuse and one for a stale turn. Existing entry points keep
+  their behaviour for the linked adapter.
+
+In the server: the started and finished record for executable tools, proxied MCP
+calls and `create_agent`.
+
 Done when tests refuse: a wrong bearer, another seat's episode, a stale `turn`, a
 call with no running turn, a forged actor, a bad `Host`, any `Origin`, an
 oversized body; and when a package hook denies a call before it runs.
 
+Also when tests show: a retried post, send, join and executable tool each act
+once and return the first result; two identical posts under different `call`
+values both act; reuse with different arguments or another tool is refused, as
+are a missing `call` and a retry whose outcome is unknown; a failed commit leaves
+neither effect nor record; the record survives a storage reload of a running turn
+and an older snapshot still loads; after a coordinator restart the retry is
+refused; a hook-denied call records nothing and may be corrected; two sends with
+one `message_id` under different calls are one message.
+
 ## 3. Schema
 
 `tinyhivemind-lang`: the `harnesses` section, `harness` on runtime, profile and
-seat, lowering, the capability table, `Rule::Integration` diagnostics, and the
-two-class patch rule. Touch `document/{types,defaults}.rs`,
+seat, lowering, the capability table including the provider rows,
+`Rule::Integration` diagnostics, and the two-class patch rule. Touch `document/{types,defaults}.rs`,
 `document/integration/types.rs`, `document/split`, `validation/integration.rs`,
 `lowering/{types,integration}.rs`, `patch/mod.rs`, READMEs and example packages.
 
@@ -53,7 +78,10 @@ cases are diagnosed at their location; a roster-only edit cannot change `harness
   MCP. Medulla's `codex_app_server` is the reference for framing; its silent new
   thread on a failed resume is not copied.
 
-Each is done when it passes conformance offline and `live_*` on its pin.
+Each is done when it passes conformance offline and `live_*` on its pin. The first
+conformance test added is a model endpoint that requires the right key: until it
+passes, `credential` stays rejected and no hosted model is usable. `openrouter`,
+`anthropic` and further endpoint shapes follow the same way, one row each.
 
 ## 5. Mixed deployment
 

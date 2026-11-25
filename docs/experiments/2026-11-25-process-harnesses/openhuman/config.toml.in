@@ -1,0 +1,58 @@
+schema_version = 13
+embeddings_provider = "none"
+chat_provider = "mock:mock"
+reasoning_provider = "mock:mock"
+agentic_provider = "mock:mock"
+coding_provider = "mock:mock"
+primary_cloud = "p_mock"
+default_model = "mock"
+
+[memory]
+engine = ""
+embedding_provider = "none"
+[memory.recall]
+enabled = false
+[memory.conversations]
+enabled = false
+[search]
+enabled = false
+
+[observability]
+analytics_enabled = false
+share_usage_data = false
+[mcp_client]
+enabled = true
+[[mcp_client.servers]]
+name = "hivea"
+endpoint = "http://127.0.0.1:@FIXTURE_PORT@/mcp"
+expose = "direct"
+auth = { kind = "bearer_token", token = "seat-a-token" }
+
+[agent]
+chat_agent_id = "seat"
+max_tool_iterations = 40
+agent_timeout_secs = 600
+[autonomy]
+auto_approve = ["@HIVE_TOOL@"]
+[tokenjuice]
+router_enabled = false
+ccr_enabled = false
+repl_handle_enabled = false
+[hooks]
+enabled = false
+[web_chat]
+suggestions_enabled = false
+[[agent_registry.entries]]
+id = "seat"
+name = "seat"
+description = "hive seat"
+source = "custom"
+enabled = true
+system_prompt = "You are a hive seat."
+tool_allowlist = ["@HIVE_TOOL@"]
+[[cloud_providers]]
+id = "p_mock"
+slug = "mock"
+label = "Mock"
+endpoint = "http://127.0.0.1:@FIXTURE_PORT@/v1"
+auth_style = "none"
