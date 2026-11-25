@@ -5293,10 +5293,6 @@ dependencies = [
 ]
 
 [[patch.unused]]
-name = "tinyinference-decisions"
-version = "0.5.0"
-
-[[patch.unused]]
 name = "tinyagents-live"
 version = "3.0.0"
 
@@ -5305,13 +5301,17 @@ name = "tinychannels"
 version = "0.1.42"
 
 [[patch.unused]]
+name = "tinystoragedrivers-testkit"
+version = "2.1.0"
+
+[[patch.unused]]
+name = "tinyinference-decisions"
+version = "0.5.0"
+
+[[patch.unused]]
+name = "tinystoragedrivers-testkit"
+version = "2.1.0"
+
+[[patch.unused]]
 name = "tinytools-std"
 version = "0.6.0"
-
-[[patch.unused]]
-name = "tinystoragedrivers-testkit"
-version = "2.1.0"
-
-[[patch.unused]]
-name = "tinystoragedrivers-testkit"
-version = "2.1.0"
