@@ -89,27 +89,32 @@ impl AgentRunner for SeatRunner {
         let timeout = self.timeout;
         let seat = self.seat.clone();
         Box::pin(async move {
-            let seat = seat.lock_owned().await;
-            Ok(run(inner, timeout, seat, request).await?)
+            let mut seat = seat.lock_owned().await;
+            let request = admit(inner.as_ref(), &mut seat, request).await?;
+            let turn = Turn {
+                id: request.turn_id.clone(),
+                inner,
+                seat: Some(seat),
+            };
+            turn.run(request, timeout).await
         })
     }
 }
 
-async fn run(
-    inner: Arc<dyn CancellableRunner>,
-    timeout: Option<Duration>,
-    mut seat: OwnedMutexGuard<Seat>,
+/// Let `request` start a turn, with the seat's session, or say why not.
+async fn admit(
+    inner: &dyn CancellableRunner,
+    seat: &mut Seat,
     mut request: TurnRequest,
-) -> Result<TurnOutcome> {
+) -> Result<TurnRequest> {
     if let Some(turn_id) = seat.unsettled.clone() {
-        settle(inner.as_ref(), &mut seat, turn_id).await?;
+        settle(inner, seat, turn_id).await?;
     }
-    let turn_id = request.turn_id.clone();
-    if turn_id.is_empty() {
+    if request.turn_id.is_empty() {
         return Err(Error::NoTurnId);
     }
-    if seat.started.contains(&turn_id) {
-        return Err(Error::Replayed(turn_id));
+    if seat.started.contains(&request.turn_id) {
+        return Err(Error::Replayed(request.turn_id));
     }
     match (&seat.session, &request.session_id) {
         (Some(expected), Some(found)) => same(expected, found)?,
@@ -117,20 +122,9 @@ async fn run(
         (None, Some(session)) => seat.session = Some(session.clone()),
         (None, None) => {}
     }
-    seat.started.insert(turn_id.clone());
-    seat.unsettled = Some(turn_id.clone());
-    // From here a dropped future leaves a turn to cancel.
-    let mut turn = Turn {
-        inner: inner.clone(),
-        seat: Some(seat),
-    };
-    let ended = match timeout {
-        Some(limit) => tokio::time::timeout(limit, inner.run(request))
-            .await
-            .unwrap_or_else(|_| Err(Error::TimedOut(limit).into())),
-        None => inner.run(request).await,
-    };
-    turn.end(turn_id, ended).await
+    seat.started.insert(request.turn_id.clone());
+    seat.unsettled = Some(request.turn_id.clone());
+    Ok(request)
 }
 
 /// Cancel `turn_id` and clear it, or leave it in doubt.
@@ -157,9 +151,83 @@ fn same(expected: &str, found: &str) -> Result<()> {
     })
 }
 
-/// A started turn, which holds the seat until it is settled.
+/// A started turn, which holds the seat until it is settled. Dropping it
+/// unsettled cancels it, still holding the seat.
 struct Turn {
+    id: String,
     inner: Arc<dyn CancellableRunner>,
-    /// Taken only by the drop.
     seat: Option<OwnedMutexGuard<Seat>>,
+}
+
+impl Turn {
+    async fn run(
+        mut self,
+        request: TurnRequest,
+        timeout: Option<Duration>,
+    ) -> tinyhivemind_hives::Result<TurnOutcome> {
+        let run = self.inner.run(request);
+        let ended = match timeout {
+            Some(limit) => tokio::time::timeout(limit, run)
+                .await
+                .unwrap_or_else(|_| Err(Error::TimedOut(limit).into())),
+            None => run.await,
+        };
+        match ended {
+            Ok(outcome) => {
+                self.keep(&outcome.session_id)?;
+                Ok(outcome)
+            }
+            Err(error) => {
+                self.settle().await?;
+                Err(error)
+            }
+        }
+    }
+
+    /// The turn ended by itself, in `session`.
+    fn keep(&mut self, session: &str) -> Result<()> {
+        let Some(mut seat) = self.seat.take() else {
+            return Ok(());
+        };
+        seat.unsettled = None;
+        if session.trim().is_empty() {
+            return Err(Error::EmptySession);
+        }
+        match &seat.session {
+            Some(expected) => same(expected, session),
+            None => {
+                seat.session = Some(session.into());
+                Ok(())
+            }
+        }
+    }
+
+    /// The turn ended in an error, which does not say that it stopped.
+    async fn settle(&mut self) -> Result<()> {
+        if let Some(seat) = &mut self.seat {
+            // Dropped while waiting here, the turn is cancelled again.
+            let settled = settle(self.inner.as_ref(), seat, self.id.clone()).await;
+            self.seat = None;
+            return settled;
+        }
+        Ok(())
+    }
+}
+
+impl Drop for Turn {
+    fn drop(&mut self) {
+        let Some(mut seat) = self.seat.take() else {
+            return;
+        };
+        // Without a runtime the seat keeps the doubt, and the next turn
+        // settles it first.
+        if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+            let inner = self.inner.clone();
+            let id = std::mem::take(&mut self.id);
+            runtime.spawn(async move {
+                // A failure leaves the same doubt.
+                let _ = settle(inner.as_ref(), &mut seat, id).await;
+            });
+        }
+    }
 }
