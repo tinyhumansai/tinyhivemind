@@ -128,7 +128,10 @@ impl Judge<'_, '_> {
                     return;
                 };
                 (
-                    m.models[k].provider.as_ref().or(m.runtime.provider.as_ref()),
+                    m.models[k]
+                        .provider
+                        .as_ref()
+                        .or(m.runtime.provider.as_ref()),
                     format!("/models/{k}/provider"),
                     format!("models.{id}.provider"),
                 )
@@ -192,7 +195,11 @@ impl Judge<'_, '_> {
             let set = &m.permissions[k];
             if set.sandbox != Sandbox::None {
                 let field = format!("permissions.{}.sandbox", set.id);
-                self.reject(Capability::Sandbox, field, format!("/permissions/{k}/sandbox"));
+                self.reject(
+                    Capability::Sandbox,
+                    field,
+                    format!("/permissions/{k}/sandbox"),
+                );
             }
             if !set.tool_rules.is_null() {
                 let field = format!("permissions.{}.tool_rules", set.id);
@@ -248,8 +255,7 @@ impl Judge<'_, '_> {
                 self.found.push(
                     Error::Integration {
                         field: format!("tools.{}.args.{name}", tool.id),
-                        reason: "turn and call are added by the host to every served tool"
-                            .into(),
+                        reason: "turn and call are added by the host to every served tool".into(),
                     },
                     HIVE,
                     format!("/tools/{t}/args/properties/{name}"),
@@ -267,14 +273,15 @@ impl Judge<'_, '_> {
         };
         let model = model_id(m, seat).and_then(|id| m.models.iter().position(|v| &v.id == id));
         let layers = [
-            (Some(&seat.limits), format!("/seats/{i}")),
-            (p.map(|k| &m.profiles[k].limits), format!("/profiles/{}", p.unwrap_or_default())),
-            (model.map(|k| &m.models[k].limits), format!("/models/{}", model.unwrap_or_default())),
-            (Some(&m.runtime.limits), "/runtime".to_owned()),
+            Some((&seat.limits, format!("/seats/{i}"))),
+            p.map(|k| (&m.profiles[k].limits, format!("/profiles/{k}"))),
+            model.map(|k| (&m.models[k].limits, format!("/models/{k}"))),
+            Some((&m.runtime.limits, "/runtime".to_owned())),
         ];
         let set = layers
             .into_iter()
-            .find_map(|(limits, at)| Some((limits?.iterations?, at)));
+            .flatten()
+            .find_map(|(limits, at)| Some((limits.iterations?, at)));
         if let Some((iterations, at)) = set
             && iterations > cap
         {
