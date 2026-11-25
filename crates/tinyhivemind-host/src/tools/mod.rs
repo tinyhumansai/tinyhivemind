@@ -11,7 +11,7 @@ use crate::{
 };
 pub use call::ToolCall;
 use serde_json::{Value, json};
-use tinyhivemind_hives::{Coordinator, Destination, EpisodeAction, SendMessage};
+use tinyhivemind_hives::{Coordinator, Destination, EpisodeAction, SendMessage, TurnCall};
 pub use types::Kind;
 
 /// Executes hive tool calls against a coordinator under the host's policies.
@@ -110,7 +110,9 @@ impl<'a> Belt<'a> {
                 self.submit(call, EpisodeAction::Complete { body }).await
             }
             Kind::CreateHive | Kind::CreateAgent | Kind::JoinHive | Kind::LeaveHive => {
-                self.manage(actor, call.management()?).await
+                let turn = call.turn_call();
+                self.manage_as(actor, call.management()?, turn.as_ref())
+                    .await
             }
         }
     }
@@ -119,11 +121,25 @@ impl<'a> Belt<'a> {
     /// # Errors
     /// Disabled management, host denial, agent creation or coordinator errors.
     pub async fn manage(&self, actor: &str, request: ManagementRequest) -> Result<Value> {
+        self.manage_as(actor, request, None).await
+    }
+    /// [`Self::manage`], through the coordinator's identified calls when `turn`
+    /// is given. Creating an agent is the creator's, outside them.
+    async fn manage_as(
+        &self,
+        actor: &str,
+        request: ManagementRequest,
+        turn: Option<&TurnCall>,
+    ) -> Result<Value> {
         let management = self.management.ok_or(Error::ManagementDisabled)?;
         management.authorizer.authorize(actor, &request)?;
+        let coordinator = self.coordinator;
         match request {
             ManagementRequest::CreateHive(hive) => {
-                self.coordinator.create_hive(hive.clone()).await?;
+                match turn {
+                    Some(turn) => coordinator.create_hive_in_turn(turn, hive.clone()).await?,
+                    None => coordinator.create_hive(hive.clone()).await?,
+                }
                 Ok(serde_json::to_value(hive)?)
             }
             ManagementRequest::CreateAgent {
@@ -142,34 +158,59 @@ impl<'a> Belt<'a> {
                 Ok(json!({"agent_id":agent_id}))
             }
             ManagementRequest::JoinHive { hive_id, agent_id } => {
-                self.coordinator.join_hive(&hive_id, &agent_id).await?;
+                match turn {
+                    Some(turn) => {
+                        coordinator
+                            .join_hive_in_turn(turn, &hive_id, &agent_id)
+                            .await?;
+                    }
+                    None => coordinator.join_hive(&hive_id, &agent_id).await?,
+                }
                 Ok(json!({"joined":true}))
             }
             ManagementRequest::LeaveHive { hive_id, agent_id } => {
-                self.coordinator.leave_hive(&hive_id, &agent_id).await?;
+                match turn {
+                    Some(turn) => {
+                        coordinator
+                            .leave_hive_in_turn(turn, &hive_id, &agent_id)
+                            .await?;
+                    }
+                    None => coordinator.leave_hive(&hive_id, &agent_id).await?,
+                }
                 Ok(json!({"left":true}))
             }
         }
     }
     async fn send(&self, call: &ToolCall, destination: Destination) -> Result<Value> {
-        let receipt = self
-            .coordinator
-            .send(SendMessage {
-                message_id: call.text("message_id"),
-                sender: call.actor().to_owned(),
-                destination,
-                body: call.text("body"),
-                thread: call.integer("thread"),
-                only_for: call.strings("only_for"),
-                starters: Vec::new(),
-            })
-            .await?;
+        let message = SendMessage {
+            message_id: call.text("message_id"),
+            sender: call.actor().to_owned(),
+            destination,
+            body: call.text("body"),
+            thread: call.integer("thread"),
+            only_for: call.strings("only_for"),
+            starters: Vec::new(),
+        };
+        let receipt = match call.turn_call() {
+            Some(turn) => self.coordinator.send_in_turn(&turn, message).await?,
+            None => self.coordinator.send(message).await?,
+        };
         Ok(serde_json::to_value(receipt)?)
     }
     async fn submit(&self, call: &ToolCall, action: EpisodeAction) -> Result<Value> {
-        self.coordinator
-            .submit_action(call.actor(), &call.text("episode_id"), action)
-            .await?;
+        let episode = call.text("episode_id");
+        match call.turn_call() {
+            Some(turn) => {
+                self.coordinator
+                    .submit_action_in_turn(&turn, &episode, action)
+                    .await?;
+            }
+            None => {
+                self.coordinator
+                    .submit_action(call.actor(), &episode, action)
+                    .await?;
+            }
+        }
         Ok(json!({"accepted":true}))
     }
 }

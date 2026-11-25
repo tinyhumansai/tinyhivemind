@@ -127,7 +127,9 @@ async fn an_identified_call_naming_another_turn_is_refused() -> Result<()> {
     let stale = ToolCall::new("a", None, Kind::Post, args)?.in_turn("0:0:a", "p1");
     assert!(matches!(
         belt.call(&stale).await,
-        Err(Error::Coordinator(tinyhivemind_hives::Error::StaleTurn { .. }))
+        Err(Error::Coordinator(
+            tinyhivemind_hives::Error::StaleTurn { .. }
+        ))
     ));
     finish.notify_one();
     Ok(())
