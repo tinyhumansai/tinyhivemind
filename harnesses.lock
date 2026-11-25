@@ -1,0 +1,20 @@
+# The harness binaries process runners are tested against, one entry per
+# kind and target. Library code never downloads: `.github/scripts/fetch-harness.sh`
+# fetches an entry's asset, checks its sha256 (and the binary's, where it is
+# recorded), and prints the binary's path for the host to pass in.
+# Spec: docs/specs/harnesses.md#pins.
+
+[[openhuman]]
+version = "0.64.15"
+target = "x86_64-unknown-linux-gnu"
+url = "https://github.com/tinyhumansai/openhuman/releases/download/v0.64.15/openhuman-core-0.64.15-x86_64-unknown-linux-gnu.tar.gz"
+sha256 = "f86ae0157b4ed28767c580c443e04027b62fe14e6f3260786f44cd265a242587"
+binary = "openhuman-core"
+binary_sha256 = "4788efd57d66ee43ae398c99875a2c84e006691e9fbefab60e5a22c0fb7fefce"
+
+[[openhuman]]
+version = "0.64.15"
+target = "aarch64-unknown-linux-gnu"
+url = "https://github.com/tinyhumansai/openhuman/releases/download/v0.64.15/openhuman-core-0.64.15-aarch64-unknown-linux-gnu.tar.gz"
+sha256 = "eabac98af5f1feb711b4ffd48185aa06a233fa6bbcd1bcd4d733397dace03b9b"
+binary = "openhuman-core"
