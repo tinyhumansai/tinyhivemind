@@ -242,7 +242,7 @@ async fn a_failed_commit_leaves_neither_the_effect_nor_its_record() {
             .is_err()
     );
     let stored = storage.load().await.unwrap();
-    assert!(stored.running["a"].actions.is_empty());
+    assert_eq!(stored.running["a"].actions, Vec::<EpisodeAction>::new());
     assert!(stored.running["a"].calls.is_empty());
     assert_eq!(actions(&c, "a"), Vec::<EpisodeAction>::new());
     // The same call then acts, once.
@@ -407,7 +407,7 @@ async fn a_retried_join_acts_once_and_returns_the_first_result() {
         .unwrap()
         .into_iter()
         .find(|h| h.hive_id == "side");
-    assert!(side.unwrap().members.is_empty());
+    assert_eq!(side.unwrap().members, Vec::<String>::new());
     held.end().await;
 }
 
