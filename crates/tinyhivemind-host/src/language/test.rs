@@ -29,7 +29,7 @@ fn binding() -> LoweredMemoryBinding {
     }
 }
 #[test]
-fn seat_request_keeps_all_factory_settings_and_memory_contract() -> Result<()> {
+fn seat_request_keeps_all_factory_settings_and_memory_contract() -> anyhow::Result<()> {
     let seat = LoweredSeat {
         id: "scout".into(),
         label: "Scout".into(),
@@ -65,7 +65,7 @@ fn seat_request_keeps_all_factory_settings_and_memory_contract() -> Result<()> {
         memory,
     } = management_request(&seat)
     else {
-        return Err(Error::MemoryBindingUnsupported);
+        anyhow::bail!("a seat request is a creation request");
     };
     assert_eq!(template, seat.template);
     assert_eq!(coordinator_id.as_deref(), Some(seat.id.as_str()));
