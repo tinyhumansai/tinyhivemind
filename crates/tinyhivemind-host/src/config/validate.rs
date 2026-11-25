@@ -1,6 +1,6 @@
 //! Referential validation and conservative authority intersection.
 use super::{
-    ConfigError, HiveConfig, Limits, McpServer, Membership, Model, PermissionProfile, Profile,
+    ConfigError, HarnessRules, HiveConfig, Limits, McpServer, Membership, Model, PermissionProfile, Profile,
     Result, Sandbox, Seat, ToolScope, ValidatedHiveConfig, WorkflowTarget,
 };
 use std::collections::BTreeSet;
@@ -8,9 +8,11 @@ use std::collections::BTreeSet;
 impl HiveConfig {
     /// Validate references and permissions without constructing any runtime.
     ///
+    /// `harness` answers what only the harness to be deployed on knows.
+    ///
     /// # Errors
     /// Returns the first typed identity, reference, limit or authority failure.
-    pub fn validate(self) -> Result<ValidatedHiveConfig> {
+    pub fn validate_for(self, harness: &dyn HarnessRules) -> Result<ValidatedHiveConfig> {
         super::parse::reject_inline(
             &serde_json::to_value(&self).map_err(|_| ConfigError::Json)?,
             "config",
@@ -24,8 +26,8 @@ impl HiveConfig {
         unique("hive", self.hives.iter().map(|v| v.id.as_str()))?;
         unique("workflow", self.workflows.iter().map(|v| v.id.as_str()))?;
         self.check_references()?;
-        self.check_settings()?;
-        unique_agent_ids(&self)?;
+        self.check_settings(harness)?;
+        unique_agent_ids(&self, harness)?;
         self.check_authority()?;
         Ok(ValidatedHiveConfig(self))
     }
@@ -182,7 +184,7 @@ impl HiveConfig {
         }
         Ok(())
     }
-    fn check_settings(&self) -> Result<()> {
+    fn check_settings(&self, harness: &dyn HarnessRules) -> Result<()> {
         let runtime = &self.runtime;
         if runtime.concurrency == 0 {
             return Err(ConfigError::InvalidWidth("runtime".into()));
@@ -276,22 +278,14 @@ impl HiveConfig {
                 return Err(ConfigError::InvalidLimit(hive.id.clone()));
             }
         }
-        self.check_workflows_and_mcp()?;
+        self.check_workflows_and_mcp(harness)?;
         Ok(())
     }
-    fn check_workflows_and_mcp(&self) -> Result<()> {
+    fn check_workflows_and_mcp(&self, harness: &dyn HarnessRules) -> Result<()> {
         for job in &self.workflows {
             if job.prompt.trim().is_empty()
                 || job.schedule.split_whitespace().count() != 5
-                || tinyflows_schedule::validate_schedule(
-                    &openhuman_core::cron::Schedule::Cron {
-                        expr: job.schedule.clone(),
-                        tz: None,
-                        active_hours: None,
-                    },
-                    chrono::DateTime::from_timestamp(0, 0).unwrap_or_default(),
-                )
-                .is_err()
+                || !harness.accepts_schedule(&job.schedule)
             {
                 return Err(ConfigError::InvalidWorkflow(job.id.clone()));
             }
@@ -381,8 +375,8 @@ impl HiveConfig {
         Ok(())
     }
 }
-fn unique_agent_ids(config: &HiveConfig) -> Result<()> {
-    if !valid_openhuman_id(&config.runtime.deployment_id) {
+fn unique_agent_ids(config: &HiveConfig, harness: &dyn HarnessRules) -> Result<()> {
+    if !valid_agent_id(&config.runtime.deployment_id) {
         return Err(ConfigError::InvalidId("runtime.deployment_id".into()));
     }
     let mut ids = std::collections::BTreeMap::<String, String>::new();
@@ -391,17 +385,17 @@ fn unique_agent_ids(config: &HiveConfig) -> Result<()> {
     }
     for seat in &config.seats {
         let agent_id = seat.resolved_agent_id(&config.runtime.deployment_id);
-        if !valid_openhuman_id(&agent_id) {
+        if !valid_agent_id(&agent_id) {
             return Err(ConfigError::InvalidAgentId {
                 seat: seat.id.clone(),
                 agent_id,
             });
         }
-        let reserved =
-            openhuman_core::agent_registry::host_definition::AgentDefinitionRegistry::builtins_only(
-            )
-            .get(&agent_id)
-            .is_some() || config.profiles.iter().any(|profile| profile.id == agent_id);
+        let reserved = harness.reserves_agent_id(&agent_id)
+            || config
+                .profiles
+                .iter()
+                .any(|profile| profile.id == agent_id);
         if reserved {
             return Err(ConfigError::ReservedAgentId {
                 seat: seat.id.clone(),
@@ -420,7 +414,7 @@ fn unique_agent_ids(config: &HiveConfig) -> Result<()> {
     }
     Ok(())
 }
-fn valid_openhuman_id(id: &str) -> bool {
+fn valid_agent_id(id: &str) -> bool {
     let bytes = id.as_bytes();
     bytes.len() <= 64
         && bytes

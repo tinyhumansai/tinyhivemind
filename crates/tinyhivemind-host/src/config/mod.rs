@@ -1,14 +1,18 @@
-//! The internal deployment plan: what `deploy` builds one runtime from.
+//! The deployment plan a harness adapter builds a hive's seats from.
 //!
-//! Hive packages (`tinyhivemind-lang`) are the only input; `language::plan`
-//! lowers them into these types, and `validate` checks the cross-package
-//! authority rules a single package cannot.
+//! Hive packages (`tinyhivemind-lang`) are the only input;
+//! [`crate::language::plan`] lowers them into these types, and
+//! [`HiveConfig::validate_for`] checks the cross-package authority rules a
+//! single package cannot. It opens no file and resolves no credential.
+mod error;
 mod parse;
+mod rules;
 mod types;
 mod validate;
-pub(crate) use crate::error::ConfigError;
-pub(crate) use types::*;
-/// Manifest parsing and validation result.
-pub(crate) type Result<T> = std::result::Result<T, ConfigError>;
+pub use error::ConfigError;
+pub use rules::HarnessRules;
+pub use types::*;
+/// Plan validation result.
+pub type Result<T> = std::result::Result<T, ConfigError>;
 #[cfg(test)]
 mod test;
