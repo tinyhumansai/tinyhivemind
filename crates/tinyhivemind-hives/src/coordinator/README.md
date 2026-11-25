@@ -13,6 +13,7 @@ same input. `release_with` remains the host's manual release operation.
 | `settings.rs` | Per-hive native policy and retained roles, frozen at acceptance |
 | `types.rs` | Host runner port and public payloads |
 | `messaging.rs` | Atomic acceptance, retry IDs, starters, attribution, and private reads |
+| `calls.rs` | Identified calls of a running turn: the `*_in_turn` entry points and `running_turn` |
 | `observe.rs` | Host transcript, committed-revision watch, episode status |
 | `conduct.rs` | Actual `CompletionDriver`/`Conductor` checkpoint lifecycle |
 | `scheduler.rs` | FIFO reservations, concurrent futures, shutdown, cancellation |
@@ -98,3 +99,19 @@ use the driver's deterministic single-owner fallback. Native routing policy and
 roles reach the routing request, and widths remain bounded, but confidence,
 clarification and high-impact thresholds cannot change fallback selection.
 Configuring these thresholds does not activate a model client.
+
+## Identified calls
+
+A host that serves tools out of process cannot tell a transport retry from a
+second intended action, so a state-changing call carries a `TurnCall`: the
+agent, the turn it says it belongs to, a caller-chosen `call`, and the tool and
+arguments. `submit_action_in_turn`, `send_in_turn`, `create_hive_in_turn`,
+`join_hive_in_turn` and `leave_hive_in_turn` check in one transaction that the
+turn is the agent's running one (`StaleTurn` otherwise), answer a known `call`
+with the same tool and arguments from its record without committing, refuse
+any other reuse (`CallReused`), or act and record the call with its result on
+the `RunningTurn`. A failed commit leaves neither. The record ends with its
+turn, and a restart interrupts every running turn, so a retry after one is
+refused as stale. `send_in_turn` refuses a sender other than the caller and
+still checks `message_id` after `call`. The unidentified entry points are
+unchanged.
