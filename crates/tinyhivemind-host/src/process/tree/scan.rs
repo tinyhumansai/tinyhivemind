@@ -145,6 +145,7 @@ impl Tree {
             let unsure = pass.unsure.iter().copied().collect();
             let mut gone = self.look(pass, unsure, order, expired);
             gone |= self.look(pass, fresh, order, expired);
+            eprintln!("round whole={whole} gone={gone} unsure={} now={now:?} idle={idle} members={} t={:?}", pass.unsure.len(), pass.members.len(), Instant::now());
             if whole && !gone && pass.unsure.is_empty() {
                 return Ok(true);
             }
