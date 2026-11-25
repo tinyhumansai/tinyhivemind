@@ -21,3 +21,7 @@ line for this program was not saved; the cleared environment and private `HOME`
 above are so it cannot read a real login. The lock file is a
 copy of the repository's, so unrelated patch versions may differ from the spike's
 own lock.
+
+Built from `manifest.sh` and run once on 2026-11-25, on the same loaded machine:
+boot 1054 ms, idle 64 MB RSS and 62 PSS, plain turn 104 ms, tool turn 119 ms, 188 MB
+RSS and 185 PSS after 16 turns.
