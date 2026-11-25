@@ -5,8 +5,12 @@ Boundary: [ADR 0035](../adr/0035-a-harness-is-a-process.md),
 [ADR 0036](../adr/0036-hive-tools-are-served-over-loopback-mcp.md).
 Evidence: [the harness spike](../experiments/2026-11-25-process-harnesses.md).
 
-Nothing here is implemented yet. Until the plan's removal phase lands, the
-linked OpenHuman adapter remains the way a package is deployed.
+Implemented so far, by step 1 of the plan: the harness-neutral host crate, the
+harness port with the seat rules below, start verification, process supervision
+on Linux, and a conformance suite that a scripted fake harness passes. No client
+for a real harness, no MCP server and no `harnesses` section exist yet. Until the
+plan's removal phase lands, the linked OpenHuman adapter remains the way a
+package is deployed.
 
 ## Problem
 

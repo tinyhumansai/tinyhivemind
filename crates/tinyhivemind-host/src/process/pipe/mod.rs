@@ -90,7 +90,7 @@ impl JsonLines {
         impl Future<Output = ()> + Send + 'static,
         impl Future<Output = ()> + Send + 'static,
     ) {
-        let (writes, writing) = mpsc::unbounded_channel();
+        let (writes, outgoing) = mpsc::unbounded_channel();
         let (entries, received) = mpsc::unbounded_channel();
         let waiting = Arc::new(AtomicUsize::new(0));
         let room = limits.queued.min(Semaphore::MAX_PERMITS);
@@ -114,7 +114,7 @@ impl JsonLines {
         let room = lines.sender.room.clone();
         (
             lines,
-            write(input, writing, room),
+            write(input, outgoing, room),
             read(output, limits.line, queue),
         )
     }

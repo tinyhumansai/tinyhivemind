@@ -11,4 +11,5 @@ sleeps look for something that must not happen, or are doubled until it does.
 | `launching.rs` | Environment, directories, pipes, readiness and exit. |
 | `stopping.rs` | Linux: stopping the whole tree and nothing else. |
 | `scope.rs` | The unreaped child, and process-group containment. |
+| `churn.rs` | Linux: stopping under fork load, and with a table or child out of its hands. |
 | `dropping.rs` | What a drop guarantees. |

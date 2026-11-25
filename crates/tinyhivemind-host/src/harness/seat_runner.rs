@@ -55,6 +55,9 @@ pub trait CancellableRunner: AgentRunner {
 ///   key. An id that ever started here is refused. All of them are kept for
 ///   the life of the runner, about 100 bytes each, since forgetting any would
 ///   allow it to run again.
+///
+/// Its futures must be driven within a Tokio runtime with time enabled, as must
+/// those of every client that supervises a process.
 pub struct SeatRunner {
     inner: Arc<dyn CancellableRunner>,
     limits: TurnLimits,

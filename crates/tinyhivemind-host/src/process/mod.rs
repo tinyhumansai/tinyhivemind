@@ -39,17 +39,24 @@
 //! - it is the child;
 //! - it is in the child's process group;
 //! - its environment holds the instance's random `TINYHIVEMIND_INSTANCE`,
-//!   whatever session it is in and whoever its parent is now;
+//!   whatever session it is in, and its parent, unless the host or one of the
+//!   host's ancestors, is not known to be someone else's process;
 //! - its parent belongs, or did when the tree was last sampled, which happens
 //!   every 100 ms.
 //!
-//! Stopping signals every such process and repeats until three looks at the
-//! process table in a row find none. One look lists the table again until it
-//! shows nothing that was not examined, so a process forked while it was
-//! looking is found. No other process is ever signalled: a process is
-//! known by its pid *and* start time, the signal goes through a pidfd opened
-//! before that identity is checked, and the group is signalled only while the
-//! unreaped child keeps its id from being reused.
+//! Stopping signals the group before it looks for anyone, and everyone else the
+//! moment they are found. It ends when two scans in a row settle on nobody. A
+//! scan walks the whole process table once and then follows the pids handed
+//! out since, so it misses neither a process forked while it was looking nor
+//! one that keeps forking and exiting. Processes that plainly belong to someone
+//! else do not hold it up, however many come and go. If one scan after another
+//! runs out of time the result is [`Error::Unproven`], with everyone found
+//! killed; anything that could not be read makes it [`Error::Table`].
+//!
+//! No other process is ever signalled: a process is known by its pid *and*
+//! start time, the signal goes through a pidfd opened before that identity is
+//! checked, and the group is signalled only while the unreaped child keeps its
+//! id from being reused.
 //!
 //! With [`Containment::ProcessGroup`] (any other Unix, or a Linux without
 //! pidfds or `/proc`) only the child's process group is signalled and shown to
@@ -64,7 +71,10 @@
 //! with another environment, overwrote its own, or runs where this user cannot
 //! read it (a set-uid or non-dumpable process); and its parent died before a
 //! sample saw it. Starting such a process within 100 ms takes intent, or a
-//! daemon that clears its environment. Work handed to a process that was never
+//! daemon that clears its environment. The proof further takes for granted
+//! that a process is not kept inside `exec` for over 200 ms, where it shows no
+//! environment, and that pids do not go all the way round within one scan.
+//! Work handed to a process that was never
 //! a descendant, such as a system service, a container daemon or a scheduler,
 //! is out of reach altogether. This contains an untidy harness; it is not a
 //! sandbox for a hostile one, which runs as the same user and could kill the
@@ -75,7 +85,9 @@
 //!
 //! The host must not reap the child itself, by waiting for any child or by
 //! ignoring `SIGCHLD`. If it does, the exit status is lost and group
-//! membership stops counting as evidence, but stopping still works.
+//! membership stops counting as evidence, but stopping still works. For up to
+//! 20 ms, until that is noticed, the group could still be signalled by an id
+//! that is no longer held.
 //!
 //! # What dropping guarantees
 //!

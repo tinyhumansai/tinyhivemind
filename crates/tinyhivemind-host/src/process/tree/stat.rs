@@ -40,35 +40,36 @@ impl Stat {
         let Some(length) = present(file.read(&mut line))? else {
             return Ok(None);
         };
-        let stat = Self::parse(pid, line.get(..length).unwrap_or_default());
-        // A line that cannot be read is not a process that is gone.
-        stat.ok_or_else(|| io::Error::other(format!("strange stat of {pid}")))
+        match Self::parse(pid, line.get(..length).unwrap_or_default()) {
+            Some((stat, released)) => Ok((!released).then_some(stat)),
+            // A line that is not understood is not a process that is gone.
+            None => Err(io::Error::other(format!("strange stat of {pid}"))),
+        }
     }
 
-    /// The outer `None` is a line that is not understood.
-    fn parse(pid: u32, line: &[u8]) -> Option<Option<Self>> {
+    /// The process, and whether the kernel has let go of all but the task.
+    fn parse(pid: u32, line: &[u8]) -> Option<(Self, bool)> {
         // The command name may itself hold spaces and parentheses.
         let name = line.iter().rposition(|byte| *byte == b')')?;
         let rest = std::str::from_utf8(line.get(name + 1..)?).ok()?;
         let mut fields = rest.split_ascii_whitespace();
         let exited = matches!(fields.next()?, "Z" | "X");
         let parent = fields.next()?.parse().ok()?;
-        // Minus one once the kernel has let go of all but the task itself.
-        let Ok(group) = u32::try_from(fields.next()?.parse::<i64>().ok()?) else {
-            return Some(None);
-        };
+        // Minus one once it is released.
+        let group: i64 = fields.next()?.parse().ok()?;
         let flags: u64 = fields.nth(3)?.parse().ok()?;
         let threads: u64 = fields.nth(10)?.parse().ok()?;
         let start = fields.nth(1)?.parse().ok()?;
-        Some(Some(Self {
+        let process = Self {
             pid,
             parent,
-            group,
+            group: u32::try_from(group).unwrap_or_default(),
             start,
             // A leader that exited before its threads reads as a zombie.
             dead: exited && threads <= 1,
             kernel: flags & KERNEL_THREAD != 0,
-        }))
+        };
+        Some((process, group < 0))
     }
 
     pub(super) fn identity(&self) -> Identity {

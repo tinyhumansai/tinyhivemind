@@ -88,10 +88,10 @@ fn tree(proc: &tempfile::TempDir) -> Result<Tree> {
     Ok(Tree::at(proc.path(), MARKER, 10)?)
 }
 
-fn pids(tree: &mut Tree) -> Result<Vec<u32>> {
+fn pids(tree: &mut Tree) -> Vec<u32> {
     let scan = scan(tree);
     assert!(scan.failure.is_none() && scan.complete);
-    Ok(scan.live.into_iter().map(|member| member.pid).collect())
+    scan.live.into_iter().map(|member| member.pid).collect()
 }
 
 fn children(proc: &tempfile::TempDir, pid: u32, list: &str) -> Result<()> {
@@ -109,7 +109,10 @@ fn a_stat_line_is_read_past_a_hostile_command_name() -> Result<()> {
     fs::write(proc.path().join("10/stat"), "10 (x) S 1")?;
     assert!(Stat::read(proc.path(), 10).is_err());
     // A task the kernel is letting go of has no group left.
-    fs::write(proc.path().join("10/stat"), "10 (x) Z 0 -1 -1 0 -1 0 0\n")?;
+    fs::write(
+        proc.path().join("10/stat"),
+        "10 (x) X 0 -1 -1 0 -1 0 0 0 0 0 0 0 0 0 20 0 0 0 100 0\n",
+    )?;
     assert!(Stat::read(proc.path(), 10)?.is_none());
     Ok(())
 }
@@ -130,7 +133,7 @@ fn descendants_are_members_however_deep() -> Result<()> {
         Entry::new(10, 1, 100),
         Entry::new(20, 1, 104),
     ])?;
-    assert_eq!(pids(&mut tree(&proc)?)?, [10, 11, 12, 13]);
+    assert_eq!(pids(&mut tree(&proc)?), [10, 11, 12, 13]);
     Ok(())
 }
 
@@ -143,7 +146,7 @@ fn a_reparented_process_is_known_by_its_marker_alone() -> Result<()> {
     let mut embedded = Entry::new(32, 1, 105);
     embedded.environ = "X=TINYHIVEMIND_INSTANCE=abc\0";
     let proc = table(&[Entry::new(10, 1, 100), orphan, other, embedded])?;
-    assert_eq!(pids(&mut tree(&proc)?)?, [10, 30]);
+    assert_eq!(pids(&mut tree(&proc)?), [10, 30]);
     Ok(())
 }
 
@@ -152,7 +155,7 @@ fn a_process_older_than_the_root_is_never_a_member() -> Result<()> {
     let mut older = Entry::new(5, 1, 99);
     older.environ = "TINYHIVEMIND_INSTANCE=abc\0";
     let proc = table(&[Entry::new(10, 1, 100), older])?;
-    assert_eq!(pids(&mut tree(&proc)?)?, [10]);
+    assert_eq!(pids(&mut tree(&proc)?), [10]);
     Ok(())
 }
 
@@ -161,10 +164,10 @@ fn the_roots_process_group_is_the_instances() -> Result<()> {
     let mut grouped = Entry::new(40, 1, 105);
     grouped.group = 10;
     let proc = table(&[Entry::new(10, 1, 100), grouped])?;
-    assert_eq!(pids(&mut tree(&proc)?)?, [10, 40]);
+    assert_eq!(pids(&mut tree(&proc)?), [10, 40]);
     let mut released = tree(&proc)?;
     released.release();
-    assert_eq!(pids(&mut released)?, [10]);
+    assert_eq!(pids(&mut released), [10]);
     Ok(())
 }
 
@@ -176,7 +179,7 @@ fn the_dead_are_not_survivors_but_a_threaded_zombie_leader_is() -> Result<()> {
     leader.state = 'Z';
     leader.threads = 3;
     let proc = table(&[Entry::new(10, 1, 100), zombie, leader])?;
-    assert_eq!(pids(&mut tree(&proc)?)?, [10, 12]);
+    assert_eq!(pids(&mut tree(&proc)?), [10, 12]);
     Ok(())
 }
 
@@ -190,7 +193,7 @@ fn a_sampled_descendant_stays_a_member_after_it_is_reparented() -> Result<()> {
     tree.sample();
     fs::remove_dir_all(proc.path().join("11"))?;
     Entry::new(12, 1, 102).write(proc.path())?;
-    assert_eq!(pids(&mut tree)?, [10, 12]);
+    assert_eq!(pids(&mut tree), [10, 12]);
     Ok(())
 }
 
@@ -203,7 +206,7 @@ fn a_reused_pid_is_not_the_process_that_had_it() -> Result<()> {
     Entry::new(11, 1, 900).write(proc.path())?;
     // A child of the new owner of the pid is not ours either.
     Entry::new(12, 11, 901).write(proc.path())?;
-    assert_eq!(pids(&mut tree)?, [10]);
+    assert_eq!(pids(&mut tree), [10]);
     Ok(())
 }
 
@@ -213,7 +216,7 @@ fn a_stale_children_list_does_not_adopt_a_stranger() -> Result<()> {
     children(&proc, 10, "11 999 junk")?;
     let mut tree = tree(&proc)?;
     tree.sample();
-    assert_eq!(pids(&mut tree)?, [10]);
+    assert_eq!(pids(&mut tree), [10]);
     Ok(())
 }
 
@@ -258,7 +261,7 @@ fn appears_during_a_scan(says_last: bool) -> Result<()> {
         fs::remove_file(&path)?;
         Ok(fs::write(path, line)?)
     })?;
-    assert_eq!(pids(&mut tree(&proc)?)?, [10, 30]);
+    assert_eq!(pids(&mut tree(&proc)?), [10, 30]);
     assert!(late.join().is_ok_and(|added| added.is_ok()));
     Ok(())
 }
@@ -285,7 +288,7 @@ fn a_scan_in_which_the_pids_wrapped_around_is_not_complete() -> Result<()> {
     let mut tree = tree(&proc)?;
     assert!(!scan(&mut tree).complete);
     assert!(late.join().is_ok_and(|added| added.is_ok()));
-    assert_eq!(pids(&mut tree)?, [5, 10]);
+    assert_eq!(pids(&mut tree), [5, 10]);
     Ok(())
 }
 
@@ -295,7 +298,7 @@ fn a_process_still_being_forked_during_the_walk_is_found() -> Result<()> {
     let proc = table(&[Entry::new(10, 1, 100)])?;
     let table = proc.path().to_path_buf();
     let late = add_interrupted(proc.path(), (20, 20), move || marked(15, 102).write(&table))?;
-    assert_eq!(pids(&mut tree(&proc)?)?, [10, 15]);
+    assert_eq!(pids(&mut tree(&proc)?), [10, 15]);
     assert!(late.join().is_ok_and(|added| added.is_ok()));
     Ok(())
 }
@@ -317,7 +320,7 @@ fn a_child_of_the_hosts_line_is_judged_for_itself() -> Result<()> {
         second,
     ])?;
     last_pid(proc.path(), 31)?;
-    assert_eq!(pids(&mut tree(&proc)?)?, [30, 31]);
+    assert_eq!(pids(&mut tree(&proc)?), [30, 31]);
     Ok(())
 }
 
@@ -466,7 +469,7 @@ fn a_process_whose_environment_is_not_there_yet_is_looked_at_again() -> Result<(
             drop(empty);
             Ok(())
         })?;
-        assert_eq!(pids(&mut tree(&proc)?)?, [10, 30]);
+        assert_eq!(pids(&mut tree(&proc)?), [10, 30]);
         assert!(late.join().is_ok_and(|shown| shown.is_ok()));
     }
     Ok(())
@@ -508,7 +511,7 @@ fn a_thread_of_a_member_is_not_another_one() -> Result<()> {
     let mut thread = marked(31, 102);
     thread.leader = 30;
     let proc = table(&[Entry::new(10, 1, 100), marked(30, 102), thread])?;
-    assert_eq!(pids(&mut tree(&proc)?)?, [10, 30]);
+    assert_eq!(pids(&mut tree(&proc)?), [10, 30]);
     Ok(())
 }
 
@@ -557,7 +560,7 @@ fn an_environment_this_user_may_not_read_is_no_evidence() -> Result<()> {
     }
     let proc = table(&[exited_root(), marked(30, 102)])?;
     let environ = proc.path().join("30/environ");
-    fs::set_permissions(environ, fs::Permissions::from_mode(0))?;
+    fs::set_permissions(environ, fs::Permissions::from_mode(0o000))?;
     let found = scan(&mut tree(&proc)?);
     assert!(found.failure.is_none() && found.settled);
     Ok(())
@@ -575,8 +578,8 @@ fn a_process_that_shows_nothing_does_not_excuse_its_children() -> Result<()> {
     let proc = table(&[Entry::new(10, 1, 100), Entry::new(20, 1, 102), child])?;
     last_pid(proc.path(), 30)?;
     let environ = proc.path().join("20/environ");
-    fs::set_permissions(environ, fs::Permissions::from_mode(0))?;
-    assert_eq!(pids(&mut tree(&proc)?)?, [10, 30]);
+    fs::set_permissions(environ, fs::Permissions::from_mode(0o000))?;
+    assert_eq!(pids(&mut tree(&proc)?), [10, 30]);
     Ok(())
 }
 
