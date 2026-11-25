@@ -41,6 +41,8 @@ const ROUNDS: usize = 256;
 /// The pause when a round has nothing new and only waits.
 const IDLE: Duration = Duration::from_millis(1);
 
+/// Whose turn it is to scan the processes of this host.
+pub(super) static TURNS: Mutex<()> = Mutex::new(());
 /// Longest one scan keeps the others of this host waiting.
 const TURN: Duration = Duration::from_millis(500);
 
@@ -51,11 +53,10 @@ const QUEUE: Duration = Duration::from_secs(2);
 /// Wait to be the only scan of this host, which is worth waiting for but not
 /// needed: the kernel looks pids up under one lock, so scans at the same time
 /// slow each other down more than they gain.
-pub(in crate::process) fn turn(expired: &dyn Fn() -> bool) -> Option<MutexGuard<'static, ()>> {
-    static TURNS: Mutex<()> = Mutex::new(());
+fn turn<'a>(turns: &'a Mutex<()>, expired: &dyn Fn() -> bool) -> Option<MutexGuard<'a, ()>> {
     let started = Instant::now();
     while !expired() && started.elapsed() < QUEUE {
-        match TURNS.try_lock() {
+        match turns.try_lock() {
             Ok(turn) => return Some(turn),
             Err(TryLockError::Poisoned(turn)) => return Some(turn.into_inner()),
             Err(TryLockError::WouldBlock) => std::thread::sleep(IDLE),
@@ -136,7 +137,7 @@ impl Tree {
             self.sample();
         }
         self.recall(&mut pass, order);
-        let turn = turn(expired);
+        let turn = turn(self.turns, expired);
         let started = Instant::now();
         let expired = || expired() || started.elapsed() >= TURN;
         match self.walk(&mut pass, order, &expired) {

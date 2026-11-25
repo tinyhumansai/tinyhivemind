@@ -124,16 +124,23 @@ impl Supervisor {
         self.kill(policy.kill)
     }
 
-    /// Who is running now.
+    /// Who is running now. Asked again until the answer is complete.
     fn members(&mut self) -> Result<Vec<u32>> {
-        let exited = self.exited();
         let started = Instant::now();
         let expired = || started.elapsed() >= QUERY;
-        let look = self.scope.look(&self.root, exited, None, &expired);
-        match look.failure {
-            Some(failure) => Err(Error::Table(failure)),
-            None if look.complete => Ok(look.live),
-            None => Err(Error::Unproven),
+        loop {
+            let exited = self.exited();
+            let look = self.scope.look(&self.root, exited, None, &expired);
+            if let Some(failure) = look.failure {
+                return Err(Error::Table(failure));
+            }
+            if look.complete {
+                return Ok(look.live);
+            }
+            if expired() {
+                return Err(Error::Unproven);
+            }
+            thread::sleep(POLL);
         }
     }
 

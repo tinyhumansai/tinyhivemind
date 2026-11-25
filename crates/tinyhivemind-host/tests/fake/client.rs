@@ -42,6 +42,8 @@ pub(crate) enum Fault {
     Unguarded,
     /// A turn interrupted by a crash is sent again.
     Replays,
+    /// The seat does not recover from a cancelled turn.
+    LostByCancel,
     /// A crashed instance is not started again.
     StaysDown,
     /// Stopping kills the child alone.
@@ -94,6 +96,7 @@ impl Harness for FakeHarness {
             tools,
             live: AsyncMutex::new(None),
             total: Mutex::default(),
+            cancelled: Mutex::default(),
             pid: Mutex::default(),
         });
         Box::pin(async move {
@@ -149,6 +152,7 @@ struct Seat {
     tools: ToolEndpoint,
     live: AsyncMutex<Option<Live>>,
     total: Mutex<u64>,
+    cancelled: Mutex<bool>,
     pid: Mutex<u32>,
 }
 
@@ -267,6 +271,9 @@ impl Seat {
     }
 
     async fn turn(&self, live: &mut Option<Live>, request: &TurnRequest) -> Result<TurnOutcome> {
+        if self.shared.fault == Fault::LostByCancel && *lock(&self.cancelled) {
+            return Err(Error::Harness("still cancelling".into()));
+        }
         let live = self.revive(live).await?;
         live.send(&json!({
             "op": "turn", "turn": request.turn_id, "session": request.session_id,
@@ -324,6 +331,7 @@ impl Seat {
     /// Cancel and wait for the answer. A dead child has nothing to cancel.
     async fn cancel(&self) -> Result<()> {
         let mut live = self.live.lock().await;
+        *lock(&self.cancelled) = true;
         let Some(live) = live.as_mut() else {
             return Ok(());
         };

@@ -155,6 +155,10 @@ impl Subject for FakeSubject {
             .collect()
     }
 
+    fn turn_limit(&self) -> Duration {
+        Duration::from_secs(5)
+    }
+
     fn patience(&self) -> Duration {
         // A faulty harness is meant to be waited for in vain.
         match self.fault {

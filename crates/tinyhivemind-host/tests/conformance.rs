@@ -88,6 +88,10 @@ caught! {
         IgnoresCancel in DropStopsTheTurn as "model call 1 is Some(Open)",
     a_turn_without_a_limit_is_caught:
         Unguarded in TimeoutStopsTheTurn as "did not end within",
+    a_seat_lost_to_a_timeout_is_caught:
+        LostByCancel in TimeoutStopsTheTurn as "turn t2 failed",
+    a_seat_lost_to_a_drop_is_caught:
+        LostByCancel in DropStopsTheTurn as "turn t3 failed",
     a_drop_nobody_cancels_is_caught:
         Unguarded in DropStopsTheTurn as "model call 1 is Some(Open)",
     a_turn_admitted_before_the_last_one_is_settled_is_caught:

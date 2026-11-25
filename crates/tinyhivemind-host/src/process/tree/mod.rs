@@ -14,8 +14,6 @@ mod scan;
 mod stat;
 
 pub(super) use scan::Scan;
-#[cfg(test)]
-pub(super) use scan::turn;
 pub(super) use stat::Identity;
 
 use rustix::io::Errno;
@@ -25,6 +23,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::Instant;
 
 /// Whether the kernel offers what a [`Tree`] needs: pidfds, and a `/proc` that
@@ -79,6 +78,8 @@ pub(super) struct Tree {
     bare: BTreeMap<Identity, Instant>,
     /// Already sent SIGTERM.
     asked: BTreeSet<Identity>,
+    /// Shared by everyone who scans the same table.
+    pub(super) turns: &'static Mutex<()>,
 }
 
 impl Tree {
@@ -100,6 +101,7 @@ impl Tree {
             known: BTreeSet::from([root.identity()]),
             bare: BTreeMap::new(),
             asked: BTreeSet::new(),
+            turns: &scan::TURNS,
         })
     }
 

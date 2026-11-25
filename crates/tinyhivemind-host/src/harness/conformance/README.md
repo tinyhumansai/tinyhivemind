@@ -8,7 +8,7 @@ which a client crate enables as a dev-dependency.
 | --- | --- |
 | `mod.rs` | `Case`, `Failure` and how to run them. |
 | `subject.rs` | `Subject`: what a client provides to be tested. |
-| `cases.rs` | The cases. Those with a time limit retry with a longer one. |
+| `cases.rs` | The cases. None is tried twice. |
 
 It is a feature because other crates call it, so it cannot be a test module, and
 a deployed host has no use for it, so it is not always compiled.

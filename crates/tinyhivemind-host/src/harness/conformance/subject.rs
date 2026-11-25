@@ -83,7 +83,12 @@ pub trait Subject: Send + Sync {
     fn escapee(&self) -> EscapeFuture;
     /// Every running process of the subject's instances.
     fn processes(&self) -> Vec<u32>;
-    /// Longest the suite waits for anything. Generous, such as a minute, since
+    /// The limit of a turn in the timeout case, which waits for all of it once.
+    /// Generous: nothing is tried again, so an answered turn has to end within
+    /// it on the slowest machine the client is tested on.
+    fn turn_limit(&self) -> Duration;
+    /// Longest the suite waits for anything, and longer than a turn's limit.
+    /// Generous, such as a minute, since
     /// only a failure takes it.
     fn patience(&self) -> Duration;
 }

@@ -12,14 +12,6 @@ use tokio::time::Instant;
 
 type Outcome<T = ()> = Result<T, String>;
 
-/// The limits the timeout case tries. A longer one is tried if a turn did not
-/// reach the model, or an answered one did not end, so that a slow machine is
-/// not mistaken for a wrong client.
-const LIMITS: [Duration; 3] = [
-    Duration::from_secs(2),
-    Duration::from_secs(8),
-    Duration::from_secs(25),
-];
 /// How long a turn that must not start is given to start anyway.
 const QUIET: Duration = Duration::from_millis(200);
 const POLL: Duration = Duration::from_millis(5);
@@ -269,31 +261,14 @@ pub(super) async fn resume_failure_is_an_error(subject: &dyn Subject) -> Outcome
 }
 
 pub(super) async fn timeout_stops_the_turn(subject: &dyn Subject) -> Outcome {
-    let mut reason = String::new();
-    for limit in LIMITS {
-        let seat = start_limited(subject, Some(limit)).await?;
-        subject.script(&[ModelStep::Hang]);
-        let call = subject.model_calls().len();
-        seat.fail("t1", None).await?;
-        if subject.model_calls().len() > call {
-            call_is(subject, call, CallState::Aborted).await?;
-            match goes_on_within_its_limit(&seat).await {
-                Ok(()) => return seat.stop().await,
-                // Or too slow, which a longer limit tells apart.
-                Err(error) => reason = error,
-            }
-        } else {
-            reason = "no turn reached the model within its limit".into();
-        }
-        seat.stop().await?;
-    }
-    Err(reason)
-}
-
-async fn goes_on_within_its_limit(seat: &Seat<'_>) -> Outcome {
-    seat.subject.script(&[reply("two", 1)]);
+    let seat = start_limited(subject, Some(subject.turn_limit())).await?;
+    subject.script(&[ModelStep::Hang]);
+    seat.fail("t1", None).await?;
+    call_is(subject, 0, CallState::Aborted).await?;
+    subject.script(&[reply("two", 1)]);
     let session = seat.complete("t2", None).await?.session_id;
-    seat.goes_on("t3", &session, 2).await
+    seat.goes_on("t3", &session, 2).await?;
+    seat.stop().await
 }
 
 pub(super) async fn drop_stops_the_turn(subject: &dyn Subject) -> Outcome {

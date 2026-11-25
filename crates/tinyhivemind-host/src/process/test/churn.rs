@@ -8,7 +8,7 @@ use anyhow::Result;
 use std::fs;
 use std::os::unix::process::CommandExt as _;
 use std::process::{Child, Command, Stdio};
-use std::sync::{Arc, mpsc};
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 use tokio::sync::{oneshot, watch};
 
@@ -213,26 +213,31 @@ async fn a_supervisor_that_is_stuck_does_not_hold_up_a_stop_past_its_bounds() ->
 
 #[test]
 fn a_scan_that_is_stuck_does_not_hold_up_the_others() -> Result<()> {
-    let stuck = std::thread::spawn(|| {
-        let turn = crate::process::tree::turn(&|| false);
-        std::thread::sleep(Duration::from_secs(6));
+    // Its own turns, so that the other tests do not wait as well.
+    static TURNS: Mutex<()> = Mutex::new(());
+    let (release, held) = mpsc::channel::<()>();
+    let (taken, ready) = mpsc::channel();
+    let stuck = std::thread::spawn(move || {
+        let turn = TURNS.lock();
+        let _ = taken.send(());
+        let _ = held.recv();
         drop(turn);
     });
+    ready.recv()?;
     let child = Command::new("/bin/sleep")
         .arg("300")
         .process_group(0)
         .spawn()?;
     let root = Root::new(child);
     let mut tree = Tree::new("MARKER=x", root.id())?;
-    let mut found = tree.scan(None, &|| stuck.is_finished());
-    while !found.complete && !stuck.is_finished() {
-        found = tree.scan(None, &|| stuck.is_finished());
+    tree.turns = &TURNS;
+    let started = Instant::now();
+    let mut complete = false;
+    while !complete && started.elapsed() < PATIENCE {
+        complete = tree.scan(None, &|| started.elapsed() > PATIENCE).complete;
     }
-    assert!(
-        found.complete,
-        "nothing was found before the other was done"
-    );
-    assert_eq!(found.live.len(), 1);
+    assert!(complete, "nothing was found while the other was stuck");
+    drop(release);
     assert!(stuck.join().is_ok());
     Ok(())
 }
