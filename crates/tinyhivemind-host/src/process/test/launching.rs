@@ -160,6 +160,14 @@ async fn an_exit_is_observed_with_its_code_or_signal() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn an_exit_is_named_by_its_code_or_signal() {
+    let exit = |code, signal| Exit { code, signal }.to_string();
+    assert_eq!(exit(Some(3), None), "exit code 3");
+    assert_eq!(exit(None, Some(9)), "signal 9");
+    assert_eq!(exit(None, None), "unknown status");
+}
+
 #[tokio::test]
 async fn readiness_is_the_probe_unless_the_child_exits_or_the_deadline_passes() -> Result<()> {
     let fixture = Fixture::new()?;

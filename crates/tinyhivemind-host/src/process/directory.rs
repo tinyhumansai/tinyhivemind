@@ -1,7 +1,7 @@
 //! The private directories of one instance.
 use super::{Error, Result};
 use std::fs::{self, DirBuilder, Permissions};
-use std::io::{ErrorKind, Read};
+use std::io::{self, ErrorKind, Read};
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
@@ -60,32 +60,30 @@ impl InstanceDir {
 
 /// Make `path` a directory of mode 0700 that this user owns.
 fn private(path: &Path) -> Result<()> {
-    let failed = |source| Error::Directory {
-        path: path.to_path_buf(),
-        source,
-    };
     match DirBuilder::new().mode(0o700).create(path) {
-        Err(error) if error.kind() != ErrorKind::AlreadyExists => return Err(failed(error)),
+        Err(error) if error.kind() != ErrorKind::AlreadyExists => return Err(at(path)(error)),
         _ => {}
     }
-    let found = fs::symlink_metadata(path).map_err(failed)?;
+    let found = fs::symlink_metadata(path).map_err(at(path))?;
     if !found.is_dir() || found.uid() != rustix::process::geteuid().as_raw() {
         return Err(Error::NotPrivate {
             path: path.to_path_buf(),
         });
     }
-    fs::set_permissions(path, Permissions::from_mode(0o700)).map_err(failed)
+    fs::set_permissions(path, Permissions::from_mode(0o700)).map_err(at(path))
 }
 
 /// 128 random bits, as hex.
 pub(super) fn token() -> Result<String> {
-    let path = Path::new("/dev/urandom");
+    let source = Path::new("/dev/urandom");
     let mut bytes = [0; 16];
-    fs::File::open(path)
-        .and_then(|mut source| source.read_exact(&mut bytes))
-        .map_err(|source| Error::Directory {
-            path: path.to_path_buf(),
-            source,
-        })?;
+    let mut file = fs::File::open(source).map_err(at(source))?;
+    file.read_exact(&mut bytes).map_err(at(source))?;
     Ok(format!("{:032x}", u128::from_ne_bytes(bytes)))
+}
+
+/// A failure at `path`.
+fn at(path: &Path) -> impl FnOnce(io::Error) -> Error {
+    let path = path.to_path_buf();
+    move |source| Error::Directory { path, source }
 }

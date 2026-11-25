@@ -79,9 +79,7 @@ pub trait Subject: Send + Sync {
     fn escapee(&self) -> EscapeFuture;
     /// Every running process of the subject's instances.
     fn processes(&self) -> Vec<u32>;
-    /// Longest the suite waits for anything. Long by default, since only a
-    /// failure takes it.
-    fn patience(&self) -> Duration {
-        Duration::from_secs(60)
-    }
+    /// Longest the suite waits for anything. Generous, such as a minute, since
+    /// only a failure takes it.
+    fn patience(&self) -> Duration;
 }
