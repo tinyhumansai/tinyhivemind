@@ -119,23 +119,24 @@ impl Supervisor {
     }
 
     fn stop(&mut self, policy: &StopPolicy) -> Result<Exit> {
-        self.terminate(policy.terminate)?;
+        self.terminate(policy.terminate);
         self.kill(policy.kill)
     }
 
     /// Ask every member to end, for as long as `bound` allows.
-    fn terminate(&mut self, bound: Duration) -> Result<()> {
+    fn terminate(&mut self, bound: Duration) {
         let started = Instant::now();
         while started.elapsed() < bound && !self.hurry.load(Ordering::Acquire) {
             let exited = self.exited();
-            let members = self.scope.members(&self.root, exited)?;
-            if members.is_empty() || (exited && !self.scope.sees_past_the_child()) {
-                return Ok(());
+            let members = self.scope.members(&self.root, exited);
+            if members.is_ok_and(|members| members.is_empty())
+                || (exited && !self.scope.sees_past_the_child())
+            {
+                return;
             }
             self.scope.terminate(&self.root);
             thread::sleep(POLL);
         }
-        Ok(())
     }
 
     /// Kill every member until nobody is found, and give up the child.
