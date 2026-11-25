@@ -272,3 +272,27 @@ impl Hive {
 pub fn fixtures() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
 }
+
+/// An executable tool `id` running `tools/<script>.sh`, with `args` as its
+/// argument schema.
+pub fn tool(id: &str, script: &str, side_effects: &str, args: Value) -> tinyhivemind_lang::ExecTool {
+    serde_json::from_value(json!({
+        "id": id,
+        "description": format!("fixture {script}"),
+        "command": [format!("tools/{script}.sh")],
+        "args": args,
+        "side_effects": side_effects,
+    }))
+    .expect("a valid tool")
+}
+
+/// A hook `id` on `event` for tools `matcher`, running `tools/<script>.sh`.
+pub fn hook(id: &str, event: &str, matcher: &str, script: &str) -> tinyhivemind_lang::LoweredHook {
+    tinyhivemind_lang::LoweredHook {
+        hook: serde_json::from_value(json!({
+            "id": id, "event": event, "matcher": matcher, "run": script,
+        }))
+        .expect("a valid hook"),
+        tool: tool(script, script, "write", json!({"type": "object"})),
+    }
+}
