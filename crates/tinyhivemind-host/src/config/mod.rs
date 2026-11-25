@@ -15,4 +15,4 @@ pub use types::*;
 /// Plan validation result.
 pub type Result<T> = std::result::Result<T, ConfigError>;
 #[cfg(test)]
-mod test;
+pub(crate) mod test;

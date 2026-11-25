@@ -1,10 +1,8 @@
 //! Request wire shapes stay explicit and round trip.
-// Test assertions deliberately panic on invalid fixture construction.
-#![allow(clippy::unwrap_used)]
-use super::SendRequest;
+use super::{ManagementRequest, SendRequest};
 
 #[test]
-fn send_request_wire_shape_is_explicit() {
+fn send_request_wire_shape_is_explicit() -> Result<(), serde_json::Error> {
     let request = SendRequest::Hive {
         hive_id: "h".into(),
         body: "b".into(),
@@ -12,15 +10,15 @@ fn send_request_wire_shape_is_explicit() {
         only_for: vec![],
     };
     let wire = serde_json::json!({"Hive":{"hive_id":"h","body":"b","thread":3,"only_for":[]}});
-    assert_eq!(serde_json::to_value(&request).unwrap(), wire);
+    assert_eq!(serde_json::to_value(&request)?, wire);
     assert_eq!(
-        serde_json::from_value::<SendRequest>(wire).unwrap(),
+        serde_json::from_value::<SendRequest>(wire)?,
         request
     );
+    Ok(())
 }
 #[test]
 fn management_request_wire_shape_keeps_host_template_and_identity_fields() {
-    use super::ManagementRequest;
     use serde_json::json;
     let cases = [
         (
@@ -67,7 +65,6 @@ fn management_request_wire_shape_keeps_host_template_and_identity_fields() {
 #[test]
 fn create_agent_binding_wire_is_optional_and_preserves_the_contract()
 -> Result<(), serde_json::Error> {
-    use super::ManagementRequest;
     let legacy = serde_json::json!({"CreateAgent":{"template":"research","config":{}}});
     let decoded: ManagementRequest = serde_json::from_value(legacy.clone())?;
     assert!(matches!(

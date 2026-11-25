@@ -1,4 +1,4 @@
-//! Lower checked hive packages into the deployment plan `deploy` builds.
+//! Lower checked hive packages into the deployment plan an adapter builds.
 //!
 //! Each package is one hive. A seat id several packages declare is one agent,
 //! whose integration must agree across them; its `permissions` and `context`
@@ -434,3 +434,5 @@ pub fn plan(packages: &[PackageSource]) -> Result<Plan, ConfigError> {
     })
 }
 
+#[cfg(test)]
+mod test;

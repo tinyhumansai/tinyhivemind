@@ -3,7 +3,6 @@ use super::*;
 use tinyhivemind_lang::{
     LoweredMemoryBinding, MemoryIdentity, MemoryKind, MemoryLifecycle, SeatMemory, ToolAccess,
 };
-mod plan;
 
 fn binding() -> LoweredMemoryBinding {
     LoweredMemoryBinding {

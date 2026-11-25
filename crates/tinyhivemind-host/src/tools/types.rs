@@ -1,22 +1,39 @@
 //! The stable tool vocabulary and its argument declarations.
+use crate::ArgumentError;
 use serde_json::{Value, json};
-#[derive(Clone, Copy, Debug)]
+/// One hive tool.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Kind {
+    /// List the hives the caller has joined.
     ListHives,
+    /// List registered agent ids.
     ListAgents,
+    /// Read a joined hive or a direct transcript.
     Read,
+    /// Enqueue a message to a joined hive.
     SendHive,
+    /// Enqueue a direct message.
     SendAgent,
+    /// Post to the active episode.
     Post,
+    /// Ask peers in a child conversation of the active episode.
     Ask,
+    /// Broadcast work within the active episode.
     Broadcast,
+    /// Complete the active episode assignment.
     Complete,
+    /// Create a hive, when managed.
     CreateHive,
+    /// Create an agent, when managed.
     CreateAgent,
+    /// Join an agent to a hive, when managed.
     JoinHive,
+    /// Remove an agent from a hive, when managed.
     LeaveHive,
 }
 impl Kind {
+    /// The nine base tools, then the four management tools when `managed`.
+    #[must_use]
     pub fn all(managed: bool) -> Vec<Self> {
         let mut kinds = vec![
             Self::ListHives,
@@ -39,6 +56,13 @@ impl Kind {
         }
         kinds
     }
+    /// The kind a model calls `name`, if there is one.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::all(true).into_iter().find(|kind| kind.name() == name)
+    }
+    /// The name a model calls the tool by.
+    #[must_use]
     pub fn name(self) -> &'static str {
         match self {
             Self::ListHives => "hivemind_list_hives",
@@ -56,6 +80,8 @@ impl Kind {
             Self::LeaveHive => "hivemind_leave_hive",
         }
     }
+    /// What the model is told the tool does.
+    #[must_use]
     pub fn description(self) -> &'static str {
         match self {
             Self::ListHives => "List hives you have joined. Hive and desk have one hive_id.",
@@ -85,7 +111,7 @@ impl Kind {
             Self::LeaveHive => "Leave a hive after host authorization, retaining recorded history.",
         }
     }
-    pub fn fields(self) -> Vec<(&'static str, &'static str, bool)> {
+    fn fields(self) -> Vec<(&'static str, &'static str, bool)> {
         match self {
             Self::ListHives | Self::ListAgents => vec![],
             Self::Read => vec![
@@ -131,6 +157,8 @@ impl Kind {
             }
         }
     }
+    /// The JSON schema of the tool's arguments.
+    #[must_use]
     pub fn schema(self) -> Value {
         let mut properties = serde_json::Map::new();
         let mut required = Vec::new();
@@ -169,20 +197,22 @@ impl Kind {
             _ => None,
         }
     }
-    pub fn validate(self, args: &Value) -> anyhow::Result<()> {
-        let obj = args
-            .as_object()
-            .ok_or_else(|| anyhow::anyhow!("arguments must be an object"))?;
+    /// Check `args` against this tool's declaration.
+    /// # Errors
+    /// The first argument that does not fit.
+    pub fn validate(self, args: &Value) -> Result<(), ArgumentError> {
+        let obj = args.as_object().ok_or(ArgumentError::NotAnObject)?;
         let fields = self.fields();
         for name in obj.keys() {
-            anyhow::ensure!(
-                fields.iter().any(|(field, _, _)| field == name),
-                "unknown argument {name}"
-            );
+            if !fields.iter().any(|(field, _, _)| field == name) {
+                return Err(ArgumentError::Unknown(name.clone()));
+            }
         }
         for (name, ty, required) in fields {
             let Some(value) = obj.get(name) else {
-                anyhow::ensure!(!required, "missing argument {name}");
+                if required {
+                    return Err(ArgumentError::Missing(name));
+                }
                 continue;
             };
             let valid = match ty {
@@ -194,17 +224,17 @@ impl Kind {
                     .is_some_and(|items| items.iter().all(Value::is_string)),
                 _ => false,
             };
-            anyhow::ensure!(valid, "invalid {name}: expected {ty}");
+            if !valid {
+                return Err(ArgumentError::Invalid { name, expected: ty });
+            }
         }
         if matches!(self, Self::Read) {
-            anyhow::ensure!(
-                obj.contains_key("hive_id") != obj.contains_key("agent_id"),
-                "supply exactly one of hive_id or agent_id"
-            );
-            anyhow::ensure!(
-                !obj.contains_key("agent_id") || !obj.contains_key("thread"),
-                "thread is only valid for hive reads"
-            );
+            if obj.contains_key("hive_id") == obj.contains_key("agent_id") {
+                return Err(ArgumentError::OneDestination);
+            }
+            if obj.contains_key("agent_id") && obj.contains_key("thread") {
+                return Err(ArgumentError::ThreadOnDirectRead);
+            }
         }
         Ok(())
     }

@@ -1,11 +1,8 @@
 //! Turn scopes and the attributed prompt.
-// Test assertions deliberately panic on invalid fixture construction.
-#![allow(clippy::unwrap_used)]
 use super::*;
 
 #[test]
 fn turn_scope_names_the_episode_its_thread_and_distinct_senders() {
-    use super::TurnScope;
     use tinyhivemind_hives::{Destination, EpisodeContext, Message, TurnRequest};
     let row = |id: &str, sender: &str, thread| Message {
         scheduled_job_id: None,
@@ -66,7 +63,7 @@ fn turn_scope_names_the_episode_its_thread_and_distinct_senders() {
 }
 
 #[test]
-fn renders_attribution_and_explicit_episode_without_reseeding() {
+fn renders_attribution_and_explicit_episode_without_reseeding() -> tinyhivemind_hives::Result<()> {
     let request = TurnRequest {
         turn_id: String::new(),
         scheduled_job_id: None,
@@ -78,13 +75,14 @@ fn renders_attribution_and_explicit_episode_without_reseeding() {
         episode: None,
         resumption: None,
     };
-    let prompt = render(&request).unwrap();
+    let prompt = render(&request)?;
     assert!(prompt.contains("\"agent_id\":\"a\""));
     assert!(prompt.contains("\"session_id\":\"history\""));
     assert!(!prompt.contains("Host resumption note"));
+    Ok(())
 }
 #[test]
-fn renders_a_release_note_ahead_of_the_attributed_context() {
+fn renders_a_release_note_ahead_of_the_attributed_context() -> tinyhivemind_hives::Result<()> {
     let request = TurnRequest {
         turn_id: String::new(),
         scheduled_job_id: None,
@@ -96,9 +94,9 @@ fn renders_a_release_note_ahead_of_the_attributed_context() {
         episode: None,
         resumption: Some("approved: staging only".into()),
     };
-    let prompt = render(&request).unwrap();
-    let note = prompt
-        .find("Host resumption note: approved: staging only")
-        .unwrap();
-    assert!(note < prompt.find("Incoming attributed Hivemind context").unwrap());
+    let prompt = render(&request)?;
+    let note = prompt.find("Host resumption note: approved: staging only");
+    assert!(note.is_some());
+    assert!(note < prompt.find("Incoming attributed Hivemind context"));
+    Ok(())
 }

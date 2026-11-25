@@ -1,6 +1,30 @@
 //! Manifest wire and validation regressions.
 use super::*;
 
+/// Harness answers for tests: numeric cron fields in range, one built-in id.
+pub(crate) struct FixtureRules;
+impl HarnessRules for FixtureRules {
+    fn accepts_schedule(&self, expression: &str) -> bool {
+        expression
+            .split_whitespace()
+            .zip([59, 23, 31, 12, 7])
+            .all(|(field, max)| field.parse::<u32>().map_or(true, |value| value <= max))
+    }
+    fn reserves_agent_id(&self, agent_id: &str) -> bool {
+        agent_id == "orchestrator"
+    }
+}
+/// Validation under [`FixtureRules`], as an adapter validates under its own.
+pub(crate) trait Validate {
+    /// Validate for the fixture harness.
+    fn validate(self) -> Result<ValidatedHiveConfig>;
+}
+impl Validate for HiveConfig {
+    fn validate(self) -> Result<ValidatedHiveConfig> {
+        self.validate_for(&FixtureRules)
+    }
+}
+
 fn minimal() -> HiveConfig {
     HiveConfig::from_json(
         r#"{"profiles":[{"id":"worker"}],"seats":[{"id":"alice","profile":"worker"}],"hives":[{"id":"desk","members":[{"seat":"alice","role":"reviewer"}]}]}"#,
