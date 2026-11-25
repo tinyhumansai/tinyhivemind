@@ -21,6 +21,7 @@ const RESERVED_ARGUMENTS: [&str; 2] = ["turn", "call"];
 pub(super) fn capabilities(package: &Package, found: &mut Findings) {
     let m = &package.manifest;
     let mut providers: BTreeMap<usize, BTreeSet<&str>> = BTreeMap::new();
+    let mut out = Out::default();
     for (i, seat) in m.seats.iter().enumerate() {
         let kind = match resolve::named(m, seat) {
             None => HarnessKind::OpenHuman,
@@ -34,7 +35,11 @@ pub(super) fn capabilities(package: &Package, found: &mut Findings) {
                 None => continue,
             },
         };
-        let mut judge = Judge { m, kind, found };
+        let mut judge = Judge {
+            m,
+            kind,
+            found: &mut out,
+        };
         judge.provider(seat);
         judge.layers(seat, i);
         judge.hive();
@@ -45,16 +50,34 @@ pub(super) fn capabilities(package: &Package, found: &mut Findings) {
             && harness.resolved_isolation() == crate::Isolation::Deployment
             && seen.len() > 1
         {
-            found.push(
+            out.push(
                 Error::Integration {
                     field: format!("harnesses.{}.isolation", harness.id),
                     reason: "seats sharing one openclaw instance must resolve to one provider; \
                              use isolation seat"
                         .into(),
                 },
-                HIVE,
                 format!("/harnesses/{h}/isolation"),
             );
+        }
+    }
+    for (error, at) in out.findings {
+        found.push(error, HIVE, at);
+    }
+}
+
+/// Findings in the order met, one per location: a setting several seats
+/// share is reported once, for the first seat that resolves to it.
+#[derive(Default)]
+struct Out {
+    seen: BTreeSet<String>,
+    findings: Vec<(Error, String)>,
+}
+
+impl Out {
+    fn push(&mut self, error: Error, at: String) {
+        if self.seen.insert(at.clone()) {
+            self.findings.push((error, at));
         }
     }
 }
@@ -97,7 +120,7 @@ fn indices<'a, T>(
 struct Judge<'a, 'f> {
     m: &'a Manifest,
     kind: HarnessKind,
-    found: &'f mut Findings,
+    found: &'f mut Out,
 }
 
 impl Judge<'_, '_> {
@@ -109,7 +132,7 @@ impl Judge<'_, '_> {
                 self.kind
             );
             self.found
-                .push(Error::Integration { field, reason }, HIVE, at);
+                .push(Error::Integration { field, reason }, at);
         }
     }
 
@@ -257,7 +280,6 @@ impl Judge<'_, '_> {
                         field: format!("tools.{}.args.{name}", tool.id),
                         reason: "turn and call are added by the host to every served tool".into(),
                     },
-                    HIVE,
                     format!("/tools/{t}/args/properties/{name}"),
                 );
             }
@@ -293,7 +315,6 @@ impl Judge<'_, '_> {
                         self.kind
                     ),
                 },
-                HIVE,
                 format!("{at}/limits/iterations"),
             );
         }
