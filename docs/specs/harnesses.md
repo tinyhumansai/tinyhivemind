@@ -5,12 +5,13 @@ Boundary: [ADR 0035](../adr/0035-a-harness-is-a-process.md),
 [ADR 0036](../adr/0036-hive-tools-are-served-over-loopback-mcp.md).
 Evidence: [the harness spike](../experiments/2026-11-25-process-harnesses.md).
 
-Implemented so far, by step 1 of the plan: the harness-neutral host crate, the
-harness port with the seat rules below, start verification, process supervision
-on Linux, and a conformance suite that a scripted fake harness passes. No client
-for a real harness, no MCP server and no `harnesses` section exist yet. Until the
-plan's removal phase lands, the linked OpenHuman adapter remains the way a
-package is deployed.
+Implemented so far, by steps 1 and 2 of the plan: the harness-neutral host
+crate, the harness port with the seat rules below, start verification, process
+supervision on Linux, a conformance suite that a scripted fake harness passes,
+the coordinator's per-turn call record, and the `tinyhivemind-mcp` server. No
+client for a real harness and no `harnesses` section exist yet, and the server
+does not proxy package MCP servers. Until the plan's removal phase lands, the
+linked OpenHuman adapter remains the way a package is deployed.
 
 ## Problem
 
@@ -249,6 +250,37 @@ over Streamable HTTP on a random port of 127.0.0.1.
 - **Policy.** Package hooks, permission layers and send policy run here, before
   dispatch, for every tool this server serves.
 
+### What the server settled
+
+These details were left open above and are fixed by `tinyhivemind-mcp`:
+
+- **Protocol.** Revisions `2025-11-25`, `2025-06-18` and `2025-03-26` are
+  negotiated; the spike's OpenHuman and OpenClaw asked for the first, Codex
+  0.171 for the second, and anything else is answered with the newest. An
+  `MCP-Protocol-Version` header naming another revision gets 400. One message
+  per POST, answered as `application/json`; a batch is refused. Notifications
+  and client responses get 202. No `Mcp-Session-Id` is issued: the bearer names
+  the seat and none of the three harnesses needed one. A GET for the event
+  stream (OpenClaw sends one) and every method but POST get 405.
+- **Admission.** Exactly one `Host`, `127.0.0.1:<port>` or `localhost:<port>`,
+  else 403; any `Origin` 403; a path other than `/mcp` 404; a wrong or missing
+  bearer 401. Bodies are bounded (1 MiB by default, 413), as are header and
+  body time and open connections, which also bounds calls in flight.
+- **Results.** A refusal is the tool's error result, which the model reads; only
+  an unknown tool is a JSON-RPC error. Prompt lists are empty as well as
+  resource lists. A call runs on its own task, so a client hanging up does not
+  leave its outcome unknown.
+- **Order of checks.** For a state-changing call: `turn` and `call` taken out,
+  the turn check, argument validation, then the ledger, the access gate, the
+  "started" record and the hooks. Send and management policy run in the host's
+  belt as it dispatches, so for a hooked hive call a policy refusal comes after
+  its hooks and is recorded with them.
+- **Approval.** The approver is the host's `Approver` port, asked with a
+  `ToolApproval` whose `call_id` is the model's `call`.
+- **Refused seats.** A seat with package MCP servers (not proxied yet), with a
+  `sandbox` other than `none`, or with a tool declaring `turn` or `call` is
+  refused when it is served, as well as by `check`.
+
 `turn` protects against stale calls, not against a hostile model: the model can
 read it. A seat acting within its own current turn has its own authority anyway.
 
@@ -290,10 +322,13 @@ refused while the outcome is unknown.
   a new `call` acts twice. The rule makes transport retries safe. It does not
   make a model careful.
 
-**Today the coordinator cannot record this.** `submit_action` pushes an action onto
-the running turn with no identity, so a retried post is staged twice. Only sends
-deduplicate, by `message_id`. The single-transaction commit that the record needs
-does exist. [Plan step 2](../plans/2026-11-25-process-harnesses.md) adds it.
+**How the coordinator records it.** `submit_action`, `send` and the hive
+management calls each have an `*_in_turn` variant taking a `TurnCall` (agent,
+turn, `call`, tool, arguments). It checks the turn, answers a known call from
+`RunningTurn::calls` or acts and records it, in one commit; a stale turn is
+`StaleTurn` and a reuse `CallReused`. The record is omitted when empty, so older
+snapshots load unchanged. The unidentified entry points behave as before, for
+the linked adapter.
 
 Two existing ids are not this one:
 
