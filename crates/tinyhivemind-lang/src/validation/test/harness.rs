@@ -55,14 +55,19 @@ fn the_mixed_harnesses_package_checks_clean_with_a_harness_per_seat() {
 #[test]
 fn an_undeclared_harness_is_an_unresolved_reference() {
     let found = mixed(|m| m["runtime"]["harness"] = json!("ghost"));
-    assert!(has(&found, Rule::Reference, "/runtime/harness"), "{found:?}");
+    assert!(
+        has(&found, Rule::Reference, "/runtime/harness"),
+        "{found:?}"
+    );
     let found = mixed(|m| m["profiles"][0]["harness"] = json!("ghost"));
     assert!(has(&found, Rule::Reference, "/profiles/0/harness"));
     let found = mixed(|m| m["seats"][1]["harness"] = json!("ghost"));
     assert!(has(&found, Rule::Reference, "/seats/1/harness"));
     // With no `harnesses` section at all, a named harness still resolves
     // nowhere.
-    let found = after("integrations", |m| m["seats"][0]["harness"] = json!("codex"));
+    let found = after("integrations", |m| {
+        m["seats"][0]["harness"] = json!("codex")
+    });
     assert!(has(&found, Rule::Reference, "/seats/0/harness"));
 }
 
@@ -100,7 +105,10 @@ fn a_delegated_profile_may_not_name_a_harness() {
         m["harnesses"] = json!([{"id": "oh", "kind": "openhuman"}]);
         m["profiles"][2]["harness"] = json!("oh");
     });
-    assert!(has(&found, Rule::Integration, "/profiles/2/harness"), "{found:?}");
+    assert!(
+        has(&found, Rule::Integration, "/profiles/2/harness"),
+        "{found:?}"
+    );
 }
 
 #[test]
@@ -131,7 +139,10 @@ fn every_rejected_provider_row_is_reported_at_the_provider() {
         (json!({"kind": "openrouter"}), "/providers/0/kind"),
         (json!({"kind": "anthropic"}), "/providers/0/kind"),
         (json!({"kind": "inherit"}), "/providers/0/kind"),
-        (json!({"credential": {"env": "KEY"}}), "/providers/0/credential"),
+        (
+            json!({"credential": {"env": "KEY"}}),
+            "/providers/0/credential",
+        ),
     ] {
         let found = mixed(|m| {
             for (key, value) in edit.as_object().unwrap() {
@@ -162,7 +173,10 @@ fn a_seat_that_resolves_to_no_provider_is_rejected() {
 #[test]
 fn a_sandbox_and_built_in_tool_settings_are_rejected() {
     for (edit, pointer) in [
-        (json!(["runtime", "sandbox", "read_only"]), "/runtime/sandbox"),
+        (
+            json!(["runtime", "sandbox", "read_only"]),
+            "/runtime/sandbox",
+        ),
         (
             json!(["permissions", 0, "sandbox", "sandboxed"]),
             "/permissions/0/sandbox",
@@ -216,7 +230,10 @@ fn a_sandbox_and_built_in_tool_settings_are_rejected() {
 #[test]
 fn a_delegate_is_rejected_on_the_profile_that_names_it() {
     let found = mixed(|m| {
-        m["profiles"].as_array_mut().unwrap().push(json!({"id": "helper"}));
+        m["profiles"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"id": "helper"}));
         m["profiles"][0]["subagents"] = json!(["helper"]);
     });
     assert_eq!(integration_pointers(&found), ["/profiles/0/subagents"]);
@@ -229,10 +246,7 @@ fn openhuman_rejects_more_iterations_than_its_fixed_cap() {
     // The cap is OpenHuman's: the runtime default reaches every seat, and
     // only the `openhuman` one reports it.
     let found = mixed(|m| m["runtime"]["limits"]["iterations"] = json!(20));
-    assert_eq!(
-        integration_pointers(&found),
-        ["/runtime/limits/iterations"]
-    );
+    assert_eq!(integration_pointers(&found), ["/runtime/limits/iterations"]);
     let found = mixed(|m| m["runtime"]["limits"]["iterations"] = json!(8));
     assert_eq!(found, vec![]);
 }
@@ -244,9 +258,10 @@ fn a_shared_openclaw_instance_runs_one_provider() {
             .as_array_mut()
             .unwrap()
             .push(json!({"id": "other", "kind": "openai", "endpoint": "http://127.0.0.1:9090/v1"}));
-        m["models"].as_array_mut().unwrap().push(
-            json!({"id": "second", "provider": "other", "name": "second-model"}),
-        );
+        m["models"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"id": "second", "provider": "other", "name": "second-model"}));
         m["seats"][0]["harness"] = json!("claw");
         m["seats"][0]["model"] = json!("second");
     });
@@ -256,9 +271,10 @@ fn a_shared_openclaw_instance_runs_one_provider() {
             .as_array_mut()
             .unwrap()
             .push(json!({"id": "other", "kind": "openai", "endpoint": "http://127.0.0.1:9090/v1"}));
-        m["models"].as_array_mut().unwrap().push(
-            json!({"id": "second", "provider": "other", "name": "second-model"}),
-        );
+        m["models"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"id": "second", "provider": "other", "name": "second-model"}));
         m["seats"][0]["harness"] = json!("claw");
         m["seats"][0]["model"] = json!("second");
         m["harnesses"][0]["isolation"] = json!("seat");

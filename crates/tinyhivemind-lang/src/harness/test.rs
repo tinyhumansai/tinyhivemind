@@ -1,7 +1,7 @@
 //! The names a package gives harnesses, and the wire form of the `harnesses`
 //! section and the `harness` fields.
 #![allow(clippy::unwrap_used)] // Tests fail loudly on unexpected results.
-use super::{Harness, HarnessKind, Isolation};
+use super::{Capability, Harness, HarnessKind, Isolation, ModelApi, Support, Unlock};
 use crate::{Manifest, Profile, RuntimeSettings, Seat};
 use serde_json::json;
 
@@ -153,4 +153,89 @@ fn an_explicit_null_harness_or_an_empty_harnesses_list_does_not_decode() {
             "{bad}"
         );
     }
+}
+
+/// The table as the spec writes it, one row per capability and one column
+/// per kind. Moving a row is a deliberate change to this literal, made in the
+/// same change as the conformance test (or the decision) that moves it.
+#[test]
+fn the_capability_table_is_the_spec_table() {
+    use Capability as C;
+    use Support::{Harness as H, Host, Rejected};
+    const T: Support = Rejected(Unlock::Conformance);
+    const R: Support = Rejected(Unlock::Release);
+    const D: Support = Rejected(Unlock::Decision);
+    let table = [
+        (C::Essentials, [H, H, H]),
+        (C::OpenaiEndpoint, [H, H, H]),
+        (C::OpenaiDefaultEndpoint, [T, T, T]),
+        (C::Openrouter, [T, T, T]),
+        (C::Anthropic, [T, T, T]),
+        (C::InheritedProvider, [D, D, D]),
+        (C::ProviderCredential, [T, T, T]),
+        (C::ServedToolPolicy, [Host, Host, Host]),
+        (C::NoSandbox, [H, H, H]),
+        (C::Sandbox, [D, D, D]),
+        (C::Autonomy, [Host, Host, Host]),
+        (C::BuiltinToolGroups, [D, D, D]),
+        (C::BuiltinToolRules, [R, D, D]),
+        (C::BuiltinToolHooks, [D, D, D]),
+        (C::McpServers, [Host, Host, Host]),
+        (C::HostSessionStore, [D, D, D]),
+        (C::HostMemoryEngine, [D, D, D]),
+        (C::Subagents, [T, D, D]),
+        (C::DefinitionBase, [T, D, D]),
+        (C::Jev, [T, D, D]),
+        (C::SessionTuning, [T, D, D]),
+        (C::Workflows, [Host, Host, Host]),
+    ];
+    assert_eq!(
+        table.iter().map(|(c, _)| *c).collect::<Vec<_>>(),
+        Capability::ALL
+    );
+    for (capability, row) in table {
+        for (kind, support) in HarnessKind::ALL.into_iter().zip(row) {
+            assert_eq!(kind.support(capability), support, "{kind} {capability}");
+        }
+    }
+}
+
+#[test]
+fn only_a_rejected_row_is_unsupported_and_each_row_reads_as_prose() {
+    assert!(Support::Harness.is_supported());
+    assert!(Support::Host.is_supported());
+    assert!(!Support::Rejected(Unlock::Conformance).is_supported());
+    for capability in Capability::ALL {
+        let prose = capability.to_string();
+        assert!(
+            !prose.is_empty() && prose == prose.to_lowercase(),
+            "{prose}"
+        );
+    }
+    assert_eq!(
+        Capability::OpenaiDefaultEndpoint.to_string(),
+        "provider openai without an endpoint"
+    );
+    assert_eq!(
+        Unlock::Conformance.to_string(),
+        "rejected until a conformance test on the pinned binary proves it"
+    );
+}
+
+#[test]
+fn each_kind_names_its_model_api_and_iteration_cap() {
+    assert_eq!(
+        HarnessKind::OpenHuman.model_api(),
+        ModelApi::ChatCompletions
+    );
+    assert_eq!(HarnessKind::OpenClaw.model_api(), ModelApi::ChatCompletions);
+    assert_eq!(HarnessKind::Codex.model_api(), ModelApi::Responses);
+    assert_eq!(HarnessKind::OpenHuman.iteration_cap(), Some(8));
+    assert_eq!(HarnessKind::OpenClaw.iteration_cap(), None);
+    assert_eq!(HarnessKind::Codex.iteration_cap(), None);
+    assert_eq!(
+        HarnessKind::OpenClaw.default_isolation(),
+        Isolation::Deployment
+    );
+    assert_eq!(HarnessKind::Codex.default_isolation(), Isolation::Seat);
 }

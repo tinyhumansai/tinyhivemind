@@ -1,6 +1,8 @@
 //! Which harness a seat runs on.
+mod capability;
 pub(crate) mod resolve;
 mod types;
+pub use capability::{Capability, ModelApi, Support, Unlock};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 pub use types::{Harness, Isolation};
