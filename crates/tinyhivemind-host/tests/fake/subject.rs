@@ -119,6 +119,27 @@ impl Subject for FakeSubject {
         fs::write(self.control().join("tools"), text).unwrap();
     }
 
+    /// Whatever runs in this subject's instance directory.
+    fn processes(&self) -> Vec<u32> {
+        let instance = self.root.path().join("instance");
+        fs::read_dir("/proc")
+            .unwrap()
+            .flatten()
+            .filter_map(|entry| entry.file_name().to_str()?.parse().ok())
+            .filter(|pid: &u32| {
+                fs::read_link(format!("/proc/{pid}/cwd")).is_ok_and(|cwd| cwd.starts_with(&instance))
+            })
+            .collect()
+    }
+
+    fn patience(&self) -> Duration {
+        // A faulty harness is meant to be waited for in vain.
+        match self.fault {
+            Fault::None => Duration::from_secs(60),
+            _ => Duration::from_secs(3),
+        }
+    }
+
     fn escapee(&self) -> EscapeFuture {
         let harness = self.current.lock().unwrap().clone();
         let report = self.control().join("escapee");
@@ -132,5 +153,15 @@ impl Subject for FakeSubject {
             }
             panic!("the escapee never reported");
         })
+    }
+}
+
+/// A faulty harness leaves processes behind.
+impl Drop for FakeSubject {
+    fn drop(&mut self) {
+        for pid in self.processes() {
+            let pid = rustix::process::Pid::from_raw(pid.cast_signed()).unwrap();
+            let _ = rustix::process::kill_process(pid, rustix::process::Signal::KILL);
+        }
     }
 }

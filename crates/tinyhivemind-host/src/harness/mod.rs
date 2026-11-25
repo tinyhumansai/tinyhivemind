@@ -15,6 +15,8 @@
 //! - [`TurnUsage::since`] turns a harness's running total into a turn's usage.
 //!
 //! The `conformance` feature adds the suite every client must pass.
+#[cfg(all(unix, feature = "conformance"))]
+pub mod conformance;
 mod error;
 mod events;
 mod kind;

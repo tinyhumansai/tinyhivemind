@@ -303,8 +303,12 @@ impl Seat {
         loop {
             match live.recv().await {
                 Ok(answer) if answer["event"] == "cancelled" => return Ok(()),
-                // What the turn said before it was cancelled.
-                Ok(_) => {}
+                // The turn ended first. What it used is not the next one's.
+                Ok(answer) => {
+                    if let Some(total) = answer["total"].as_u64() {
+                        *self.total.lock().unwrap() = total;
+                    }
+                }
                 Err(_) => {
                     live.instance.exited().await;
                     return Ok(());
