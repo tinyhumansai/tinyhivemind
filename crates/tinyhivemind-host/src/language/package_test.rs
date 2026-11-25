@@ -101,3 +101,14 @@ fn a_file_that_cannot_be_read_is_named() -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+#[test]
+fn what_lowering_refuses_is_a_finding_in_the_manifest() {
+    let error = tinyhivemind_lang::Error::MissingDocument {
+        path: "seats/a.md".into(),
+    };
+    let finding = super::finding(&error);
+    assert_eq!(finding.file, "hive.json");
+    assert_eq!(finding.rule, tinyhivemind_lang::Rule::from(&error));
+    assert!(finding.message.contains("seats/a.md"));
+}

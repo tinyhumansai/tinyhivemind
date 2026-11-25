@@ -7,7 +7,7 @@ use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
 };
-use tinyhivemind_lang::{LoweredHive, Package};
+use tinyhivemind_lang::{Diagnostic, LoweredHive, Package, Rule};
 
 /// A checked hive package and the root its relative files resolve against.
 #[derive(Clone, Debug)]
@@ -46,14 +46,8 @@ impl PackageSource {
         let Some(package) = package.filter(|_| diagnostics.is_empty()) else {
             return Err(failed(diagnostics));
         };
-        let lowered = tinyhivemind_lang::lower(&package).map_err(|error| {
-            failed(vec![tinyhivemind_lang::Diagnostic {
-                file: "hive.json".into(),
-                pointer: None,
-                rule: tinyhivemind_lang::Rule::from(&error),
-                message: error.to_string(),
-            }])
-        })?;
+        let lowered = tinyhivemind_lang::lower(&package);
+        let lowered = lowered.map_err(|error| failed(vec![finding(&error)]))?;
         Ok(Self {
             root,
             package,
@@ -120,6 +114,17 @@ impl PackageSource {
     #[must_use]
     pub fn lowered(&self) -> &LoweredHive {
         &self.lowered
+    }
+}
+
+/// What lowering refused, which a package that checks does not get to, as a
+/// finding like those of the check.
+fn finding(error: &tinyhivemind_lang::Error) -> Diagnostic {
+    Diagnostic {
+        file: "hive.json".into(),
+        pointer: None,
+        rule: Rule::from(error),
+        message: error.to_string(),
     }
 }
 
