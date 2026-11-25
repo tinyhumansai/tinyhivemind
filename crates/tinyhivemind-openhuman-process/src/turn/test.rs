@@ -183,11 +183,11 @@ async fn a_cancelled_turn_is_shown_to_have_stopped() {
     let active = harnessed.active.lock().ok().and_then(|mut active| active.take());
     let active = active.unwrap_or_else(|| unreachable!("a dropped turn leaves itself"));
     assert!(active.request_id.is_some());
-    let cancelled = cancel(&harnessed.fixture.client, "thm-scout", &active).await;
+    let cancelled = cancel(&harnessed.fixture.client, &active).await;
     assert!(cancelled.is_ok(), "{cancelled:?}");
     assert_eq!(harnessed.fixture.calls(), ["aborted"]);
     // Nothing is running any more, so a second cancel returns at once.
-    let again = cancel(&harnessed.fixture.client, "thm-scout", &active).await;
+    let again = cancel(&harnessed.fixture.client, &active).await;
     assert!(again.is_ok());
 }
 

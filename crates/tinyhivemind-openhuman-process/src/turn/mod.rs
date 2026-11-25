@@ -50,6 +50,8 @@ pub(crate) enum Error {
 /// The submitted turn of a seat, which a cancellation names.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct Active {
+    /// The seat's thread.
+    pub(crate) thread: String,
     /// The turn's own `client_id`.
     pub(crate) client_id: String,
     /// What `channel_web_chat` returned, once it has.
@@ -95,6 +97,7 @@ pub(crate) async fn run(
 ) -> Result<Ended> {
     let mut events = turn.client.events(&turn.client_id).await?;
     let mut submitted = Active {
+        thread: turn.thread.to_owned(),
         client_id: turn.client_id.clone(),
         request_id: None,
     };
@@ -233,10 +236,10 @@ async fn approve(turn: &Turn<'_>, event: &Value) -> Result<()> {
     Ok(())
 }
 
-/// Cancel `active` on `thread`, returning once its request has ended.
-pub(crate) async fn cancel(client: &Client, thread: &str, active: &Active) -> Result<()> {
+/// Cancel `active`, returning once its request has ended.
+pub(crate) async fn cancel(client: &Client, active: &Active) -> Result<()> {
     let mut events = client.events(&active.client_id).await?;
-    let mut params = json!({"client_id": active.client_id, "thread_id": thread});
+    let mut params = json!({"client_id": active.client_id, "thread_id": active.thread});
     if let Some(request_id) = &active.request_id {
         params["request_id"] = json!(request_id);
     }
