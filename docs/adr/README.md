@@ -60,6 +60,8 @@ link any earlier ADR it amends.
 | [0032](0032-hive-language-owns-the-wire-format.md) | The hive language owns a host-neutral wire format | Accepted — supersedes the package count in 0028; editing superseded in part by 0033 |
 | [0033](0033-editors-write-files-and-the-crate-checks-them.md) | Editors write files; the crate checks them | Accepted — supersedes patch authoring in 0032 |
 | [0034](0034-the-hive-language-defines-the-deployment.md) | The hive language defines the deployment | Accepted — supersedes the parallel schema of the OpenHuman hive configuration spec |
+| [0035](0035-a-harness-is-a-process.md) | A harness is a process | Accepted — amends 0034; supersedes 0020 and the linking crate of 0028 once the link is removed |
+| [0036](0036-hive-tools-are-served-over-loopback-mcp.md) | Hive tools are served over loopback MCP | Accepted — amends 0027 |
 
 ## Reading order
 

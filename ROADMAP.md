@@ -10,6 +10,7 @@ consumer builds.
 
 | Phase | What lands | State |
 | --- | --- | --- |
+| Process harnesses | OpenHuman, OpenClaw and Codex seats as supervised child processes, chosen per seat; hive tools over loopback MCP; the linked OpenHuman adapter removed behind a parity gate; [spec](docs/specs/harnesses.md), [plan](docs/plans/2026-11-25-process-harnesses.md), [ADR 0035](docs/adr/0035-a-harness-is-a-process.md), [ADR 0036](docs/adr/0036-hive-tools-are-served-over-loopback-mcp.md) | spec accepted |
 | Hive language integrations | OpenHuman at upstream main; `hive.json` gains runtime, providers, models, MCP, skills, executable tools, toolpacks, permissions, profiles, hooks, session, Jev, features and workflows; tools and hooks as scripts in any language (`tinyhivemind-exec`); OpenHuman deploys packages and `HiveConfig` is retired; [spec](docs/specs/hive-language-integrations.md), [executable tools](docs/specs/executable-tools.md), [ADR 0034](docs/adr/0034-the-hive-language-defines-the-deployment.md) | **done** |
 | OpenHuman configuration | One runtime, reusable Markdown profiles, persistent seats, narrowed hive permissions and native workflows; [accepted contract](docs/specs/openhuman-hive-config.md) | Implemented in #113; its manifest format is superseded by hive packages (ADR 0034) |
 | P0 | Reshape the TinyBus module template into a plain library workspace | **done** |

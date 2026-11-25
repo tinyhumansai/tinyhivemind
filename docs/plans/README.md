@@ -61,3 +61,4 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a test-first sample
 
 - [`2026-10-10-hive-language.md`](2026-10-10-hive-language.md) — implement the accepted hive language and adapter conversions.
 - [`2026-10-23-hive-language-integrations.md`](2026-10-23-hive-language-integrations.md) — bump OpenHuman to upstream main, give the language its integration sections, add executable tools, and deploy packages on OpenHuman in place of `HiveConfig`.
+- [`2026-11-25-process-harnesses.md`](2026-11-25-process-harnesses.md) — run OpenHuman, OpenClaw and Codex as child processes and remove the linked adapter.

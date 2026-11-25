@@ -29,7 +29,10 @@ Three rules decide what belongs here:
    `tinyhivemind-lang` do not name types from a consuming application.
    They accept snapshots, borrowed views, or narrow ports. The
    `tinyhivemind-openhuman` adapter explicitly names OpenHuman types and keeps
-   that dependency out of the pure crates.
+   that dependency out of the pure crates. That link is being replaced: a
+   harness is a supervised process behind a client crate that links none
+   ([ADR 0035](docs/adr/0035-a-harness-is-a-process.md)). Add no new linked
+   harness, and no new dependency on the linked one.
 3. **One message, one round, of bounded width.** A step may authorize several
    turns to run concurrently — seats are async sessions and the algebra says so
    — but never more than `round_width` while blind or `revealed_width` after

@@ -162,3 +162,4 @@ rather than restating it. Two run across several specifications:
 
 - [`hive-language.md`](hive-language.md) — pure declarative hive packages, guarded edits, memory bindings, and evaluated lineage.
 - [`hive-language-checking.md`](hive-language-checking.md) — direct file edits checked like a compiler: located diagnostics, collected findings, and per-class changes for lineage.
+- [`harnesses.md`](harnesses.md) — accepted, not yet implemented: OpenHuman, OpenClaw and Codex seats as supervised processes, chosen per seat, reaching hive tools over loopback MCP.
