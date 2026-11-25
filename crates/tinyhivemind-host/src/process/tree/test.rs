@@ -1,5 +1,5 @@
 //! Attribution over a fabricated process table, and signalling real ones.
-use super::{Identity, Stat, Tree, alive, signal};
+use super::{Identity, Stat, Tree, signal};
 use rustix::process::Signal;
 use std::fs;
 use std::path::Path;
@@ -179,6 +179,11 @@ fn an_unreadable_table_is_an_error_and_not_an_empty_tree() {
     let mut tree = tree(&proc);
     drop(proc);
     assert!(tree.scan().is_err());
+}
+
+/// Whether `member` is running.
+fn alive(proc: &Path, member: Identity) -> bool {
+    Stat::read(proc, member.pid).is_some_and(|stat| !stat.dead && stat.identity() == member)
 }
 
 /// The identity of a real process.

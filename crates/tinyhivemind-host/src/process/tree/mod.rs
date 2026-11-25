@@ -235,10 +235,4 @@ fn signal(proc: &Path, member: Identity, signal: Signal) -> rustix::io::Result<(
 }
 
 #[cfg(test)]
-/// Whether `member` is running, for tests.
-fn alive(proc: &Path, member: Identity) -> bool {
-    Stat::read(proc, member.pid).is_some_and(|stat| !stat.dead && stat.identity() == member)
-}
-
-#[cfg(test)]
 mod test;
