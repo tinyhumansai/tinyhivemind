@@ -5,9 +5,11 @@
 - **Spec:** [harnesses](../specs/harnesses.md)
 - **Decision:** [ADR 0035](../adr/0035-a-harness-is-a-process.md),
   [ADR 0036](../adr/0036-hive-tools-are-served-over-loopback-mcp.md)
-- **Code:** throwaway scripts under the git-ignored `target/spike`; not kept. The
-  conformance suite in the [plan](../plans/2026-11-25-process-harnesses.md) is the
-  durable replacement.
+- **Code:** [the companion directory](2026-11-25-process-harnesses/README.md): the
+  fixture, the exact configs, environment, flags, versions and checksums, and the
+  commands that repeat the gate and the measurements. It also lists which spike
+  scripts were kept and which were not. The conformance suite in the
+  [plan](../plans/2026-11-25-process-harnesses.md) is the durable replacement.
 
 ## Question and gate
 
@@ -21,7 +23,8 @@ the work. A Codex failure would drop only Codex.
 A scripted model (Chat Completions and Responses) and a bearer-checked MCP stub on
 loopback, shared by all three. Versions: openhuman-core 0.64.15 (release, sha256
 checked), OpenClaw 2026.10.33 on Node 24.22.3, codex-cli 0.171.0, Linux x86_64. No
-real model and no login. A mock proves wiring and says nothing of model behaviour.
+real model and no login: the fixture ignored the key on model requests, so no
+provider credential was tested. A mock proves wiring and says nothing of model behaviour.
 Each harness was tested by a separate agent with the same checklist, on a shared
 machine, so timings are indicative.
 
@@ -94,7 +97,8 @@ OpenHuman or Codex seat adds a process.
 
 ## Not tested
 
-Real models; compaction and long sessions; concurrent seats under load; provider
+Real models; provider credentials, and any provider other than one custom endpoint
+per harness; compaction and long sessions; concurrent seats under load; provider
 rate limits; OpenClaw's documented sub-agent auto-archive; memory per extra agent
 in one Gateway; harness built-in tools under a sandbox; OpenHuman's
 `tool_rules` in any release; macOS and ARM; coordinator-run turns over a real
