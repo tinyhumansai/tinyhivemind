@@ -180,6 +180,17 @@ impl Instance {
         self.stderr.text()
     }
 
+    /// Why a log ends before the child's output does, if one does. Nothing
+    /// drains that pipe any more, so the child may block on it.
+    #[must_use]
+    pub fn log_failure(&self) -> Option<Error> {
+        let logs = [("stdout", &self.stdout), ("stderr", &self.stderr)];
+        logs.into_iter().find_map(|(stream, log)| {
+            let kind = log.failure()?;
+            Some(Error::Log { stream, kind })
+        })
+    }
+
     /// How the child ended, if it did.
     #[must_use]
     pub fn exit(&self) -> Option<Exit> {

@@ -2,8 +2,11 @@
 use super::{JsonLines, Limits, LineError, Tail, drain};
 use anyhow::{Context as _, Result, bail};
 use serde_json::{Value, json};
+use std::io;
+use std::pin::Pin;
+use std::task::{self, Poll};
 use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream, duplex};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt, DuplexStream, ReadBuf, duplex};
 
 const LIMITS: Limits = Limits {
     line: 64,
@@ -92,7 +95,6 @@ async fn a_child_that_writes_unread_lines_is_drained_and_the_loss_is_reported() 
     for _ in 0..1000 {
         child_out.write_all(b"\"0123456789\"\n").await?;
     }
-    drop(child_out);
     let mut values = 0;
     loop {
         match lines.receiver.recv().await {
@@ -105,7 +107,82 @@ async fn a_child_that_writes_unread_lines_is_drained_and_the_loss_is_reported() 
         }
     }
     assert!((1..1000).contains(&values));
+    // The stream is over although the child is still there and writing.
+    child_out.write_all(b"{}\n").await?;
+    let ended = tokio::time::timeout(Duration::from_secs(10), lines.receiver.recv());
+    assert!(ended.await?.is_none());
+    for _ in 0..1000 {
+        child_out.write_all(b"\"0123456789\"\n").await?;
+    }
+    Ok(())
+}
+
+/// Fails every read after the first bytes.
+struct Broken(Option<&'static [u8]>);
+
+impl AsyncRead for Broken {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        _: &mut task::Context<'_>,
+        buffer: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        Poll::Ready(match self.0.take() {
+            Some(bytes) => {
+                buffer.put_slice(bytes);
+                Ok(())
+            }
+            None => Err(io::Error::other("device gone")),
+        })
+    }
+}
+
+#[tokio::test]
+async fn a_pipe_that_cannot_be_read_is_an_error_and_not_the_end_of_the_output() -> Result<()> {
+    let (host_in, _child_in) = duplex(16);
+    let broken = Broken(Some(b"1\n2"));
+    let (mut lines, _, reading) = JsonLines::over(host_in, broken, LIMITS);
+    reading.await;
+    assert_eq!(lines.receiver.recv().await.context("missing")??, json!(1));
+    // Half a line is not a line.
+    let error = lines.receiver.recv().await.context("missing")?.err();
+    assert!(matches!(error, Some(LineError::Read(_))), "{error:?}");
     assert!(lines.receiver.recv().await.is_none());
+    let tail = Tail::new(8);
+    drain(Broken(Some(b"log")), tail.clone()).await;
+    assert_eq!(tail.text(), "log");
+    assert_eq!(tail.failure(), Some(io::ErrorKind::Other));
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_line_too_long_to_send_is_refused_and_none_of_it_is_sent() -> Result<()> {
+    let (lines, mut child_in, _child_out) = connect(LIMITS);
+    let error = lines.sender.send(&json!("x".repeat(100))).await.err();
+    assert!(matches!(error, Some(LineError::TooLong { limit: 64 })));
+    lines.sender.send(&json!("x".repeat(62))).await?;
+    drop(lines);
+    let mut written = String::new();
+    child_in.read_to_string(&mut written).await?;
+    assert_eq!(written.len(), 65);
+    Ok(())
+}
+
+#[tokio::test]
+async fn what_waits_to_be_written_is_bounded_by_bytes() -> Result<()> {
+    let (lines, _child_in, _child_out) = connect(LIMITS);
+    let long = json!("x".repeat(60));
+    let mut sent = 0;
+    let waiting = async {
+        while sent < 100 {
+            lines.sender.send(&long).await?;
+            sent += 1;
+        }
+        Ok::<_, LineError>(())
+    };
+    let filled = tokio::time::timeout(Duration::from_millis(200), waiting).await;
+    assert!(filled.is_err(), "nobody reads, so a send has to wait");
+    // 256 bytes may wait, beside what the pipe and the writer hold.
+    assert!((1..=6).contains(&sent), "{sent}");
     Ok(())
 }
 

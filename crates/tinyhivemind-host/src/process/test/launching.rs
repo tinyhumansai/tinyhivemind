@@ -140,6 +140,7 @@ async fn logs_are_bounded_and_always_drained() -> Result<()> {
     assert!(instance.exited().await.success());
     until(|| instance.stderr().ends_with("end\n")).await;
     assert_eq!(instance.stderr().len(), 1000);
+    assert!(instance.log_failure().is_none());
     Ok(())
 }
 

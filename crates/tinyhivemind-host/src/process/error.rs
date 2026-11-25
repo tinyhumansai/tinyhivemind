@@ -52,6 +52,14 @@ pub enum Error {
     /// tree.
     #[error("the process table could not be read: {0}")]
     Table(#[source] io::Error),
+    /// A log of the child could not be read to its end.
+    #[error("the child's {stream} could not be read: {kind}")]
+    Log {
+        /// `stdout` or `stderr`.
+        stream: &'static str,
+        /// What went wrong.
+        kind: io::ErrorKind,
+    },
     /// Processes of the instance were still there when the time ran out. The
     /// instance is not stopped.
     #[error("{} processes of the instance are still running: {pids:?}", pids.len())]
