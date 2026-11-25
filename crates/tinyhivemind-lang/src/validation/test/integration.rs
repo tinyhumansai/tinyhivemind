@@ -8,7 +8,15 @@ use std::collections::BTreeMap;
 
 /// The `integrations` example package, every file keyed by relative path.
 pub(crate) fn documents() -> BTreeMap<String, String> {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/hives/integrations");
+    example("integrations")
+}
+
+/// The example package `examples/hives/<name>`, every file keyed by
+/// relative path.
+pub(super) fn example(name: &str) -> BTreeMap<String, String> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("examples/hives")
+        .join(name);
     let mut files = BTreeMap::new();
     let mut pending = vec![(root, String::new())];
     while let Some((dir, prefix)) = pending.pop() {
@@ -34,7 +42,7 @@ fn after(edit: impl FnOnce(&mut Value)) -> Vec<Diagnostic> {
     diagnose_documents(&docs).1
 }
 
-fn has(found: &[Diagnostic], rule: Rule, pointer: &str) -> bool {
+pub(super) fn has(found: &[Diagnostic], rule: Rule, pointer: &str) -> bool {
     found
         .iter()
         .any(|d| d.rule == rule && d.pointer.as_deref() == Some(pointer))
