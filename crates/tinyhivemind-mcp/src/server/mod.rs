@@ -302,11 +302,11 @@ async fn serve(listener: TcpListener, shared: Arc<Shared>, mut stopped: watch::R
                 Err(_) => continue,
             },
         };
-        let shared = shared.clone();
-        let service = service_fn(move |request| http::handle(shared.clone(), request));
+        let handler = shared.clone();
+        let service = service_fn(move |request| http::handle(handler.clone(), request));
         let connection = http1::Builder::new()
             .timer(TokioTimer::new())
-            .header_read_timeout(shared_timeout(&slots, &listener).unwrap_or_default())
+            .header_read_timeout(shared.options.header_timeout)
             .serve_connection(TokioIo::new(stream), service);
         let connection = graceful.watch(connection);
         tokio::spawn(async move {
