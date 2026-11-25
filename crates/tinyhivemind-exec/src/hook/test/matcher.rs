@@ -34,8 +34,18 @@ fn a_runner_says_whether_a_tool_hook_names_a_tool() {
     let dir = std::env::temp_dir();
     let hooks = runner(
         vec![
-            hook("guard", "pre_tool_use", "allow", json!({"matcher": "git_*"})),
-            hook("audit", "post_tool_use", "record", json!({"matcher": "deploy"})),
+            hook(
+                "guard",
+                "pre_tool_use",
+                "allow",
+                json!({"matcher": "git_*"}),
+            ),
+            hook(
+                "audit",
+                "post_tool_use",
+                "record",
+                json!({"matcher": "deploy"}),
+            ),
             hook("end", "stop", "record", json!({})),
         ],
         &dir,

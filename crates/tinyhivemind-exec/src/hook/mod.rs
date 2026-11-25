@@ -68,6 +68,16 @@ impl HookRunner {
         self.hooks.is_empty()
     }
 
+    /// Whether a `pre_tool_use` or `post_tool_use` hook names `tool`, so that
+    /// a call of it would run a hook.
+    #[must_use]
+    pub fn matches_tool(&self, tool: &str) -> bool {
+        self.bound(HookEvent::PreToolUse, Some(tool))
+            .chain(self.bound(HookEvent::PostToolUse, Some(tool)))
+            .next()
+            .is_some()
+    }
+
     /// Ask the `pre_tool_use` hooks whether a call of `tool` with
     /// `arguments` may run. The first refusal wins and later hooks do not run.
     pub async fn pre_tool_use(&self, tool: &str, arguments: &Value) -> Verdict {
