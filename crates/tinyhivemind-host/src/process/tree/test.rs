@@ -126,6 +126,9 @@ fn the_roots_process_group_is_the_instances() {
     grouped.group = 10;
     let proc = table(&[Entry::new(10, 1, 100), grouped]);
     assert_eq!(pids(&mut tree(&proc)), [10, 40]);
+    let mut released = tree(&proc);
+    released.release();
+    assert_eq!(pids(&mut released), [10]);
 }
 
 #[test]

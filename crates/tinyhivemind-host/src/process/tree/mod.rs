@@ -68,13 +68,15 @@ pub(super) struct Tree {
     /// The whole `NAME=value` environment entry.
     marker: Vec<u8>,
     root: Identity,
+    /// Whether the root is unreaped, which reserves its pid as a group id.
+    held: bool,
     /// Members seen alive, kept after a parent exits.
     known: BTreeSet<Identity>,
 }
 
 impl Tree {
-    /// The tree under `root`, which must be running and not yet reaped, and
-    /// must stay unreaped for as long as the tree is used.
+    /// The tree under `root`, which must not be reaped without
+    /// [`Self::release`].
     pub(super) fn new(marker: &str, root: u32) -> io::Result<Self> {
         Self::at(Path::new("/proc"), marker, root)
     }
@@ -87,8 +89,14 @@ impl Tree {
             proc: proc.to_path_buf(),
             marker: marker.as_bytes().to_vec(),
             root,
+            held: true,
             known: BTreeSet::from([root]),
         })
+    }
+
+    /// The root was reaped, so its pid proves nothing from here on.
+    pub(super) fn release(&mut self) {
+        self.held = false;
     }
 
     /// Remember the present descendants of every known member.
@@ -194,7 +202,7 @@ impl Tree {
     /// Whether `stat` is a member on its own evidence.
     fn is_member(&self, stat: &Stat) -> bool {
         self.known.contains(&stat.identity())
-            || stat.group == self.root.pid
+            || (self.held && stat.group == self.root.pid)
             || (self.is_marked(stat.pid)
                 // The environment was that of the process `stat` describes.
                 && Stat::read(&self.proc, stat.pid).is_some_and(|now| now.start == stat.start))

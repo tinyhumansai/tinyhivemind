@@ -243,3 +243,18 @@ async fn a_process_group_is_a_survivor_until_it_is_gone() {
     let error = instance.stop(async {}, policy).await.unwrap_err();
     assert!(matches!(error, Error::Survivors { pids } if pids == [instance.pid()]));
 }
+
+#[tokio::test]
+async fn a_child_the_host_reaped_is_reported_lost_and_its_tree_is_still_stopped() {
+    let fixture = Fixture::new();
+    fixture.script("stay", STAY);
+    let instance = fixture.start("setsid sh $OUT/stay & exit 0").await;
+    let orphan = fixture.pid("pid").await;
+    let root = rustix::process::Pid::from_raw(i32::try_from(instance.pid()).unwrap()).unwrap();
+    let options = rustix::process::WaitIdOptions::EXITED;
+    rustix::process::waitid(rustix::process::WaitId::Pid(root), options).unwrap();
+    instance.exited().await;
+    let exit = instance.stop(async {}, SHORT).await.unwrap();
+    assert!(!exit.success() || exit.code == Some(0));
+    assert!(!running(orphan));
+}
