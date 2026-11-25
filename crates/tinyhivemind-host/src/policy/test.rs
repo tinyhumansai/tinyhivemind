@@ -80,3 +80,23 @@ fn create_agent_binding_wire_is_optional_and_preserves_the_contract()
     assert_eq!(serde_json::to_value(decoded)?, wire);
     Ok(())
 }
+
+#[test]
+fn management_shows_neither_of_its_ports() {
+    struct Ports;
+    impl super::ManagementAuthorizer for Ports {
+        fn authorize(&self, _: &str, _: &ManagementRequest) -> crate::Result<()> {
+            Ok(())
+        }
+    }
+    impl super::AgentCreator for Ports {
+        fn create(&self, agent: super::NewAgent) -> super::CreateFuture<'_> {
+            Box::pin(async move { Ok(agent.template) })
+        }
+    }
+    let management = super::Management {
+        authorizer: &Ports,
+        creator: &Ports,
+    };
+    assert_eq!(format!("{management:?}"), "Management");
+}

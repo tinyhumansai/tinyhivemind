@@ -1,4 +1,5 @@
 //! Manifest wire and validation regressions.
+mod parsing;
 use super::*;
 
 /// Harness answers for tests: numeric cron fields in range, one built-in id.

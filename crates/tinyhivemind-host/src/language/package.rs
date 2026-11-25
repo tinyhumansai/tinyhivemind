@@ -153,3 +153,7 @@ fn read(root: &Path) -> Result<BTreeMap<String, String>, ConfigError> {
     }
     Ok(files)
 }
+
+#[cfg(test)]
+#[path = "package_test.rs"]
+mod test;

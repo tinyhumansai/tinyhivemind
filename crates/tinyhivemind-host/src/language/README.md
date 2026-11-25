@@ -7,6 +7,7 @@ Hive packages are read here and turned into what an adapter deploys.
 | `mod.rs` | Conversions of coordinator settings and lowered seat requests |
 | `package.rs` | `PackageSource`: `load` (read a directory and check it), `from_documents`, `new` (check a package a host edited), `read` (an unchecked `Package` to edit), and `root`, `package`, `lowered` accessors |
 | `plan/` | Lowers one or more `PackageSource`s into the deployment plan; see [`plan/README.md`](plan/README.md) |
+| `package_test.rs` | Loading, editing and refusing packages |
 | `test.rs` | Field preservation of the conversions |
 
 `PackageSource::load` skips dot-files, and fails with `ConfigError::Package`
