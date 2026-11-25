@@ -154,6 +154,11 @@ impl Scope {
         Ok(members)
     }
 
+    /// Whether members can be told apart from the child's own zombie.
+    pub(super) fn sees_past_the_child(&self) -> bool {
+        !matches!(self, Self::Group { .. })
+    }
+
     /// The child exited and is to be killed with its tree: do what must come
     /// before looking for what is left.
     pub(super) fn settle(&self, root: &Root) {

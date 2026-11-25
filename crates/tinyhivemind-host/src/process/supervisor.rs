@@ -125,10 +125,11 @@ impl Supervisor {
 
     /// Ask every member to end, for as long as `bound` allows.
     fn terminate(&mut self, bound: Duration) -> Result<()> {
-        let deadline = Instant::now() + bound;
-        while Instant::now() < deadline && !self.hurry.load(Ordering::Acquire) {
+        let started = Instant::now();
+        while started.elapsed() < bound && !self.hurry.load(Ordering::Acquire) {
             let exited = self.exited();
-            if self.scope.members(&self.root, exited)?.is_empty() {
+            let members = self.scope.members(&self.root, exited)?;
+            if members.is_empty() || (exited && !self.scope.sees_past_the_child()) {
                 return Ok(());
             }
             self.scope.terminate(&self.root);
@@ -139,7 +140,7 @@ impl Supervisor {
 
     /// Kill every member until nobody is found, and give up the child.
     fn kill(&mut self, bound: Duration) -> Result<Exit> {
-        let deadline = Instant::now() + bound;
+        let started = Instant::now();
         let mut proof = 0;
         loop {
             let exited = self.exited();
@@ -152,7 +153,7 @@ impl Supervisor {
             } else {
                 proof = 0;
                 self.scope.kill(&self.root);
-                if Instant::now() >= deadline {
+                if started.elapsed() >= bound {
                     return Err(Error::Survivors { pids: members });
                 }
             }
