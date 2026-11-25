@@ -242,7 +242,7 @@ fn signal(proc: &Path, member: Identity, signal: Signal) -> rustix::io::Result<(
         Err(Errno::SRCH | Errno::INVAL) => return Ok(()),
         opened => opened?,
     };
-    if !Stat::read(proc, member.pid).is_some_and(|stat| stat.identity() == member) {
+    if Stat::read(proc, member.pid).is_none_or(|stat| stat.identity() != member) {
         return Ok(());
     }
     match pidfd_send_signal(handle, signal) {

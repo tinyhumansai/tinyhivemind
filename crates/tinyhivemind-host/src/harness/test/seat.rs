@@ -11,7 +11,7 @@ fn seat(inner: &Arc<Scripted>) -> SeatRunner {
 }
 
 /// Yield until the log is `expected`.
-async fn logged(inner: &Scripted, expected: &[&str]) -> Result<()> {
+async fn logged(inner: &Scripted, expected: &[&str]) {
     let reached = async {
         while inner.log() != expected {
             tokio::task::yield_now().await;
@@ -23,7 +23,6 @@ async fn logged(inner: &Scripted, expected: &[&str]) -> Result<()> {
         "{:?} never became {expected:?}",
         inner.log()
     );
-    Ok(())
 }
 
 async fn refusal(seat: &SeatRunner, turn_id: &str, session: Option<&str>) -> Result<String> {

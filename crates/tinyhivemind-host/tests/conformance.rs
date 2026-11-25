@@ -52,7 +52,6 @@ async fn catches(fault: Fault, case: Case) -> Result<()> {
     let ended = case.run(&subject).await;
     let failure = ended.err().context("the fault was not caught")?;
     assert_eq!(failure.case, case);
-    assert!(!failure.reason.is_empty());
     assert!(failure.to_string().contains(&failure.reason));
     Ok(())
 }

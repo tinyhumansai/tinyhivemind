@@ -92,7 +92,7 @@ impl Child {
     }
 
     /// The session's id and the user messages in it.
-    fn session(&self) -> Option<(String, u64)> {
+    fn session() -> Option<(String, u64)> {
         let text = fs::read_to_string("session.json").ok()?;
         let session: Value = serde_json::from_str(&text).ok()?;
         Some((
@@ -102,15 +102,15 @@ impl Child {
     }
 
     fn turn(&mut self, request: &Value) -> std::io::Result<()> {
-        let known = self.session();
+        let known = Self::session();
         let (id, turns) = match (request["session"].as_str(), known) {
             (Some(wanted), Some((id, turns))) if wanted == id => (id, turns),
-            (Some(_), _) if self.fault == "new_session" => (self.new_session()?, 0),
+            (Some(_), _) if self.fault == "new_session" => (Self::new_session()?, 0),
             (Some(wanted), _) => {
                 let reason = format!("no session {wanted}");
                 return Self::say(&json!({"event": "no_session", "reason": reason}));
             }
-            (None, _) => (self.new_session()?, 0),
+            (None, _) => (Self::new_session()?, 0),
         };
         let turns = if self.fault == "forgetful" {
             1
@@ -136,7 +136,7 @@ impl Child {
         }))
     }
 
-    fn new_session(&self) -> std::io::Result<String> {
+    fn new_session() -> std::io::Result<String> {
         let mut number = 0_u64;
         loop {
             number += 1;

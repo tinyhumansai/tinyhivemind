@@ -24,7 +24,7 @@ fn each_kind_has_the_name_a_package_uses() -> Result<()> {
 }
 
 #[test]
-fn an_endpoint_never_shows_its_bearer() -> Result<()> {
+fn an_endpoint_never_shows_its_bearer() {
     let endpoint = ToolEndpoint::new(
         "hivemind",
         "http://127.0.0.1:9/mcp",
@@ -35,18 +35,16 @@ fn an_endpoint_never_shows_its_bearer() -> Result<()> {
     assert!(!text.contains("s3cret"), "{text}");
     assert!(text.contains("hivemind") && text.contains("redacted"));
     assert_eq!(endpoint.bearer(), "s3cret");
-    Ok(())
 }
 
 #[test]
-fn a_seat_plan_shows_its_seat_and_not_its_prompt_or_settings() -> Result<()> {
+fn a_seat_plan_shows_its_seat_and_not_its_prompt_or_settings() {
     let mut plan = plan("scout", Path::new("/srv/scout"));
     plan.seat.prompt = "private prompt".into();
     plan.seat.config = json!({"k": "private setting"});
     let text = format!("{plan:?}");
     assert!(text.contains("scout") && text.contains("/srv/scout"));
     assert!(!text.contains("private"), "{text}");
-    Ok(())
 }
 
 #[test]

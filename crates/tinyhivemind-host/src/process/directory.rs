@@ -87,5 +87,5 @@ pub(super) fn token() -> Result<String> {
             path: path.to_path_buf(),
             source,
         })?;
-    Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
+    Ok(format!("{:032x}", u128::from_ne_bytes(bytes)))
 }

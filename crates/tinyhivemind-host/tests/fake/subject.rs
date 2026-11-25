@@ -3,6 +3,7 @@ use super::client::{FakeHarness, Fault};
 use rustix::process::{Pid, Signal, kill_process};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
+use std::fmt::Debug;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -15,7 +16,7 @@ use tinyhivemind_host::harness::{Harness, SeatPlan, ToolEndpoint};
 use tinyhivemind_lang::{LoweredSeat, LoweredSeatIntegration};
 
 /// The result of something the test itself does, which has to work.
-fn done<T: std::fmt::Debug, E: std::fmt::Debug>(result: Result<T, E>) {
+fn done<T: Debug, E: Debug>(result: &Result<T, E>) {
     assert!(result.is_ok(), "{result:?}");
 }
 
@@ -89,7 +90,7 @@ impl Subject for FakeSubject {
             ModelStep::Hang => Value::Null,
         };
         let steps = self.control().join("steps");
-        done(fs::write(
+        done(&fs::write(
             steps.join(format!("{number:04}")),
             step.to_string(),
         ));
@@ -119,7 +120,7 @@ impl Subject for FakeSubject {
 
     fn lose_sessions(&self) {
         let state = self.root.path().join("instance/state");
-        done(fs::remove_file(state.join("session.json")));
+        done(&fs::remove_file(state.join("session.json")));
     }
 
     fn offer(&self, fault: ToolFault) {
@@ -128,7 +129,7 @@ impl Subject for FakeSubject {
             ToolFault::Extra => "extra",
             ToolFault::Missing => "missing",
         };
-        done(fs::write(self.control().join("tools"), text));
+        done(&fs::write(self.control().join("tools"), text));
     }
 
     /// Whatever runs in this subject's instance directory.
@@ -158,7 +159,7 @@ impl Subject for FakeSubject {
         let harness = lock(&self.current).clone();
         let report = self.control().join("escapee");
         Box::pin(async move {
-            done(harness?.escape().await);
+            done(&harness?.escape().await);
             // The suite bounds the wait.
             loop {
                 if let Ok(pid) = fs::read_to_string(&report) {

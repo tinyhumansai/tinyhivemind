@@ -193,13 +193,11 @@ impl Turn {
         if session.trim().is_empty() {
             return Err(Error::EmptySession);
         }
-        match &seat.session {
-            Some(expected) => same(expected, session),
-            None => {
-                seat.session = Some(session.into());
-                Ok(())
-            }
+        if let Some(expected) = &seat.session {
+            return same(expected, session);
         }
+        seat.session = Some(session.into());
+        Ok(())
     }
 
     /// The turn ended in an error, which does not say that it stopped.

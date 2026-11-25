@@ -182,11 +182,11 @@ async fn noticed_within(wait: Duration) -> Result<bool> {
     fixture.script("go", "")?;
     until(|| fixture.read("left") == "1\n").await;
     instance.stop(async {}, SHORT).await?;
-    let escaped = running(escapee);
-    if escaped {
+    let alive = running(escapee);
+    if alive {
         rustix::process::kill_process(process(escapee)?, rustix::process::Signal::KILL)?;
     }
-    Ok(!escaped)
+    Ok(!alive)
 }
 
 #[tokio::test]
