@@ -1,9 +1,10 @@
 //! The child's own lifetime, apart from its supervisor.
-use super::support::{Fixture, running};
+use super::support::{Fixture, PATIENCE, running};
 use crate::process::scope::Root;
-use crate::process::{Containment, Instance};
+use crate::process::{Containment, Instance, StopPolicy};
 use std::os::unix::process::CommandExt;
 use std::process::Command;
+use std::time::Duration;
 
 #[test]
 fn a_root_nobody_released_is_killed_and_reaped_when_dropped() {
@@ -34,4 +35,21 @@ async fn asking_who_is_running_in_a_group_changes_nothing() {
         .await
         .unwrap();
     assert!(!running(left));
+}
+
+#[tokio::test]
+async fn a_group_whose_leader_is_gone_is_not_given_the_rest_of_the_grace_period() {
+    let fixture = Fixture::new();
+    let launch = fixture.shell("exec sleep 300");
+    let instance = Instance::contained(launch, Containment::ProcessGroup)
+        .await
+        .unwrap();
+    let policy = StopPolicy {
+        cancel: Duration::ZERO,
+        terminate: Duration::MAX,
+        kill: Duration::MAX,
+    };
+    let stopped = instance.stop(async {}, policy);
+    let exit = tokio::time::timeout(PATIENCE, stopped).await.unwrap().unwrap();
+    assert_eq!(exit.signal, Some(15));
 }
