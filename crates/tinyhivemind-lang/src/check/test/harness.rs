@@ -19,7 +19,10 @@ fn original(permitted: &[PatchClass]) -> BTreeMap<String, String> {
 }
 
 /// `base` with its manifest rewritten by `edit`.
-fn edited(base: &BTreeMap<String, String>, edit: impl FnOnce(&mut Value)) -> BTreeMap<String, String> {
+fn edited(
+    base: &BTreeMap<String, String>,
+    edit: impl FnOnce(&mut Value),
+) -> BTreeMap<String, String> {
     let mut docs = base.clone();
     let mut manifest: Value = serde_json::from_str(&docs["hive.json"]).expect("manifest decodes");
     edit(&mut manifest);
@@ -28,7 +31,10 @@ fn edited(base: &BTreeMap<String, String>, edit: impl FnOnce(&mut Value)) -> BTr
 }
 
 fn refusals(found: &[Diagnostic]) -> Vec<(Rule, Option<&str>)> {
-    found.iter().map(|d| (d.rule, d.pointer.as_deref())).collect()
+    found
+        .iter()
+        .map(|d| (d.rule, d.pointer.as_deref()))
+        .collect()
 }
 
 #[test]
@@ -64,8 +70,9 @@ fn a_roster_only_edit_cannot_move_a_seat_to_another_harness() {
     ] {
         let path = edit.as_array().expect("an edit path");
         let edit = edited(&base, |m| {
-            m[path[0].as_str().expect("a key")][usize::try_from(path[1].as_u64().expect("an index"))
-                .expect("an index")][path[2].as_str().expect("a key")] = path[3].clone();
+            m[path[0].as_str().expect("a key")]
+                [usize::try_from(path[1].as_u64().expect("an index")).expect("an index")]
+                [path[2].as_str().expect("a key")] = path[3].clone();
         });
         let refused = check(&base, &edit).expect_err("a roster edit cannot move a seat");
         assert!(

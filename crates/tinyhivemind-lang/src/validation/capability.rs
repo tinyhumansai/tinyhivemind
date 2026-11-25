@@ -131,8 +131,7 @@ impl Judge<'_, '_> {
                 "the {} harness cannot honour {capability}: {unlock}",
                 self.kind
             );
-            self.found
-                .push(Error::Integration { field, reason }, at);
+            self.found.push(Error::Integration { field, reason }, at);
         }
     }
 

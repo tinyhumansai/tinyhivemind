@@ -61,3 +61,34 @@ pub(crate) fn declared<'a>(manifest: &'a Manifest, id: &str) -> Option<&'a Harne
 pub(crate) fn resolve<'a>(manifest: &'a Manifest, seat: &'a Seat) -> Option<&'a Harness> {
     named(manifest, seat).and_then(|(id, _)| declared(manifest, id))
 }
+
+/// Where `edit` moves a seat of `base` to another harness, as JSON Pointers
+/// into `edit`'s manifest.
+///
+/// A seat moves when its own `harness` field changes (a new seat counts from
+/// no field), or when the harness it resolves to changes: an existing seat
+/// against what it resolved to in `base`, a new one against `runtime.harness`.
+/// A change of `runtime.harness` or a profile's `harness` is itself an
+/// integration edit; one through a seat's `profile` is located there.
+pub(crate) fn moves(base: &Manifest, edit: &Manifest) -> Vec<String> {
+    let mut found = Vec::new();
+    for (i, seat) in edit.seats.iter().enumerate() {
+        let before = base.seats.iter().find(|s| s.id == seat.id);
+        let was = before.and_then(|s| s.harness.as_ref());
+        let resolved = named(edit, seat);
+        let baseline = match before {
+            Some(before) => named(base, before).map(|(id, _)| id),
+            None => edit.runtime.harness.as_deref(),
+        };
+        if seat.harness.as_ref() != was {
+            found.push(Origin::Seat.pointer(i));
+        } else if resolved.map(|(id, _)| id) != baseline {
+            let profile_changed = before.is_none_or(|before| before.profile != seat.profile);
+            found.push(match resolved {
+                Some((_, origin)) if !profile_changed => origin.pointer(i),
+                _ => format!("/seats/{i}/profile"),
+            });
+        }
+    }
+    found
+}
