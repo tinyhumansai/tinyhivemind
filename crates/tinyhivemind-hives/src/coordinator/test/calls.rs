@@ -287,7 +287,6 @@ async fn after_a_coordinator_restart_the_retry_is_refused() {
             .await,
         Err(Error::StaleTurn { .. })
     ));
-    held.finish.notify_one();
     held.drain.abort();
 }
 
@@ -316,7 +315,8 @@ fn direct(id: &str, sender: &str) -> SendMessage {
 #[tokio::test]
 async fn a_retried_send_acts_once_and_returns_the_first_receipt() {
     let c = setup().await;
-    let (mut requests, finish) = holding(&c, &["a", "b"]).await;
+    let (mut requests, finish) = holding(&c, &["a"]).await;
+    add(&c, "b", |request| Box::pin(async move { Ok(done(&request)) })).await;
     c.send_as_host(message("task", Destination::Agent("a".into())))
         .await
         .unwrap();
@@ -350,9 +350,7 @@ async fn a_retried_send_acts_once_and_returns_the_first_receipt() {
         c.send_in_turn(&forged, direct("forged", "b")).await,
         Err(Error::InvalidIdentifier("sender"))
     ));
-    held.finish.notify_one();
-    held.finish.notify_one();
-    held.drain.await.unwrap().unwrap();
+    held.end().await;
 }
 
 #[tokio::test]

@@ -318,6 +318,7 @@ async fn membership_removed_before_claim_prevents_later_delivery() {
     c.leave_hive("work", "a").await.unwrap();
     assert_eq!(c.run_until_idle().await.unwrap().completed, 0);
 }
+mod calls;
 mod failures;
 mod finalization;
 mod lifecycle;
