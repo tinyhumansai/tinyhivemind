@@ -54,6 +54,7 @@ pub(crate) struct Fake {
     /// Where it listens, on 127.0.0.1.
     pub(crate) port: u16,
     task: tokio::task::JoinHandle<()>,
+    state: Arc<State>,
 }
 
 impl Fake {
@@ -67,17 +68,20 @@ impl Fake {
     /// Serve `setup` on `listener`.
     pub(crate) fn on(listener: TcpListener, setup: Setup, port: u16) -> Self {
         let state = Arc::new(State::new(setup));
+        let serving = state.clone();
         let task = tokio::spawn(serve(listener, move |request| {
-            let state = state.clone();
+            let state = serving.clone();
             async move { state.handle(request).await }
         }));
-        Self { port, task }
+        Self { port, task, state }
     }
 }
 
 impl Drop for Fake {
+    /// Like a process that is gone: nothing answers and every stream ends.
     fn drop(&mut self) {
         self.task.abort();
+        lock(&self.state.subscribers).clear();
     }
 }
 
