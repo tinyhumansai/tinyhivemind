@@ -4,7 +4,7 @@ resolver = "3"
 # package, each directory named for the package it holds. There is no root
 # package: the crate a host links is `crates/tinyhivemind-core`, the same as any
 # other member. Keeping the root virtual is what makes that uniform.
-members = ["crates/tinyhivemind-core", "crates/tinyhivemind-tools", "crates/tinyhivemind-openhuman", "crates/tinyhivemind-hives", "crates/tinyhivemind-lang", "crates/tinyhivemind-exec", "crates/tinyhivemind-host"]
+members = ["crates/tinyhivemind-core", "crates/tinyhivemind-tools", "crates/tinyhivemind-openhuman", "crates/tinyhivemind-hives", "crates/tinyhivemind-lang", "crates/tinyhivemind-exec", "crates/tinyhivemind-host", "crates/tinyhivemind-mcp"]
 # `worktrees/` holds `git worktree` checkouts of this same repository; each
 # contains a full copy of this manifest. Keep them excluded from Cargo
 # workspace discovery.
@@ -31,6 +31,23 @@ tinyhivemind-exec = { path = "crates/tinyhivemind-exec" }
 sha2 = "0.10"
 # Harness-neutral tool belt, policies, package plans and process supervision.
 tinyhivemind-host = { path = "crates/tinyhivemind-host" }
+# The HTTP/1.1 server under `tinyhivemind-mcp`, which serves hive tools to
+# harness processes over Streamable HTTP on loopback (ADR 0036). hyper 1 is a
+# protocol implementation and no framework: no router, no TLS, no HTTP/2, no
+# middleware stack, so the server's whole request surface (Host, Origin,
+# bearer, body bound) is the crate's own code and nothing else is listening.
+# It is already in this lockfile through the vendored harness, MIT licensed,
+# and builds on 1.96. Server and HTTP/1 only; a test adds `client`.
+hyper = { version = "1", default-features = false, features = ["server", "http1"] }
+# hyper's tokio I/O adapter, its timer (for the header read timeout) and the
+# graceful-shutdown watcher. Nothing else: no client, no auto-HTTP/2.
+hyper-util = { version = "0.1", default-features = false, features = ["tokio", "server-graceful"] }
+# Bounded request bodies (`Limited`) and fixed response bodies (`Full`).
+http-body-util = "0.1"
+# Constant-time comparison of a presented bearer with each seat's.
+subtle = { version = "2", default-features = false, features = ["std"] }
+# Random per-seat bearers, from the operating system.
+getrandom = "0.3"
 # Durable cross-hive coordinator used at the harness boundary.
 tinyhivemind-hives = { path = "crates/tinyhivemind-hives" }
 # Concurrent owned runner futures in the coordinator, outside core.
