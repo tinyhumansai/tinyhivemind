@@ -3,6 +3,7 @@
 use super::tree::{Identity, Tree};
 use super::{Containment, Error, Result};
 use rustix::process::{Pid, Signal, kill_process_group, test_kill_process_group};
+#[cfg(target_os = "linux")]
 use std::collections::BTreeSet;
 use std::io;
 use std::process::Child;
@@ -101,17 +102,18 @@ pub(super) enum Scope {
 impl Scope {
     /// What `containment` covers of the child `root`, which was started in a
     /// group of its own and with `marker` in its environment.
-    #[cfg_attr(not(target_os = "linux"), expect(unused_variables))]
     pub(super) fn of(containment: Containment, marker: &str, root: &Root) -> io::Result<Self> {
-        match containment {
-            #[cfg(target_os = "linux")]
-            Containment::Tree => Ok(Self::Tree {
+        #[cfg(target_os = "linux")]
+        if containment == Containment::Tree {
+            return Ok(Self::Tree {
                 tree: Tree::new(marker, root.id())?,
                 live: Vec::new(),
                 asked: BTreeSet::new(),
-            }),
-            _ => Ok(Self::Group { asked: false }),
+            });
         }
+        // Elsewhere a group is all there is, whoever its members are.
+        let _ = (containment, marker, root);
+        Ok(Self::Group { asked: false })
     }
 
     /// Remember descendants while their parents still show whose they are.
