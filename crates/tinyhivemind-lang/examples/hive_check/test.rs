@@ -119,3 +119,27 @@ fn the_broken_integrations_package_reports_each_rule_once() {
     }
     assert_eq!(found.len(), 5, "{located:?}");
 }
+
+#[test]
+fn the_broken_harnesses_package_reports_each_harness_finding_once() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/broken/harnesses");
+    let (found, _) = findings(&load(&dir).expect("the broken package loads"), None);
+    let mut located: Vec<(String, &str)> = found
+        .iter()
+        .map(|d| (d.pointer.clone().unwrap_or_default(), d.rule.name()))
+        .collect();
+    located.sort();
+    let mut expected = [
+        ("/seats/0/harness", "reference"),
+        ("/harnesses/2/id", "identity"),
+        ("/harnesses/1/isolation", "integration"),
+        ("/profiles/1/harness", "integration"),
+        ("/profiles/0/subagents", "integration"),
+        ("/providers/0/credential", "integration"),
+        ("/runtime/sandbox", "integration"),
+        ("/tools/0/args/properties/call", "integration"),
+    ]
+    .map(|(pointer, rule)| (pointer.to_owned(), rule));
+    expected.sort();
+    assert_eq!(located, expected);
+}
