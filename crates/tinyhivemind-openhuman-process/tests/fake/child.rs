@@ -6,6 +6,8 @@
 //! of its own, which reports its pid to `<control>/escapee`.
 #[path = "../support/http.rs"]
 mod http;
+// The in-process unit tests use the parts of the fake this binary does not.
+#[allow(dead_code, reason = "shared with the in-process tests")]
 #[path = "surface.rs"]
 mod surface;
 

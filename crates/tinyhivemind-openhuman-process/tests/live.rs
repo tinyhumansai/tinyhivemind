@@ -1,1 +1,1 @@
-//! Placeholder until its slice.
+//! Live tests, written in slice 6.
