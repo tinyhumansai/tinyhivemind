@@ -3,6 +3,8 @@
 //! port. Linux only, as the suite escapes a process group on purpose.
 #![cfg(target_os = "linux")]
 
+#[path = "support/seat.rs"]
+mod seat_support;
 #[path = "fake/subject.rs"]
 mod subject;
 
@@ -54,7 +56,7 @@ async fn the_harness_is_the_openhuman_kind() -> Result<()> {
 #[tokio::test]
 async fn a_seat_it_cannot_honour_is_refused_before_anything_starts() -> Result<()> {
     let subject = FakeSubject::new()?;
-    let mut seat = subject::seat("http://127.0.0.1:9/v1");
+    let mut seat = seat_support::seat("http://127.0.0.1:9/v1");
     seat.integration.limits.iterations = Some(20);
     let plan = SeatPlan::new(seat, subject.root_path().join("instance"));
     let refused = subject.harness().start(plan, subject.endpoint()).await;
