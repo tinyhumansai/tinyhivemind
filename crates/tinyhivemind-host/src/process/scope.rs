@@ -153,8 +153,8 @@ impl Scope {
         }
     }
 
-    /// Who is running, given whether the child exited. A child that has not is
-    /// always among them. Each is sent `order` as soon as it is found, and the
+    /// Who is running, given whether the child exited: if it has not, nobody
+    /// being found proves nothing. Each is sent `order` as soon as it is found, and the
     /// child's group before anyone is looked for.
     pub(super) fn look(
         &mut self,
@@ -200,8 +200,9 @@ impl Scope {
                 }
             }
         };
-        if !exited && !look.live.contains(&root.id()) {
-            look.live.push(root.id());
+        if !exited {
+            // Whether or not it was found, it was there.
+            look.settled = false;
         }
         look
     }

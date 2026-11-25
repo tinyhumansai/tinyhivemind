@@ -14,9 +14,11 @@
 //! found alive. The argument holds as long as every pid handed out is looked
 //! at, in order. It fails only for pids looked at too late, after their owner
 //! died and left a child whose pid is not among those looked at yet. So a
-//! round is final if none of its pids turned out to be gone, and a process
-//! nobody asked about cannot prevent that: it is alive and plainly someone
-//! else's, or a zombie whose parent plainly is.
+//! round is final if none of its pids turned out to be gone, now or when one
+//! that was unsure is looked at again. Other processes coming and going do not
+//! prevent that, unless one comes and goes within every single round: each is
+//! found alive and plainly someone else's, or a zombie whose parent plainly
+//! is.
 use super::{Evidence, Identity, Stat, Tree, present};
 use rustix::process::Signal;
 use std::collections::{BTreeMap, BTreeSet};
@@ -32,6 +34,9 @@ const STORM: u32 = 50_000;
 /// How long a process may show no environment before that counts as having
 /// none. Inside `exec` it lasts microseconds, if nothing else has the CPU.
 const BARE: Duration = Duration::from_millis(200);
+/// Rounds that wait for what they are unsure of. More are not needed: they wait
+/// for at most [`BARE`].
+const ROUNDS: usize = 256;
 /// The pause when a round has nothing new and only waits.
 const IDLE: Duration = Duration::from_millis(1);
 
@@ -43,6 +48,16 @@ pub(in crate::process) struct Scan {
     pub(in crate::process) settled: bool,
     /// Why it could not settle, if something could not be read.
     pub(in crate::process) failure: Option<io::Error>,
+}
+
+/// What one look at a pid came to.
+enum Judged {
+    /// A member, or not one.
+    Known,
+    /// Bare: look again.
+    Unsure,
+    /// Nobody is there any more to judge.
+    Gone,
 }
 
 /// What a scan has seen so far.
@@ -59,6 +74,8 @@ struct Pass {
     alive: bool,
     /// Bare, to be looked at again.
     unsure: BTreeSet<u32>,
+    /// Of each round that may be final, whom it is still unsure of.
+    rounds: Vec<BTreeSet<u32>>,
     failure: Option<io::Error>,
 }
 
@@ -143,10 +160,13 @@ impl Tree {
             last = now;
             let idle = fresh.is_empty();
             let unsure = pass.unsure.iter().copied().collect();
-            let mut gone = self.look(pass, unsure, order, expired);
-            gone |= self.look(pass, fresh, order, expired);
-            eprintln!("round whole={whole} gone={gone} unsure={} now={now:?} idle={idle} members={} t={:?}", pass.unsure.len(), pass.members.len(), Instant::now());
-            if whole && !gone && pass.unsure.is_empty() {
+            self.look(pass, unsure, order, expired);
+            let gone = self.look(pass, fresh, order, expired);
+            eprintln!("round {} whole={whole} gone={gone} n={} unsure={} rounds={} members={} alive={}", self.root.pid, last.is_some(), pass.unsure.len(), pass.rounds.len(), pass.members.len(), pass.alive);
+            if whole && !gone && pass.rounds.len() < ROUNDS {
+                pass.rounds.push(pass.unsure.clone());
+            }
+            if pass.rounds.iter().any(BTreeSet::is_empty) {
                 return Ok(true);
             }
             if idle {
@@ -189,7 +209,20 @@ impl Tree {
                 return true;
             }
             match self.judge(pass, pid, order) {
-                Ok(judged) => gone |= !judged,
+                Ok(Judged::Known) => {
+                    pass.unsure.remove(&pid);
+                    for round in &mut pass.rounds {
+                        round.remove(&pid);
+                    }
+                }
+                Ok(Judged::Unsure) => {
+                    pass.unsure.insert(pid);
+                }
+                Ok(Judged::Gone) => {
+                    gone = true;
+                    pass.unsure.remove(&pid);
+                    pass.rounds.retain(|round| !round.contains(&pid));
+                }
                 // What cannot be read is not gone.
                 Err(error) => pass.failure = Some(error),
             }
@@ -197,34 +230,28 @@ impl Tree {
         gone
     }
 
-    /// Look at one process. False if it was gone.
-    fn judge(&mut self, pass: &mut Pass, pid: u32, order: Option<Signal>) -> io::Result<bool> {
+    /// Look at one process.
+    fn judge(&mut self, pass: &mut Pass, pid: u32, order: Option<Signal>) -> io::Result<Judged> {
         let Some(stat) = Stat::read(&self.proc, pid)? else {
-            pass.unsure.remove(&pid);
-            return Ok(false);
+            return Ok(Judged::Gone);
         };
-        let evidence = self.evidence(&stat)?;
-        pass.unsure.remove(&pid);
-        match evidence {
+        match self.evidence(&stat)? {
             Evidence::Member => {
                 self.found(pass, stat, order);
-                return Ok(true);
+                return Ok(Judged::Known);
             }
             Evidence::Gone => {
                 if !self.is_anothers_child(pass, &stat)? {
                     // A zombie stays one. Its children may be anyone's.
                     pass.seen.insert(pid);
-                    return Ok(false);
+                    return Ok(Judged::Gone);
                 }
             }
             Evidence::Bare => {
-                let since = *self
-                    .bare
-                    .entry(stat.identity())
-                    .or_insert_with(Instant::now);
+                let bare = self.bare.entry(stat.identity());
+                let since = *bare.or_insert_with(Instant::now);
                 if since.elapsed() < BARE && !self.is_anothers_child(pass, &stat)? {
-                    pass.unsure.insert(pid);
-                    return Ok(true);
+                    return Ok(Judged::Unsure);
                 }
             }
             Evidence::None => {}
@@ -234,7 +261,7 @@ impl Tree {
         if stat.start >= self.root.start {
             pass.stats.push(stat);
         }
-        Ok(true)
+        Ok(Judged::Known)
     }
 
     /// Whether `stat` is the child of a process that is not a member and

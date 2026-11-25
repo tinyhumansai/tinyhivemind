@@ -164,6 +164,7 @@ impl Supervisor {
             }
             let order = Some(Signal::KILL);
             let look = self.scope.look(&self.root, exited, order, &expired);
+            eprintln!("LOOK {} live={:?} settled={} fail={:?} t={:?}", self.root.id(), look.live, look.settled, look.failure, started.elapsed());
             if look.is_proof() {
                 proof += 1;
             } else {
