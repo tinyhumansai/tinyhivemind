@@ -24,9 +24,10 @@ fn each_kind_has_the_name_a_package_uses() -> Result<(), serde_json::Error> {
 
 #[test]
 fn a_harness_entry_is_an_id_a_kind_and_an_optional_isolation() {
-    let shared: Harness =
-        serde_json::from_value(json!({"id": "claw", "kind": "openclaw", "isolation": "deployment"}))
-            .unwrap();
+    let shared: Harness = serde_json::from_value(
+        json!({"id": "claw", "kind": "openclaw", "isolation": "deployment"}),
+    )
+    .unwrap();
     assert_eq!(
         shared,
         Harness {
@@ -68,7 +69,10 @@ fn a_harness_entry_rejects_unknown_fields_a_missing_kind_and_null() {
         json!({"id": "c", "kind": "codex", "isolation": null}),
         json!({"id": "c", "kind": "codex", "isolation": "process"}),
     ] {
-        assert!(serde_json::from_value::<Harness>(bad.clone()).is_err(), "{bad}");
+        assert!(
+            serde_json::from_value::<Harness>(bad.clone()).is_err(),
+            "{bad}"
+        );
     }
 }
 
@@ -95,7 +99,12 @@ fn an_absent_harness_is_not_serialized_anywhere() {
     assert!(wire["runtime"].get("harness").is_none());
     assert!(wire["seats"][0].get("harness").is_none());
     let profile: Profile = serde_json::from_value(json!({"id": "p"})).unwrap();
-    assert!(serde_json::to_value(&profile).unwrap().get("harness").is_none());
+    assert!(
+        serde_json::to_value(&profile)
+            .unwrap()
+            .get("harness")
+            .is_none()
+    );
     assert!(
         serde_json::to_value(RuntimeSettings::default())
             .unwrap()
@@ -139,6 +148,9 @@ fn an_explicit_null_harness_or_an_empty_harnesses_list_does_not_decode() {
         manifest(json!({"profiles": [{"id": "p", "harness": null}]})),
         seat_null,
     ] {
-        assert!(serde_json::from_value::<Manifest>(bad.clone()).is_err(), "{bad}");
+        assert!(
+            serde_json::from_value::<Manifest>(bad.clone()).is_err(),
+            "{bad}"
+        );
     }
 }

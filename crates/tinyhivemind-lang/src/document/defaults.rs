@@ -35,7 +35,10 @@ where
 {
     let list = Vec::<T>::deserialize(deserializer)?;
     if list.is_empty() {
-        return Err(D::Error::invalid_length(0, &"at least one entry; omit the section instead"));
+        return Err(D::Error::invalid_length(
+            0,
+            &"at least one entry; omit the section instead",
+        ));
     }
     Ok(list)
 }

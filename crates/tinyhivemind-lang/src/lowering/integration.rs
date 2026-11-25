@@ -179,6 +179,7 @@ pub(super) fn seat(package: &Package, seat: &Seat) -> LoweredSeatIntegration {
         subagents: p.subagents.clone(),
         bare_prompt: p.bare_prompt,
         definition_base: p.definition_base.clone(),
+        harness: crate::harness::resolve::resolve(m, seat).cloned(),
     }
 }
 

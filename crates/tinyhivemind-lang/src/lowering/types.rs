@@ -1,8 +1,8 @@
 //! Translate validated packages into existing core values and host requests.
 use crate::{
-    CoordinatorSettings, ExecTool, Goal, GroupMode, Hook, JevSettings, Limits, Link, McpServer,
-    MemorySpec, Mission, Model, PermissionSet, Policies, Provider, RuntimeSettings, SeatMemory,
-    SessionSettings, Skill, ToolAccess, Workflow,
+    CoordinatorSettings, ExecTool, Goal, GroupMode, Harness, HarnessKind, Hook, JevSettings,
+    Limits, Link, McpServer, MemorySpec, Mission, Model, PermissionSet, Policies, Provider,
+    RuntimeSettings, SeatMemory, SessionSettings, Skill, ToolAccess, Workflow,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -119,6 +119,20 @@ pub struct LoweredSeatIntegration {
     pub bare_prompt: bool,
     /// A harness built-in definition to start from.
     pub definition_base: Option<String>,
+    /// The declared harness the seat runs on: the seat's `harness`, else its
+    /// profile's, else the runtime's. `None` when none is named, which is an
+    /// `openhuman` seat ([`Self::harness_kind`]).
+    pub harness: Option<Harness>,
+}
+
+impl LoweredSeatIntegration {
+    /// The kind of harness the seat runs on; `openhuman` when it names none.
+    #[must_use]
+    pub fn harness_kind(&self) -> HarnessKind {
+        self.harness
+            .as_ref()
+            .map_or(HarnessKind::OpenHuman, |harness| harness.kind)
+    }
 }
 /// Resolved identity plus runtime memory configuration retained for the host.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]

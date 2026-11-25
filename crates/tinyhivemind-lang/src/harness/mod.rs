@@ -1,4 +1,5 @@
 //! Which harness a seat runs on.
+pub(crate) mod resolve;
 mod types;
 use serde::{Deserialize, Serialize};
 use std::fmt;
