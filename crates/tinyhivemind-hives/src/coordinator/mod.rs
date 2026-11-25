@@ -370,7 +370,7 @@ fn create_hive_state(state: &mut StoredState, hive: &HiveInfo) -> Result<()> {
         }
     }
     if let Some(existing) = state.hives.get(&hive.hive_id) {
-        return if existing == &hive {
+        return if existing == hive {
             Ok(())
         } else {
             Err(Error::HiveConflict(hive.hive_id.clone()))
