@@ -111,15 +111,21 @@ pub(crate) async fn run(
         ended = follow(&turn, request_id, &mut events) => ended,
         _ = closed.wait_for(|closed| *closed) => Err(Error::Closed),
     };
-    if ended.is_ok() {
+    turn.closed = closed;
+    let (ended, over) = ended?;
+    if over {
         set(active, None);
     }
-    turn.closed = closed;
-    ended
+    Ok(ended)
 }
 
-/// Read events until the request ends.
-async fn follow(turn: &Turn<'_>, request_id: &str, events: &mut Events) -> Result<Ended> {
+/// Read events until the request ends, or fails while it runs on: whether
+/// the instance's turn is over.
+async fn follow(
+    turn: &Turn<'_>,
+    request_id: &str,
+    events: &mut Events,
+) -> Result<(Ended, bool)> {
     let mut iterations = 0_usize;
     let progress = |progress| Event::Progress {
         turn_id: turn.turn_id.to_owned(),
@@ -146,10 +152,11 @@ async fn follow(turn: &Turn<'_>, request_id: &str, events: &mut Events) -> Resul
                         "the turn started iteration {iterations}, past the seat's limit of {}",
                         turn.iterations
                     );
-                    return Ok(Ended {
+                    let ended = Ended {
                         failure: Some(failure),
                         ..Ended::default()
-                    });
+                    };
+                    return Ok((ended, false));
                 }
             }
             "text_delta" if event["delta_kind"] == "text" => {
@@ -176,18 +183,20 @@ async fn follow(turn: &Turn<'_>, request_id: &str, events: &mut Events) -> Resul
                         "the turn reached the binary's cap of {ITERATION_CAP} iterations, which it reports as a normal end"
                     )
                 });
-                return Ok(Ended {
+                let ended = Ended {
                     reply: event["full_response"].as_str().map(str::to_owned),
                     usage: usage(&event["usage"]),
                     failure,
-                });
+                };
+                return Ok((ended, true));
             }
             "chat_error" | "chat_cancelled" => {
                 let failure = format!("{name} ({}): {}", text("error_type"), text("message"));
-                return Ok(Ended {
+                let ended = Ended {
                     failure: Some(failure),
                     ..Ended::default()
-                });
+                };
+                return Ok((ended, true));
             }
             _ => {}
         }

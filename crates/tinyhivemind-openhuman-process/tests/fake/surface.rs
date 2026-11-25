@@ -260,7 +260,7 @@ impl State {
         if !entries.unwrap_or_default().iter().any(|entry| entry["id"] == agent) {
             return Err(format!("chat_agent_id '{agent}' is not a runnable agent definition"));
         }
-        let text = |key: &str| params[key].as_str().map(str::to_owned);
+        let text = |key: &str| params[key].as_str().filter(|text| !text.is_empty()).map(str::to_owned);
         let (Some(client), Some(thread), Some(message)) =
             (text("client_id"), text("thread_id"), text("message"))
         else {

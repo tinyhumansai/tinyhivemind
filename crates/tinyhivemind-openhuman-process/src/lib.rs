@@ -2,6 +2,7 @@
 pub mod capability;
 mod config;
 mod rpc;
+mod turn;
 
 #[cfg(test)]
 #[path = "../tests/support/http.rs"]
