@@ -13,7 +13,7 @@ pub(crate) fn documents() -> BTreeMap<String, String> {
 
 /// The example package `examples/hives/<name>`, every file keyed by
 /// relative path.
-pub(super) fn example(name: &str) -> BTreeMap<String, String> {
+pub(crate) fn example(name: &str) -> BTreeMap<String, String> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("examples/hives")
         .join(name);
