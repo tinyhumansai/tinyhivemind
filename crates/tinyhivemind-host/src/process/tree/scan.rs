@@ -95,8 +95,8 @@ struct Pass {
     seen: BTreeSet<u32>,
     /// Looked at and plainly not a member, so that its children are not.
     others: BTreeSet<u32>,
-    /// The host and its ancestors.
-    line: BTreeSet<u32>,
+    /// The host and its ancestors, unless one could not be seen.
+    line: Option<BTreeSet<u32>>,
     /// Whether the kernel says which pid was last, and so that none was handed
     /// out twice.
     numbered: bool,
@@ -118,7 +118,12 @@ impl Pass {
     /// of the host's own line may be a member's. The parent is the process it
     /// was when it was looked at, as no pid is handed out twice in one walk.
     fn is_anothers_child(&self, stat: &Stat) -> bool {
-        self.numbered && self.others.contains(&stat.parent) && !self.line.contains(&stat.parent)
+        self.numbered
+            && self.others.contains(&stat.parent)
+            && self
+                .line
+                .as_ref()
+                .is_some_and(|line| !line.contains(&stat.parent))
     }
 }
 
@@ -193,7 +198,7 @@ impl Tree {
         order: Option<Signal>,
         expired: &dyn Fn() -> bool,
     ) -> io::Result<bool> {
-        pass.line = self.line()?;
+        pass.line = self.line();
         let mut last = self.last_pid()?;
         pass.numbered = last.is_some();
         self.look(pass, self.listed(pass)?, order, expired);
@@ -289,7 +294,16 @@ impl Tree {
 
     /// Look at one process.
     fn judge(&mut self, pass: &mut Pass, pid: u32, order: Option<Signal>) -> io::Result<Judged> {
-        let Some(stat) = Stat::read(&self.proc, pid)? else {
+        let stat = match Stat::read(&self.proc, pid) {
+            // Another user's, as with `hidepid=1`: nothing is known of it, and
+            // nothing of a member, which is looked for by its identity.
+            Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
+                pass.seen.insert(pid);
+                return Ok(Judged::Known);
+            }
+            read => read?,
+        };
+        let Some(stat) = stat else {
             return Ok(Judged::Gone);
         };
         if let Some(parent) = pass.members.get(&stat.parent)
@@ -334,17 +348,20 @@ impl Tree {
         Ok(Judged::Known)
     }
 
-    /// The host and its ancestors.
-    fn line(&self) -> io::Result<BTreeSet<u32>> {
-        let mut line = BTreeSet::from([0, 1]);
-        let mut next = self.host;
-        while line.insert(next) {
-            next = match Stat::read(&self.proc, next)? {
-                Some(stat) => stat.parent,
-                None => 1,
-            };
-        }
-        Ok(line)
+    /// The host and its ancestors, read twice to see that none died meanwhile,
+    /// or `None` if any cannot be seen: an orphan may have gone to it.
+    fn line(&self) -> Option<BTreeSet<u32>> {
+        let read = || {
+            let mut line = vec![0, 1];
+            let mut next = self.host;
+            while !line.contains(&next) {
+                line.push(next);
+                next = Stat::read(&self.proc, next).ok()??.parent;
+            }
+            Some(line)
+        };
+        let line = read()?;
+        (read()? == line).then(|| line.into_iter().collect())
     }
 
     /// Add a member, and signal it.

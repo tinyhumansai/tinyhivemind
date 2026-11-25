@@ -1,5 +1,4 @@
 //! The private directories of one instance.
-use super::types::TEMPORARY;
 use super::{Error, Result};
 use std::fs::{self, DirBuilder, File, Permissions, TryLockError};
 use std::io::{self, ErrorKind, Read};
@@ -134,10 +133,7 @@ fn is_spent(path: &Path) -> bool {
 /// Whether no process is found that was started with `path` as its `TMPDIR`.
 #[cfg(target_os = "linux")]
 fn is_unused(path: &Path) -> bool {
-    let mut entry = std::ffi::OsString::from(TEMPORARY);
-    entry.push("=");
-    entry.push(path);
-    super::tree::in_use(entry.as_encoded_bytes()).is_ok_and(|in_use| !in_use)
+    super::tree::in_use(Path::new("/proc"), path).is_ok_and(|in_use| !in_use)
 }
 
 /// Nothing says who uses `path`, so somebody may.

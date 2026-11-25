@@ -1,4 +1,6 @@
 //! Attribution over a fabricated process table, and signalling real ones.
+mod hidden;
+
 use super::{Identity, Scan, Stat, Tree, signal};
 use anyhow::{Context as _, Result};
 use rustix::process::Signal;
@@ -511,74 +513,6 @@ fn a_thread_of_a_member_is_not_another_one() -> Result<()> {
     let mut thread = marked(31, 102);
     thread.leader = 30;
     let proc = table(&[Entry::new(10, 1, 100), marked(30, 102), thread])?;
-    assert_eq!(pids(&mut tree(&proc)?), [10, 30]);
-    Ok(())
-}
-
-#[test]
-fn what_cannot_be_read_is_not_gone() -> Result<()> {
-    // A directory cannot be read as a file, whoever tries.
-    let broken = |proc: &Path, name: &str| -> Result<()> {
-        fs::remove_file(proc.join(name))?;
-        Ok(fs::create_dir(proc.join(name))?)
-    };
-    for name in ["20/stat", "20/environ", "30/status"] {
-        for says_last in [true, false] {
-            let proc = table(&[exited_root(), Entry::new(20, 1, 101), marked(30, 102)])?;
-            if says_last {
-                last_pid(proc.path(), 30)?;
-            }
-            let mut tree = tree(&proc)?;
-            broken(proc.path(), name)?;
-            let found = scan(&mut tree);
-            assert!(found.failure.is_some() && !found.settled, "{name}");
-            // The rest is found all the same.
-            if name.starts_with("20") {
-                assert_eq!(found.live.len(), 1, "{name}");
-            }
-        }
-    }
-    // A known member that cannot be read counts as running.
-    let proc = table(&[Entry::new(10, 1, 100), Entry::new(11, 10, 101)])?;
-    children(&proc, 10, "11")?;
-    let mut tree = tree(&proc)?;
-    tree.sample();
-    broken(proc.path(), "11/stat")?;
-    tree.sample();
-    let found = scan(&mut tree);
-    assert!(found.failure.is_some());
-    assert_eq!(found.live.len(), 2);
-    Ok(())
-}
-
-#[test]
-fn an_environment_this_user_may_not_read_is_no_evidence() -> Result<()> {
-    use std::os::unix::fs::PermissionsExt as _;
-    // Root may read it.
-    if rustix::process::geteuid().is_root() {
-        return Ok(());
-    }
-    let proc = table(&[exited_root(), marked(30, 102)])?;
-    let environ = proc.path().join("30/environ");
-    fs::set_permissions(environ, fs::Permissions::from_mode(0o000))?;
-    let found = scan(&mut tree(&proc)?);
-    assert!(found.failure.is_none() && found.settled);
-    Ok(())
-}
-
-#[test]
-fn a_process_that_shows_nothing_does_not_excuse_its_children() -> Result<()> {
-    use std::os::unix::fs::PermissionsExt as _;
-    if rustix::process::geteuid().is_root() {
-        return Ok(());
-    }
-    // A member that cannot be told for one, such as a set-uid program.
-    let mut child = marked(30, 103);
-    child.parent = 20;
-    let proc = table(&[Entry::new(10, 1, 100), Entry::new(20, 1, 102), child])?;
-    last_pid(proc.path(), 30)?;
-    let environ = proc.path().join("20/environ");
-    fs::set_permissions(environ, fs::Permissions::from_mode(0o000))?;
     assert_eq!(pids(&mut tree(&proc)?), [10, 30]);
     Ok(())
 }

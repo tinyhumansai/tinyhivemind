@@ -22,6 +22,8 @@ use stat::{Stat, present};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io;
+use std::os::unix::ffi::OsStrExt as _;
+use std::os::unix::fs::MetadataExt as _;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Instant;
@@ -37,15 +39,56 @@ pub(super) fn supported() -> bool {
         && pidfd_open(rustix::process::getpid(), PidfdFlags::empty()).is_ok()
 }
 
-/// Whether any readable process was started with the environment `entry`.
-pub(super) fn in_use(entry: &[u8]) -> io::Result<bool> {
-    for process in fs::read_dir("/proc")? {
-        let environ = fs::read(process?.path().join("environ"));
-        if environ.is_ok_and(|environ| environ.split(|byte| *byte == 0).any(|e| e == entry)) {
-            return Ok(true);
+/// Whether any process was started with `directory` as its `TMPDIR`, by any
+/// name. Errors other than a process being gone or not this user's to read
+/// are errors, so that nothing is taken to be unused that might not be.
+pub(super) fn in_use(proc: &Path, directory: &Path) -> io::Result<bool> {
+    let target = fs::metadata(directory)?;
+    let same = |found: &fs::Metadata| found.dev() == target.dev() && found.ino() == target.ino();
+    for entry in fs::read_dir(proc)? {
+        let entry = entry?;
+        if entry
+            .file_name()
+            .to_str()
+            .is_none_or(|name| name.parse::<u32>().is_err())
+        {
+            continue;
+        }
+        let environ = match fs::read(entry.path().join("environ")) {
+            Err(error) if error.kind() == io::ErrorKind::PermissionDenied => continue,
+            read => present(read)?,
+        };
+        let entries = environ
+            .iter()
+            .flat_map(|environ| environ.split(|byte| *byte == 0));
+        for value in entries.filter_map(|entry| entry.strip_prefix(b"TMPDIR=")) {
+            let path = Path::new(std::ffi::OsStr::from_bytes(value));
+            if path.is_absolute() && named(fs::metadata(path))?.is_some_and(|found| same(&found)) {
+                return Ok(true);
+            }
         }
     }
     Ok(false)
+}
+
+/// `None` if `found` says that no such directory is there to be named.
+fn named(found: io::Result<fs::Metadata>) -> io::Result<Option<fs::Metadata>> {
+    let nothing = [
+        Errno::NOTDIR,
+        Errno::LOOP,
+        Errno::NAMETOOLONG,
+        Errno::ACCESS,
+    ];
+    match found {
+        Err(error)
+            if error
+                .raw_os_error()
+                .is_some_and(|raw| nothing.iter().any(|errno| errno.raw_os_error() == raw)) =>
+        {
+            Ok(None)
+        }
+        found => present(found),
+    }
 }
 
 /// What a process shows on its own.
