@@ -93,7 +93,12 @@ field's location.
 
 | Field | openhuman | openclaw | codex |
 | --- | --- | --- | --- |
-| prompt, model, hive and executable tools, limits.timeout_ms | yes | yes | yes |
+| prompt, model name, hive and executable tools, limits.timeout_ms | yes | yes | yes |
+| provider `openai` with an explicit `endpoint`, no `credential` | Chat Completions | Chat Completions | Responses API |
+| provider `openai` without an `endpoint` | rejected | rejected | rejected |
+| provider `openrouter`, `anthropic` | rejected | rejected | rejected |
+| provider `inherit`, or no provider at all | rejected | rejected | rejected |
+| provider `credential` | rejected | rejected | rejected |
 | hooks and permissions on hive and executable tools | yes, host side | yes, host side | yes, host side |
 | built-in tool groups | exact allowlist | off | off |
 | `tool_rules` on built-in tools | rejected until a release has them | rejected | rejected |
@@ -111,6 +116,43 @@ Two consequences follow. A package that relies on OpenHuman's built-in tools
 with hooks or argument rules cannot move to the process harness yet, and that
 blocks removal of the linked adapter for it. And "workflows" and proxied package
 MCP servers are new host work, not something the spike exercised.
+
+### Providers
+
+A `model` row means nothing without the provider it runs on, so `check` judges
+the resolved provider of every seat: its kind, endpoint and credential.
+
+- **What the rows rest on.** The spike ran one shape per kind, against a scripted
+  endpoint on loopback that did not check the model request's key: OpenHuman with
+  `auth_style = "none"`, OpenClaw (`openai-completions`) and Codex
+  (`wire_api = "responses"`) with the literal key `dummy`. Nothing else was run,
+  so everything else starts rejected. A row moves when a conformance test proves
+  it on the pinned binary; for `credential` that test uses an endpoint which
+  refuses the call without the right key. No hosted model is usable until then.
+- **Codex needs the Responses API.** `openai` means any compatible endpoint and
+  the language cannot say which API one serves, so `check` cannot see this
+  mismatch. The turn then fails; the runner does not retry another API.
+- **No fallback.** `inherit` means "whatever provider the runtime already has". A
+  child process has none, so it is rejected, as is a seat that resolves to no
+  provider. A process harness never uses its own default or hosted provider. The
+  generated config names one provider, and the start check (rule 6 below)
+  compares the effective one with it and fails on any other usable route.
+- **Credentials.** The host resolves the `SecretRef` and puts the value only in
+  that instance's cleared environment or its private config: never in the
+  package, a command line, the shared environment, a log or a tool's environment.
+  Where a kind insists on a key and the package has no credential, the host
+  writes a fixed placeholder.
+- **Shared OpenClaw.** One provider was tested per Gateway. Seats in one instance
+  must resolve to the same provider until a test shows more; otherwise use
+  `isolation = "seat"`.
+
+These rows bind process harnesses. The linked adapter keeps its own limits in
+`crates/tinyhivemind-openhuman/src/deploy/compatibility.rs` while it lasts: a
+package provider endpoint or credential conflicts with a host-injected provider,
+a credential needs an endpoint or a kind, and `anthropic` needs an injected
+provider. It also uses one provider per runtime, and an absent provider there
+really does inherit OpenHuman's own (`deploy/runtime.rs`), which the process
+harness does not copy.
 
 ## The harness port
 
@@ -144,7 +186,8 @@ unchanged. Process runners register under the coordinator's `runtime_id`.
    written, and the model-visible tool list is exactly the expected set. Any
    mismatch fails the start.
 7. Starts the child with a cleared environment plus an explicit list, a private
-   state directory and temp directory, and no operator token visible to tools.
+   state directory and temp directory, and no operator token or provider
+   credential visible to tools.
 
 ### Supervision
 
@@ -165,9 +208,12 @@ over Streamable HTTP on a random port of 127.0.0.1.
   equal the seat's running `turn_id`. A call with no running turn, or naming
   another turn, is refused. The bearer cannot do this alone: OpenClaw resumes
   an interrupted turn after a crash, and its calls would carry a valid bearer
-  while a newer turn is running. `turn` is added to the served schema only.
-- **Effects.** A call that reached the coordinator is recorded against its turn,
-  so a repeated call with the same identity does not act twice.
+  while a newer turn is running.
+- **Call.** Every call that changes state also carries a required `call` string,
+  chosen by the model and unique per intended action within the turn. See
+  [call identity](#call-identity). `turn` and `call` are added to the served
+  schema only and removed before hooks and dispatch; `check` rejects an executable
+  tool whose own `args` declare either name.
 - **Surface.** Only tools. Resource methods return an empty list, since Codex
   always offers resource readers. A bad `Host` or any `Origin` is refused, no
   redirect is ever sent, and request bodies are bounded.
@@ -176,6 +222,57 @@ over Streamable HTTP on a random port of 127.0.0.1.
 
 `turn` protects against stale calls, not against a hostile model: the model can
 read it. A seat acting within its own current turn has its own authority anyway.
+
+### Call identity
+
+The identity of a call is (seat, turn, `call`): the bearer gives the seat. A
+bearer and a `turn` alone cannot tell a retry from a second intended action, and
+no harness supplies a stable invocation id.
+
+| Call | Outcome |
+| --- | --- |
+| new identity | acts |
+| known identity, same tool and arguments | returns the recorded result; runs neither the tool nor its hooks |
+| known identity, different tool or arguments | refused |
+| another `call`, even with identical arguments | acts |
+| `turn` not running, whatever the `call` | refused |
+
+State-changing means everything but the list and read hive tools and executable
+tools with `side_effects = "read"`. A proxied MCP call always counts as changing
+state. A call refused before it acts, by validation, policy or a hook, records
+nothing.
+
+- **Coordinator actions** (post, ask, broadcast, complete, sends, create, join and
+  leave hive): the record and its result are written in the same transaction as
+  the effect, so neither exists without the other and a restart of the server
+  alone does not lose it. A coordinator restart interrupts every running turn, so
+  a later retry is refused by its `turn` rather than answered from the record.
+  The record may therefore be dropped when its turn ends.
+- **Executable tools, proxied MCP calls and `create_agent`** act outside the
+  coordinator's transaction. The server records "started" before it runs one, and
+  the result after. A retry gets the recorded result or, while the outcome is
+  unknown, a refusal. This is at most once **within one server process**; the
+  records are in memory.
+- **Not covered.** The model picks `call`, so a model that repeats an action under
+  a new `call` acts twice. The rule makes transport retries safe. It does not
+  make a model careful.
+
+**Today the coordinator cannot record this.** `submit_action` pushes an action onto
+the running turn with no identity, so a retried post is staged twice. Only sends
+deduplicate, by `message_id`. The single-transaction commit that the record needs
+does exist. [Plan step 2](../plans/2026-11-25-process-harnesses.md) adds it.
+
+Two existing ids are not this one:
+
+- **`message_id`** on a send stays the send's durable identity, across turns and
+  restarts, and is one space for the whole coordinator: the same id with a
+  different sender or payload is a conflict. It is checked after `call`. So two
+  sends with different `call` values but the same `message_id` and payload are one
+  message; a second intended message needs its own `message_id` too.
+- **`THM_CALL_ID`** is the host's counter of *runs* of an executable tool or hook
+  (`<id>-<n>`, `hook-<id>-<n>`), restarts with the process and is unknown to the
+  caller. It is unchanged and takes no part in deduplication. A retry answered
+  from the record runs nothing and so gets no new one.
 
 ## Per-kind rules
 
@@ -220,6 +317,17 @@ each kind: hive tool with the right actor; wrong bearer; another seat's bearer;
 stale `turn`; second turn continues; resume after restart; resume failure;
 timeout; drop stops the model call; kill mid-turn neither replays nor loses the
 seat; per-turn usage; exact model-visible tool list; no process left after stop.
+
+Call identity: a retry of one call acts once and returns the first result; two
+identical calls under different `call` values in one turn both act; a reused
+`call` with different arguments, or another tool, is refused; a missing `call` is
+refused; an executable tool retried while its outcome is unknown is refused and
+runs once.
+
+Providers: each accepted row reaches exactly the declared endpoint; each rejected
+row fails `check` at its location; with the declared endpoint down the turn fails
+and no other endpoint is contacted; a credential appears in no log, argument list
+or tool environment.
 
 Live tests (`live_*`, opt-in) run the same cases on the pinned binaries, then a
 mixed hive reaches a decision with every message in the coordinator transcript.
