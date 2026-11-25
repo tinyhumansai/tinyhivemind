@@ -71,6 +71,18 @@ impl Root {
     }
 }
 
+impl Drop for Root {
+    /// A child nobody released, because its instance failed to start, is
+    /// killed and reaped. This waits, but only for a SIGKILL to take effect.
+    fn drop(&mut self) {
+        self.signal_group(Signal::KILL);
+        let child = self.child.get_mut().unwrap_or_else(PoisonError::into_inner);
+        if let Some(child) = child {
+            let _ = child.wait();
+        }
+    }
+}
+
 /// The processes of one instance.
 pub(super) enum Scope {
     /// The whole tree.
@@ -129,23 +141,33 @@ impl Scope {
                 *live = tree.scan().map_err(Error::Table)?;
                 live.iter().map(|member| member.pid).collect()
             }
-            // The child's zombie counts as its group's, so whether the rest is
-            // gone shows only once it is reaped, and before that the group is
-            // the only thing that can be signalled.
-            Self::Group { .. } if exited => {
-                root.signal_group(Signal::KILL);
-                root.release();
-                match test_kill_process_group(root.pid()) {
-                    Err(rustix::io::Errno::SRCH) => Vec::new(),
-                    _ => vec![root.id()],
-                }
-            }
-            Self::Group { .. } => Vec::new(),
+            // An unreaped child counts, so this cannot be empty before
+            // `settle`.
+            Self::Group { .. } => match test_kill_process_group(root.pid()) {
+                Err(rustix::io::Errno::SRCH) => Vec::new(),
+                _ => vec![root.id()],
+            },
         };
         if !exited && !members.contains(&root.id()) {
             members.push(root.id());
         }
         Ok(members)
+    }
+
+    /// The child exited and is to be killed with its tree: do what must come
+    /// before looking for what is left.
+    pub(super) fn settle(&self, root: &Root) {
+        match self {
+            #[cfg(target_os = "linux")]
+            Self::Tree { .. } => {}
+            // The child's zombie counts as its group's, so whether the rest is
+            // gone shows only once it is reaped, and the group can be
+            // signalled only before that.
+            Self::Group { .. } => {
+                root.signal_group(Signal::KILL);
+                root.release();
+            }
+        }
     }
 
     /// Ask everyone found by the last look to end, once each.

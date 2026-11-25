@@ -26,6 +26,7 @@ pub struct Instance {
     lines: Option<JsonLines>,
     stdout: Tail,
     stderr: Tail,
+    pumps: Vec<tokio::task::AbortHandle>,
 }
 
 impl Instance {
@@ -96,6 +97,7 @@ impl Instance {
             lines: None,
             stdout: Tail::new(launch.log_limit),
             stderr: Tail::new(launch.log_limit),
+            pumps: Vec::new(),
         };
         // An error below drops `instance`, which kills the group at once.
         let scope = Scope::of(containment, &format!("{MARKER}={token}"), &root);
@@ -125,7 +127,7 @@ impl Instance {
     ) -> std::io::Result<()> {
         if let Some(stderr) = stderr {
             let stderr = tokio::process::ChildStderr::from_std(stderr)?;
-            tokio::spawn(drain(stderr, self.stderr.clone()));
+            self.pump(drain(stderr, self.stderr.clone()));
         }
         let Some(stdout) = stdout else {
             return Ok(());
@@ -134,13 +136,17 @@ impl Instance {
         if let (Streams::Lines(limits), Some(stdin)) = (streams, stdin) {
             let stdin = tokio::process::ChildStdin::from_std(stdin)?;
             let (lines, writing, reading) = JsonLines::over(stdin, stdout, limits);
-            tokio::spawn(writing);
-            tokio::spawn(reading);
+            self.pump(writing);
+            self.pump(reading);
             self.lines = Some(lines);
         } else {
-            tokio::spawn(drain(stdout, self.stdout.clone()));
+            self.pump(drain(stdout, self.stdout.clone()));
         }
         Ok(())
+    }
+
+    fn pump(&mut self, pump: impl Future<Output = ()> + Send + 'static) {
+        self.pumps.push(tokio::spawn(pump).abort_handle());
     }
 
     /// The child's pid, which is also its process group's id.
@@ -248,7 +254,10 @@ impl Instance {
     /// has passed, and [`Error::Table`] if the process table cannot be read.
     /// Neither means stopped; calling again tries again.
     pub async fn stop(&self, cancel: impl Future<Output = ()>, policy: StopPolicy) -> Result<Exit> {
-        let _ = tokio::time::timeout(policy.cancel, cancel).await;
+        tokio::select! {
+            _ = self.exited() => {}
+            _ = tokio::time::timeout(policy.cancel, cancel) => {}
+        }
         let (reply, stopped) = oneshot::channel();
         // A closed channel means an earlier stop already proved it.
         let _ = self.requests.send(Request::Stop(policy, reply));
@@ -260,11 +269,16 @@ impl Instance {
 }
 
 impl Drop for Instance {
-    /// Kill, without waiting. The process group is signalled before this
-    /// returns; the rest of the tree follows on the supervisor's thread.
+    /// Kill, without waiting: the process group is signalled before this
+    /// returns, and the rest of the tree follows on the supervisor's thread.
     fn drop(&mut self) {
         self.root.signal_group(Signal::KILL);
         self.hurry.store(true, Ordering::Release);
+        // Each ends with the tree, unless something that escaped it holds the
+        // other end of the pipe.
+        for pump in &self.pumps {
+            pump.abort();
+        }
         // Already stopped, if the supervisor is gone.
         let _ = self.requests.send(Request::Abandon);
     }

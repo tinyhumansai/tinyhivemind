@@ -128,11 +128,6 @@ impl Supervisor {
         let deadline = Instant::now() + bound;
         while Instant::now() < deadline && !self.hurry.load(Ordering::Acquire) {
             let exited = self.exited();
-            if matches!(self.scope, Scope::Group { .. }) && exited {
-                // Looking again would reap the child, and killing the rest of
-                // its group has to come before that.
-                return Ok(());
-            }
             if self.scope.members(&self.root, exited)?.is_empty() {
                 return Ok(());
             }
@@ -148,6 +143,9 @@ impl Supervisor {
         let mut proof = 0;
         loop {
             let exited = self.exited();
+            if exited {
+                self.scope.settle(&self.root);
+            }
             let members = self.scope.members(&self.root, exited)?;
             if members.is_empty() {
                 proof += 1;
