@@ -4,7 +4,7 @@ resolver = "3"
 # package, each directory named for the package it holds. There is no root
 # package: the crate a host links is `crates/tinyhivemind-core`, the same as any
 # other member. Keeping the root virtual is what makes that uniform.
-members = ["crates/tinyhivemind-core", "crates/tinyhivemind-tools", "crates/tinyhivemind-openhuman", "crates/tinyhivemind-hives", "crates/tinyhivemind-lang", "crates/tinyhivemind-exec"]
+members = ["crates/tinyhivemind-core", "crates/tinyhivemind-tools", "crates/tinyhivemind-openhuman", "crates/tinyhivemind-hives", "crates/tinyhivemind-lang", "crates/tinyhivemind-exec", "crates/tinyhivemind-host"]
 # `worktrees/` holds `git worktree` checkouts of this same repository; each
 # contains a full copy of this manifest. Keep them excluded from Cargo
 # workspace discovery.
@@ -29,6 +29,8 @@ tinyhivemind-lang = { path = "crates/tinyhivemind-lang" }
 tinyhivemind-exec = { path = "crates/tinyhivemind-exec" }
 # Cryptographic identities for evaluated hive package lineage.
 sha2 = "0.10"
+# Harness-neutral tool belt, policies, package plans and process supervision.
+tinyhivemind-host = { path = "crates/tinyhivemind-host" }
 # Durable cross-hive coordinator used at the harness boundary.
 tinyhivemind-hives = { path = "crates/tinyhivemind-hives" }
 # Concurrent owned runner futures in the coordinator, outside core.

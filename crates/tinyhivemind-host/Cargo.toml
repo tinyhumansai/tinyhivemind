@@ -1,0 +1,30 @@
+[package]
+name = "tinyhivemind-host"
+description = "Harness-neutral hosting: the hive tool belt, its policies, package plans, and supervised harness processes."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+publish = false
+# This crate names no harness type and links none (ADR 0035). It spawns
+# processes, so it is outside the pure crates `.github/scripts/assert-pure.sh`
+# guards.
+
+[dependencies]
+# Durable coordination: the `AgentRunner` seam, actions and turn payloads.
+tinyhivemind-hives.workspace = true
+# Typed errors.
+thiserror.workspace = true
+# Child processes, their deadlines and pipes.
+tokio = { workspace = true, features = ["process", "io-util", "time", "rt", "sync", "macros"] }
+
+[dev-dependencies]
+# Async tests on a multi-threaded runtime.
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+# Temporary instance directories.
+tempfile.workspace = true
+
+[lints]
+workspace = true

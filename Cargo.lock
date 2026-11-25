@@ -3568,6 +3568,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tinyhivemind-host"
+version = "0.2.1"
+dependencies = [
+ "tempfile",
+ "thiserror",
+ "tinyhivemind-hives",
+ "tokio",
+]
+
+[[package]]
 name = "tinyhivemind-lang"
 version = "0.2.1"
 dependencies = [
