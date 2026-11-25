@@ -1,7 +1,9 @@
 //! What dropping an instance guarantees without awaiting anything.
 use super::support::{Fixture, running, until};
-use crate::process::Instance;
+use crate::process::{Instance, Launch};
 use anyhow::Result;
+use std::os::unix::fs::PermissionsExt as _;
+use std::time::Duration;
 
 #[tokio::test]
 async fn dropping_kills_the_process_group() -> Result<()> {
@@ -70,13 +72,29 @@ fn dropping_needs_no_runtime() -> Result<()> {
 }
 
 #[tokio::test]
-async fn dropping_a_start_that_is_never_awaited_to_the_end_leaves_nothing() -> Result<()> {
+async fn dropping_a_start_that_waits_for_its_program_leaves_nothing() -> Result<()> {
     let fixture = Fixture::new()?;
-    let launch = fixture.shell("echo $$ > $OUT/pid; exec sleep 300")?;
-    let started = tokio::spawn(Instance::start(launch));
-    let root = fixture.pid("pid").await?;
-    started.abort();
-    drop(started.await);
-    until(|| !running(root)).await;
+    fixture.script("program", "#!/bin/sh\necho $$ > $OUT/pid\n")?;
+    let program = fixture.path("program");
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700))?;
+    // A program open for writing is busy, and the start tries again.
+    let busy = std::fs::File::options().append(true).open(&program)?;
+    let launch = Launch::new(&program, fixture.dir()?).env("OUT", fixture.path(""));
+    let mut starting = Box::pin(Instance::start(launch));
+    let waited = tokio::time::timeout(Duration::from_millis(50), &mut starting).await;
+    assert!(waited.is_err(), "the start was not under way");
+    let temporaries = || -> Result<usize> {
+        let entries = std::fs::read_dir(fixture.dir()?.root())?;
+        let names = entries.flatten().map(|entry| entry.file_name());
+        Ok(names
+            .filter(|name| name.to_string_lossy().starts_with("tmp-"))
+            .count())
+    };
+    assert_eq!(temporaries()?, 1);
+    drop(starting);
+    assert_eq!(temporaries()?, 0);
+    drop(busy);
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert_eq!(fixture.read("pid"), "", "the program ran all the same");
     Ok(())
 }

@@ -54,13 +54,16 @@ pub enum Case {
     /// A seat starts only if the model sees exactly the expected tools, and a
     /// refused start leaves nothing running.
     ToolListIsExact,
+    /// A seat starts only if the instance runs with the config that was
+    /// written, and a refused start leaves nothing running.
+    ConfigIsTheOneWritten,
     /// No process is left after a stop, not even one in its own session.
     NothingLeftAfterStop,
 }
 
 impl Case {
     /// Every case.
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::SecondTurnContinues,
         Self::ResumesAfterRestart,
         Self::ResumeFailureIsAnError,
@@ -71,6 +74,7 @@ impl Case {
         Self::NoTurnTwice,
         Self::UsageIsPerTurn,
         Self::ToolListIsExact,
+        Self::ConfigIsTheOneWritten,
         Self::NothingLeftAfterStop,
     ];
 
@@ -90,6 +94,7 @@ impl Case {
             Self::NoTurnTwice => cases::no_turn_twice(subject).await,
             Self::UsageIsPerTurn => cases::usage_is_per_turn(subject).await,
             Self::ToolListIsExact => cases::tool_list_is_exact(subject).await,
+            Self::ConfigIsTheOneWritten => cases::config_is_the_one_written(subject).await,
             Self::NothingLeftAfterStop => cases::nothing_left_after_stop(subject).await,
         };
         ended.map_err(|reason| Failure { case: self, reason })

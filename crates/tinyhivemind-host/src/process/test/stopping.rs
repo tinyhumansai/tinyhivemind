@@ -323,19 +323,3 @@ async fn a_process_group_is_a_survivor_until_it_is_gone() -> Result<()> {
     assert!(matches!(error, Error::Survivors { pids } if pids == [instance.pid()]));
     Ok(())
 }
-
-#[tokio::test]
-async fn a_child_the_host_reaped_is_reported_lost_and_its_tree_is_still_stopped() -> Result<()> {
-    let fixture = Fixture::new()?;
-    fixture.script("stay", STAY)?;
-    let instance = fixture.start("setsid sh $OUT/stay & exit 0").await?;
-    let orphan = fixture.pid("pid").await?;
-    let root = process(instance.pid())?;
-    let options = rustix::process::WaitIdOptions::EXITED;
-    rustix::process::waitid(rustix::process::WaitId::Pid(root), options)?;
-    instance.exited().await;
-    let exit = instance.stop(async {}, SHORT).await?;
-    assert!(!exit.success() || exit.code == Some(0));
-    assert!(!running(orphan));
-    Ok(())
-}

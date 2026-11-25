@@ -4,10 +4,10 @@
 //! for it and a drop needs no runtime. It has the only right to reap the
 //! child: until the tree is proven gone the child stays a zombie, which keeps
 //! its pid, and so its process group id, from being given to anyone else.
+use super::directory::Temporary;
 use super::scope::{Root, Scope};
 use super::{Error, Exit, Result, StopPolicy};
 use rustix::process::{Signal, WaitId, WaitIdOptions, waitid};
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
@@ -48,7 +48,7 @@ pub(super) struct Supervisor {
     /// Set by a drop: skip the rest of the grace period.
     pub(super) hurry: Arc<AtomicBool>,
     /// Removed once the tree is proven gone.
-    pub(super) temporary: PathBuf,
+    pub(super) temporary: Option<Temporary>,
 }
 
 impl Supervisor {
@@ -178,8 +178,9 @@ impl Supervisor {
                 && proof >= PROOF
             {
                 self.root.release();
-                // A leftover directory is private and harmless.
-                let _ = std::fs::remove_dir_all(&self.temporary);
+                if let Some(mut temporary) = self.temporary.take() {
+                    temporary.in_use(false);
+                }
                 return Ok(exit);
             }
             thread::sleep(POLL);

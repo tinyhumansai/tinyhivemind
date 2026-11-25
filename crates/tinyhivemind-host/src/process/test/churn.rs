@@ -129,7 +129,7 @@ async fn a_table_that_cannot_be_read_is_an_error_after_the_group_was_killed() ->
         requests: received,
         exit: watch::channel(None).0,
         hurry: Arc::default(),
-        temporary: fixture.path("none"),
+        temporary: None,
     }
     .start()?;
     let (reply, members) = oneshot::channel();
@@ -147,5 +147,42 @@ async fn a_table_that_cannot_be_read_is_an_error_after_the_group_was_killed() ->
         "{error:?}"
     );
     assert!(!running(pid));
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_child_the_host_reaped_is_reported_lost_and_its_tree_is_still_stopped() -> Result<()> {
+    let fixture = Fixture::new()?;
+    let mut command = Command::new("/bin/sh");
+    command.args([
+        "-c",
+        "setsid sh -c 'echo $$ > $OUT/pid; exec sleep 300' & exec sleep 300",
+    ]);
+    command
+        .env("OUT", fixture.path(""))
+        .env("MARKED", fixture.path(""));
+    let root = Arc::new(Root::new(command.process_group(0).spawn()?));
+    let (pid, process) = (root.id(), root.pid());
+    let orphan = fixture.pid("pid").await?;
+    let marker = format!("MARKED={}", fixture.path("").display());
+    let (requests, received) = mpsc::channel();
+    let supervisor = Supervisor {
+        scope: Scope::Tree(Tree::new(&marker, pid)?),
+        root,
+        requests: received,
+        exit: watch::channel(None).0,
+        hurry: Arc::default(),
+        temporary: None,
+    };
+    // The host kills and reaps the child before its supervisor looks at all.
+    rustix::process::kill_process(process, rustix::process::Signal::KILL)?;
+    let exited = rustix::process::WaitIdOptions::EXITED;
+    rustix::process::waitid(rustix::process::WaitId::Pid(process), exited)?;
+    supervisor.start()?;
+    let (reply, stopped) = oneshot::channel();
+    requests.send(Request::Stop(BOUNDS, reply))?;
+    let exit = stopped.await??;
+    assert_eq!((exit.code, exit.signal), (None, None));
+    assert!(!running(orphan));
     Ok(())
 }

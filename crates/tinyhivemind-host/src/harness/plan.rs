@@ -16,8 +16,14 @@ use tinyhivemind_lang::LoweredSeat;
 pub struct SeatPlan {
     /// The seat, lowered from its package.
     pub seat: LoweredSeat,
-    /// An absolute path, private to the instance, that survives restarts. The
-    /// same path is what lets a session be resumed.
+    /// An absolute path, private to this seat, that survives restarts. The same
+    /// path is what lets a session be resumed.
+    ///
+    /// With one instance per seat this is the instance's directory. A client
+    /// whose seats share an instance keeps that in a directory it was given
+    /// when it was constructed, and only what is this seat's alone in here, so
+    /// two seats never have the same one. Such an instance holds every one of
+    /// its seats' credentials, and stopping one seat leaves it running.
     pub directory: PathBuf,
     /// Told what the seat does.
     pub observer: Arc<dyn Observer>,

@@ -86,8 +86,15 @@ impl Child {
             Ok("missing") => drop(tools.pop()),
             _ => {}
         }
+        // Like OpenHuman, the child falls back to its defaults in silence.
+        let written = match self.control.join("misconfigured").exists() {
+            true => String::new(),
+            false => fs::read_to_string("config.json").unwrap_or_default(),
+        };
+        let config = serde_json::from_str(&written).unwrap_or(json!({"mode": "default"}));
         Self::say(&json!({
             "event": "hello", "pid": std::process::id(), "version": VERSION, "tools": tools,
+            "config": config,
         }))
     }
 

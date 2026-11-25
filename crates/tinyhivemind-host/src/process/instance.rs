@@ -1,15 +1,15 @@
 //! One supervised child, from launch to proven stop.
+use super::directory::{self, Temporary};
 use super::pipe::{JsonLines, Tail, drain};
 use super::scope::{Root, Scope, containment};
 use super::supervisor::{Request, Supervisor};
 use super::types::{MARKER, Streams, TEMPORARY};
-use super::{Containment, Error, Exit, Launch, Result, StopPolicy, directory};
+use super::{Containment, Error, Exit, Launch, Result, StopPolicy};
 use rustix::process::Signal;
 use std::fmt;
 use std::future::Future;
 use std::io::ErrorKind;
 use std::os::unix::process::CommandExt;
-use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, mpsc};
@@ -47,19 +47,15 @@ impl Instance {
     pub(super) async fn contained(launch: Launch, containment: Containment) -> Result<Self> {
         launch.check()?;
         let token = directory::token()?;
-        let temporary = launch.dir.temporary(&token)?;
-        let started = Self::spawn(&launch, containment, &token, &temporary).await;
-        if started.is_err() {
-            let _ = std::fs::remove_dir_all(&temporary);
-        }
-        started
+        let temporary = launch.dir.temporary(&token).await?;
+        Self::spawn(&launch, containment, &token, temporary).await
     }
 
     async fn spawn(
         launch: &Launch,
         containment: Containment,
         token: &str,
-        temporary: &Path,
+        mut temporary: Temporary,
     ) -> Result<Self> {
         let failed = |source| Error::Spawn {
             program: launch.program.clone(),
@@ -75,7 +71,7 @@ impl Instance {
             .env_clear()
             .envs(launch.environment.iter().cloned())
             .env(MARKER, token)
-            .env(TEMPORARY, temporary)
+            .env(TEMPORARY, temporary.path())
             .current_dir(launch.current_dir.as_deref().unwrap_or(launch.dir.state()))
             .stdin(stdin)
             .stdout(Stdio::piped())
@@ -101,13 +97,15 @@ impl Instance {
         };
         // An error below drops `instance`, which kills the group at once.
         let scope = Scope::of(containment, &format!("{MARKER}={token}"), &root);
+        let scope = scope.map_err(Error::Table)?;
+        temporary.in_use(true);
         Supervisor {
             root,
-            scope: scope.map_err(Error::Table)?,
+            scope,
             requests: received,
             exit,
             hurry: instance.hurry.clone(),
-            temporary: temporary.to_path_buf(),
+            temporary: Some(temporary),
         }
         .start()
         .map_err(failed)?;

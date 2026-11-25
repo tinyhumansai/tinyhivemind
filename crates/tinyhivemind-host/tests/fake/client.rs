@@ -7,8 +7,8 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 use tinyhivemind_hives::{AgentRunner, TurnDisposition, TurnFuture, TurnOutcome, TurnRequest};
 use tinyhivemind_host::harness::{
-    CancelFuture, CancellableRunner, Error, Event, Expected, Harness, HarnessKind, Result,
-    SeatPlan, SeatRunner, StartFuture, StopFuture, ToolEndpoint, TurnUsage,
+    CancelFuture, CancellableRunner, Error, Event, Expected, Harness, HarnessKind, Observed,
+    Result, SeatPlan, SeatRunner, StartFuture, StopFuture, ToolEndpoint, TurnUsage,
 };
 use tinyhivemind_host::process::{Instance, InstanceDir, JsonLines, Launch, StopPolicy};
 use tokio::sync::Mutex as AsyncMutex;
@@ -36,6 +36,8 @@ pub(crate) enum Fault {
     TotalUsage,
     /// The instance is not verified.
     Unverified,
+    /// The instance's config is not compared with the one written.
+    UnverifiedConfig,
     /// Turns are not serialized, timed out or refused a second time.
     Unguarded,
     /// A turn interrupted by a crash is sent again.
@@ -160,6 +162,9 @@ impl Seat {
             Fault::IgnoresCancel => "ignores_cancel",
             _ => "",
         };
+        let config = dir.state().join("config.json");
+        std::fs::write(&config, self.config().to_string())
+            .map_err(|error| Error::Harness(error.to_string()))?;
         let launch = Launch::new(&self.shared.program, dir)
             .env("CONTROL", &self.shared.control)
             .env("FAULT", fault)
@@ -182,6 +187,11 @@ impl Seat {
                 Err(error)
             }
         }
+    }
+
+    /// The config written for the child.
+    fn config(&self) -> Value {
+        json!({"mode": "strict", "bearer": self.tools.bearer()})
     }
 
     async fn verify(&self, live: &mut Live) -> Result<()> {
@@ -210,11 +220,19 @@ impl Seat {
             Fault::Unverified => found.clone(),
             _ => tools.iter().cloned().collect(),
         };
-        let started = Expected::new(instance.pid(), VERSION, required).verify(
-            pid.unwrap_or_default(),
-            version,
-            found,
-        )?;
+        let mut expected = Expected::new(instance.pid(), VERSION).tools(required);
+        let mut observed = Observed::new(pid.unwrap_or_default(), version).tools(found);
+        let written = match self.shared.fault {
+            Fault::UnverifiedConfig => hello["config"].clone(),
+            _ => self.config(),
+        };
+        for (name, value) in written.as_object().into_iter().flatten() {
+            expected = expected.setting(name, value.clone());
+        }
+        for (name, value) in hello["config"].as_object().into_iter().flatten() {
+            observed = observed.setting(name, value.clone());
+        }
+        let started = expected.verify(&observed)?;
         let id = &self.plan.seat.id;
         self.plan.observer.event(id, Event::Started(started));
         Ok(())

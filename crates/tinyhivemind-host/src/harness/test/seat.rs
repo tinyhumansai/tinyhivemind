@@ -4,7 +4,7 @@ use crate::harness::SeatRunner;
 use anyhow::{Context as _, Result};
 use std::sync::Arc;
 use std::time::Duration;
-use tinyhivemind_hives::AgentRunner;
+use tinyhivemind_hives::{AgentRunner, TurnDisposition};
 
 fn seat(inner: &Arc<Scripted>) -> SeatRunner {
     SeatRunner::new(Arc::new(Handle(inner.clone())))
@@ -213,6 +213,86 @@ async fn a_request_without_a_session_continues_the_one_the_seat_has() -> Result<
     let seat = seat(&inner);
     seat.run(request("t1", None)).await?;
     seat.run(request("t2", None)).await?;
+    assert_eq!(inner.log(), ["run t1 none", "run t2 s"]);
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_cancellation_that_never_ends_is_given_up_and_blocks_the_seat_with_an_error() -> Result<()>
+{
+    let inner = Scripted::new(&[Turn::Fail, Turn::Session("s")]);
+    inner.permits.forget_permits(usize::MAX);
+    let seat = seat(&inner).with_cancel_limit(Duration::from_millis(20));
+    let ended = tokio::time::timeout(Duration::from_secs(30), refusal(&seat, "t1", None));
+    assert!(ended.await??.contains("20ms"));
+    for turn in ["t2", "t3"] {
+        let ended = tokio::time::timeout(Duration::from_secs(30), refusal(&seat, turn, None));
+        let refused = ended.await??;
+        assert!(
+            refused.contains("t1") && refused.contains("20ms"),
+            "{refused}"
+        );
+    }
+    // The host stopped the instance, so nothing of any turn is left.
+    seat.instance_stopped().await;
+    seat.run(request("t2", None)).await?;
+    assert!(
+        refusal(&seat, "t1", None)
+            .await?
+            .contains("already started")
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_dropped_turn_whose_cancellation_never_ends_does_not_hold_the_seat_for_ever() -> Result<()>
+{
+    let inner = Scripted::new(&[Turn::Hang, Turn::Session("s")]);
+    inner.permits.forget_permits(usize::MAX);
+    let seat = seat(&inner).with_cancel_limit(Duration::from_millis(20));
+    let first = tokio::spawn(seat.run(request("t1", None)));
+    logged(&inner, &["run t1 none"]).await;
+    first.abort();
+    let ended = tokio::time::timeout(Duration::from_secs(30), refusal(&seat, "t2", None));
+    assert!(ended.await??.contains("t1"));
+    // It answers after all.
+    inner.permits.add_permits(1);
+    seat.run(request("t2", None)).await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_turn_reported_as_failed_is_cancelled_and_its_session_kept() -> Result<()> {
+    let failed = TurnDisposition::Failed("cap reached".into());
+    let inner = Scripted::new(&[Turn::Ends(failed.clone()), Turn::Session("s")]);
+    let seat = seat(&inner);
+    let outcome = seat.run(request("t1", None)).await?;
+    assert_eq!(outcome.disposition, failed);
+    assert_eq!(inner.log(), ["run t1 none", "cancel t1", "cancelled t1"]);
+    seat.run(request("t2", None)).await?;
+    assert!(inner.log().contains(&"run t2 s".to_owned()));
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_failed_turn_that_cannot_be_shown_to_have_stopped_is_an_error() -> Result<()> {
+    let failed = TurnDisposition::Failed("cap reached".into());
+    let inner = Scripted::new(&[Turn::Ends(failed)]);
+    inner.refuse_cancel(true);
+    let seat = seat(&inner);
+    assert!(refusal(&seat, "t1", None).await?.contains("will not stop"));
+    assert!(refusal(&seat, "t2", None).await?.contains("t1"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_parked_turn_has_ended_and_is_not_cancelled() -> Result<()> {
+    let inner = Scripted::new(&[Turn::Ends(TurnDisposition::Parked), Turn::Session("s")]);
+    let seat = seat(&inner);
+    let outcome = seat.run(request("t1", None)).await?;
+    assert_eq!(outcome.disposition, TurnDisposition::Parked);
+    // Its release comes as another turn, with another id.
+    seat.run(request("t2", Some("s"))).await?;
     assert_eq!(inner.log(), ["run t1 none", "run t2 s"]);
     Ok(())
 }

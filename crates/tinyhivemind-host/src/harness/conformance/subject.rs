@@ -66,14 +66,18 @@ pub trait Subject: Send + Sync {
     fn seat(&self) -> SeatPlan;
     /// The seat's tools. Nothing needs to be served there.
     fn endpoint(&self) -> ToolEndpoint;
-    /// Append a step to the model's script.
-    fn script(&self, step: ModelStep);
+    /// Have the model play `steps` from its next call on, and drop what is left
+    /// of an earlier script. With nothing left to play it hangs.
+    fn script(&self, steps: &[ModelStep]);
     /// Every call the model received, in order.
     fn model_calls(&self) -> Vec<ModelCall>;
     /// Delete the seat's sessions from the durable state of a stopped seat.
     fn lose_sessions(&self);
     /// Make every instance started from now on offer its tools this way.
     fn offer(&self, fault: ToolFault);
+    /// Make every instance started from now on run with a config that is not
+    /// the one its client wrote, in a setting that matters.
+    fn misconfigure(&self);
     /// Have the running instance start a process in a session of its own, and
     /// return its pid, or `None` if this kind cannot be made to.
     fn escapee(&self) -> EscapeFuture;

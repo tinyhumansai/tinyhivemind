@@ -81,6 +81,7 @@ fn events_have_a_pinned_wire_form() -> Result<()> {
         pid: 7,
         version: "1.2".into(),
         tools: ["a".to_owned()].into(),
+        settings: ["m".to_owned()].into(),
     };
     let progress = |progress| Event::Progress {
         turn_id: "t".into(),
@@ -89,7 +90,8 @@ fn events_have_a_pinned_wire_form() -> Result<()> {
     for (event, wire) in [
         (
             Event::Started(started),
-            json!({"event": "started", "pid": 7, "version": "1.2", "tools": ["a"]}),
+            json!({"event": "started", "pid": 7, "version": "1.2", "tools": ["a"],
+                "settings": ["m"]}),
         ),
         (
             Event::Usage {

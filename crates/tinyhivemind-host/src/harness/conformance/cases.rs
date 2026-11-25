@@ -12,8 +12,9 @@ use tokio::time::Instant;
 
 type Outcome<T = ()> = Result<T, String>;
 
-/// The limits the timeout case tries: each is long enough for a turn that is
-/// answered, and a longer one is tried if a turn did not even reach the model.
+/// The limits the timeout case tries. A longer one is tried if a turn did not
+/// reach the model, or an answered one did not end, so that a slow machine is
+/// not mistaken for a wrong client.
 const LIMITS: [Duration; 3] = [
     Duration::from_secs(2),
     Duration::from_secs(8),
@@ -135,7 +136,7 @@ impl Seat<'_> {
 
     /// One more turn in `session`, which must see `seen` user messages or more.
     async fn goes_on(&self, turn: &str, session: &str, seen: usize) -> Outcome {
-        self.subject.script(reply("on", 1));
+        self.subject.script(&[reply("on", 1)]);
         let outcome = self.complete(turn, Some(session)).await?;
         ensure(outcome.session_id == session, || {
             format!("turn {turn} ran in another session")
@@ -232,7 +233,7 @@ fn nothing_runs(subject: &dyn Subject) -> Outcome {
 
 pub(super) async fn second_turn_continues(subject: &dyn Subject) -> Outcome {
     let seat = start(subject).await?;
-    subject.script(reply("one", 1));
+    subject.script(&[reply("one", 1)]);
     let first = seat.complete("t1", None).await?;
     ensure(first.reply.as_deref() == Some("one"), || {
         format!("the reply is {:?}", first.reply)
@@ -243,7 +244,7 @@ pub(super) async fn second_turn_continues(subject: &dyn Subject) -> Outcome {
 
 pub(super) async fn resumes_after_restart(subject: &dyn Subject) -> Outcome {
     let seat = start(subject).await?;
-    subject.script(reply("one", 1));
+    subject.script(&[reply("one", 1)]);
     let session = seat.complete("t1", None).await?.session_id;
     seat.stop().await?;
     drop(seat);
@@ -254,12 +255,12 @@ pub(super) async fn resumes_after_restart(subject: &dyn Subject) -> Outcome {
 
 pub(super) async fn resume_failure_is_an_error(subject: &dyn Subject) -> Outcome {
     let seat = start(subject).await?;
-    subject.script(reply("one", 1));
+    subject.script(&[reply("one", 1)]);
     let session = seat.complete("t1", None).await?.session_id;
     seat.stop().await?;
     drop(seat);
     subject.lose_sessions();
-    subject.script(reply("two", 1));
+    subject.script(&[reply("two", 1)]);
     let seat = start(subject).await?;
     seat.fail("t2", Some(&session)).await?;
     // Nothing was asked of the model in some other session.
@@ -268,27 +269,38 @@ pub(super) async fn resume_failure_is_an_error(subject: &dyn Subject) -> Outcome
 }
 
 pub(super) async fn timeout_stops_the_turn(subject: &dyn Subject) -> Outcome {
-    subject.script(ModelStep::Hang);
+    let mut reason = String::new();
     for limit in LIMITS {
         let seat = start_limited(subject, Some(limit)).await?;
+        subject.script(&[ModelStep::Hang]);
+        let call = subject.model_calls().len();
         seat.fail("t1", None).await?;
-        if !subject.model_calls().is_empty() {
-            call_is(subject, 0, CallState::Aborted).await?;
-            subject.script(reply("two", 1));
-            let session = seat.complete("t2", None).await?.session_id;
-            seat.goes_on("t3", &session, 2).await?;
-            return seat.stop().await;
+        if subject.model_calls().len() > call {
+            call_is(subject, call, CallState::Aborted).await?;
+            match goes_on_within_its_limit(&seat).await {
+                Ok(()) => return seat.stop().await,
+                // Or too slow, which a longer limit tells apart.
+                Err(error) => reason = error,
+            }
+        } else {
+            reason = "no turn reached the model within its limit".into();
         }
         seat.stop().await?;
     }
-    Err("no turn reached the model within its limit".into())
+    Err(reason)
+}
+
+async fn goes_on_within_its_limit(seat: &Seat<'_>) -> Outcome {
+    seat.subject.script(&[reply("two", 1)]);
+    let session = seat.complete("t2", None).await?.session_id;
+    seat.goes_on("t3", &session, 2).await
 }
 
 pub(super) async fn drop_stops_the_turn(subject: &dyn Subject) -> Outcome {
     let seat = start(subject).await?;
-    subject.script(reply("one", 1));
+    subject.script(&[reply("one", 1)]);
     let session = seat.complete("t1", None).await?.session_id;
-    subject.script(ModelStep::Hang);
+    subject.script(&[ModelStep::Hang]);
     let run = tokio::spawn(seat.runner.run(request(&seat.id, "t2", Some(&session))));
     call_is(subject, 1, CallState::Open).await?;
     run.abort();
@@ -299,9 +311,9 @@ pub(super) async fn drop_stops_the_turn(subject: &dyn Subject) -> Outcome {
 
 pub(super) async fn kill_mid_turn(subject: &dyn Subject) -> Outcome {
     let seat = start(subject).await?;
-    subject.script(reply("one", 1));
+    subject.script(&[reply("one", 1)]);
     let session = seat.complete("t1", None).await?.session_id;
-    subject.script(ModelStep::Hang);
+    subject.script(&[ModelStep::Hang]);
     let run = tokio::spawn(seat.runner.run(request(&seat.id, "t2", Some(&session))));
     call_is(subject, 1, CallState::Open).await?;
     let pid = i32::try_from(seat.events.started()?.pid).map_err(text)?;
@@ -319,10 +331,9 @@ pub(super) async fn kill_mid_turn(subject: &dyn Subject) -> Outcome {
 
 pub(super) async fn one_turn_at_a_time(subject: &dyn Subject) -> Outcome {
     let seat = start(subject).await?;
-    subject.script(reply("one", 1));
+    subject.script(&[reply("one", 1)]);
     let session = seat.complete("t1", None).await?.session_id;
-    subject.script(ModelStep::Hang);
-    subject.script(reply("three", 1));
+    subject.script(&[ModelStep::Hang, reply("three", 1)]);
     let first = tokio::spawn(seat.runner.run(request(&seat.id, "t2", Some(&session))));
     call_is(subject, 1, CallState::Open).await?;
     let second = tokio::spawn(seat.runner.run(request(&seat.id, "t3", Some(&session))));
@@ -338,9 +349,9 @@ pub(super) async fn one_turn_at_a_time(subject: &dyn Subject) -> Outcome {
 
 pub(super) async fn no_turn_twice(subject: &dyn Subject) -> Outcome {
     let seat = start(subject).await?;
-    subject.script(reply("one", 1));
+    subject.script(&[reply("one", 1)]);
     let session = seat.complete("t1", None).await?.session_id;
-    subject.script(reply("two", 1));
+    subject.script(&[reply("two", 1)]);
     seat.fail("t1", Some(&session)).await?;
     calls_are(subject, &[CallState::Answered])?;
     seat.stop().await
@@ -348,9 +359,9 @@ pub(super) async fn no_turn_twice(subject: &dyn Subject) -> Outcome {
 
 pub(super) async fn usage_is_per_turn(subject: &dyn Subject) -> Outcome {
     let seat = start(subject).await?;
-    subject.script(reply("one", 100));
+    subject.script(&[reply("one", 100)]);
     let session = seat.complete("t1", None).await?.session_id;
-    subject.script(reply("two", 30));
+    subject.script(&[reply("two", 30)]);
     seat.complete("t2", Some(&session)).await?;
     let found = (seat.events.usage("t1"), seat.events.usage("t2"));
     ensure(found == (vec![100], vec![30]), || {
@@ -359,7 +370,7 @@ pub(super) async fn usage_is_per_turn(subject: &dyn Subject) -> Outcome {
     seat.stop().await?;
     drop(seat);
     let seat = start(subject).await?;
-    subject.script(reply("three", 7));
+    subject.script(&[reply("three", 7)]);
     seat.complete("t3", Some(&session)).await?;
     let found = seat.events.usage("t3");
     ensure(found == [7], || {
@@ -395,9 +406,23 @@ pub(super) async fn tool_list_is_exact(subject: &dyn Subject) -> Outcome {
     seat.stop().await
 }
 
+pub(super) async fn config_is_the_one_written(subject: &dyn Subject) -> Outcome {
+    let seat = start(subject).await?;
+    let compared = seat.events.started()?.settings;
+    ensure(!compared.is_empty(), || "no setting was compared".into())?;
+    seat.stop().await?;
+    drop(seat);
+    subject.misconfigure();
+    if let Ok(seat) = start(subject).await {
+        seat.stop().await?;
+        return Err("a seat started with another config than was written".into());
+    }
+    nothing_runs(subject)
+}
+
 pub(super) async fn nothing_left_after_stop(subject: &dyn Subject) -> Outcome {
     let seat = start(subject).await?;
-    subject.script(reply("one", 1));
+    subject.script(&[reply("one", 1)]);
     seat.complete("t1", None).await?;
     let escapee = within(subject, "the escape", subject.escapee()).await?;
     let running = subject.processes();

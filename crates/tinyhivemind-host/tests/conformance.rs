@@ -43,70 +43,69 @@ passes! {
     no_turn_runs_twice => NoTurnTwice,
     usage_is_per_turn => UsageIsPerTurn,
     the_tool_list_is_exact => ToolListIsExact,
+    the_config_is_the_one_written => ConfigIsTheOneWritten,
     nothing_is_left_after_stop => NothingLeftAfterStop,
 }
 
-/// `case` must fail a harness with `fault`.
-async fn catches(fault: Fault, case: Case) -> Result<()> {
+/// `case` must fail a harness with `fault`, and for that reason.
+async fn catches(fault: Fault, case: Case, reason: &str) -> Result<()> {
     let subject = FakeSubject::new(fault)?;
     let ended = case.run(&subject).await;
     let failure = ended.err().context("the fault was not caught")?;
     assert_eq!(failure.case, case);
-    assert!(failure.to_string().contains(&failure.reason));
+    assert!(failure.to_string().contains(reason), "{failure}");
     Ok(())
 }
 
-#[tokio::test]
-async fn a_second_turn_without_the_first_is_caught() -> Result<()> {
-    catches(Fault::Forgetful, Case::SecondTurnContinues).await?;
-    catches(Fault::Forgetful, Case::ResumesAfterRestart).await
+/// One test per fault and the case that catches it.
+macro_rules! caught {
+    ($($name:ident: $fault:ident in $case:ident as $reason:literal),* $(,)?) => {
+        $(
+            #[tokio::test]
+            async fn $name() -> Result<()> {
+                catches(Fault::$fault, Case::$case, $reason).await
+            }
+        )*
+        #[test]
+        fn every_case_catches_something() {
+            for case in Case::ALL {
+                assert!([$(Case::$case),*].contains(&case), "{case:?}");
+            }
+        }
+    };
 }
 
-#[tokio::test]
-async fn a_new_session_in_place_of_a_lost_one_is_caught() -> Result<()> {
-    catches(Fault::NewSession, Case::ResumeFailureIsAnError).await
-}
-
-#[tokio::test]
-async fn a_cancellation_that_does_nothing_is_caught() -> Result<()> {
-    catches(Fault::IgnoresCancel, Case::DropStopsTheTurn).await?;
-    catches(Fault::IgnoresCancel, Case::TimeoutStopsTheTurn).await
-}
-
-#[tokio::test]
-async fn a_runner_without_the_seat_rules_is_caught() -> Result<()> {
-    catches(Fault::Unguarded, Case::TimeoutStopsTheTurn).await?;
-    catches(Fault::Unguarded, Case::DropStopsTheTurn).await?;
-    catches(Fault::Unguarded, Case::NoTurnTwice).await?;
-    catches(Fault::Unguarded, Case::OneTurnAtATime).await
-}
-
-#[tokio::test]
-async fn a_replayed_turn_is_caught() -> Result<()> {
-    catches(Fault::Replays, Case::KillNeitherReplaysNorLosesTheSeat).await
-}
-
-#[tokio::test]
-async fn a_lost_seat_is_caught() -> Result<()> {
-    catches(Fault::StaysDown, Case::KillNeitherReplaysNorLosesTheSeat).await
-}
-
-#[tokio::test]
-async fn cumulative_usage_is_caught() -> Result<()> {
-    catches(Fault::TotalUsage, Case::UsageIsPerTurn).await
-}
-
-#[tokio::test]
-async fn an_unverified_tool_list_is_caught() -> Result<()> {
-    catches(Fault::Unverified, Case::ToolListIsExact).await
-}
-
-#[tokio::test]
-async fn an_instance_left_by_a_failed_start_is_caught() -> Result<()> {
-    catches(Fault::LeavesFailedStart, Case::ToolListIsExact).await
-}
-
-#[tokio::test]
-async fn an_orphan_left_by_stop_is_caught() -> Result<()> {
-    catches(Fault::LeavesOrphans, Case::NothingLeftAfterStop).await
+caught! {
+    a_second_turn_without_the_first_is_caught:
+        Forgetful in SecondTurnContinues as "saw Some(1) user messages",
+    a_resumed_session_without_its_history_is_caught:
+        Forgetful in ResumesAfterRestart as "saw Some(1) user messages",
+    a_new_session_in_place_of_a_lost_one_is_caught:
+        NewSession in ResumeFailureIsAnError as "turn t2 ended as Completed",
+    a_timeout_that_cancels_nothing_is_caught:
+        IgnoresCancel in TimeoutStopsTheTurn as "model call 0 is Some(Open)",
+    a_drop_that_cancels_nothing_is_caught:
+        IgnoresCancel in DropStopsTheTurn as "model call 1 is Some(Open)",
+    a_turn_without_a_limit_is_caught:
+        Unguarded in TimeoutStopsTheTurn as "did not end within",
+    a_drop_nobody_cancels_is_caught:
+        Unguarded in DropStopsTheTurn as "model call 1 is Some(Open)",
+    a_turn_admitted_before_the_last_one_is_settled_is_caught:
+        Unguarded in OneTurnAtATime as "are [Answered, Open, Answered]",
+    a_turn_that_runs_again_is_caught:
+        Unguarded in NoTurnTwice as "turn t1 ended as Completed",
+    a_replayed_turn_is_caught:
+        Replays in KillNeitherReplaysNorLosesTheSeat as "the killed turn did not end",
+    a_lost_seat_is_caught:
+        StaysDown in KillNeitherReplaysNorLosesTheSeat as "turn t3 failed",
+    cumulative_usage_is_caught:
+        TotalUsage in UsageIsPerTurn as "reported ([100], [130])",
+    an_unverified_tool_list_is_caught:
+        Unverified in ToolListIsExact as "started with a tool list that is Extra",
+    an_instance_left_by_a_failed_start_is_caught:
+        LeavesFailedStart in ToolListIsExact as "are left",
+    an_unverified_config_is_caught:
+        UnverifiedConfig in ConfigIsTheOneWritten as "started with another config",
+    an_orphan_left_by_stop_is_caught:
+        LeavesOrphans in NothingLeftAfterStop as "are left",
 }

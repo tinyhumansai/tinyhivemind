@@ -94,7 +94,6 @@ impl JsonLines {
         let (entries, received) = mpsc::unbounded_channel();
         let waiting = Arc::new(AtomicUsize::new(0));
         let room = limits.queued.min(Semaphore::MAX_PERMITS);
-        let room = Arc::new(Semaphore::new(room));
         let queue = Queue {
             entries: Some(entries),
             waiting: waiting.clone(),
@@ -103,14 +102,16 @@ impl JsonLines {
         let lines = Self {
             sender: LineSender {
                 lines: writes,
-                room: room.clone(),
-                limit: limits.line,
+                // A line and its end have to fit, or it would wait for ever.
+                limit: limits.line.min(room.saturating_sub(1)),
+                room: Arc::new(Semaphore::new(room)),
             },
             receiver: LineReceiver {
                 entries: received,
                 waiting,
             },
         };
+        let room = lines.sender.room.clone();
         (
             lines,
             write(input, writing, room),

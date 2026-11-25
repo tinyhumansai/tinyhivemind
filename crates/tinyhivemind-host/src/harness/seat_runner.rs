@@ -5,8 +5,11 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
-use tinyhivemind_hives::{AgentRunner, TurnFuture, TurnOutcome, TurnRequest};
+use tinyhivemind_hives::{AgentRunner, TurnDisposition, TurnFuture, TurnOutcome, TurnRequest};
 use tokio::sync::{Mutex, OwnedMutexGuard};
+
+/// How long a cancellation may take. Enough to kill an instance and prove it.
+const CANCEL_LIMIT: Duration = Duration::from_secs(30);
 
 /// Future returned by [`CancellableRunner::cancel`].
 pub type CancelFuture = Pin<Box<dyn Future<Output = Result<()>> + Send>>;
@@ -18,8 +21,10 @@ pub trait CancellableRunner: AgentRunner {
     ///
     /// Called when a run failed, ran out of time or was dropped. The turn may
     /// never have reached the harness, may already have ended, and may be
-    /// cancelled more than once; all of those succeed. The wait must be
-    /// bounded, since the seat admits no turn until it is over.
+    /// cancelled more than once; all of those succeed. So does cancelling a
+    /// turn of an instance that was stopped since. The future is dropped if it
+    /// takes longer than [`SeatRunner::with_cancel_limit`] allows, and the turn
+    /// then stays in doubt.
     fn cancel(&self, turn_id: &str) -> CancelFuture;
 }
 
@@ -32,20 +37,34 @@ pub trait CancellableRunner: AgentRunner {
 /// - **One turn at a time.** Dropping a drain ends the reservation at once,
 ///   and the next drain may claim the same agent while the harness is still
 ///   winding down. A run waits here until the previous turn is settled.
-/// - **Settled.** A run that fails, runs out of time or is dropped is
-///   cancelled. If that cannot be shown to have worked, the seat admits no
-///   turn until a further cancellation does.
+/// - **Settled.** A run that fails, runs out of time, is dropped or reports
+///   [`TurnDisposition::Failed`] is cancelled. If that cannot be shown to have
+///   worked, each further turn tries again first and is refused with
+///   [`Error::Unsettled`] if it cannot either. The way out is to stop the
+///   instance, with [`super::Harness::stop`], and start the seat again or, if
+///   this runner is kept, call [`SeatRunner::instance_stopped`].
+/// - **Parked is ended.** [`TurnDisposition::Parked`] promises, like
+///   [`TurnDisposition::Completed`], that the harness's own turn is over: the
+///   release comes as another turn with another id. A client must not return
+///   it while the harness waits for an answer.
 /// - **One session for life.** Also when the coordinator asks for none, which
 ///   it does if it was interrupted before it stored the first. A request for
 ///   another session never reaches the harness.
 /// - **No turn twice.** The coordinator never reuses a turn id, but a caller
 ///   that retries a failed run would, and no harness has a durable idempotency
-///   key. An id that ever started here is refused. They are kept for the life
-///   of the runner.
+///   key. An id that ever started here is refused. All of them are kept for
+///   the life of the runner, about 100 bytes each, since forgetting any would
+///   allow it to run again.
 pub struct SeatRunner {
     inner: Arc<dyn CancellableRunner>,
-    timeout: Option<Duration>,
+    limits: TurnLimits,
     seat: Arc<Mutex<Seat>>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct TurnLimits {
+    run: Option<Duration>,
+    cancel: Duration,
 }
 
 #[derive(Default)]
@@ -62,7 +81,10 @@ impl SeatRunner {
     pub fn new(inner: Arc<dyn CancellableRunner>) -> Self {
         Self {
             inner,
-            timeout: None,
+            limits: TurnLimits {
+                run: None,
+                cancel: CANCEL_LIMIT,
+            },
             seat: Arc::default(),
         }
     }
@@ -70,15 +92,31 @@ impl SeatRunner {
     /// Cancel a turn that runs longer than `timeout`.
     #[must_use]
     pub fn with_timeout(mut self, timeout: Option<Duration>) -> Self {
-        self.timeout = timeout;
+        self.limits.run = timeout;
         self
+    }
+
+    /// Give a cancellation `limit` instead of 30 seconds.
+    #[must_use]
+    pub fn with_cancel_limit(mut self, limit: Duration) -> Self {
+        self.limits.cancel = limit;
+        self
+    }
+
+    /// The instance was proven stopped, so nothing of any turn is left running
+    /// and the seat may go on. Waits for a running turn or cancellation to
+    /// notice.
+    ///
+    /// Calling this without that proof gives up the guarantee.
+    pub async fn instance_stopped(&self) {
+        self.seat.lock().await.unsettled = None;
     }
 }
 
 impl std::fmt::Debug for SeatRunner {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SeatRunner")
-            .field("timeout", &self.timeout)
+            .field("limits", &self.limits)
             .finish_non_exhaustive()
     }
 }
@@ -86,17 +124,18 @@ impl std::fmt::Debug for SeatRunner {
 impl AgentRunner for SeatRunner {
     fn run(&self, request: TurnRequest) -> TurnFuture {
         let inner = self.inner.clone();
-        let timeout = self.timeout;
+        let limits = self.limits;
         let seat = self.seat.clone();
         Box::pin(async move {
             let mut seat = seat.lock_owned().await;
-            let request = admit(inner.as_ref(), &mut seat, request).await?;
+            let request = admit(inner.as_ref(), limits, &mut seat, request).await?;
             let turn = Turn {
                 id: request.turn_id.clone(),
                 inner,
+                limits,
                 seat: Some(seat),
             };
-            turn.run(request, timeout).await
+            turn.run(request).await
         })
     }
 }
@@ -104,11 +143,12 @@ impl AgentRunner for SeatRunner {
 /// Let `request` start a turn, with the seat's session, or say why not.
 async fn admit(
     inner: &dyn CancellableRunner,
+    limits: TurnLimits,
     seat: &mut Seat,
     mut request: TurnRequest,
 ) -> Result<TurnRequest> {
     if let Some(turn_id) = seat.unsettled.clone() {
-        settle(inner, seat, turn_id).await?;
+        settle(inner, limits, seat, turn_id).await?;
     }
     if request.turn_id.is_empty() {
         return Err(Error::NoTurnId);
@@ -128,17 +168,22 @@ async fn admit(
 }
 
 /// Cancel `turn_id` and clear it, or leave it in doubt.
-async fn settle(inner: &dyn CancellableRunner, seat: &mut Seat, turn_id: String) -> Result<()> {
-    match inner.cancel(&turn_id).await {
-        Ok(()) => {
+async fn settle(
+    inner: &dyn CancellableRunner,
+    limits: TurnLimits,
+    seat: &mut Seat,
+    turn_id: String,
+) -> Result<()> {
+    let limit = limits.cancel;
+    let reason = match tokio::time::timeout(limit, inner.cancel(&turn_id)).await {
+        Ok(Ok(())) => {
             seat.unsettled = None;
-            Ok(())
+            return Ok(());
         }
-        Err(error) => Err(Error::Unsettled {
-            turn_id,
-            reason: error.to_string(),
-        }),
-    }
+        Ok(Err(error)) => error.to_string(),
+        Err(_) => format!("its cancellation did not end within {limit:?}"),
+    };
+    Err(Error::Unsettled { turn_id, reason })
 }
 
 fn same(expected: &str, found: &str) -> Result<()> {
@@ -156,40 +201,47 @@ fn same(expected: &str, found: &str) -> Result<()> {
 struct Turn {
     id: String,
     inner: Arc<dyn CancellableRunner>,
+    limits: TurnLimits,
     seat: Option<OwnedMutexGuard<Seat>>,
 }
 
 impl Turn {
-    async fn run(
-        mut self,
-        request: TurnRequest,
-        timeout: Option<Duration>,
-    ) -> tinyhivemind_hives::Result<TurnOutcome> {
+    async fn run(mut self, request: TurnRequest) -> tinyhivemind_hives::Result<TurnOutcome> {
         let run = self.inner.run(request);
-        let ended = match timeout {
+        let ended = match self.limits.run {
             Some(limit) => tokio::time::timeout(limit, run)
                 .await
                 .unwrap_or_else(|_| Err(Error::TimedOut(limit).into())),
             None => run.await,
         };
-        match ended {
-            Ok(outcome) => {
-                self.keep(&outcome.session_id)?;
-                Ok(outcome)
-            }
+        let outcome = match ended {
+            Ok(outcome) => outcome,
             Err(error) => {
                 self.settle().await?;
-                Err(error)
+                return Err(error);
             }
+        };
+        self.keep(&outcome.session_id)?;
+        match outcome.disposition {
+            // Says that the turn failed, not that the harness is done with it.
+            TurnDisposition::Failed(_) => self.settle().await?,
+            TurnDisposition::Completed | TurnDisposition::Parked => self.end(),
+        }
+        Ok(outcome)
+    }
+
+    /// The turn ended, in whatever session it names.
+    fn end(&mut self) {
+        if let Some(mut seat) = self.seat.take() {
+            seat.unsettled = None;
         }
     }
 
-    /// The turn ended by itself, in `session`.
+    /// Hold the seat to `session`.
     fn keep(&mut self, session: &str) -> Result<()> {
-        let Some(mut seat) = self.seat.take() else {
+        let Some(seat) = &mut self.seat else {
             return Ok(());
         };
-        seat.unsettled = None;
         if session.trim().is_empty() {
             return Err(Error::EmptySession);
         }
@@ -200,11 +252,11 @@ impl Turn {
         Ok(())
     }
 
-    /// The turn ended in an error, which does not say that it stopped.
+    /// The run ended in a way that does not say that the turn stopped.
     async fn settle(&mut self) -> Result<()> {
         if let Some(seat) = &mut self.seat {
             // Dropped while waiting here, the turn is cancelled again.
-            let settled = settle(self.inner.as_ref(), seat, self.id.clone()).await;
+            let settled = settle(self.inner.as_ref(), self.limits, seat, self.id.clone()).await;
             self.seat = None;
             return settled;
         }
@@ -221,10 +273,11 @@ impl Drop for Turn {
         // settles it first.
         if let Ok(runtime) = tokio::runtime::Handle::try_current() {
             let inner = self.inner.clone();
+            let limits = self.limits;
             let id = std::mem::take(&mut self.id);
             runtime.spawn(async move {
                 // A failure leaves the same doubt.
-                let _ = settle(inner.as_ref(), &mut seat, id).await;
+                let _ = settle(inner.as_ref(), limits, &mut seat, id).await;
             });
         }
     }

@@ -43,6 +43,8 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 pub(super) enum Turn {
     /// Return this session.
     Session(&'static str),
+    /// Return the session `s`, this way.
+    Ends(TurnDisposition),
     /// Fail.
     Fail,
     /// Never return.
@@ -95,6 +97,11 @@ impl AgentRunner for Handle {
                     session_id: session_id.into(),
                     reply: None,
                     disposition: TurnDisposition::Completed,
+                }),
+                Turn::Ends(disposition) => Ok(TurnOutcome {
+                    session_id: "s".into(),
+                    reply: None,
+                    disposition,
                 }),
                 Turn::Fail => Err(Error::Harness("scripted".into()).into()),
                 Turn::Hang => std::future::pending().await,

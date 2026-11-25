@@ -91,8 +91,9 @@ async fn a_bad_launch_is_refused_before_anything_starts() -> Result<()> {
         .context("expected a failure")?;
     assert!(matches!(refused, Error::Spawn { .. }), "{refused}");
     // No temporary directory is left by a launch that failed.
-    let left = std::fs::read_dir(fixture.dir()?.root())?.count();
-    assert_eq!(left, 1, "only the state directory");
+    for left in std::fs::read_dir(fixture.dir()?.root())?.flatten() {
+        assert!(!left.file_name().to_string_lossy().starts_with("tmp-"));
+    }
     Ok(())
 }
 

@@ -1,5 +1,5 @@
 //! Private instance directories.
-use super::support::Fixture;
+use super::support::{Fixture, SHORT, exists, until};
 use crate::process::{Error, InstanceDir};
 use anyhow::{Context as _, Result};
 use std::fs;
@@ -70,5 +70,73 @@ fn a_relative_path_or_a_missing_parent_is_refused() -> Result<()> {
         .err()
         .context("expected a failure")?;
     assert!(matches!(refused, Error::Directory { .. }));
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn what_a_crashed_host_left_is_removed_when_the_instance_is_opened_again() -> Result<()> {
+    let fixture = Fixture::new()?;
+    let root = fixture.dir()?.root().to_path_buf();
+    fs::create_dir_all(root.join("tmp-0badf00d/deep"))?;
+    fs::write(root.join("tmp-0badf00d/deep/file"), "x")?;
+    // None of these is one of ours.
+    fs::create_dir(root.join("tmp-mine"))?;
+    fs::create_dir(root.join("tmp-0badf00d0"))?;
+    fs::write(root.join("tmp-12345678"), "a file")?;
+    fs::create_dir(fixture.path("elsewhere"))?;
+    symlink(fixture.path("elsewhere"), root.join("tmp-87654321"))?;
+    fs::write(fixture.dir()?.state().join("session"), "s")?;
+    fixture.dir()?;
+    assert!(!exists(&root.join("tmp-0badf00d")));
+    for kept in [
+        "tmp-mine",
+        "tmp-0badf00d0",
+        "tmp-12345678",
+        "tmp-87654321",
+        "state/session",
+    ] {
+        assert!(exists(&root.join(kept)), "{kept}");
+    }
+    assert!(exists(&fixture.path("elsewhere")));
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn nothing_is_removed_under_a_running_instance_of_the_same_directory() -> Result<()> {
+    let fixture = Fixture::new()?;
+    let instance = fixture
+        .start("echo $TMPDIR > $OUT/tmp; exec sleep 300")
+        .await?;
+    until(|| fixture.read("tmp").ends_with('\n')).await;
+    let temporary = fixture.read("tmp").trim().to_owned();
+    // Not even what nobody uses, as that cannot be told for certain.
+    let root = fixture.dir()?.root().to_path_buf();
+    fs::create_dir(root.join("tmp-0badf00d"))?;
+    fixture.dir()?;
+    assert!(exists(temporary.as_ref()) && exists(&root.join("tmp-0badf00d")));
+    instance.stop(async {}, SHORT).await?;
+    fixture.dir()?;
+    assert!(!exists(temporary.as_ref()) && !exists(&root.join("tmp-0badf00d")));
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn nothing_is_removed_that_a_process_of_a_crashed_host_still_uses() -> Result<()> {
+    let fixture = Fixture::new()?;
+    let temporary = fixture.dir()?.root().join("tmp-0badf00d");
+    fs::create_dir(&temporary)?;
+    let mut left = std::process::Command::new("/bin/sleep")
+        .arg("300")
+        .env("TMPDIR", &temporary)
+        .spawn()?;
+    fixture.dir()?;
+    assert!(exists(&temporary));
+    left.kill()?;
+    left.wait()?;
+    fixture.dir()?;
+    assert!(!exists(&temporary));
     Ok(())
 }

@@ -164,6 +164,14 @@ async fn a_line_too_long_to_send_is_refused_and_none_of_it_is_sent() -> Result<(
     let mut written = String::new();
     child_in.read_to_string(&mut written).await?;
     assert_eq!(written.len(), 65);
+    // More than may wait could wait for ever.
+    let narrow = Limits {
+        line: 64,
+        queued: 16,
+    };
+    let (lines, _child_in, _child_out) = connect(narrow);
+    let error = lines.sender.send(&json!("x".repeat(20))).await.err();
+    assert!(matches!(error, Some(LineError::TooLong { limit: 15 })));
     Ok(())
 }
 

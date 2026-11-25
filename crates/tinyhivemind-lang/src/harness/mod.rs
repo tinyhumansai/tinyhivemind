@@ -3,6 +3,9 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// A harness, by the name a package gives it.
+///
+/// Only a name: what a kind can do is the language's to check, and the
+/// program that does it is the host's to choose.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum HarnessKind {
@@ -23,3 +26,6 @@ impl fmt::Display for HarnessKind {
         })
     }
 }
+
+#[cfg(test)]
+mod test;

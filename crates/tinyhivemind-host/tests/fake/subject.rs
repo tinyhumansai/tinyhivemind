@@ -81,19 +81,23 @@ impl Subject for FakeSubject {
         ToolEndpoint::new("hivemind", "http://127.0.0.1:1/mcp", "bearer", tools)
     }
 
-    fn script(&self, step: ModelStep) {
-        let number = self.steps.fetch_add(1, Ordering::Relaxed);
-        let step = match step {
-            ModelStep::Reply { text, usage } => {
-                json!({"reply": text, "tokens": usage.input_tokens})
-            }
-            ModelStep::Hang => Value::Null,
-        };
-        let steps = self.control().join("steps");
-        done(&fs::write(
-            steps.join(format!("{number:04}")),
-            step.to_string(),
-        ));
+    fn script(&self, steps: &[ModelStep]) {
+        let directory = self.control().join("steps");
+        for old in fs::read_dir(&directory).into_iter().flatten().flatten() {
+            // The child may have taken it meanwhile.
+            let _ = fs::remove_file(old.path());
+        }
+        for step in steps {
+            let number = self.steps.fetch_add(1, Ordering::Relaxed);
+            let step = match step {
+                ModelStep::Reply { text, usage } => {
+                    json!({"reply": text, "tokens": usage.input_tokens})
+                }
+                ModelStep::Hang => Value::Null,
+            };
+            let path = directory.join(format!("{number:04}"));
+            done(&fs::write(path, step.to_string()));
+        }
     }
 
     fn model_calls(&self) -> Vec<ModelCall> {
@@ -132,6 +136,10 @@ impl Subject for FakeSubject {
         done(&fs::write(self.control().join("tools"), text));
     }
 
+    fn misconfigure(&self) {
+        done(&fs::write(self.control().join("misconfigured"), ""));
+    }
+
     /// Whatever runs in this subject's instance directory.
     fn processes(&self) -> Vec<u32> {
         let instance = self.root.path().join("instance");
@@ -151,7 +159,7 @@ impl Subject for FakeSubject {
         // A faulty harness is meant to be waited for in vain.
         match self.fault {
             Fault::None => Duration::from_secs(60),
-            _ => Duration::from_secs(3),
+            _ => Duration::from_secs(8),
         }
     }
 

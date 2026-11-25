@@ -17,6 +17,7 @@ paths.
 | `check` | `check` and `check_packages`: direct edits checked against the original and the constitution, every finding collected; `Review` on success. |
 | `diagnostic` | `Diagnostic` and `Rule`, and the collector every rule reports into. |
 | `document` | `Package` and `Manifest` wire types, the integration sections (`document/integration/`), `parse` and `diagnose_documents` over a caller-supplied document map. |
+| `harness` | `HarnessKind`: the harnesses a package may name. |
 | `memory` | `Constitution` and `MemorySpec`: caps, protected namespaces, identities, lifecycles, reaches and recall settings. |
 | `validation` | `validate`, `diagnose`, `validate_path`, `validate_namespace`: references, paths, frontmatter agreement, goal acyclicity, policy bounds, memory access and the integration sections. |
 | `lowering` | `lower`: core desks, routing candidates, host seat creation inputs and each seat's resolved integration. |

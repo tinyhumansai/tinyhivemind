@@ -11,7 +11,8 @@
 //!   out before the next one starts. A client implements
 //!   [`CancellableRunner`] and returns its runner wrapped.
 //! - [`Expected::verify`] refuses an instance that is not the child that was
-//!   started, not the pinned version, or offers any other set of tools.
+//!   started, not the pinned version, does not run with the config that was
+//!   written, or offers any other set of tools.
 //! - [`TurnUsage::since`] turns a harness's running total into a turn's usage.
 //!
 //! The `conformance` feature adds the suite every client must pass.
@@ -19,7 +20,6 @@
 pub mod conformance;
 mod error;
 mod events;
-mod kind;
 mod plan;
 mod seat_runner;
 mod verification;
@@ -29,10 +29,12 @@ pub use events::{
     ApprovalFuture, Approver, DenyAll, Event, Ignore, Observer, Progress, ToolApproval,
     ToolDecision, TurnUsage,
 };
-pub use kind::HarnessKind;
 pub use plan::{SeatPlan, ToolEndpoint};
 pub use seat_runner::{CancelFuture, CancellableRunner, SeatRunner};
-pub use verification::{Expected, Mismatch, Started};
+pub use verification::{Expected, Mismatch, Observed, Started};
+
+/// The kind a package names, which is the language's own.
+pub use tinyhivemind_lang::HarnessKind;
 
 use std::future::Future;
 use std::pin::Pin;
