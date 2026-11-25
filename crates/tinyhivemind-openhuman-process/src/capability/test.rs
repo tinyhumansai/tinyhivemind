@@ -191,7 +191,7 @@ fn fields_this_harness_does_not_take_are_named() {
         }),
         ("bare_prompt", |seat| seat.integration.bare_prompt = true),
         ("skills", |seat| {
-            let skill = serde_json::json!({"id": "s", "path": "skills/s"});
+            let skill = serde_json::json!({"id": "s"});
             let skill = serde_json::from_value(skill).unwrap_or_else(|error| {
                 unreachable!("a skill of an id and a path: {error}")
             });
@@ -202,15 +202,15 @@ fn fields_this_harness_does_not_take_are_named() {
         assert_eq!(refused(change), Refusal::Unsupported(field), "{field}");
     }
     let memory = serde_json::from_value(serde_json::json!({
-        "agent_id": "scout", "namespace": "agent:scout", "kind": "agent",
-        "identity": {}, "root": "", "settings": {}
-    }));
-    if let Ok(memory) = memory {
-        assert_eq!(
-            refused(|seat| seat.memory = Some(memory)),
-            Refusal::Unsupported("memory")
-        );
-    }
+        "agent_id": "scout", "namespace": "agent:scout", "kind": "agent", "root": "",
+        "identity": {"id": "m", "namespace": "agent:scout", "kind": "agent", "lifecycle": "run"},
+        "settings": {"seat": "scout", "identity": "m", "budget_chars": 100}
+    }))
+    .unwrap_or_else(|error| unreachable!("a memory binding: {error}"));
+    assert_eq!(
+        refused(|seat| seat.memory = Some(memory)),
+        Refusal::Unsupported("memory")
+    );
 }
 
 #[test]
