@@ -12,6 +12,7 @@ use crate::{
     Diagnostic, Error, Result,
     diagnostic::{CONSTITUTION, Findings, HIVE, MEMORY, escape},
 };
+pub(crate) use defaults::{nonempty, present};
 pub use integration::*;
 use std::collections::BTreeMap;
 pub use types::*;

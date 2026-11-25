@@ -6,10 +6,39 @@
 //! field of the same seat. Each decodes leniently into the same complete
 //! value, so serialization, and with it the round-trip unknown-field check in
 //! `document/mod.rs`, is unchanged.
+//!
+//! The harness fields go the other way: absent, they are not serialized, so
+//! a package that predates them keeps its content id. [`present`] and
+//! [`nonempty`] therefore refuse the two inputs that would decode to the
+//! absent value and so vanish on the round trip, `null` and `[]`.
 use super::{Limits, Policies, Seat, ToolAccess};
 use serde::{Deserialize, Deserializer, de::Error as _};
 use serde_json::Value;
 use tinyhivemind_core::desk::{Desk, ResponderMode};
+
+/// Decode an optional field that is omitted when absent: present means a
+/// value, so `null` is a decode error rather than a key the round trip drops.
+pub(crate) fn present<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    T::deserialize(deserializer).map(Some)
+}
+
+/// Decode a list that is omitted when empty: present means at least one
+/// entry, so `[]` is a decode error rather than a key the round trip drops.
+pub(crate) fn nonempty<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    let list = Vec::<T>::deserialize(deserializer)?;
+    if list.is_empty() {
+        return Err(D::Error::invalid_length(0, &"at least one entry; omit the section instead"));
+    }
+    Ok(list)
+}
 
 /// Decode `policies` as an overlay on [`Policies::default`].
 ///
@@ -105,6 +134,8 @@ pub(super) struct SeatWire {
     limits: Limits,
     #[serde(default)]
     context: Vec<String>,
+    #[serde(default, deserialize_with = "present")]
+    harness: Option<String>,
 }
 
 impl From<SeatWire> for Seat {
@@ -127,6 +158,7 @@ impl From<SeatWire> for Seat {
             permissions: wire.permissions,
             limits: wire.limits,
             context: wire.context,
+            harness: wire.harness,
         }
     }
 }
