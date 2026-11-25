@@ -1,4 +1,5 @@
 //! Start-up verification and tool discovery, against the fake surface.
+use super::{Layout, environment, turn_secs};
 use super::verify::{discover, verify};
 use crate::error::Error;
 use crate::fixture::{Fixture, PID, SERVER, hashed_tools, served};
@@ -91,4 +92,40 @@ async fn a_tool_whose_name_another_tools_name_starts_with_is_told_apart() {
     let wanted: BTreeSet<String> = ["post".to_owned()].into_iter().collect();
     let found = discover(&fixture.client, SERVER, &wanted, WARM).await;
     assert_eq!(found.ok(), Some(vec![crate::fake::hashed(SERVER, "post")]));
+}
+
+#[test]
+fn the_environment_is_exactly_the_recipe_and_never_turns_the_sandbox_off() {
+    let layout = Layout::new(std::path::Path::new("/seat/state"));
+    let environment = environment(&layout, "token", "key");
+    let names: Vec<&str> = environment.iter().map(|(name, _)| *name).collect();
+    assert_eq!(
+        names,
+        [
+            "PATH",
+            "HOME",
+            "LANG",
+            "OPENHUMAN_WORKSPACE",
+            "OPENHUMAN_ACTION_DIR",
+            "OPENHUMAN_TOOL_DISPATCHER",
+            "OPENHUMAN_COMPOSIO_MODE",
+            "OPENHUMAN_BACKEND_API_KEY",
+            "OPENHUMAN_KEYRING_BACKEND",
+            "OPENHUMAN_KEYRING_MASTER_KEY",
+            "OPENHUMAN_CORE_TOKEN",
+            "RUST_LOG",
+        ]
+    );
+    let value = |name: &str| environment.iter().find(|(key, _)| *key == name).map(|(_, value)| value.as_str());
+    assert_eq!(value("OPENHUMAN_WORKSPACE"), Some("/seat/state/ws"));
+    assert_eq!(value("OPENHUMAN_KEYRING_BACKEND"), Some("encrypted_file"));
+    assert_eq!(value("OPENHUMAN_BACKEND_API_KEY"), Some("dummy"));
+    assert!(value("OPENHUMAN_SANDBOX").is_none());
+}
+
+#[test]
+fn the_binary_lets_a_turn_run_past_the_seats_own_limit() {
+    assert_eq!(turn_secs(None), 600);
+    assert_eq!(turn_secs(Some(Duration::from_secs(5))), 600);
+    assert_eq!(turn_secs(Some(Duration::from_secs(3600))), 3660);
 }

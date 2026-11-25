@@ -166,11 +166,11 @@ impl Launcher<'_> {
         let layout = Layout::new(dir.state());
         layout.create()?;
         let key = layout.master_key()?;
-        let (probe, written) = self.start(&dir, &layout, &key, &[NOTHING.to_owned()]).await?;
-        drop(written);
+        let nothing = [NOTHING.to_owned()];
+        let ((probe, client), _) = self.start(&dir, &layout, &key, &nothing).await?;
         let server = &self.tools.server;
-        let names = discover(&probe.1, server, &self.tools.tools, self.options.warm_up).await;
-        probe.0.stop(async {}, self.options.stop).await?;
+        let names = discover(&client, server, &self.tools.tools, self.options.warm_up).await;
+        probe.stop(async {}, self.options.stop).await?;
         let names = names?;
         let ((instance, client), written) = self.start(&dir, &layout, &key, &names).await?;
         let version = &self.program.version;
@@ -210,10 +210,11 @@ impl Launcher<'_> {
         layout.write_config(&written)?;
         let token = random()?;
         let port = free_port()?;
-        let mut launch = Launch::new(&self.program.path, dir.clone())
-            .args(["run", "--headless-api", "--host", "127.0.0.1", "--port"])
-            .arg(port.to_string())
-            .current_dir(layout.action());
+        let mut launch = Launch::new(&self.program.path, dir.clone()).current_dir(layout.action());
+        for argument in ["run", "--headless-api", "--host", "127.0.0.1", "--port"] {
+            launch = launch.arg(argument);
+        }
+        launch = launch.arg(port.to_string());
         for (name, value) in environment(layout, &token, key) {
             launch = launch.env(name, value);
         }
