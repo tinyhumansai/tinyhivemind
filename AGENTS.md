@@ -57,7 +57,8 @@ This is a Rust 2024 virtual Cargo workspace with eight packages. Core owns all
 host-neutral behavior; lang is where a hive mind is defined, integrations
 included; tools renders native tool definitions and records calls; exec runs a
 package's executable tools and hooks; host is the harness-neutral
-half of running seats; OpenHuman is the only crate that links an agent harness,
+half of running seats; mcp serves hive tools to seats that run as processes;
+OpenHuman is the only crate that links an agent harness,
 and it deploys hive packages.
 
 ```text
@@ -101,7 +102,10 @@ process. `tinyhivemind-exec` runs those executable tools and hooks
 `tinyhivemind-host` depends on core, hives and lang, and owns what every harness
 shares: the hive tools and their dispatch, the send and management policy ports,
 turn scope and prompt, package loading, the deployment plan, and supervised
-harness processes. It links no harness, and `assert-pure.sh` checks that. The
+harness processes. It links no harness, and `assert-pure.sh` checks that.
+`tinyhivemind-mcp` depends on host, hives, lang and exec, and serves those
+tools, a package's executable tools and its hooks over Streamable HTTP on
+127.0.0.1, one bearer per seat (ADR 0036); it links no harness either. The
 OpenHuman adapter depends on core, hives, lang, exec and host, re-exports the
 host's types under its own paths, and deploys packages
 with `HiveDeployment::from_packages`; its former `HiveConfig` manifest format is
