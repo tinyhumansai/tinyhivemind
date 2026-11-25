@@ -72,6 +72,11 @@
 //! read it (a set-uid or non-dumpable process); and its parent died before a
 //! sample saw it. Starting such a process within 100 ms takes intent, or a
 //! daemon that clears its environment. The proof further takes for granted
+//! that a process this user cannot see, as with `hidepid`, or whose entry it
+//! may not read, is not a member: such a process may be another user's, and a
+//! member that became one is out of reach anyway. Nor are children excused by
+//! their parent while any of the host's ancestors cannot be seen, as one of
+//! them may have adopted a member. It takes for granted
 //! that a process is not kept inside `exec` for over 200 ms, where it shows no
 //! environment, and that pids do not go all the way round within one scan.
 //! Work handed to a process that was never
