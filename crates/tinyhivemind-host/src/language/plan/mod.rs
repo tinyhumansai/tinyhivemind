@@ -42,6 +42,7 @@ pub struct Plan {
 }
 
 /// The id of the native profile a seat's resolved integration becomes.
+#[must_use]
 pub fn seat_profile(seat: &str) -> String {
     format!("seat-{seat}")
 }

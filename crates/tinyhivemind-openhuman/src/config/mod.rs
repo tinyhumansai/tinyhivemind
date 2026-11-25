@@ -3,6 +3,7 @@
 //! The plan and its validation live in `tinyhivemind-host`; this module answers
 //! what only the linked `OpenHuman` knows: which cron expressions its scheduler
 //! accepts and which agent ids its built-in definitions take.
+pub use tinyhivemind_host::config::ConfigError;
 pub(crate) use tinyhivemind_host::config::*;
 
 /// The pinned `OpenHuman`'s schedule parser and built-in registry.

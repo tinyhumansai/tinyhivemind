@@ -53,7 +53,8 @@ mod memory;
 #[cfg(any(test, feature = "offline"))]
 pub mod offline;
 mod tools;
-pub use error::{ConfigError, Error, Result};
+pub use config::ConfigError;
+pub use error::{Error, Result};
 pub use host::{
     AgentFactory, AgentFuture, HostedTurn, ManagementAuthorizer, ManagementRequest, OpenHumanHost,
     RegisteredAgent, SendAuthorizer, SendRequest, TURN_TIMEOUT, TurnHooks, TurnOptions,
