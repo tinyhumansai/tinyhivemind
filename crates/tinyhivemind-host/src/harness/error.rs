@@ -49,13 +49,19 @@ pub enum Error {
         found: String,
     },
     /// An earlier turn may still be running, so the seat admits no other.
-    #[error("turn {turn_id} could not be shown to have stopped: {reason}")]
+    #[error("turn {turn_id} could not be shown to have stopped: {reason}{}", ended_in(.ended.as_deref()))]
     Unsettled {
         /// The turn in doubt.
         turn_id: String,
         /// Why its cancellation failed.
         reason: String,
+        /// How the turn itself ended, if it said.
+        ended: Option<String>,
     },
+}
+
+fn ended_in(ended: Option<&str>) -> String {
+    ended.map_or_else(String::new, |ended| format!(", after it ended in: {ended}"))
 }
 
 /// The coordinator records a runner's failure by its message.

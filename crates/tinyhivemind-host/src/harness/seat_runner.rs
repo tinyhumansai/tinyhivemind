@@ -74,8 +74,8 @@ struct TurnLimits {
 struct Seat {
     session: Option<String>,
     started: HashSet<String>,
-    /// A turn not yet shown to have ended.
-    unsettled: Option<String>,
+    /// A turn not yet shown to have ended, and how it ended if it said.
+    unsettled: Option<(String, Option<String>)>,
 }
 
 impl SeatRunner {
@@ -106,13 +106,20 @@ impl SeatRunner {
         self
     }
 
-    /// The instance was proven stopped, so nothing of any turn is left running
-    /// and the seat may go on. Waits for a running turn or cancellation to
-    /// notice.
+    /// The instance that ran `turn_id`, the one an [`Error::Unsettled`] names,
+    /// was proven stopped since, so that the turn is over and the seat may go
+    /// on. Says whether that was the turn in doubt: a later one, of a later
+    /// instance, is not settled by this. Waits for a running turn or
+    /// cancellation to notice.
     ///
     /// Calling this without that proof gives up the guarantee.
-    pub async fn instance_stopped(&self) {
-        self.seat.lock().await.unsettled = None;
+    pub async fn instance_stopped(&self, turn_id: &str) -> bool {
+        let mut seat = self.seat.lock().await;
+        let settled = seat.unsettled.as_ref().is_some_and(|(id, _)| id == turn_id);
+        if settled {
+            seat.unsettled = None;
+        }
+        settled
     }
 }
 
@@ -150,8 +157,8 @@ async fn admit(
     seat: &mut Seat,
     mut request: TurnRequest,
 ) -> Result<TurnRequest> {
-    if let Some(turn_id) = seat.unsettled.clone() {
-        settle(inner, limits, seat, turn_id).await?;
+    if seat.unsettled.is_some() {
+        settle(inner, limits, seat).await?;
     }
     if request.turn_id.is_empty() {
         return Err(Error::NoTurnId);
@@ -166,17 +173,15 @@ async fn admit(
         (None, None) => {}
     }
     seat.started.insert(request.turn_id.clone());
-    seat.unsettled = Some(request.turn_id.clone());
+    seat.unsettled = Some((request.turn_id.clone(), None));
     Ok(request)
 }
 
-/// Cancel `turn_id` and clear it, or leave it in doubt.
-async fn settle(
-    inner: &dyn CancellableRunner,
-    limits: TurnLimits,
-    seat: &mut Seat,
-    turn_id: String,
-) -> Result<()> {
+/// Cancel the turn in doubt and clear it, or leave it in doubt.
+async fn settle(inner: &dyn CancellableRunner, limits: TurnLimits, seat: &mut Seat) -> Result<()> {
+    let Some((turn_id, ended)) = seat.unsettled.clone() else {
+        return Ok(());
+    };
     let limit = limits.cancel;
     let reason = match tokio::time::timeout(limit, inner.cancel(&turn_id)).await {
         Ok(Ok(())) => {
@@ -186,7 +191,11 @@ async fn settle(
         Ok(Err(error)) => error.to_string(),
         Err(_) => format!("its cancellation did not end within {limit:?}"),
     };
-    Err(Error::Unsettled { turn_id, reason })
+    Err(Error::Unsettled {
+        turn_id,
+        reason,
+        ended,
+    })
 }
 
 fn same(expected: &str, found: &str) -> Result<()> {
