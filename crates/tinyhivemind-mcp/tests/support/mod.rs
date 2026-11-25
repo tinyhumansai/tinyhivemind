@@ -147,7 +147,6 @@ pub struct Hive {
     pub b: Client,
     pub endpoint: ToolEndpoint,
     pub workspace: tempfile::TempDir,
-    requests: mpsc::UnboundedReceiver<TurnRequest>,
     drain: Option<tokio::task::JoinHandle<tinyhivemind_hives::Result<tinyhivemind_hives::RunReport>>>,
 }
 impl Hive {
@@ -224,6 +223,8 @@ impl Hive {
             async move { coordinator.run_until_idle().await }
         });
         let turn = requests.recv().await.unwrap();
+        // Later turns, such as the conductor's nudges, are not held.
+        drop(requests);
         Self {
             a: Client::of(&server, &endpoint),
             b: Client::of(&server, &other),
@@ -233,7 +234,6 @@ impl Hive {
             finish,
             endpoint,
             workspace,
-            requests,
             drain: Some(drain),
         }
     }
