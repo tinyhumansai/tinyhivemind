@@ -208,7 +208,8 @@ fn example(name: &str) -> anyhow::Result<PackageSource> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../tinyhivemind-lang/examples/hives")
         .join(name);
-    Ok(PackageSource::read(&root)?)
+    let package = PackageSource::read(&root)?;
+    Ok(PackageSource::new(root, &package)?)
 }
 
 #[test]

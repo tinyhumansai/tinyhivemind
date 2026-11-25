@@ -27,8 +27,7 @@ fn each_typed_split_file_holds_exactly_its_sections() {
     let empty = "{}";
     // `harnesses` is written only when it holds an entry.
     let agents: AgentsFile =
-        serde_json::from_str(r#"{"harnesses": [{"id": "c", "kind": "codex"}]}"#)
-            .expect("decodes");
+        serde_json::from_str(r#"{"harnesses": [{"id": "c", "kind": "codex"}]}"#).expect("decodes");
     let tools: ToolsFile = serde_json::from_str(empty).expect("decodes");
     let desks: DesksFile = serde_json::from_str(empty).expect("decodes");
     assert_eq!(keys(&agents), sections(AGENTS));
@@ -89,8 +88,9 @@ fn harnesses_live_in_agents_json_and_are_reported_there() {
     );
     let (_, found) = crate::diagnose_documents(&documents);
     assert!(
-        found.iter().any(|d| d.file == AGENTS
-            && d.pointer.as_deref() == Some("/harnesses/1/isolation")),
+        found
+            .iter()
+            .any(|d| d.file == AGENTS && d.pointer.as_deref() == Some("/harnesses/1/isolation")),
         "{found:?}"
     );
 }

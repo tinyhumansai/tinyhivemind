@@ -56,6 +56,7 @@ pub(super) fn prepare(
     secrets: &Arc<dyn SecretResolver>,
     native: &mut openhuman_embed::RuntimeConfig,
 ) -> DeployResult<(HiveConfig, Extras)> {
+    harnesses(packages)?;
     let Plan {
         mut config,
         seats,
@@ -95,6 +96,37 @@ pub(super) fn prepare(
         );
     }
     Ok((config, extras))
+}
+
+/// Refuse what this adapter would otherwise accept and ignore: a seat whose
+/// resolved harness is not `openhuman`, which only a process deployment can
+/// start, and two packages declaring one harness id differently.
+pub(super) fn harnesses(packages: &[PackageSource]) -> DeployResult<()> {
+    let mut declared = BTreeMap::<&str, &lang::Harness>::new();
+    for source in packages {
+        for harness in &source.package().manifest.harnesses {
+            if declared
+                .insert(&harness.id, harness)
+                .is_some_and(|earlier| earlier != harness)
+            {
+                return Err(ConfigError::ConflictingDeclaration {
+                    section: "harnesses".into(),
+                    id: harness.id.clone(),
+                }
+                .into());
+            }
+        }
+        for seat in &source.lowered().seats {
+            let kind = seat.integration.harness_kind();
+            if kind != lang::HarnessKind::OpenHuman {
+                return Err(DeployError::UnsupportedHarness {
+                    seat: seat.id.clone(),
+                    kind,
+                });
+            }
+        }
+    }
+    Ok(())
 }
 
 fn apply_session(native: &mut openhuman_embed::RuntimeConfig, session: &lang::SessionSettings) {

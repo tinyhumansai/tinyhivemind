@@ -326,5 +326,8 @@ fn a_seat_prompt_frontmatter_may_restate_its_own_harness_only() {
         format!("---\n{{\"harness\": null}}\n---\n{body}"),
     );
     let found = diagnose_documents(&docs).1;
-    assert!(found.iter().any(|d| d.rule == Rule::Frontmatter), "{found:?}");
+    assert!(
+        found.iter().any(|d| d.rule == Rule::Frontmatter),
+        "{found:?}"
+    );
 }
