@@ -1,6 +1,7 @@
 # Process tests
 
-Real shell children. Conditions are polled for with a deadline, never slept for.
+Real shell children. A condition is polled for with a deadline. The only plain
+sleeps look for something that must not happen, or are doubled until it does.
 
 | File | Purpose |
 | --- | --- |
