@@ -64,10 +64,10 @@ impl Scripted {
         })
     }
     pub(super) fn log(&self) -> Vec<String> {
-        self.log.lock().unwrap().clone()
+        self.log.lock()?.clone()
     }
     fn note(&self, entry: String) {
-        self.log.lock().unwrap().push(entry);
+        self.log.lock()?.push(entry);
     }
 }
 
@@ -81,7 +81,7 @@ impl AgentRunner for Handle {
         Box::pin(async move {
             let session = request.session_id.as_deref().unwrap_or("none");
             this.note(format!("run {} {session}", request.turn_id));
-            let turn = this.turns.lock().unwrap().pop().unwrap();
+            let turn = this.turns.lock()?.pop().context("missing")?;
             match turn {
                 Turn::Session(session_id) => Ok(TurnOutcome {
                     session_id: session_id.into(),
@@ -101,8 +101,8 @@ impl CancellableRunner for Handle {
         let turn_id = turn_id.to_owned();
         Box::pin(async move {
             this.note(format!("cancel {turn_id}"));
-            this.permits.acquire().await.unwrap().forget();
-            if *this.refuse_cancel.lock().unwrap() {
+            this.permits.acquire().await?.forget();
+            if *this.refuse_cancel.lock()? {
                 return Err(Error::Harness("will not stop".into()));
             }
             this.note(format!("cancelled {turn_id}"));

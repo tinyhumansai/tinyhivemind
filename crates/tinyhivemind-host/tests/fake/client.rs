@@ -95,7 +95,7 @@ impl Harness for FakeHarness {
             let timeout = seat.plan.turn_timeout();
             let inner = Arc::new(Runner(seat.clone()));
             let unguarded = seat.shared.fault == Fault::Unguarded;
-            seats.lock().unwrap().insert(id, seat);
+            seats.lock()?.insert(id, seat);
             if unguarded {
                 return Ok(inner as Arc<dyn AgentRunner>);
             }
@@ -105,7 +105,7 @@ impl Harness for FakeHarness {
     }
 
     fn stop(&self, seat_id: &str) -> StopFuture {
-        let seat = self.seats.lock().unwrap().remove(seat_id);
+        let seat = self.seats.lock()?.remove(seat_id);
         Box::pin(async move {
             if let Some(seat) = seat {
                 seat.stop().await?;
@@ -163,8 +163,8 @@ impl Seat {
             .take_lines()
             .ok_or_else(|| Error::Harness("no lines".into()))?;
         let mut live = Live { instance, lines };
-        *self.total.lock().unwrap() = 0;
-        *self.pid.lock().unwrap() = live.instance.pid();
+        *self.total.lock()? = 0;
+        *self.pid.lock()? = live.instance.pid();
         match self.verify(&mut live).await {
             Ok(()) => Ok(live),
             Err(error) if self.shared.fault == Fault::LeavesFailedStart => {
@@ -270,7 +270,7 @@ impl Seat {
             input_tokens: tokens,
             ..TurnUsage::default()
         };
-        let earlier = std::mem::replace(&mut *self.total.lock().unwrap(), total);
+        let earlier = std::mem::replace(&mut *self.total.lock()?, total);
         let earlier = if self.shared.fault == Fault::TotalUsage {
             0
         } else {
@@ -306,7 +306,7 @@ impl Seat {
                 // The turn ended first. What it used is not the next one's.
                 Ok(answer) => {
                     if let Some(total) = answer["total"].as_u64() {
-                        *self.total.lock().unwrap() = total;
+                        *self.total.lock()? = total;
                     }
                 }
                 Err(_) => {
@@ -319,8 +319,8 @@ impl Seat {
 
     async fn stop(&self) -> Result<()> {
         if self.shared.fault == Fault::LeavesOrphans {
-            let pid = i32::try_from(*self.pid.lock().unwrap()).unwrap();
-            let pid = rustix::process::Pid::from_raw(pid).unwrap();
+            let pid = i32::try_from(*self.pid.lock()?)?;
+            let pid = rustix::process::Pid::from_raw(pid).context("missing")?;
             let _ = rustix::process::kill_process(pid, rustix::process::Signal::KILL);
             std::mem::forget(self.live.lock().await.take());
             return Ok(());
@@ -334,7 +334,7 @@ impl Seat {
 
     pub async fn escape(&self) {
         if let Some(live) = self.live.lock().await.as_mut() {
-            live.send(&json!({"op": "escape"})).await.unwrap();
+            live.send(&json!({"op": "escape"})).await?;
         }
     }
 }
@@ -342,7 +342,7 @@ impl Seat {
 impl FakeHarness {
     /// Have every running seat leave a grandchild in a session of its own.
     pub async fn escape(&self) {
-        let seats: Vec<_> = self.seats.lock().unwrap().values().cloned().collect();
+        let seats: Vec<_> = self.seats.lock()?.values().cloned().collect();
         for seat in seats {
             seat.escape().await;
         }

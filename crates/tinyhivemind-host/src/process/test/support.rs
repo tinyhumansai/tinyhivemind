@@ -22,11 +22,11 @@ pub(super) struct Fixture {
 impl Fixture {
     pub(super) fn new() -> Self {
         Self {
-            root: tempfile::tempdir().unwrap(),
+            root: tempfile::tempdir()?,
         }
     }
     pub(super) fn dir(&self) -> InstanceDir {
-        InstanceDir::create(self.root.path().join("instance")).unwrap()
+        InstanceDir::create(self.root.path().join("instance"))?
     }
     pub(super) fn path(&self, name: &str) -> PathBuf {
         self.root.path().join(name)
@@ -41,10 +41,10 @@ impl Fixture {
     }
     /// A script children can run as `sh $OUT/name`.
     pub(super) fn script(&self, name: &str, body: &str) {
-        fs::write(self.path(name), body).unwrap();
+        fs::write(self.path(name), body)?;
     }
     pub(super) async fn start(&self, script: &str) -> Instance {
-        Instance::start(self.shell(script)).await.unwrap()
+        Instance::start(self.shell(script)).await?
     }
     /// The pid a child wrote to `$OUT/name`.
     pub(super) async fn pid(&self, name: &str) -> u32 {
@@ -58,7 +58,7 @@ impl Fixture {
             pid.is_some()
         })
         .await;
-        pid.unwrap()
+        pid.context("missing")?
     }
     pub(super) fn read(&self, name: &str) -> String {
         fs::read_to_string(self.path(name)).unwrap_or_default()
@@ -79,7 +79,7 @@ pub(super) fn running(pid: u32) -> bool {
     let output = std::process::Command::new("ps")
         .args(["-o", "stat=", "-p", &pid.to_string()])
         .output()
-        .unwrap();
+        ?;
     let state = String::from_utf8_lossy(&output.stdout).trim().to_owned();
     !state.is_empty() && !state.starts_with('Z')
 }

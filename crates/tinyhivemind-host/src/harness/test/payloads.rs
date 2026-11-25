@@ -8,44 +8,48 @@ use serde_json::json;
 use std::path::Path;
 
 #[test]
-fn each_kind_has_the_name_a_package_uses() {
+fn each_kind_has_the_name_a_package_uses() -> Result<()> {
     for (kind, name) in [
         (HarnessKind::OpenHuman, "openhuman"),
         (HarnessKind::OpenClaw, "openclaw"),
         (HarnessKind::Codex, "codex"),
     ] {
-        assert_eq!(serde_json::to_value(kind).unwrap(), json!(name));
-        assert_eq!(serde_json::from_value::<HarnessKind>(json!(name)).unwrap(), kind);
+        assert_eq!(serde_json::to_value(kind)?, json!(name));
+        assert_eq!(serde_json::from_value::<HarnessKind>(json!(name))?, kind);
         assert_eq!(kind.to_string(), name);
     }
     assert!(serde_json::from_value::<HarnessKind>(json!("open_human")).is_err());
+    Ok(())
 }
 
 #[test]
-fn an_endpoint_never_shows_its_bearer() {
+fn an_endpoint_never_shows_its_bearer() -> Result<()> {
     let endpoint = ToolEndpoint::new("hivemind", "http://127.0.0.1:9/mcp", "s3cret", ["post".into()]);
     let text = format!("{endpoint:?} {endpoint:#?}");
     assert!(!text.contains("s3cret"), "{text}");
     assert!(text.contains("hivemind") && text.contains("redacted"));
     assert_eq!(endpoint.bearer(), "s3cret");
+    Ok(())
 }
 
 #[test]
-fn a_seat_plan_shows_its_seat_and_not_its_prompt_or_settings() {
+fn a_seat_plan_shows_its_seat_and_not_its_prompt_or_settings() -> Result<()> {
     let mut plan = plan("scout", Path::new("/srv/scout"));
     plan.seat.prompt = "private prompt".into();
     plan.seat.config = json!({"k": "private setting"});
     let text = format!("{plan:?}");
     assert!(text.contains("scout") && text.contains("/srv/scout"));
     assert!(!text.contains("private"), "{text}");
+    Ok(())
 }
 
 #[test]
-fn a_plans_turn_timeout_is_the_seats_own_limit() {
+fn a_plans_turn_timeout_is_the_seats_own_limit() -> Result<()> {
     let mut plan = plan("scout", Path::new("/srv/scout"));
     assert_eq!(plan.turn_timeout(), None);
     plan.seat.integration.limits.timeout_ms = Some(1500);
-    assert_eq!(plan.turn_timeout().unwrap().as_millis(), 1500);
+    assert_eq!(plan.turn_timeout().context("missing")?.as_millis(), 1500);
+    Ok(())
 }
 
 #[test]
@@ -62,7 +66,7 @@ fn usage_of_a_turn_is_the_difference_of_totals() {
 }
 
 #[test]
-fn events_have_a_pinned_wire_form() {
+fn events_have_a_pinned_wire_form() -> Result<()> {
     let usage = TurnUsage {
         input_tokens: 1,
         cached_input_tokens: 2,
@@ -109,13 +113,14 @@ fn events_have_a_pinned_wire_form() {
                 "progress": {"kind": "tool_result", "call_id": "c", "failed": true}}),
         ),
     ] {
-        assert_eq!(serde_json::to_value(&event).unwrap(), wire);
-        assert_eq!(serde_json::from_value::<Event>(wire).unwrap(), event);
+        assert_eq!(serde_json::to_value(&event)?, wire);
+        assert_eq!(serde_json::from_value::<Event>(wire)?, event);
     }
+    Ok(())
 }
 
 #[tokio::test]
-async fn approvals_are_denied_unless_the_host_decides_otherwise() {
+async fn approvals_are_denied_unless_the_host_decides_otherwise() -> Result<()> {
     let request = ToolApproval {
         seat: "scout".into(),
         turn_id: "t".into(),
@@ -126,13 +131,14 @@ async fn approvals_are_denied_unless_the_host_decides_otherwise() {
     let decision = DenyAll.decide(request).await;
     assert!(matches!(decision, ToolDecision::Deny { .. }));
     assert_eq!(
-        serde_json::to_value(decision).unwrap(),
+        serde_json::to_value(decision)?,
         json!({"decision": "deny", "reason": "this host approves no harness tool"})
     );
     assert_eq!(
-        serde_json::to_value(ToolDecision::Allow).unwrap(),
+        serde_json::to_value(ToolDecision::Allow)?,
         json!({"decision": "allow"})
     );
+    Ok(())
 }
 
 #[test]

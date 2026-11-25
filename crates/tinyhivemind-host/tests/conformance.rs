@@ -45,11 +45,12 @@ passes! {
 }
 
 /// `case` must fail a harness with `fault`.
-async fn catches(fault: Fault, case: Case) {
-    let failure = case.run(&FakeSubject::new(fault)).await.unwrap_err();
+async fn catches(fault: Fault, case: Case) -> Result<()> {
+    let failure = case.run(&FakeSubject::new(fault)).await.err().context("expected a failure")?;
     assert_eq!(failure.case, case);
     assert!(!failure.reason.is_empty());
     assert!(failure.to_string().contains(&failure.reason));
+    Ok(())
 }
 
 #[tokio::test]

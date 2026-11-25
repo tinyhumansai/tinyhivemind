@@ -42,9 +42,9 @@ async fn dropping_also_kills_an_orphan_in_its_own_session_and_cleans_up() {
 }
 
 #[test]
-fn dropping_needs_no_runtime() {
+fn dropping_needs_no_runtime() -> Result<()> {
     let fixture = Fixture::new();
-    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let runtime = tokio::runtime::Runtime::new()?;
     let (instance, orphan): (Instance, u32) = runtime.block_on(async {
         let instance = fixture
             .start("setsid sh -c 'echo $$ > $OUT/pid; exec sleep 300' & exec sleep 300")
@@ -55,13 +55,14 @@ fn dropping_needs_no_runtime() {
     drop(runtime);
     let root = instance.pid();
     drop(instance);
-    let waiting = tokio::runtime::Runtime::new().unwrap();
+    let waiting = tokio::runtime::Runtime::new()?;
     waiting.block_on(async {
         until(|| !running(root)).await;
         if cfg!(target_os = "linux") {
             until(|| !running(orphan)).await;
         }
     });
+    Ok(())
 }
 
 #[tokio::test]

@@ -23,8 +23,8 @@ pub struct FakeSubject {
 
 impl FakeSubject {
     pub fn new(fault: Fault) -> Self {
-        let root = tempfile::tempdir().unwrap();
-        fs::create_dir_all(root.path().join("control/steps")).unwrap();
+        let root = tempfile::tempdir()?;
+        fs::create_dir_all(root.path().join("control/steps"))?;
         Self {
             root,
             fault,
@@ -48,7 +48,7 @@ impl Subject for FakeSubject {
     fn harness(&self) -> Arc<dyn Harness> {
         let program = PathBuf::from(env!("CARGO_BIN_EXE_tinyhivemind-fake-harness"));
         let harness = Arc::new(FakeHarness::new(program, self.control(), self.fault));
-        *self.current.lock().unwrap() = Some(harness.clone());
+        *self.current.lock()? = Some(harness.clone());
         harness
     }
 
@@ -79,14 +79,14 @@ impl Subject for FakeSubject {
             ModelStep::Hang => Value::Null,
         };
         let steps = self.control().join("steps");
-        fs::write(steps.join(format!("{number:04}")), step.to_string()).unwrap();
+        fs::write(steps.join(format!("{number:04}")), step.to_string())?;
     }
 
     fn model_calls(&self) -> Vec<ModelCall> {
         let mut calls = BTreeMap::new();
         for entry in self.entries() {
-            let number = entry["call"].as_u64().unwrap();
-            let state = match entry["state"].as_str().unwrap() {
+            let number = entry["call"].as_u64().context("missing")?;
+            let state = match entry["state"].as_str().context("missing")? {
                 "answered" => CallState::Answered,
                 "aborted" => CallState::Aborted,
                 // A model call ends with the process that makes it.
@@ -97,7 +97,7 @@ impl Subject for FakeSubject {
             };
             let seen = entry["seen"].as_u64();
             let call = calls.entry(number).or_insert(ModelCall {
-                seen: usize::try_from(seen.unwrap_or(0)).unwrap(),
+                seen: usize::try_from(seen.unwrap_or(0))?,
                 state,
             });
             call.state = state;
@@ -107,7 +107,7 @@ impl Subject for FakeSubject {
 
     fn lose_sessions(&self) {
         let state = self.root.path().join("instance/state");
-        fs::remove_file(state.join("session.json")).unwrap();
+        fs::remove_file(state.join("session.json"))?;
     }
 
     fn offer(&self, fault: ToolFault) {
@@ -116,14 +116,14 @@ impl Subject for FakeSubject {
             ToolFault::Extra => "extra",
             ToolFault::Missing => "missing",
         };
-        fs::write(self.control().join("tools"), text).unwrap();
+        fs::write(self.control().join("tools"), text)?;
     }
 
     /// Whatever runs in this subject's instance directory.
     fn processes(&self) -> Vec<u32> {
         let instance = self.root.path().join("instance");
         fs::read_dir("/proc")
-            .unwrap()
+            ?
             .flatten()
             .filter_map(|entry| entry.file_name().to_str()?.parse().ok())
             .filter(|pid: &u32| {
@@ -141,7 +141,7 @@ impl Subject for FakeSubject {
     }
 
     fn escapee(&self) -> EscapeFuture {
-        let harness = self.current.lock().unwrap().clone();
+        let harness = self.current.lock()?.clone();
         let report = self.control().join("escapee");
         Box::pin(async move {
             harness?.escape().await;
@@ -160,7 +160,7 @@ impl Subject for FakeSubject {
 impl Drop for FakeSubject {
     fn drop(&mut self) {
         for pid in self.processes() {
-            let pid = rustix::process::Pid::from_raw(pid.cast_signed()).unwrap();
+            let pid = rustix::process::Pid::from_raw(pid.cast_signed()).context("missing")?;
             let _ = rustix::process::kill_process(pid, rustix::process::Signal::KILL);
         }
     }

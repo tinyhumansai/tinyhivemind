@@ -33,53 +33,55 @@ impl Entry {
     fn write(&self, proc: &Path) {
         let directory = proc.join(self.pid.to_string());
         let task = directory.join("task").join(self.pid.to_string());
-        fs::create_dir_all(&task).unwrap();
+        fs::create_dir_all(&task)?;
         // A name holding spaces and parentheses must not shift the fields.
         let stat = format!(
             "{} (a) b (c) {} {} {} {} 0 -1 0 0 0 0 0 0 0 0 0 20 0 {} 0 {} 0 0\n",
             self.pid, self.state, self.parent, self.group, self.group, self.threads, self.start
         );
-        fs::write(directory.join("stat"), stat).unwrap();
-        fs::write(directory.join("environ"), self.environ).unwrap();
+        fs::write(directory.join("stat"), stat)?;
+        fs::write(directory.join("environ"), self.environ)?;
     }
 }
 
 fn table(entries: &[Entry]) -> tempfile::TempDir {
-    let proc = tempfile::tempdir().unwrap();
+    let proc = tempfile::tempdir()?;
     for entry in entries {
         entry.write(proc.path());
     }
     // Entries that are not processes are skipped.
-    fs::create_dir(proc.path().join("sys")).unwrap();
+    fs::create_dir(proc.path().join("sys"))?;
     proc
 }
 
 fn tree(proc: &tempfile::TempDir) -> Tree {
-    Tree::at(proc.path(), MARKER, 10).unwrap()
+    Tree::at(proc.path(), MARKER, 10)?
 }
 
 fn pids(tree: &mut Tree) -> Vec<u32> {
     tree.scan()
-        .unwrap()
+        ?
         .into_iter()
         .map(|member| member.pid)
         .collect()
 }
 
-fn children(proc: &tempfile::TempDir, pid: u32, list: &str) {
+fn children(proc: &tempfile::TempDir, pid: u32, list: &str) -> Result<()> {
     let task = format!("{pid}/task/{pid}/children");
-    fs::write(proc.path().join(task), list).unwrap();
+    fs::write(proc.path().join(task), list)?;
+    Ok(())
 }
 
 #[test]
-fn a_stat_line_is_read_past_a_hostile_command_name() {
+fn a_stat_line_is_read_past_a_hostile_command_name() -> Result<()> {
     let proc = table(&[Entry::new(10, 1, 100)]);
-    let stat = Stat::read(proc.path(), 10).unwrap();
+    let stat = Stat::read(proc.path(), 10).context("missing")?;
     assert_eq!((stat.parent, stat.group, stat.start), (1, 10, 100));
     assert!(!stat.dead);
     assert!(Stat::read(proc.path(), 11).is_none());
-    fs::write(proc.path().join("10/stat"), "10 (x) S 1").unwrap();
+    fs::write(proc.path().join("10/stat"), "10 (x) S 1")?;
     assert!(Stat::read(proc.path(), 10).is_none());
+    Ok(())
 }
 
 #[test]
@@ -143,16 +145,17 @@ fn the_dead_are_not_survivors_but_a_threaded_zombie_leader_is() {
 }
 
 #[test]
-fn a_sampled_descendant_stays_a_member_after_it_is_reparented() {
+fn a_sampled_descendant_stays_a_member_after_it_is_reparented() -> Result<()> {
     let proc = table(&[Entry::new(10, 1, 100), Entry::new(11, 10, 101)]);
     Entry::new(12, 11, 102).write(proc.path());
     children(&proc, 10, "11 ");
     children(&proc, 11, "12 ");
     let mut tree = tree(&proc);
     tree.sample();
-    fs::remove_dir_all(proc.path().join("11")).unwrap();
+    fs::remove_dir_all(proc.path().join("11"))?;
     Entry::new(12, 1, 102).write(proc.path());
     assert_eq!(pids(&mut tree), [10, 12]);
+    Ok(())
 }
 
 #[test]
@@ -191,39 +194,41 @@ fn alive(proc: &Path, member: Identity) -> bool {
 
 /// The identity of a real process.
 fn identity(pid: u32) -> Identity {
-    Stat::read(Path::new("/proc"), pid).unwrap().identity()
+    Stat::read(Path::new("/proc"), pid).context("missing")?.identity()
 }
 
 #[test]
-fn a_signal_reaches_the_process_it_names_and_no_later_owner_of_its_pid() {
+fn a_signal_reaches_the_process_it_names_and_no_later_owner_of_its_pid() -> Result<()> {
     let proc = Path::new("/proc");
     let mut child = Command::new("/bin/sleep")
         .arg("300")
         .stdin(Stdio::null())
         .spawn()
-        .unwrap();
+        ?;
     let real = identity(child.id());
     let stale = Identity {
         start: real.start + 1,
         ..real
     };
-    signal(proc, stale, Signal::KILL).unwrap();
+    signal(proc, stale, Signal::KILL)?;
     assert!(alive(proc, real));
     assert!(!alive(proc, stale));
-    assert!(child.try_wait().unwrap().is_none());
-    signal(proc, real, Signal::KILL).unwrap();
-    assert!(!child.wait().unwrap().success());
+    assert!(child.try_wait()?.is_none());
+    signal(proc, real, Signal::KILL)?;
+    assert!(!child.wait()?.success());
     assert!(!alive(proc, real));
     // Gone is not an error.
-    signal(proc, real, Signal::KILL).unwrap();
+    signal(proc, real, Signal::KILL)?;
+    Ok(())
 }
 
 #[test]
-fn a_signal_the_kernel_refuses_is_an_error() {
+fn a_signal_the_kernel_refuses_is_an_error() -> Result<()> {
     // Nothing unprivileged may signal init; root may, so it is skipped there.
     if rustix::process::geteuid().is_root() {
         return;
     }
     let refused = signal(Path::new("/proc"), identity(1), Signal::TERM);
-    assert_eq!(refused.unwrap_err(), rustix::io::Errno::PERM);
+    assert_eq!(refused.err().context("expected a failure")?, rustix::io::Errno::PERM);
+    Ok(())
 }
