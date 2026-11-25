@@ -212,6 +212,19 @@ fn example(name: &str) -> anyhow::Result<PackageSource> {
     Ok(PackageSource::new(root, &package)?)
 }
 
+/// `mixed-harnesses` with its one remaining harness, `claw`, made an
+/// `openhuman` harness every seat but the lead names.
+fn openhuman_only() -> anyhow::Result<PackageSource> {
+    let source = example("mixed-harnesses")?;
+    let mut package = source.package().clone();
+    package.manifest.harnesses.truncate(1);
+    package.manifest.harnesses[0].kind = tinyhivemind_lang::HarnessKind::OpenHuman;
+    package.manifest.harnesses[0].isolation = None;
+    package.manifest.seats[2].harness = Some("claw".into());
+    package.manifest.profiles[0].harness = None;
+    Ok(PackageSource::new(source.root(), &package)?)
+}
+
 #[test]
 fn a_seat_on_any_harness_but_openhuman_is_refused_before_deployment() -> anyhow::Result<()> {
     let refused = crate::deploy::packages::harnesses(&[example("mixed-harnesses")?]);
@@ -229,31 +242,16 @@ fn a_seat_on_any_harness_but_openhuman_is_refused_before_deployment() -> anyhow:
     );
     // No harness anywhere, or an explicit `openhuman` one, deploys as today.
     crate::deploy::packages::harnesses(&[example("integrations")?])?;
-    let mut explicit = example("mixed-harnesses")?.package().clone();
-    explicit.manifest.harnesses.truncate(1);
-    explicit.manifest.harnesses[0].kind = tinyhivemind_lang::HarnessKind::OpenHuman;
-    explicit.manifest.harnesses[0].isolation = None;
-    explicit.manifest.seats[1].harness = Some("claw".into());
-    explicit.manifest.seats[2].harness = Some("claw".into());
-    explicit.manifest.profiles[0].harness = None;
-    let root = example("mixed-harnesses")?.root().to_path_buf();
-    crate::deploy::packages::harnesses(&[PackageSource::new(&root, &explicit)?])?;
+    crate::deploy::packages::harnesses(&[openhuman_only()?])?;
     Ok(())
 }
 
 #[test]
 fn packages_must_agree_on_a_harness_declared_under_one_id() -> anyhow::Result<()> {
-    let first = example("integrations")?;
-    let mut package = first.package().clone();
-    package.manifest.harnesses = vec![tinyhivemind_lang::Harness {
-        id: "oh".into(),
-        kind: tinyhivemind_lang::HarnessKind::OpenHuman,
-        isolation: None,
-    }];
-    let root = first.root().to_path_buf();
-    let one = PackageSource::new(&root, &package)?;
+    let one = openhuman_only()?;
+    let mut package = one.package().clone();
     package.manifest.harnesses[0].kind = tinyhivemind_lang::HarnessKind::Codex;
-    let other = PackageSource::new(&root, &package)?;
+    let other = PackageSource::new(one.root(), &package)?;
     crate::deploy::packages::harnesses(&[one.clone(), one.clone()])?;
     let refused = crate::deploy::packages::harnesses(&[one, other]);
     assert!(
