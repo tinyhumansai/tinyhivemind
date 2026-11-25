@@ -18,7 +18,7 @@ async fn dropping_kills_the_process_group() {
 async fn dropping_also_kills_an_orphan_in_its_own_session_and_cleans_up() {
     let fixture = Fixture::new();
     let instance = fixture
-        .start("sh -c 'setsid sh -c \"echo \\$\\$ > $OUT/pid; exec sleep 300\" &'; echo $TMPDIR > $OUT/tmp; exec sleep 300")
+        .start("(setsid sh -c 'echo $$ > $OUT/pid; exec sleep 300' &); echo $TMPDIR > $OUT/tmp; exec sleep 300")
         .await;
     let orphan = fixture.pid("pid").await;
     until(|| fixture.read("tmp").ends_with('\n')).await;

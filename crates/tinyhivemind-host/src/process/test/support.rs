@@ -39,6 +39,10 @@ impl Fixture {
             .env("OUT", self.root.path())
             .env("PATH", "/usr/bin:/bin")
     }
+    /// A script children can run as `sh $OUT/name`.
+    pub(super) fn script(&self, name: &str, body: &str) {
+        fs::write(self.path(name), body).unwrap();
+    }
     pub(super) async fn start(&self, script: &str) -> Instance {
         Instance::start(self.shell(script)).await.unwrap()
     }

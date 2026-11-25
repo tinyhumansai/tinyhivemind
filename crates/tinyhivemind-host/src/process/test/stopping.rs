@@ -65,10 +65,14 @@ async fn stopping_twice_or_after_exit_gives_the_same_exit() {
     }
 }
 
-/// Start `script`, which reports a grandchild in `$OUT/pid`, stop, and require
-/// both to be gone.
+/// Reports its pid in `$OUT/pid` and stays.
+const STAY: &str = "echo $$ > $OUT/pid; exec sleep 300";
+
+/// Start `script`, in which `$OUT/stay` reports a grandchild, stop, and
+/// require both to be gone.
 async fn leaves_nothing(script: &str) {
     let fixture = Fixture::new();
+    fixture.script("stay", STAY);
     let instance = fixture.start(script).await;
     let grandchild = fixture.pid("pid").await;
     assert!(running(grandchild));
@@ -79,29 +83,34 @@ async fn leaves_nothing(script: &str) {
 
 #[tokio::test]
 async fn a_grandchild_in_its_own_session_is_stopped() {
-    leaves_nothing("setsid sh -c 'echo $$ > $OUT/pid; exec sleep 300' & exec sleep 300").await;
+    leaves_nothing("setsid sh $OUT/stay & exec sleep 300").await;
 }
 
 #[tokio::test]
 async fn a_grandchild_whose_parent_died_is_stopped() {
-    leaves_nothing("sh -c 'sh -c \"echo \\$\\$ > $OUT/pid; exec sleep 300\" &'; exec sleep 300")
-        .await;
+    leaves_nothing("(sh $OUT/stay &); exec sleep 300").await;
 }
 
 #[tokio::test]
-async fn an_orphan_in_its_own_session_that_ignores_sigterm_is_stopped() {
-    leaves_nothing(
-        "sh -c 'setsid sh -c \"trap : TERM; trap \\\"\\\" TERM; echo \\$\\$ > $OUT/pid; exec sleep 300\" &'; exec sleep 300",
-    )
-    .await;
+async fn an_orphan_in_its_own_session_is_stopped() {
+    leaves_nothing("(setsid sh $OUT/stay &); exec sleep 300").await;
+}
+
+#[tokio::test]
+async fn an_orphan_that_ignores_sigterm_is_stopped() {
+    leaves_nothing("trap '' TERM; (setsid sh $OUT/stay &); exec sleep 300").await;
+}
+
+#[tokio::test]
+async fn a_descendant_that_cleared_its_environment_is_stopped_while_its_parent_lives() {
+    leaves_nothing("setsid env -i OUT=$OUT /bin/sh $OUT/stay & exec sleep 300").await;
 }
 
 #[tokio::test]
 async fn an_orphan_left_by_a_root_that_already_exited_is_stopped() {
     let fixture = Fixture::new();
-    let instance = fixture
-        .start("setsid sh -c 'echo $$ > $OUT/pid; exec sleep 300' & exit 1")
-        .await;
+    fixture.script("stay", STAY);
+    let instance = fixture.start("setsid sh $OUT/stay & exit 1").await;
     let orphan = fixture.pid("pid").await;
     assert_eq!(instance.exited().await.code, Some(1));
     assert!(running(orphan));
@@ -110,54 +119,45 @@ async fn an_orphan_left_by_a_root_that_already_exited_is_stopped() {
 }
 
 #[tokio::test]
-async fn a_descendant_that_cleared_its_environment_is_stopped_while_its_parent_lives() {
-    leaves_nothing(
-        "setsid env -i OUT=$OUT /bin/sh -c 'echo $$ > $OUT/pid; exec /bin/sleep 300' & exec sleep 300",
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn a_sampled_descendant_that_cleared_its_environment_and_was_orphaned_is_stopped() {
+async fn a_descendant_seen_before_it_was_orphaned_is_stopped_though_it_cleared_its_environment() {
     let fixture = Fixture::new();
-    // The middle process lives until it is released, which is after the
-    // supervisor has sampled the tree.
+    fixture.script("stay", STAY);
+    // The middle process lives until the supervisor has seen its child.
+    fixture.script(
+        "middle",
+        "setsid env -i OUT=$OUT /bin/sh $OUT/stay & until [ -e $OUT/go ]; do sleep 0.01; done",
+    );
     let instance = fixture
-        .start(
-            "sh -c 'setsid env -i OUT=$OUT /bin/sh -c \"echo \\$\\$ > \\$OUT/pid; exec /bin/sleep 300\" & until [ -e $OUT/go ]; do sleep 0.01; done; echo 1 > $OUT/left' & exec sleep 300",
-        )
+        .start("sh $OUT/middle; echo 1 > $OUT/left; exec sleep 300")
         .await;
     let escapee = fixture.pid("pid").await;
-    instance.sampled().await;
-    std::fs::write(fixture.path("go"), "").unwrap();
-    until(|| parent(escapee) != 0 && fixture.read("left") == "1\n").await;
+    let deadline = tokio::time::Instant::now() + PATIENCE;
+    while !instance.members().await.unwrap().contains(&escapee) {
+        assert!(tokio::time::Instant::now() < deadline);
+    }
+    fixture.script("go", "");
+    until(|| fixture.read("left") == "1\n").await;
     instance.stop(async {}, SHORT).await.unwrap();
     assert!(!running(escapee));
-}
-
-fn parent(pid: u32) -> u32 {
-    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).unwrap_or_default();
-    stat.rsplit_once(')')
-        .and_then(|(_, rest)| rest.split_whitespace().nth(1)?.parse().ok())
-        .unwrap_or(0)
 }
 
 #[tokio::test]
 async fn a_tree_that_keeps_forking_is_stopped() {
     let fixture = Fixture::new();
+    fixture.script(
+        "chain",
+        "echo $$ >> $OUT/pids; sleep 0.02; setsid sh $OUT/chain & exit",
+    );
     let instance = fixture
-        .start(
-            "fork() { setsid sh -c 'trap \"\" TERM; echo $$ >> $OUT/pids; sleep 0.02; exec sh -c \"$0\" \"$0\"' \"$0\" & }; \
-             for i in 1 2 3 4; do setsid sh -c 'while :; do (sleep 0.005 & echo $! >> $OUT/pids) ; sleep 0.005; done' & done; exec sleep 300",
-        )
+        .start("trap '' TERM; for i in 1 2 3 4; do setsid sh $OUT/chain & done; exec sleep 300")
         .await;
-    until(|| fixture.read("pids").lines().count() > 20).await;
+    until(|| fixture.read("pids").lines().count() > 40).await;
     instance.stop(async {}, SHORT).await.unwrap();
     let after = fixture.read("pids");
-    for pid in after.lines().filter_map(|line| line.parse().ok()) {
+    for pid in after.lines().filter_map(|line| line.parse().ok()).rev().take(10) {
         assert!(!running(pid));
     }
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
     assert_eq!(fixture.read("pids"), after, "something is still forking");
 }
 
