@@ -81,13 +81,14 @@ fn a_stat_line_is_read_past_a_hostile_command_name() -> Result<()> {
 }
 
 #[test]
-fn a_root_that_is_not_running_has_no_tree() {
+fn a_root_that_is_not_running_has_no_tree() -> Result<()> {
     let proc = table(&[])?;
     assert!(Tree::at(proc.path(), MARKER, 10).is_err());
+    Ok(())
 }
 
 #[test]
-fn descendants_are_members_however_deep() {
+fn descendants_are_members_however_deep() -> Result<()> {
     let proc = table(&[
         Entry::new(13, 12, 103),
         Entry::new(12, 11, 102),
@@ -96,10 +97,11 @@ fn descendants_are_members_however_deep() {
         Entry::new(20, 1, 104),
     ])?;
     assert_eq!(pids(&mut tree(&proc)?)?, [10, 11, 12, 13]);
+    Ok(())
 }
 
 #[test]
-fn a_reparented_process_is_known_by_its_marker_alone() {
+fn a_reparented_process_is_known_by_its_marker_alone() -> Result<()> {
     let mut orphan = Entry::new(30, 1, 105);
     orphan.environ = "A=1\0TINYHIVEMIND_INSTANCE=abc\0";
     let mut other = Entry::new(31, 1, 105);
@@ -108,18 +110,20 @@ fn a_reparented_process_is_known_by_its_marker_alone() {
     embedded.environ = "X=TINYHIVEMIND_INSTANCE=abc\0";
     let proc = table(&[Entry::new(10, 1, 100), orphan, other, embedded])?;
     assert_eq!(pids(&mut tree(&proc)?)?, [10, 30]);
+    Ok(())
 }
 
 #[test]
-fn a_process_older_than_the_root_is_never_a_member() {
+fn a_process_older_than_the_root_is_never_a_member() -> Result<()> {
     let mut older = Entry::new(5, 1, 99);
     older.environ = "TINYHIVEMIND_INSTANCE=abc\0";
     let proc = table(&[Entry::new(10, 1, 100), older])?;
     assert_eq!(pids(&mut tree(&proc)?)?, [10]);
+    Ok(())
 }
 
 #[test]
-fn the_roots_process_group_is_the_instances() {
+fn the_roots_process_group_is_the_instances() -> Result<()> {
     let mut grouped = Entry::new(40, 1, 105);
     grouped.group = 10;
     let proc = table(&[Entry::new(10, 1, 100), grouped])?;
@@ -127,10 +131,11 @@ fn the_roots_process_group_is_the_instances() {
     let mut released = tree(&proc)?;
     released.release();
     assert_eq!(pids(&mut released)?, [10]);
+    Ok(())
 }
 
 #[test]
-fn the_dead_are_not_survivors_but_a_threaded_zombie_leader_is() {
+fn the_dead_are_not_survivors_but_a_threaded_zombie_leader_is() -> Result<()> {
     let mut zombie = Entry::new(11, 10, 101);
     zombie.state = 'Z';
     let mut leader = Entry::new(12, 10, 101);
@@ -138,6 +143,7 @@ fn the_dead_are_not_survivors_but_a_threaded_zombie_leader_is() {
     leader.threads = 3;
     let proc = table(&[Entry::new(10, 1, 100), zombie, leader])?;
     assert_eq!(pids(&mut tree(&proc)?)?, [10, 12]);
+    Ok(())
 }
 
 #[test]
@@ -155,7 +161,7 @@ fn a_sampled_descendant_stays_a_member_after_it_is_reparented() -> Result<()> {
 }
 
 #[test]
-fn a_reused_pid_is_not_the_process_that_had_it() {
+fn a_reused_pid_is_not_the_process_that_had_it() -> Result<()> {
     let proc = table(&[Entry::new(10, 1, 100), Entry::new(11, 10, 101)])?;
     children(&proc, 10, "11")?;
     let mut tree = tree(&proc)?;
@@ -164,23 +170,26 @@ fn a_reused_pid_is_not_the_process_that_had_it() {
     // A child of the new owner of the pid is not ours either.
     Entry::new(12, 11, 901).write(proc.path())?;
     assert_eq!(pids(&mut tree)?, [10]);
+    Ok(())
 }
 
 #[test]
-fn a_stale_children_list_does_not_adopt_a_stranger() {
+fn a_stale_children_list_does_not_adopt_a_stranger() -> Result<()> {
     let proc = table(&[Entry::new(10, 1, 100), Entry::new(11, 1, 101)])?;
     children(&proc, 10, "11 999 junk")?;
     let mut tree = tree(&proc)?;
     tree.sample();
     assert_eq!(pids(&mut tree)?, [10]);
+    Ok(())
 }
 
 #[test]
-fn an_unreadable_table_is_an_error_and_not_an_empty_tree() {
+fn an_unreadable_table_is_an_error_and_not_an_empty_tree() -> Result<()> {
     let proc = table(&[Entry::new(10, 1, 100)])?;
     let mut tree = tree(&proc)?;
     drop(proc);
     assert!(tree.scan().is_err());
+    Ok(())
 }
 
 /// Whether `member` is running.

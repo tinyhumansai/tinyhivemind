@@ -11,7 +11,7 @@ fn seat(inner: &Arc<Scripted>) -> SeatRunner {
 }
 
 /// Yield until the log is `expected`.
-async fn logged(inner: &Scripted, expected: &[&str]) {
+async fn logged(inner: &Scripted, expected: &[&str]) -> Result<()> {
     let reached = async {
         while inner.log() != expected {
             tokio::task::yield_now().await;
@@ -23,6 +23,7 @@ async fn logged(inner: &Scripted, expected: &[&str]) {
         "{:?} never became {expected:?}",
         inner.log()
     );
+    Ok(())
 }
 
 async fn refusal(seat: &SeatRunner, turn_id: &str, session: Option<&str>) -> Result<String> {
@@ -163,10 +164,11 @@ async fn a_turn_dropped_while_it_waited_never_started() -> Result<()> {
 }
 
 #[tokio::test]
-async fn an_empty_session_is_an_error() {
+async fn an_empty_session_is_an_error() -> Result<()> {
     let inner = Scripted::new(&[Turn::Session(" ")]);
     let refused = refusal(&seat(&inner), "t1", None).await?;
     assert!(refused.contains("empty session"), "{refused}");
+    Ok(())
 }
 
 #[tokio::test]
@@ -196,13 +198,14 @@ async fn a_request_for_another_session_never_reaches_the_harness() -> Result<()>
 }
 
 #[tokio::test]
-async fn a_resumed_session_must_come_back_as_itself() {
+async fn a_resumed_session_must_come_back_as_itself() -> Result<()> {
     let inner = Scripted::new(&[Turn::Session("new")]);
     let refused = refusal(&seat(&inner), "t1", Some("old")).await?;
     assert!(
         refused.contains("old") && refused.contains("new"),
         "{refused}"
     );
+    Ok(())
 }
 
 #[tokio::test]
