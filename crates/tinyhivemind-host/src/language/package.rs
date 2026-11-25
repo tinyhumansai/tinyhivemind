@@ -1,6 +1,6 @@
 //! A hive package together with the directory it was read from.
 //!
-//! The language crate opens no files; the adapter does, because executable
+//! The language crate opens no files; this crate does, because executable
 //! tools and skill bundles are run and installed from the package directory.
 use crate::config::ConfigError;
 use std::{

@@ -1,7 +1,7 @@
 //! The stable tool vocabulary and its argument declarations.
 use serde_json::{Value, json};
 #[derive(Clone, Copy, Debug)]
-pub(super) enum Kind {
+pub enum Kind {
     ListHives,
     ListAgents,
     Read,
@@ -17,7 +17,7 @@ pub(super) enum Kind {
     LeaveHive,
 }
 impl Kind {
-    pub(super) fn all(managed: bool) -> Vec<Self> {
+    pub fn all(managed: bool) -> Vec<Self> {
         let mut kinds = vec![
             Self::ListHives,
             Self::ListAgents,
@@ -39,7 +39,7 @@ impl Kind {
         }
         kinds
     }
-    pub(super) fn name(self) -> &'static str {
+    pub fn name(self) -> &'static str {
         match self {
             Self::ListHives => "hivemind_list_hives",
             Self::ListAgents => "hivemind_list_agents",
@@ -56,7 +56,7 @@ impl Kind {
             Self::LeaveHive => "hivemind_leave_hive",
         }
     }
-    pub(super) fn description(self) -> &'static str {
+    pub fn description(self) -> &'static str {
         match self {
             Self::ListHives => "List hives you have joined. Hive and desk have one hive_id.",
             Self::ListAgents => "List registered agent IDs for direct messages across hives.",
@@ -85,7 +85,7 @@ impl Kind {
             Self::LeaveHive => "Leave a hive after host authorization, retaining recorded history.",
         }
     }
-    pub(super) fn fields(self) -> Vec<(&'static str, &'static str, bool)> {
+    pub fn fields(self) -> Vec<(&'static str, &'static str, bool)> {
         match self {
             Self::ListHives | Self::ListAgents => vec![],
             Self::Read => vec![
@@ -131,7 +131,7 @@ impl Kind {
             }
         }
     }
-    pub(super) fn schema(self) -> Value {
+    pub fn schema(self) -> Value {
         let mut properties = serde_json::Map::new();
         let mut required = Vec::new();
         for (name, ty, needed) in self.fields() {
@@ -169,7 +169,7 @@ impl Kind {
             _ => None,
         }
     }
-    pub(super) fn validate(self, args: &Value) -> anyhow::Result<()> {
+    pub fn validate(self, args: &Value) -> anyhow::Result<()> {
         let obj = args
             .as_object()
             .ok_or_else(|| anyhow::anyhow!("arguments must be an object"))?;

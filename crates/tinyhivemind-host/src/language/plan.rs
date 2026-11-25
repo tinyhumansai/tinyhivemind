@@ -13,36 +13,36 @@ use tinyhivemind_lang as lang;
 
 /// What a seat runs with beyond the native agent definition.
 #[derive(Clone, Debug)]
-pub(crate) struct SeatPlan {
+pub struct SeatPlan {
     /// The root of the package that declared the seat first.
-    pub(crate) root: PathBuf,
+    pub root: PathBuf,
     /// The id of that package's hive.
-    pub(crate) hive: String,
+    pub hive: String,
     /// Executable tools the seat may call.
-    pub(crate) programs: Vec<lang::ExecTool>,
+    pub programs: Vec<lang::ExecTool>,
     /// Hooks on the seat's turns.
-    pub(crate) hooks: Vec<lang::LoweredHook>,
+    pub hooks: Vec<lang::LoweredHook>,
     /// Feature flags of the package.
-    pub(crate) features: BTreeMap<String, bool>,
+    pub features: BTreeMap<String, bool>,
     /// Skill bundle ids the seat selected, and every bundle the package ships.
-    pub(crate) skills: (Vec<String>, Vec<String>),
+    pub skills: (Vec<String>, Vec<String>),
 }
 
 /// A deployment plan and the settings the plan types do not carry.
 #[derive(Clone, Debug)]
-pub(crate) struct Plan {
+pub struct Plan {
     /// The native deployment plan.
-    pub(crate) config: HiveConfig,
+    pub config: HiveConfig,
     /// Per-seat extras, keyed by seat id.
-    pub(crate) seats: BTreeMap<String, SeatPlan>,
+    pub seats: BTreeMap<String, SeatPlan>,
     /// Agent session settings of the first package.
-    pub(crate) session: lang::SessionSettings,
+    pub session: lang::SessionSettings,
     /// Jev settings of the first package.
-    pub(crate) jev: lang::JevSettings,
+    pub jev: lang::JevSettings,
 }
 
 /// The id of the native profile a seat's resolved integration becomes.
-pub(crate) fn seat_profile(seat: &str) -> String {
+pub fn seat_profile(seat: &str) -> String {
     format!("seat-{seat}")
 }
 
@@ -359,7 +359,7 @@ type Seats = BTreeMap<String, (lang::LoweredSeatIntegration, String, SeatPlan)>;
 /// [`ConfigError::ConflictingDeclaration`] when packages disagree, and
 /// [`ConfigError::UnsupportedSetting`] for tool rules the harness cannot
 /// decode. An empty list is [`ConfigError::EmptyHive`].
-pub(crate) fn plan(packages: &[PackageSource]) -> Result<Plan, ConfigError> {
+pub fn plan(packages: &[PackageSource]) -> Result<Plan, ConfigError> {
     let first = packages
         .first()
         .ok_or_else(|| ConfigError::EmptyHive("deployment".into()))?;
@@ -434,6 +434,3 @@ pub(crate) fn plan(packages: &[PackageSource]) -> Result<Plan, ConfigError> {
     })
 }
 
-#[cfg(test)]
-#[path = "plan_test.rs"]
-mod test;
