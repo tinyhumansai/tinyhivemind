@@ -11,5 +11,5 @@
 | [`activation/`](activation/README.md) | The registration barrier |
 | [`journal/`](journal/README.md) | `MemoryLog`, an optional in-memory session log |
 | [`error/`](error/README.md) | `Error`, `ArgumentError` and `Result` |
-| `process/` | Supervised child processes |
-| `harness/` | The harness port |
+| [`process/`](process/README.md) | Supervised child processes |
+| [`harness/`](harness/README.md) | The harness port |
