@@ -55,6 +55,19 @@ async fn a_child_that_ignores_everything_is_killed_within_the_bounds() {
 }
 
 #[tokio::test]
+async fn cancelling_a_child_that_already_exited_is_not_waited_for() {
+    let fixture = Fixture::new();
+    let instance = fixture.start("exit 0").await;
+    instance.exited().await;
+    let policy = StopPolicy {
+        cancel: Duration::MAX,
+        ..SHORT
+    };
+    let stopped = instance.stop(std::future::pending(), policy);
+    tokio::time::timeout(PATIENCE, stopped).await.unwrap().unwrap();
+}
+
+#[tokio::test]
 async fn stopping_twice_or_after_exit_gives_the_same_exit() {
     let fixture = Fixture::new();
     let instance = fixture.start("exit 2").await;

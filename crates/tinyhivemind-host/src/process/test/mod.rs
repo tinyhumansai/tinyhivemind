@@ -2,6 +2,7 @@
 mod directory;
 mod dropping;
 mod launching;
+mod scope;
 #[cfg(target_os = "linux")]
 mod stopping;
 mod support;

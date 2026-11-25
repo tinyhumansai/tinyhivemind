@@ -9,8 +9,8 @@ repository.workspace = true
 readme = "README.md"
 publish = false
 # This crate names no harness type and links none (ADR 0035). It spawns
-# processes, so it is outside the pure crates `.github/scripts/assert-pure.sh`
-# guards.
+# processes, so it is outside the pure crates; `.github/scripts/assert-pure.sh`
+# asserts only that no harness is in its graph.
 
 [dependencies]
 # Durable coordination: the `AgentRunner` seam, actions and turn payloads.
