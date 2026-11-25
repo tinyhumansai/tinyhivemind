@@ -217,16 +217,26 @@ fn a_process_whose_environment_is_not_there_yet_is_looked_at_again() -> Result<(
     fs::remove_file(&pipe)?;
     assert!(Command::new("mkfifo").arg(&pipe).status()?.success());
     let late = std::thread::spawn(move || -> Result<()> {
-        // Empty at first, then what it was started with.
-        drop(fs::File::options().write(true).open(&pipe)?);
-        fs::remove_file(&pipe)?;
-        Ok(fs::write(&pipe, "TINYHIVEMIND_INSTANCE=abc\0")?)
+        // What it was started with is there before the first look ends, which
+        // sees nothing.
+        let empty = fs::File::options().write(true).open(&pipe)?;
+        let shown = pipe.with_extension("shown");
+        fs::write(&shown, "TINYHIVEMIND_INSTANCE=abc\0")?;
+        fs::rename(shown, pipe)?;
+        drop(empty);
+        Ok(())
     });
-    let mut tree = tree(&proc)?;
-    let found = pids(&mut tree)?;
+    assert_eq!(pids(&mut tree(&proc)?)?, [10, 30]);
     assert!(late.join().is_ok_and(|shown| shown.is_ok()));
-    // The scan that met the empty one, or at the latest the next.
-    assert!(found == [10, 30] || pids(&mut tree)? == [10, 30]);
+    Ok(())
+}
+
+#[test]
+fn a_process_without_an_environment_is_looked_at_only_so_often() -> Result<()> {
+    let mut bare = Entry::new(30, 1, 102);
+    bare.environ = "";
+    let proc = table(&[Entry::new(10, 1, 100), bare])?;
+    assert_eq!(pids(&mut tree(&proc)?)?, [10]);
     Ok(())
 }
 

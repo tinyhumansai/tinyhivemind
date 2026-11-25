@@ -147,7 +147,15 @@ impl Supervisor {
             if exited {
                 self.scope.settle(&self.root);
             }
-            let members = self.scope.members(&self.root, exited)?;
+            let members = match self.scope.members(&self.root, exited) {
+                // The table may be readable the next time.
+                Err(_) if started.elapsed() < bound => {
+                    proof = 0;
+                    thread::sleep(POLL);
+                    continue;
+                }
+                members => members?,
+            };
             if members.is_empty() {
                 proof += 1;
             } else {

@@ -48,8 +48,9 @@ pub enum Error {
         /// The bound that passed.
         deadline: Duration,
     },
-    /// The process table could not be read, so nothing is known of the tree.
-    #[error("the process table is unreadable: {0}")]
+    /// The process table could not be read whole, so nothing is known of the
+    /// tree.
+    #[error("the process table could not be read: {0}")]
     Table(#[source] io::Error),
     /// Processes of the instance were still there when the time ran out. The
     /// instance is not stopped.

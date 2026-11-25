@@ -70,6 +70,23 @@ pub(super) fn supported() -> bool {
         && pidfd_open(rustix::process::getpid(), PidfdFlags::empty()).is_ok()
 }
 
+/// Listings of the process table in one scan. Each takes a millisecond or so
+/// and a scan normally needs two or three.
+const LISTINGS: usize = 1000;
+/// Looks at a process that shows no environment, which it does not while it is
+/// inside `exec`, before that counts as having none.
+const LOOKS: u32 = 3;
+
+/// What a process shows on its own.
+enum Evidence {
+    /// It belongs to the instance.
+    Member,
+    /// Its environment is empty, so far.
+    Bare,
+    /// Nothing.
+    None,
+}
+
 /// The processes of one instance.
 pub(super) struct Tree {
     proc: PathBuf,
@@ -157,28 +174,61 @@ impl Tree {
             && Stat::read(&self.proc, parent.pid).is_some_and(|stat| stat.identity() == parent)
     }
 
-    /// Every live member, by walking the whole process table.
+    /// Every live member, by walking the whole process table until a listing
+    /// of it shows no process that was not looked at.
+    ///
+    /// One listing would not do: by the time its last entry is read, a process
+    /// that was not in it may have been forked by one that was and is gone.
     pub(super) fn scan(&mut self) -> io::Result<Vec<Identity>> {
+        let mut seen = BTreeSet::new();
+        let mut bare = BTreeMap::new();
         let mut stats = Vec::new();
-        for entry in fs::read_dir(&self.proc)? {
-            let name = entry?.file_name();
-            let Some(pid) = name.to_str().and_then(|name| name.parse().ok()) else {
-                continue;
-            };
-            // A descendant cannot be older than the root.
-            if let Some(stat) = Stat::read(&self.proc, pid)
-                && stat.start >= self.root.start
-            {
+        let mut members = BTreeMap::new();
+        for _ in 0..LISTINGS {
+            let fresh = self.unseen(&seen)?;
+            if fresh.is_empty() {
+                return Ok(self.keep(&stats, members));
+            }
+            for pid in fresh {
+                // A descendant cannot be older than the root.
+                let stat = Stat::read(&self.proc, pid).filter(|stat| stat.start >= self.root.start);
+                let Some(stat) = stat else {
+                    seen.insert(pid);
+                    continue;
+                };
+                match self.evidence(&stat) {
+                    Evidence::Member => {
+                        members.insert(pid, stat.identity());
+                    }
+                    Evidence::Bare if *bare.entry(pid).or_insert(0) < LOOKS => {
+                        bare.entry(pid).and_modify(|looks| *looks += 1);
+                        continue;
+                    }
+                    Evidence::Bare | Evidence::None => {}
+                }
+                seen.insert(pid);
                 stats.push(stat);
             }
         }
-        let mut members: BTreeMap<u32, Identity> = stats
-            .iter()
-            .filter(|stat| self.is_member(stat))
-            .map(|stat| (stat.pid, stat.identity()))
-            .collect();
-        // Children of members, until nothing is added: the table is not
-        // ordered by descent, and pids wrap.
+        Err(io::Error::other("it never held still"))
+    }
+
+    /// The listed pids that are not `seen`.
+    fn unseen(&self, seen: &BTreeSet<u32>) -> io::Result<Vec<u32>> {
+        let mut fresh = Vec::new();
+        for entry in fs::read_dir(&self.proc)? {
+            let name = entry?.file_name();
+            let pid = name.to_str().and_then(|name| name.parse().ok());
+            fresh.extend(pid.filter(|pid| !seen.contains(pid)));
+        }
+        Ok(fresh)
+    }
+
+    /// Add the descendants of `members` among `stats`, remember them all, and
+    /// return the live ones.
+    fn keep(&mut self, stats: &[Stat], mut members: BTreeMap<u32, Identity>) -> Vec<Identity> {
+        // Until nothing is added: the table is not ordered by descent, and
+        // pids wrap.
         loop {
             let added: Vec<Identity> = stats
                 .iter()
@@ -197,29 +247,39 @@ impl Tree {
             }
             members.extend(added.into_iter().map(|member| (member.pid, member)));
         }
-        self.known.clone_from(&members.into_values().collect());
+        self.known = members.into_values().collect();
         self.known.insert(self.root);
-        Ok(stats
+        stats
             .iter()
             .filter(|stat| !stat.dead && self.known.contains(&stat.identity()))
             .map(Stat::identity)
             .collect::<BTreeSet<_>>()
             .into_iter()
-            .collect())
+            .collect()
     }
 
-    /// Whether `stat` is a member on its own evidence.
-    fn is_member(&self, stat: &Stat) -> bool {
-        self.known.contains(&stat.identity())
-            || (self.held && stat.group == self.root.pid)
-            || (self.is_marked(stat.pid)
-                // The environment was that of the process `stat` describes.
-                && Stat::read(&self.proc, stat.pid).is_some_and(|now| now.start == stat.start))
-    }
-
-    fn is_marked(&self, pid: u32) -> bool {
-        fs::read(self.proc.join(pid.to_string()).join("environ"))
-            .is_ok_and(|environ| environ.split(|byte| *byte == 0).any(|e| e == self.marker))
+    /// What `stat` shows on its own.
+    fn evidence(&self, stat: &Stat) -> Evidence {
+        if self.known.contains(&stat.identity()) || (self.held && stat.group == self.root.pid) {
+            return Evidence::Member;
+        }
+        let environ = fs::read(self.proc.join(stat.pid.to_string()).join("environ"));
+        let Ok(environ) = environ else {
+            return Evidence::None;
+        };
+        if environ.is_empty() && !stat.dead {
+            return Evidence::Bare;
+        }
+        let marked = environ
+            .split(|byte| *byte == 0)
+            .any(|entry| entry == self.marker);
+        // It was the environment of the process `stat` describes.
+        let same = || Stat::read(&self.proc, stat.pid).is_some_and(|now| now.start == stat.start);
+        if marked && same() {
+            Evidence::Member
+        } else {
+            Evidence::None
+        }
     }
 
     /// Signal a member found by [`Self::scan`].

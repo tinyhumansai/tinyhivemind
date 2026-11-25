@@ -44,8 +44,9 @@
 //!   every 100 ms.
 //!
 //! Stopping signals every such process and repeats until three looks at the
-//! process table in a row find none, so a process forked while it was looking
-//! is found by the next look. No other process is ever signalled: a process is
+//! process table in a row find none. One look lists the table again until it
+//! shows nothing that was not examined, so a process forked while it was
+//! looking is found. No other process is ever signalled: a process is
 //! known by its pid *and* start time, the signal goes through a pidfd opened
 //! before that identity is checked, and the group is signalled only while the
 //! unreaped child keeps its id from being reused.
