@@ -1,0 +1,72 @@
+[package]
+name = "tinyhivemind-openhuman-process"
+description = "Hive seats on OpenHuman as supervised `openhuman-core` child processes, through its JSON-RPC and event stream."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+publish = false
+# This crate names no OpenHuman type and links no harness (ADR 0035): it talks
+# to a pinned `openhuman-core` binary over loopback HTTP. It is a crate of its
+# own, not a module of `tinyhivemind-openhuman`, so that removing the linked
+# adapter and `vendor/openhuman` deletes that crate without touching this one.
+# `.github/scripts/assert-pure.sh` asserts that no harness enters its graph.
+
+[features]
+# The host's conformance suite, and the scripted fake `openhuman-core` it runs
+# against, which has to be a real process and so is a binary.
+conformance = ["tinyhivemind-host/conformance", "dep:toml", "dep:rustix"]
+
+[[bin]]
+name = "tinyhivemind-fake-openhuman"
+path = "tests/fake/child.rs"
+required-features = ["conformance"]
+test = false
+doc = false
+
+[[test]]
+name = "conformance"
+required-features = ["conformance"]
+
+[[test]]
+name = "live"
+required-features = ["conformance"]
+
+[dependencies]
+# The harness port, seat runner, verification and process supervision.
+tinyhivemind-host.workspace = true
+# `AgentRunner`, `TurnRequest` and `TurnOutcome`.
+tinyhivemind-hives.workspace = true
+# The lowered seat and its provider, which decide what may be written.
+tinyhivemind-lang.workspace = true
+# Loopback JSON-RPC and the `/events` stream.
+reqwest.workspace = true
+# Request and event payloads, and the effective config.
+serde_json.workspace = true
+# Typed errors.
+thiserror.workspace = true
+# Deadlines, the seat's locks and the close signal of a running turn.
+tokio = { workspace = true, features = ["time", "sync", "macros", "rt"] }
+# The fake child reads the config the runner wrote, as `openhuman-core` does.
+toml = { version = "0.8", optional = true }
+# The fake child's grandchild leaves its session with `setsid`; the workspace
+# forbids `unsafe`, so `std`'s `pre_exec` is out. Already in the lockfile.
+rustix = { version = "1.1", default-features = false, features = ["std", "process"], optional = true }
+
+[dev-dependencies]
+tinyhivemind-host = { workspace = true, features = ["conformance"] }
+# Fallible tests over several error types.
+anyhow.workspace = true
+# Async tests, and the in-process fake's listener.
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "io-util", "time", "sync", "process"] }
+# Seat and control directories.
+tempfile.workspace = true
+# The in-process fake reads the written config.
+toml = "0.8"
+# Killing a seat's child in the conformance suite.
+rustix = { version = "1.1", default-features = false, features = ["std", "process"] }
+
+[lints]
+workspace = true

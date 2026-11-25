@@ -4,7 +4,7 @@ resolver = "3"
 # package, each directory named for the package it holds. There is no root
 # package: the crate a host links is `crates/tinyhivemind-core`, the same as any
 # other member. Keeping the root virtual is what makes that uniform.
-members = ["crates/tinyhivemind-core", "crates/tinyhivemind-tools", "crates/tinyhivemind-openhuman", "crates/tinyhivemind-hives", "crates/tinyhivemind-lang", "crates/tinyhivemind-exec", "crates/tinyhivemind-host"]
+members = ["crates/tinyhivemind-core", "crates/tinyhivemind-tools", "crates/tinyhivemind-openhuman", "crates/tinyhivemind-hives", "crates/tinyhivemind-lang", "crates/tinyhivemind-exec", "crates/tinyhivemind-host", "crates/tinyhivemind-openhuman-process"]
 # `worktrees/` holds `git worktree` checkouts of this same repository; each
 # contains a full copy of this manifest. Keep them excluded from Cargo
 # workspace discovery.
@@ -31,6 +31,14 @@ tinyhivemind-exec = { path = "crates/tinyhivemind-exec" }
 sha2 = "0.10"
 # Harness-neutral tool belt, policies, package plans and process supervision.
 tinyhivemind-host = { path = "crates/tinyhivemind-host" }
+# The HTTP client process harness clients speak to a harness's loopback API
+# with: JSON-RPC posts and a Server-Sent Events stream. Default features off,
+# so no TLS stack, no HTTP/2 and no proxy lookup from the environment: every
+# URL is `http://127.0.0.1`, and a proxy must never see a seat's token. It is
+# already in this lockfile through the linked OpenHuman tree and `wiremock`,
+# and it is `MIT OR Apache-2.0`. Its streaming `Response::chunk` is all SSE
+# needs, so the `stream` feature is not taken either.
+reqwest = { version = "0.12", default-features = false }
 # Durable cross-hive coordinator used at the harness boundary.
 tinyhivemind-hives = { path = "crates/tinyhivemind-hives" }
 # Concurrent owned runner futures in the coordinator, outside core.
