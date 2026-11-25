@@ -67,6 +67,10 @@ struct Pass {
     seen: BTreeSet<u32>,
     /// Looked at and not a member. None becomes one.
     others: BTreeMap<u32, u64>,
+    /// The host and its ancestors.
+    line: BTreeSet<u32>,
+    /// Others that excused a child since the last confirmation.
+    parents: BTreeMap<u32, u64>,
     /// Members, and everything that may still turn out to descend from one.
     stats: Vec<Stat>,
     members: BTreeMap<u32, Identity>,
@@ -77,6 +81,21 @@ struct Pass {
     /// Of each round that may be final, whom it is still unsure of.
     rounds: Vec<BTreeSet<u32>>,
     failure: Option<io::Error>,
+}
+
+impl Pass {
+    /// Whether `stat` is the child of a process that is not a member and
+    /// cannot have adopted one. Orphans go to an ancestor, so a child of one
+    /// of the host's own line may be a member's. To be confirmed.
+    fn is_anothers_child(&mut self, stat: &Stat) -> bool {
+        if self.line.contains(&stat.parent) {
+            return false;
+        }
+        let parent = self.others.get(&stat.parent);
+        self.parents
+            .extend(parent.map(|start| (stat.parent, *start)));
+        parent.is_some()
+    }
 }
 
 impl Tree {
@@ -140,6 +159,7 @@ impl Tree {
         order: Option<Signal>,
         expired: &dyn Fn() -> bool,
     ) -> io::Result<bool> {
+        pass.line = self.line()?;
         let mut last = self.last_pid()?;
         self.look(pass, self.listed(pass)?, order, expired);
         // These may have been looked at before their owner was there to see.
@@ -161,8 +181,7 @@ impl Tree {
             let idle = fresh.is_empty();
             let unsure = pass.unsure.iter().copied().collect();
             self.look(pass, unsure, order, expired);
-            let gone = self.look(pass, fresh, order, expired);
-            eprintln!("round {} whole={whole} gone={gone} n={} unsure={} rounds={} members={} alive={}", self.root.pid, last.is_some(), pass.unsure.len(), pass.rounds.len(), pass.members.len(), pass.alive);
+            let gone = self.look(pass, fresh, order, expired) || !self.confirm(pass);
             if whole && !gone && pass.rounds.len() < ROUNDS {
                 pass.rounds.push(pass.unsure.clone());
             }
@@ -235,22 +254,33 @@ impl Tree {
         let Some(stat) = Stat::read(&self.proc, pid)? else {
             return Ok(Judged::Gone);
         };
+        if let Some(parent) = pass.members.get(&stat.parent)
+            && self.is_child(&stat, *parent)?
+        {
+            self.found(pass, stat, order);
+            return Ok(Judged::Known);
+        }
+        if !self.is_known(&stat) && pass.is_anothers_child(&stat) {
+            pass.seen.insert(pid);
+            pass.others.insert(pid, stat.start);
+            return Ok(Judged::Known);
+        }
         match self.evidence(&stat)? {
             Evidence::Member => {
                 self.found(pass, stat, order);
                 return Ok(Judged::Known);
             }
             Evidence::Gone => {
-                if !self.is_anothers_child(pass, &stat)? {
-                    // A zombie stays one. Its children may be anyone's.
+                // A zombie stays one. Its children may be anyone's.
+                if stat.dead {
                     pass.seen.insert(pid);
-                    return Ok(Judged::Gone);
                 }
+                return Ok(Judged::Gone);
             }
             Evidence::Bare => {
                 let bare = self.bare.entry(stat.identity());
                 let since = *bare.or_insert_with(Instant::now);
-                if since.elapsed() < BARE && !self.is_anothers_child(pass, &stat)? {
+                if since.elapsed() < BARE {
                     return Ok(Judged::Unsure);
                 }
             }
@@ -264,18 +294,20 @@ impl Tree {
         Ok(Judged::Known)
     }
 
-    /// Whether `stat` is the child of a process that is not a member and
-    /// cannot have adopted one. Orphans go to an ancestor, so a child of one
-    /// of the host's own line may be a member's.
-    fn is_anothers_child(&self, pass: &Pass, stat: &Stat) -> io::Result<bool> {
-        let Some(start) = pass.others.get(&stat.parent) else {
-            return Ok(false);
-        };
-        let parent = Identity {
-            pid: stat.parent,
-            start: *start,
-        };
-        Ok(!self.line()?.contains(&parent.pid) && Stat::is_now(&self.proc, parent)?)
+    /// Whether the parents that excused their children are still the processes
+    /// they were taken for. Only what is confirmed afterwards was so then.
+    fn confirm(&self, pass: &mut Pass) -> bool {
+        std::mem::take(&mut pass.parents)
+            .into_iter()
+            .all(
+                |(pid, start)| match Stat::is_now(&self.proc, Identity { pid, start }) {
+                    Ok(same) => same,
+                    Err(error) => {
+                        pass.failure = Some(error);
+                        false
+                    }
+                },
+            )
     }
 
     /// The host and its ancestors.

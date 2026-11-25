@@ -159,9 +159,14 @@ impl Tree {
         Ok(child.parent == parent.pid && Stat::is_now(&self.proc, parent)?)
     }
 
+    /// Whether `stat` is a member known already, or in the root's group.
+    fn is_known(&self, stat: &Stat) -> bool {
+        self.known.contains(&stat.identity()) || (self.held && stat.group == self.root.pid)
+    }
+
     /// What `stat` shows on its own.
     fn evidence(&self, stat: &Stat) -> io::Result<Evidence> {
-        if self.known.contains(&stat.identity()) || (self.held && stat.group == self.root.pid) {
+        if self.is_known(stat) {
             return Ok(Evidence::Member);
         }
         if stat.dead {
