@@ -162,8 +162,12 @@ harness does not copy.
 pub trait Harness: Send + Sync {
     fn kind(&self) -> HarnessKind;
     fn start(&self, seat: SeatPlan, tools: ToolEndpoint) -> StartFuture; // -> Arc<dyn AgentRunner>
+    fn stop(&self, seat_id: &str) -> StopFuture;
 }
 ```
+
+`stop` exists because a runner alone gives its host no way to await proof that
+nothing is left running.
 
 `AgentRunner`, `TurnRequest` and `TurnOutcome` in `tinyhivemind-hives` are
 unchanged. Process runners register under the coordinator's `runtime_id`.
