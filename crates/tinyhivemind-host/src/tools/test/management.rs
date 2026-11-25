@@ -125,13 +125,10 @@ async fn a_refused_actor_changes_nothing_and_reaches_no_creator() -> Result<()> 
             Err(Error::Unauthorized(_))
         ));
     }
-    assert!(coordinator.list_hives()?.is_empty());
-    assert!(
-        creator
-            .asked
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .is_empty()
+    assert_eq!(coordinator.list_hives()?, []);
+    assert_eq!(
+        *creator.asked.lock().unwrap_or_else(PoisonError::into_inner),
+        []
     );
     Ok(())
 }
