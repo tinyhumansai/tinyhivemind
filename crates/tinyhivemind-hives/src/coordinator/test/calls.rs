@@ -36,7 +36,8 @@ impl Held {
         self.drain.await.unwrap().unwrap()
     }
 }
-/// Register `ids`, each holding its turns open, in a hive `work`.
+/// Register `ids` in a hive `work`, each holding a turn open while its
+/// request is being received.
 async fn holding(
     c: &Coordinator,
     ids: &[&str],
@@ -48,8 +49,11 @@ async fn holding(
         add(c, id, move |request| {
             let (started, finish) = (started.clone(), finish.clone());
             Box::pin(async move {
-                started.send(request.clone()).unwrap();
-                finish.notified().await;
+                // Only the turn a test receives is held; later ones, such as
+                // the conductor's nudges, return at once.
+                if started.send(request.clone()).is_ok() {
+                    finish.notified().await;
+                }
                 Ok(done(&request))
             })
         })
