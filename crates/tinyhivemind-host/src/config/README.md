@@ -1,7 +1,7 @@
 # Deployment plan
 
-The crate-internal plan `deploy` builds one `OpenHuman` runtime from. It is
-**not an input format**: the public `HiveConfig` JSON and Markdown manifests,
+The plan a harness adapter builds a hive's seats from. It is
+**not an input format**: the former public `HiveConfig` JSON and Markdown manifests,
 `load_dir` and the YAML profile frontmatter are retired
 ([ADR 0034](../../../../docs/adr/0034-the-hive-language-defines-the-deployment.md)).
 A hive is defined once, as a `tinyhivemind-lang` package; `language::plan`
@@ -10,14 +10,17 @@ check and version. Nothing here opens a file or resolves a credential.
 
 `validate` checks what a single package cannot, because it needs the whole plan:
 references and identities, limits, permission narrowing and MCP consistency.
-`ValidatedHiveConfig` exposes immutable data through `config()`; consuming it
-with `into_config()` returns editable data without retaining validation proof.
-Parse failures are `ConfigError` values, exported from the crate root, and
-none carries input contents.
+`HiveConfig::validate_for` takes the harness's `HarnessRules`, because only the
+harness knows which cron expressions its scheduler accepts and which agent ids
+its built-in agents take. Consuming `ValidatedHiveConfig` with `into_config()`
+returns editable data without retaining validation proof. Failures are
+`ConfigError` values, and none carries input contents.
 
 | File | Responsibility |
 | --- | --- |
-| `mod.rs` | Module doc and internal exports |
+| `mod.rs` | Module doc and exports |
+| `error.rs` | `ConfigError` |
+| `rules.rs` | `HarnessRules`, the questions only a harness can answer |
 | `types.rs` | The plan's serde types and the immutable validated wrapper |
 | `parse.rs` | Inline-secret refusal over a plan value; the JSON entry points exist only for tests |
 | `validate.rs` | References, identities, limits, narrowing and MCP consistency |
@@ -39,7 +42,7 @@ ones. Runtime, profile and seat turn limits can only decrease.
 and rejects conflicting named connections. Membership MCP declarations assert
 the complete same set; use two seats to change connections.
 
-Adapter hive defaults use episode `round_width=1`, `revealed_width=1`. Each
+Plan hive defaults use episode `round_width=1`, `revealed_width=1`. Each
 width is independently bounded by runtime concurrency; blind rounds may be
 wider than revealed rounds. Core defaults remain unchanged. Other policies
 retain core and coordinator defaults.

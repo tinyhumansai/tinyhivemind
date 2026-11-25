@@ -370,7 +370,8 @@ specs, or start from the [gallery](crates/tinyhivemind-lang/examples/hives).
 
 `tinyhivemind-tools` renders native tool specs and records episode calls;
 `tinyhivemind-hives` coordinates durable messages across dynamic hives;
-`tinyhivemind-exec` runs a package's script tools and hooks; and
+`tinyhivemind-exec` runs a package's script tools and hooks;
+`tinyhivemind-host` holds what every agent harness shares; and
 `tinyhivemind-openhuman` deploys packages on OpenHuman. The
 [architecture guide](https://github.com/tinyhumansai/tinyhivemind/wiki/Architecture)
 and [crate dependency map](docs/crate-dependencies.md) show their boundaries.

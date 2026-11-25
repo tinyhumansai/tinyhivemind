@@ -17,8 +17,13 @@ set -euo pipefail
 # whose vocabulary dependency includes `anyhow` and `async-trait`.
 pure_crates=("tinyhivemind-core" "tinyhivemind-lang")
 tool_crates=("tinyhivemind-tools")
+# Host runs harnesses as processes (ADR 0035), so it may hold a runtime, but it
+# must never link one.
+host_crates=("tinyhivemind-host")
 
 forbidden_pure='tokio|futures|async-trait|axum|hyper|reqwest|ureq|curl|anyhow|rusqlite|git2|openhuman|tinyagents|tinytools'
+# Whole families: `openhuman-embed`, `tinyagents-harness` and so on.
+forbidden_host='(openhuman|tinyagents|tinyflows|tinymemory|tinyhivemind-openhuman)(-[a-z0-9-]+)?'
 forbidden_tools='tokio|futures|axum|hyper|reqwest|ureq|curl|rusqlite|git2|openhuman|tinyagents'
 
 status=0
@@ -49,12 +54,17 @@ for crate in "${tool_crates[@]}"; do
   check_crate "$crate" "$forbidden_tools"
 done
 
+for crate in "${host_crates[@]}"; do
+  check_crate "$crate" "$forbidden_host"
+done
+
 if [ "$status" -ne 0 ]; then
   echo >&2
-  echo "This crate is linked into the hot path of every agent turn and must" >&2
+  echo "A pure crate is linked into the hot path of every agent turn and must" >&2
   echo "compile in a host's default build. It must stay free of async" >&2
-  echo "runtimes, transports, HTTP clients and web frameworks." >&2
+  echo "runtimes, transports, HTTP clients and web frameworks. The host crate" >&2
+  echo "runs harnesses as processes and must link none (ADR 0035)." >&2
   exit 1
 fi
 
-echo "assert-pure: ${pure_crates[*]} ${tool_crates[*]} — clean"
+echo "assert-pure: ${pure_crates[*]} ${tool_crates[*]} ${host_crates[*]} — clean"

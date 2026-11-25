@@ -2,11 +2,13 @@
 
 `mod.rs` binds one runtime to a coordinator, retains identical attachment
 factories for repeated clones, and authorizes optional dynamic management.
-`types.rs` defines host factories, authorization requests, progress/usage hooks,
-and `RegisteredAgent`, the core bound-handle wrapper.
-`activation.rs` gates tool execution on durable registration and wakes a runner
-claimed concurrently before adapter activation. `activation_test.rs` covers
-waiting and already activated claims. `runner.rs` sends attributed JSON input through the supplied agent, continuing
+`types.rs` defines host factories, authorizers, progress/usage hooks, and
+`RegisteredAgent`, the core bound-handle wrapper; the requests, `TurnScope`,
+`TurnOptions` and prompt are `tinyhivemind-host`'s. `bridge.rs` puts the
+adapter's authorizers and factory behind that crate's ports, carrying the
+adapter's own errors through unchanged. The host's `Activation` gates tool
+execution on durable registration and wakes a runner claimed concurrently before
+adapter activation. `runner.rs` sends attributed JSON input through the supplied agent, continuing
 its stored session without clearing history. `test.rs` and `runner_test.rs`
 cover registration, ownership, management and real provider requests.
 
