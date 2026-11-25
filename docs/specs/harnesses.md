@@ -193,9 +193,18 @@ unchanged. Process runners register under the coordinator's `runtime_id`.
 
 Stop is: cancel, close event streams, SIGTERM, bounded wait, SIGKILL. Killing a
 process group is not enough. OpenClaw's broker has its own session, and Codex
-shell children outlived both interrupt and kill. Linux supervision must cover
-the whole tree (a cgroup or a subreaper); where it cannot, the runner refuses a
-configuration that spawns such children.
+shell children outlived both interrupt and kill.
+
+On Linux, stop covers the child, its process group, every process carrying the
+instance's random environment marker, and their sampled descendants. It repeats
+until consecutive scans find nobody and reports survivors as an error. A process
+that left the group, hides the marker and was orphaned before a sample saw it
+can escape, and stop then reports success. Elsewhere only the process group is
+covered, and the runner refuses a configuration that spawns such children.
+
+That is acceptable only while built-in tools are off. Before any harness may run
+a shell, its instance must be held by a cgroup or a subreaper helper, so that
+containment no longer depends on what a child chooses to reveal.
 
 ## Hive tools
 
