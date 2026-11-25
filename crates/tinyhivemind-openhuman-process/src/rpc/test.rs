@@ -86,7 +86,7 @@ async fn a_stream_the_server_drops_ends() {
 
 #[test]
 fn sse_frames_split_anywhere_are_put_back_together() {
-    let text = ": keep-alive\n\nevent: a\ndata: {\"n\":\n data: 1}\n\nevent: b\r\ndata: {\"n\":2}\r\n\r\n";
+    let text = ": keep-alive\n\nevent: a\ndata: {\"n\":\ndata: 1}\n\nevent: b\r\ndata: {\"n\":2}\r\n\r\n";
     for split in 0..text.len() {
         let mut parser = Parser::default();
         let mut found = parser.push(&text.as_bytes()[..split]);
