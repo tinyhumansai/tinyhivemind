@@ -439,7 +439,7 @@ fn effective(setup: &Setup) -> Value {
             server["timeout_secs"] = json!(30);
         }
     }
-    if fs::read_to_string(control.join("tools")).as_deref() == Ok("extra") {
+    if fs::read_to_string(control.join("tools")).is_ok_and(|text| text == "extra") {
         let entries = config["agent_registry"]["entries"].as_array_mut();
         for entry in entries.into_iter().flatten() {
             if let Some(tools) = entry["tool_allowlist"].as_array_mut() {
