@@ -1,4 +1,5 @@
 //! Agent registration, messaging, and conducted scheduling.
+mod calls;
 mod conduct;
 mod messaging;
 mod observe;
@@ -21,7 +22,7 @@ use tokio::sync::{Mutex as AsyncMutex, Notify, watch};
 pub use types::{
     AgentRegistration, AgentRunner, CoordinatorOptions, Destination, EpisodeAction, EpisodeContext,
     EpisodePhase, EpisodeStatus, HOST_ID, HiveInfo, InterruptedTurn, Message, Receipt, RunReport,
-    SendMessage, TurnDisposition, TurnFuture, TurnOutcome, TurnRequest,
+    SendMessage, TurnCall, TurnDisposition, TurnFuture, TurnOutcome, TurnRequest,
 };
 
 /// Cloneable shared coordinator; all clones share runners, inboxes and locks.

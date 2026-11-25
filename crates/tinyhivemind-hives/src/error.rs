@@ -51,6 +51,19 @@ pub enum Error {
     /// No active bound episode turn admits the action.
     #[error("stale episode {0}")]
     StaleEpisode(String),
+    /// An identified call names a turn that is not its agent's running one,
+    /// or its agent has no running turn.
+    #[error("turn {turn_id} is not the running turn of {agent_id}")]
+    StaleTurn {
+        /// Agent the call was made as.
+        agent_id: String,
+        /// Turn the call named.
+        turn_id: String,
+    },
+    /// An identified call reuses a `call` its turn already made with another
+    /// tool or other arguments.
+    #[error("call {0} was already made with another tool or arguments")]
+    CallReused(String),
     /// Store revision changed before commit.
     #[error("storage revision conflict: expected {expected}, found {actual}")]
     RevisionConflict {
