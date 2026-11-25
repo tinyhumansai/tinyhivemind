@@ -1,5 +1,6 @@
 //! A scripted runner in this process, and plans to start seats with.
 use crate::harness::{CancelFuture, CancellableRunner, Error, SeatPlan};
+use anyhow::{Context as _, Result};
 use serde_json::Value;
 use std::path::Path;
 use std::sync::{Arc, Mutex};

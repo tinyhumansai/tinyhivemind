@@ -12,7 +12,7 @@ mod types;
 pub use directory::InstanceDir;
 pub use error::{Error, Result};
 pub use instance::Instance;
-pub use pipe::{JsonLines, LineError, LineReceiver, LineSender, Limits};
+pub use pipe::{JsonLines, Limits, LineError, LineReceiver, LineSender};
 pub use scope::containment;
 pub use types::{Containment, Exit, Launch, StopPolicy};
 

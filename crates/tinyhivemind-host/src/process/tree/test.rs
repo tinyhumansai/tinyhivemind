@@ -1,5 +1,6 @@
 //! Attribution over a fabricated process table, and signalling real ones.
 use super::{Identity, Stat, Tree, signal};
+use anyhow::{Context as _, Result};
 use rustix::process::Signal;
 use std::fs;
 use std::path::Path;
@@ -59,11 +60,7 @@ fn tree(proc: &tempfile::TempDir) -> Tree {
 }
 
 fn pids(tree: &mut Tree) -> Vec<u32> {
-    tree.scan()
-        ?
-        .into_iter()
-        .map(|member| member.pid)
-        .collect()
+    tree.scan()?.into_iter().map(|member| member.pid).collect()
 }
 
 fn children(proc: &tempfile::TempDir, pid: u32, list: &str) -> Result<()> {
@@ -194,7 +191,9 @@ fn alive(proc: &Path, member: Identity) -> bool {
 
 /// The identity of a real process.
 fn identity(pid: u32) -> Identity {
-    Stat::read(Path::new("/proc"), pid).context("missing")?.identity()
+    Stat::read(Path::new("/proc"), pid)
+        .context("missing")?
+        .identity()
 }
 
 #[test]
@@ -203,8 +202,7 @@ fn a_signal_reaches_the_process_it_names_and_no_later_owner_of_its_pid() -> Resu
     let mut child = Command::new("/bin/sleep")
         .arg("300")
         .stdin(Stdio::null())
-        .spawn()
-        ?;
+        .spawn()?;
     let real = identity(child.id());
     let stale = Identity {
         start: real.start + 1,
@@ -229,6 +227,9 @@ fn a_signal_the_kernel_refuses_is_an_error() -> Result<()> {
         return;
     }
     let refused = signal(Path::new("/proc"), identity(1), Signal::TERM);
-    assert_eq!(refused.err().context("expected a failure")?, rustix::io::Errno::PERM);
+    assert_eq!(
+        refused.err().context("expected a failure")?,
+        rustix::io::Errno::PERM
+    );
     Ok(())
 }

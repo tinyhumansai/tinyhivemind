@@ -191,7 +191,9 @@ impl Seat {
                 READY,
             )
             .await?;
-        let pid = hello["pid"].as_u64().and_then(|pid| u32::try_from(pid).ok());
+        let pid = hello["pid"]
+            .as_u64()
+            .and_then(|pid| u32::try_from(pid).ok());
         let found = hello["tools"].as_array().cloned().unwrap_or_default();
         let found: Vec<String> = found
             .iter()
@@ -214,7 +216,9 @@ impl Seat {
 
     /// The live child, started again if it died.
     async fn revive<'a>(&self, live: &'a mut Option<Live>) -> Result<&'a mut Live> {
-        let dead = live.as_ref().is_none_or(|live| live.instance.exit().is_some());
+        let dead = live
+            .as_ref()
+            .is_none_or(|live| live.instance.exit().is_some());
         if dead && self.shared.fault != Fault::StaysDown {
             if let Some(old) = live.take() {
                 old.instance.stop(async {}, STOP).await?;
@@ -229,7 +233,9 @@ impl Seat {
         let ended = self.turn(&mut live, &request).await;
         if ended.is_err()
             && self.shared.fault == Fault::Replays
-            && live.as_ref().is_some_and(|live| live.instance.exit().is_some())
+            && live
+                .as_ref()
+                .is_some_and(|live| live.instance.exit().is_some())
         {
             return self.turn(&mut live, &request).await;
         }

@@ -1,6 +1,7 @@
 //! One turn at a time, one session for life, and no turn twice.
 use super::support::{Handle, Scripted, Turn, request};
 use crate::harness::SeatRunner;
+use anyhow::{Context as _, Result};
 use std::sync::Arc;
 use std::time::Duration;
 use tinyhivemind_hives::AgentRunner;
@@ -17,14 +18,19 @@ async fn logged(inner: &Scripted, expected: &[&str]) -> Result<()> {
         }
     };
     let waited = tokio::time::timeout(Duration::from_secs(30), reached).await;
-    assert!(waited.is_ok(), "{:?} never became {expected:?}", inner.log());
+    assert!(
+        waited.is_ok(),
+        "{:?} never became {expected:?}",
+        inner.log()
+    );
     Ok(())
 }
 
 async fn refusal(seat: &SeatRunner, turn_id: &str, session: Option<&str>) -> String {
     seat.run(request(turn_id, session))
         .await
-        .err().context("expected a failure")?
+        .err()
+        .context("expected a failure")?
         .to_string()
 }
 
@@ -109,7 +115,10 @@ fn a_turn_abandoned_with_its_runtime_is_cancelled_before_the_next() -> Result<()
     let runtime = tokio::runtime::Runtime::new()?;
     let mut first = Some(first);
     runtime.block_on(async {
-        let polled = tokio::time::timeout(Duration::from_millis(10), first.as_mut().context("missing")?);
+        let polled = tokio::time::timeout(
+            Duration::from_millis(10),
+            first.as_mut().context("missing")?,
+        );
         assert!(polled.await.is_err());
     });
     drop(runtime);
@@ -137,7 +146,11 @@ async fn a_turn_id_runs_once_whatever_became_of_it() -> Result<()> {
         assert!(refused.contains("already started"), "{refused}");
     }
     assert!(refusal(&seat, "", Some("s")).await.contains("no turn id"));
-    let runs = inner.log().iter().filter(|entry| entry.starts_with("run")).count();
+    let runs = inner
+        .log()
+        .iter()
+        .filter(|entry| entry.starts_with("run"))
+        .count();
     assert_eq!(runs, 3);
     Ok(())
 }
@@ -166,7 +179,11 @@ async fn an_empty_session_is_an_error() {
 
 #[tokio::test]
 async fn a_changed_session_is_an_error_and_the_seat_keeps_its_own() -> Result<()> {
-    let inner = Scripted::new(&[Turn::Session("s"), Turn::Session("other"), Turn::Session("s")]);
+    let inner = Scripted::new(&[
+        Turn::Session("s"),
+        Turn::Session("other"),
+        Turn::Session("s"),
+    ]);
     let seat = seat(&inner);
     seat.run(request("t1", None)).await?;
     let refused = refusal(&seat, "t2", Some("s")).await;
@@ -190,7 +207,10 @@ async fn a_request_for_another_session_never_reaches_the_harness() -> Result<()>
 async fn a_resumed_session_must_come_back_as_itself() {
     let inner = Scripted::new(&[Turn::Session("new")]);
     let refused = refusal(&seat(&inner), "t1", Some("old")).await;
-    assert!(refused.contains("old") && refused.contains("new"), "{refused}");
+    assert!(
+        refused.contains("old") && refused.contains("new"),
+        "{refused}"
+    );
 }
 
 #[tokio::test]

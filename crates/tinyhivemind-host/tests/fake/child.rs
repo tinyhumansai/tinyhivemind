@@ -95,7 +95,10 @@ impl Child {
     fn session(&self) -> Option<(String, u64)> {
         let text = fs::read_to_string("session.json").ok()?;
         let session: Value = serde_json::from_str(&text).ok()?;
-        Some((session["id"].as_str()?.to_owned(), session["turns"].as_u64()?))
+        Some((
+            session["id"].as_str()?.to_owned(),
+            session["turns"].as_u64()?,
+        ))
     }
 
     fn turn(&mut self, request: &Value) -> std::io::Result<()> {
@@ -109,7 +112,11 @@ impl Child {
             }
             (None, _) => (self.new_session()?, 0),
         };
-        let turns = if self.fault == "forgetful" { 1 } else { turns + 1 };
+        let turns = if self.fault == "forgetful" {
+            1
+        } else {
+            turns + 1
+        };
         write_whole(
             Path::new("session.json"),
             &json!({"id": id, "turns": turns}).to_string(),

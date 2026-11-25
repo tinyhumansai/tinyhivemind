@@ -4,6 +4,7 @@ use crate::harness::{
     Approver, DenyAll, Error, Event, HarnessKind, Progress, Started, ToolApproval, ToolDecision,
     ToolEndpoint, TurnUsage,
 };
+use anyhow::{Context as _, Result};
 use serde_json::json;
 use std::path::Path;
 
@@ -24,7 +25,12 @@ fn each_kind_has_the_name_a_package_uses() -> Result<()> {
 
 #[test]
 fn an_endpoint_never_shows_its_bearer() -> Result<()> {
-    let endpoint = ToolEndpoint::new("hivemind", "http://127.0.0.1:9/mcp", "s3cret", ["post".into()]);
+    let endpoint = ToolEndpoint::new(
+        "hivemind",
+        "http://127.0.0.1:9/mcp",
+        "s3cret",
+        ["post".into()],
+    );
     let text = format!("{endpoint:?} {endpoint:#?}");
     assert!(!text.contains("s3cret"), "{text}");
     assert!(text.contains("hivemind") && text.contains("redacted"));
@@ -88,7 +94,10 @@ fn events_have_a_pinned_wire_form() -> Result<()> {
             json!({"event": "started", "pid": 7, "version": "1.2", "tools": ["a"]}),
         ),
         (
-            Event::Usage { turn_id: "t".into(), usage },
+            Event::Usage {
+                turn_id: "t".into(),
+                usage,
+            },
             json!({"event": "usage", "turn_id": "t", "usage": {"input_tokens": 1,
                 "cached_input_tokens": 2, "output_tokens": 3, "reasoning_tokens": 4}}),
         ),
@@ -103,12 +112,18 @@ fn events_have_a_pinned_wire_form() -> Result<()> {
                 "progress": {"kind": "text", "delta": "d"}}),
         ),
         (
-            progress(Progress::ToolCall { call_id: "c".into(), tool: "a".into() }),
+            progress(Progress::ToolCall {
+                call_id: "c".into(),
+                tool: "a".into(),
+            }),
             json!({"event": "progress", "turn_id": "t",
                 "progress": {"kind": "tool_call", "call_id": "c", "tool": "a"}}),
         ),
         (
-            progress(Progress::ToolResult { call_id: "c".into(), failed: true }),
+            progress(Progress::ToolResult {
+                call_id: "c".into(),
+                failed: true,
+            }),
             json!({"event": "progress", "turn_id": "t",
                 "progress": {"kind": "tool_result", "call_id": "c", "failed": true}}),
         ),

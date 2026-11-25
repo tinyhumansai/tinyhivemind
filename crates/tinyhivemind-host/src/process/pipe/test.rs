@@ -1,5 +1,6 @@
 //! Framing, bounds and cancellation of the piped streams.
-use super::{JsonLines, LineError, Limits, Tail, drain};
+use super::{JsonLines, Limits, LineError, Tail, drain};
+use anyhow::{Context as _, Result};
 use serde_json::{Value, json};
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream, duplex};
@@ -40,7 +41,10 @@ async fn each_value_is_one_line_in_each_direction() -> Result<()> {
         },
         reply
     );
-    assert_eq!(received, [json!({"b": 1}), json!([3]), json!("unterminated")]);
+    assert_eq!(
+        received,
+        [json!({"b": 1}), json!([3]), json!("unterminated")]
+    );
     drop(lines);
     let mut written = String::new();
     child_in.read_to_string(&mut written).await?;
@@ -52,7 +56,13 @@ async fn each_value_is_one_line_in_each_direction() -> Result<()> {
 async fn a_malformed_line_is_an_error_and_the_next_is_still_read() -> Result<()> {
     let (mut lines, _child_in, child_out) = connect(LIMITS);
     tokio::spawn(async move { finish(child_out, b"not json\n{}\n").await });
-    let error = lines.receiver.recv().await.context("missing")?.err().context("expected a failure")?;
+    let error = lines
+        .receiver
+        .recv()
+        .await
+        .context("missing")?
+        .err()
+        .context("expected a failure")?;
     assert!(matches!(error, LineError::Malformed(_)));
     assert_eq!(lines.receiver.recv().await.context("missing")??, json!({}));
     assert!(lines.receiver.recv().await.is_none());
@@ -65,7 +75,13 @@ async fn an_overlong_line_is_an_error_and_the_next_is_still_read() -> Result<()>
     let mut bytes = vec![b'1'; 100];
     bytes.extend_from_slice(b"\n7\n");
     tokio::spawn(async move { finish(child_out, &bytes).await });
-    let error = lines.receiver.recv().await.context("missing")?.err().context("expected a failure")?;
+    let error = lines
+        .receiver
+        .recv()
+        .await
+        .context("missing")?
+        .err()
+        .context("expected a failure")?;
     assert!(matches!(error, LineError::TooLong { limit: 64 }));
     assert_eq!(lines.receiver.recv().await.context("missing")??, json!(7));
     Ok(())
@@ -112,9 +128,11 @@ async fn a_queue_that_is_read_never_overflows() -> Result<()> {
     for number in 0..100 {
         child_out
             .write_all(format!("{number}\n").as_bytes())
-            .await
-            ?;
-        assert_eq!(lines.receiver.recv().await.context("missing")??, json!(number));
+            .await?;
+        assert_eq!(
+            lines.receiver.recv().await.context("missing")??,
+            json!(number)
+        );
     }
     Ok(())
 }
@@ -149,9 +167,7 @@ async fn sending_to_a_child_that_closed_its_input_is_an_error() -> Result<()> {
             }
         }
     };
-    let error = tokio::time::timeout(Duration::from_secs(10), closed)
-        .await
-        ?;
+    let error = tokio::time::timeout(Duration::from_secs(10), closed).await?;
     assert!(matches!(error, LineError::Closed));
     Ok(())
 }

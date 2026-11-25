@@ -185,8 +185,9 @@ impl Tree {
                 .filter(|stat| !members.contains_key(&stat.pid))
                 .filter(|stat| {
                     members.get(&stat.parent).is_some_and(|parent| {
-                        Stat::read(&self.proc, stat.pid)
-                            .is_some_and(|now| now.start == stat.start && self.is_child(&now, *parent))
+                        Stat::read(&self.proc, stat.pid).is_some_and(|now| {
+                            now.start == stat.start && self.is_child(&now, *parent)
+                        })
                     })
                 })
                 .map(Stat::identity)

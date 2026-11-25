@@ -29,7 +29,9 @@ impl TurnUsage {
                 .cached_input_tokens
                 .checked_sub(earlier.cached_input_tokens)?,
             output_tokens: self.output_tokens.checked_sub(earlier.output_tokens)?,
-            reasoning_tokens: self.reasoning_tokens.checked_sub(earlier.reasoning_tokens)?,
+            reasoning_tokens: self
+                .reasoning_tokens
+                .checked_sub(earlier.reasoning_tokens)?,
         })
     }
 }

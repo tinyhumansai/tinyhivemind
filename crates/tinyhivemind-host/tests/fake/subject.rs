@@ -1,5 +1,5 @@
 //! The fake harness as a subject of the conformance suite.
-use super::client::{Fault, FakeHarness};
+use super::client::{FakeHarness, Fault};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::fs;
@@ -122,12 +122,12 @@ impl Subject for FakeSubject {
     /// Whatever runs in this subject's instance directory.
     fn processes(&self) -> Vec<u32> {
         let instance = self.root.path().join("instance");
-        fs::read_dir("/proc")
-            ?
+        fs::read_dir("/proc")?
             .flatten()
             .filter_map(|entry| entry.file_name().to_str()?.parse().ok())
             .filter(|pid: &u32| {
-                fs::read_link(format!("/proc/{pid}/cwd")).is_ok_and(|cwd| cwd.starts_with(&instance))
+                fs::read_link(format!("/proc/{pid}/cwd"))
+                    .is_ok_and(|cwd| cwd.starts_with(&instance))
             })
             .collect()
     }

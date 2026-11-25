@@ -27,7 +27,9 @@ impl InstanceDir {
     pub fn create(root: impl Into<PathBuf>) -> Result<Self> {
         let root = root.into();
         if !root.is_absolute() {
-            return Err(Error::Launch("the instance directory is not an absolute path"));
+            return Err(Error::Launch(
+                "the instance directory is not an absolute path",
+            ));
         }
         let state = root.join("state");
         private(&root)?;

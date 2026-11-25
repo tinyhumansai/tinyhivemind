@@ -99,7 +99,11 @@ impl JsonLines {
                 waiting,
             },
         };
-        (lines, write(input, writes), read(output, limits.line, queue))
+        (
+            lines,
+            write(input, writes),
+            read(output, limits.line, queue),
+        )
     }
 }
 
