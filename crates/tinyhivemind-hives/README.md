@@ -25,6 +25,11 @@ The host reads everything with `read_transcript`, including replies to
 episode without hiding the message, and `release_with` hands a parked agent
 a note on its next turn.
 
+A host serving tools out of process identifies each state-changing call with
+a `TurnCall` and uses the `*_in_turn` entry points: a retry is answered from a
+record written with the effect, and a call naming a turn that is not running is
+refused.
+
 Direct sends return durable receipts without awaiting peers. `read_direct`
 exposes only the caller/peer pair, including returned replies, and starts no
 turn. Hive reads enforce membership and private thread audiences.

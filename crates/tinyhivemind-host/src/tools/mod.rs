@@ -11,7 +11,7 @@ use crate::{
 };
 pub use call::ToolCall;
 use serde_json::{Value, json};
-use tinyhivemind_hives::{Coordinator, Destination, EpisodeAction, SendMessage};
+use tinyhivemind_hives::{Coordinator, Destination, EpisodeAction, SendMessage, TurnCall};
 pub use types::Kind;
 
 /// Executes hive tool calls against a coordinator under the host's policies.
@@ -51,6 +51,32 @@ impl<'a> Belt<'a> {
         self.management = Some(management);
         self
     }
+    /// Run exactly the send and management policy [`Self::call`] would run
+    /// for `call`, with no effect.
+    ///
+    /// A host that has to act between authorization and dispatch, such as
+    /// running a package hook, calls this first. [`Self::call`] still checks
+    /// again, so a policy that changes between the two is judged by the
+    /// second check.
+    ///
+    /// # Errors
+    /// The send policy's refusal, disabled management, the management
+    /// authorizer's refusal, or a memory contract that does not decode.
+    pub fn authorize(&self, call: &ToolCall) -> Result<()> {
+        if let (Some(policy), Some(request)) = (self.send_policy, call.outbound()) {
+            policy.authorize_in_session(call.actor(), &request, call.session())?;
+        }
+        if matches!(
+            call.kind(),
+            Kind::CreateHive | Kind::CreateAgent | Kind::JoinHive | Kind::LeaveHive
+        ) {
+            let management = self.management.ok_or(Error::ManagementDisabled)?;
+            management
+                .authorizer
+                .authorize(call.actor(), &call.management()?)?;
+        }
+        Ok(())
+    }
     /// Execute one validated call as its bound actor.
     ///
     /// # Errors
@@ -59,7 +85,15 @@ impl<'a> Belt<'a> {
     pub async fn call(&self, call: &ToolCall) -> Result<Value> {
         let coordinator = self.coordinator;
         let actor = call.actor();
-        if let (Some(policy), Some(request)) = (self.send_policy, call.outbound()) {
+        // A recorded identified call was authorized when it acted; its retry
+        // is answered from the record and acts on nothing, so policy is not
+        // asked again.
+        let recorded = match call.turn_call() {
+            Some(turn) => coordinator.call_recorded(&turn)?,
+            None => false,
+        };
+        if let (false, Some(policy), Some(request)) = (recorded, self.send_policy, call.outbound())
+        {
             policy.authorize_in_session(actor, &request, call.session())?;
         }
         match call.kind() {
@@ -110,7 +144,9 @@ impl<'a> Belt<'a> {
                 self.submit(call, EpisodeAction::Complete { body }).await
             }
             Kind::CreateHive | Kind::CreateAgent | Kind::JoinHive | Kind::LeaveHive => {
-                self.manage(actor, call.management()?).await
+                let turn = call.turn_call();
+                self.manage_as(actor, call.management()?, turn.as_ref(), recorded)
+                    .await
             }
         }
     }
@@ -119,11 +155,29 @@ impl<'a> Belt<'a> {
     /// # Errors
     /// Disabled management, host denial, agent creation or coordinator errors.
     pub async fn manage(&self, actor: &str, request: ManagementRequest) -> Result<Value> {
+        self.manage_as(actor, request, None, false).await
+    }
+    /// [`Self::manage`], through the coordinator's identified calls when `turn`
+    /// is given, without asking the authorizer again for a `recorded` one.
+    /// Creating an agent is the creator's, outside them.
+    async fn manage_as(
+        &self,
+        actor: &str,
+        request: ManagementRequest,
+        turn: Option<&TurnCall>,
+        recorded: bool,
+    ) -> Result<Value> {
         let management = self.management.ok_or(Error::ManagementDisabled)?;
-        management.authorizer.authorize(actor, &request)?;
+        if !recorded {
+            management.authorizer.authorize(actor, &request)?;
+        }
+        let coordinator = self.coordinator;
         match request {
             ManagementRequest::CreateHive(hive) => {
-                self.coordinator.create_hive(hive.clone()).await?;
+                match turn {
+                    Some(turn) => coordinator.create_hive_in_turn(turn, hive.clone()).await?,
+                    None => coordinator.create_hive(hive.clone()).await?,
+                }
                 Ok(serde_json::to_value(hive)?)
             }
             ManagementRequest::CreateAgent {
@@ -142,34 +196,59 @@ impl<'a> Belt<'a> {
                 Ok(json!({"agent_id":agent_id}))
             }
             ManagementRequest::JoinHive { hive_id, agent_id } => {
-                self.coordinator.join_hive(&hive_id, &agent_id).await?;
+                match turn {
+                    Some(turn) => {
+                        coordinator
+                            .join_hive_in_turn(turn, &hive_id, &agent_id)
+                            .await?;
+                    }
+                    None => coordinator.join_hive(&hive_id, &agent_id).await?,
+                }
                 Ok(json!({"joined":true}))
             }
             ManagementRequest::LeaveHive { hive_id, agent_id } => {
-                self.coordinator.leave_hive(&hive_id, &agent_id).await?;
+                match turn {
+                    Some(turn) => {
+                        coordinator
+                            .leave_hive_in_turn(turn, &hive_id, &agent_id)
+                            .await?;
+                    }
+                    None => coordinator.leave_hive(&hive_id, &agent_id).await?,
+                }
                 Ok(json!({"left":true}))
             }
         }
     }
     async fn send(&self, call: &ToolCall, destination: Destination) -> Result<Value> {
-        let receipt = self
-            .coordinator
-            .send(SendMessage {
-                message_id: call.text("message_id"),
-                sender: call.actor().to_owned(),
-                destination,
-                body: call.text("body"),
-                thread: call.integer("thread"),
-                only_for: call.strings("only_for"),
-                starters: Vec::new(),
-            })
-            .await?;
+        let message = SendMessage {
+            message_id: call.text("message_id"),
+            sender: call.actor().to_owned(),
+            destination,
+            body: call.text("body"),
+            thread: call.integer("thread"),
+            only_for: call.strings("only_for"),
+            starters: Vec::new(),
+        };
+        let receipt = match call.turn_call() {
+            Some(turn) => self.coordinator.send_in_turn(&turn, message).await?,
+            None => self.coordinator.send(message).await?,
+        };
         Ok(serde_json::to_value(receipt)?)
     }
     async fn submit(&self, call: &ToolCall, action: EpisodeAction) -> Result<Value> {
-        self.coordinator
-            .submit_action(call.actor(), &call.text("episode_id"), action)
-            .await?;
+        let episode = call.text("episode_id");
+        match call.turn_call() {
+            Some(turn) => {
+                self.coordinator
+                    .submit_action_in_turn(&turn, &episode, action)
+                    .await?;
+            }
+            None => {
+                self.coordinator
+                    .submit_action(call.actor(), &episode, action)
+                    .await?;
+            }
+        }
         Ok(json!({"accepted":true}))
     }
 }

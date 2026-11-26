@@ -1,4 +1,5 @@
 //! Agent registration, messaging, and conducted scheduling.
+mod calls;
 mod conduct;
 mod messaging;
 mod observe;
@@ -21,7 +22,7 @@ use tokio::sync::{Mutex as AsyncMutex, Notify, watch};
 pub use types::{
     AgentRegistration, AgentRunner, CoordinatorOptions, Destination, EpisodeAction, EpisodeContext,
     EpisodePhase, EpisodeStatus, HOST_ID, HiveInfo, InterruptedTurn, Message, Receipt, RunReport,
-    SendMessage, TurnDisposition, TurnFuture, TurnOutcome, TurnRequest,
+    SendMessage, TurnCall, TurnDisposition, TurnFuture, TurnOutcome, TurnRequest,
 };
 
 /// Cloneable shared coordinator; all clones share runners, inboxes and locks.
@@ -202,27 +203,7 @@ impl Coordinator {
     pub async fn create_hive(&self, hive: HiveInfo) -> Result<()> {
         identifier(&hive.hive_id, "hive id")?;
         identifier(&hive.name, "hive name")?;
-        self.update(|state| {
-            let mut unique = BTreeSet::new();
-            for member in &hive.members {
-                if !state.agents.contains_key(member) {
-                    return Err(Error::UnknownAgent(member.clone()));
-                }
-                if !unique.insert(member) {
-                    return Err(Error::DuplicateMember(member.clone()));
-                }
-            }
-            if let Some(existing) = state.hives.get(&hive.hive_id) {
-                return if existing == &hive {
-                    Ok(())
-                } else {
-                    Err(Error::HiveConflict(hive.hive_id.clone()))
-                };
-            }
-            state.hives.insert(hive.hive_id.clone(), hive.clone());
-            Ok(())
-        })
-        .await
+        self.update(|state| create_hive_state(state, &hive)).await
     }
     /// List current dynamic hive definitions in ID order.
     /// # Errors
@@ -274,33 +255,15 @@ impl Coordinator {
     /// # Errors
     /// Returns unknown hive/agent or storage errors.
     pub async fn join_hive(&self, hive_id: &str, agent_id: &str) -> Result<()> {
-        self.update(|state| {
-            known_agent(state, agent_id)?;
-            let hive = state
-                .hives
-                .get_mut(hive_id)
-                .ok_or_else(|| Error::UnknownHive(hive_id.into()))?;
-            if !hive.members.iter().any(|id| id == agent_id) {
-                hive.members.push(agent_id.into());
-            }
-            Ok(())
-        })
-        .await
+        self.update(|state| join_hive_state(state, hive_id, agent_id))
+            .await
     }
     /// Leave a hive; active turns keep their captured authorization and history.
     /// # Errors
     /// Returns unknown hive/agent or storage errors.
     pub async fn leave_hive(&self, hive_id: &str, agent_id: &str) -> Result<()> {
-        self.update(|state| {
-            known_agent(state, agent_id)?;
-            let hive = state
-                .hives
-                .get_mut(hive_id)
-                .ok_or_else(|| Error::UnknownHive(hive_id.into()))?;
-            hive.members.retain(|id| id != agent_id);
-            Ok(())
-        })
-        .await
+        self.update(|state| leave_hive_state(state, hive_id, agent_id))
+            .await
     }
     /// Record an action for the caller's currently running episode.
     /// # Errors
@@ -311,51 +274,8 @@ impl Coordinator {
         episode_id: &str,
         action: EpisodeAction,
     ) -> Result<()> {
-        self.update(|state| {
-            let running = state
-                .running
-                .get_mut(agent_id)
-                .ok_or_else(|| Error::StaleEpisode(episode_id.into()))?;
-            let episode = running
-                .request
-                .episode
-                .as_ref()
-                .filter(|ep| ep.episode_id == episode_id)
-                .ok_or_else(|| Error::StaleEpisode(episode_id.into()))?;
-            if let EpisodeAction::Ask { agents, .. } = &action {
-                if agents.is_empty() {
-                    return Err(Error::InvalidIdentifier("ask recipients"));
-                }
-                let hive = running
-                    .request
-                    .memberships
-                    .iter()
-                    .find(|hive| hive.hive_id == episode.hive_id)
-                    .ok_or_else(|| Error::StaleEpisode(episode_id.into()))?;
-                let episode_members = state
-                    .episodes
-                    .iter()
-                    .find(|record| record.episode_id == episode_id)
-                    .map(|record| &record.hive.members)
-                    .ok_or_else(|| Error::StaleEpisode(episode_id.into()))?;
-                let mut unique = BTreeSet::new();
-                for target in agents {
-                    if target == agent_id
-                        || !hive.members.contains(target)
-                        || !episode_members.contains(target)
-                        || !unique.insert(target)
-                    {
-                        return Err(Error::NotMember {
-                            agent_id: target.clone(),
-                            hive_id: hive.hive_id.clone(),
-                        });
-                    }
-                }
-            }
-            running.actions.push(action.clone());
-            Ok(())
-        })
-        .await
+        self.update(|state| stage_action(state, agent_id, episode_id, &action))
+            .await
     }
     /// Release a parked agent after the host settles its approval.
     /// Equivalent to [`Self::release_with`] without a note.
@@ -438,6 +358,99 @@ fn identifier(value: &str, field: &'static str) -> Result<()> {
     } else {
         Ok(())
     }
+}
+/// Create `hive` in `state`; an identical definition is already there.
+fn create_hive_state(state: &mut StoredState, hive: &HiveInfo) -> Result<()> {
+    let mut unique = BTreeSet::new();
+    for member in &hive.members {
+        if !state.agents.contains_key(member) {
+            return Err(Error::UnknownAgent(member.clone()));
+        }
+        if !unique.insert(member) {
+            return Err(Error::DuplicateMember(member.clone()));
+        }
+    }
+    if let Some(existing) = state.hives.get(&hive.hive_id) {
+        return if existing == hive {
+            Ok(())
+        } else {
+            Err(Error::HiveConflict(hive.hive_id.clone()))
+        };
+    }
+    state.hives.insert(hive.hive_id.clone(), hive.clone());
+    Ok(())
+}
+/// Add `agent_id` to `hive_id` in `state`, unless it is a member already.
+fn join_hive_state(state: &mut StoredState, hive_id: &str, agent_id: &str) -> Result<()> {
+    known_agent(state, agent_id)?;
+    let hive = state
+        .hives
+        .get_mut(hive_id)
+        .ok_or_else(|| Error::UnknownHive(hive_id.into()))?;
+    if !hive.members.iter().any(|id| id == agent_id) {
+        hive.members.push(agent_id.into());
+    }
+    Ok(())
+}
+/// Remove `agent_id` from `hive_id` in `state`.
+fn leave_hive_state(state: &mut StoredState, hive_id: &str, agent_id: &str) -> Result<()> {
+    known_agent(state, agent_id)?;
+    let hive = state
+        .hives
+        .get_mut(hive_id)
+        .ok_or_else(|| Error::UnknownHive(hive_id.into()))?;
+    hive.members.retain(|id| id != agent_id);
+    Ok(())
+}
+/// Stage `action` on `agent_id`'s running turn in `state`, for `episode_id`.
+fn stage_action(
+    state: &mut StoredState,
+    agent_id: &str,
+    episode_id: &str,
+    action: &EpisodeAction,
+) -> Result<()> {
+    let running = state
+        .running
+        .get_mut(agent_id)
+        .ok_or_else(|| Error::StaleEpisode(episode_id.into()))?;
+    let episode = running
+        .request
+        .episode
+        .as_ref()
+        .filter(|ep| ep.episode_id == episode_id)
+        .ok_or_else(|| Error::StaleEpisode(episode_id.into()))?;
+    if let EpisodeAction::Ask { agents, .. } = action {
+        if agents.is_empty() {
+            return Err(Error::InvalidIdentifier("ask recipients"));
+        }
+        let hive = running
+            .request
+            .memberships
+            .iter()
+            .find(|hive| hive.hive_id == episode.hive_id)
+            .ok_or_else(|| Error::StaleEpisode(episode_id.into()))?;
+        let episode_members = state
+            .episodes
+            .iter()
+            .find(|record| record.episode_id == episode_id)
+            .map(|record| &record.hive.members)
+            .ok_or_else(|| Error::StaleEpisode(episode_id.into()))?;
+        let mut unique = BTreeSet::new();
+        for target in agents {
+            if target == agent_id
+                || !hive.members.contains(target)
+                || !episode_members.contains(target)
+                || !unique.insert(target)
+            {
+                return Err(Error::NotMember {
+                    agent_id: target.clone(),
+                    hive_id: hive.hive_id.clone(),
+                });
+            }
+        }
+    }
+    running.actions.push(action.clone());
+    Ok(())
 }
 fn known_agent(state: &StoredState, id: &str) -> Result<()> {
     if state.agents.contains_key(id) {

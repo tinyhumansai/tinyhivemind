@@ -34,3 +34,8 @@ from current memberships. Every episode freezes its settings and scheduled job
 identity. Transcript rows persist scheduled authority on `Message`, while
 running reservations retain it in `TurnRequest`; legacy rows default to no
 explicit settings or scheduled origin.
+
+`RunningTurn::calls` maps each identified call of the turn to its
+`CallRecord` (tool, arguments, result). It is omitted when empty, so a
+snapshot written before it existed loads unchanged and a turn without
+identified calls serializes as before.

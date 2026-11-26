@@ -179,6 +179,24 @@ pub struct SendMessage {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub starters: Vec<String>,
 }
+/// One state-changing call made from a running turn, and who made it.
+///
+/// `(agent_id, turn_id, call)` identifies it: the first call with an identity
+/// acts and is recorded with its effect, a retry with the same `tool` and
+/// `arguments` returns the recorded result, and any other reuse is refused.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TurnCall {
+    /// Agent the host bound the call to.
+    pub agent_id: String,
+    /// Turn the call says it belongs to; it must be the agent's running one.
+    pub turn_id: String,
+    /// Caller-chosen identity, unique per intended action within the turn.
+    pub call: String,
+    /// Tool the call names.
+    pub tool: String,
+    /// Its arguments, without `turn_id` or `call`.
+    pub arguments: serde_json::Value,
+}
 /// Receipt returned without waiting for the destination agent.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Receipt {

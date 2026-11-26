@@ -104,15 +104,18 @@ impl Observer for Ignore {
     fn event(&self, _: &str, _: Event) {}
 }
 
-/// A harness asking whether one of its own tools may run. Hive tools never
-/// ask: their policy runs where they are served.
+/// A request to run one tool call: a harness asking about one of its own
+/// tools, or the host's tool server asking about an effectful executable
+/// tool of a `supervised` seat. Hive tools never ask: send and management
+/// policy decide them.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ToolApproval {
     /// The seat asking.
     pub seat: String,
     /// The running turn.
     pub turn_id: String,
-    /// The harness's id for the call.
+    /// The harness's id for the call, or the model's `call` when the tool
+    /// server asks.
     pub call_id: String,
     /// The tool.
     pub tool: String,
@@ -136,7 +139,7 @@ pub enum ToolDecision {
 /// Future returned by [`Approver::decide`].
 pub type ApprovalFuture = Pin<Box<dyn Future<Output = ToolDecision> + Send>>;
 
-/// Decides what a harness asks.
+/// Decides whether a tool call may run, for a harness or the tool server.
 pub trait Approver: Send + Sync {
     /// Decide `request`. The turn waits, within its own timeout.
     fn decide(&self, request: ToolApproval) -> ApprovalFuture;

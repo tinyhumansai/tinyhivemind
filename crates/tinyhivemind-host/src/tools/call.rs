@@ -5,7 +5,7 @@ use crate::{
     policy::{ManagementRequest, SendRequest},
 };
 use serde_json::Value;
-use tinyhivemind_hives::HiveInfo;
+use tinyhivemind_hives::{HiveInfo, TurnCall};
 
 /// A hive tool call with validated arguments and a host-bound caller.
 ///
@@ -16,6 +16,8 @@ pub struct ToolCall {
     session: Option<String>,
     kind: Kind,
     args: Value,
+    /// The running turn and caller-chosen call this one says it is.
+    identity: Option<(String, String)>,
 }
 impl ToolCall {
     /// A call to `kind` by the seat the host bound it to.
@@ -34,6 +36,28 @@ impl ToolCall {
             session,
             kind,
             args,
+            identity: None,
+        })
+    }
+    /// The same call, identified as `call` of the actor's running turn
+    /// `turn_id`.
+    ///
+    /// A coordinator action of an identified call is refused unless that turn
+    /// is running, and acts at most once per `call`: a retry with the same
+    /// arguments returns the recorded result, and other reuse is refused.
+    #[must_use]
+    pub fn in_turn(mut self, turn_id: impl Into<String>, call: impl Into<String>) -> Self {
+        self.identity = Some((turn_id.into(), call.into()));
+        self
+    }
+    /// The coordinator's identity for this call, when it has one.
+    pub(super) fn turn_call(&self) -> Option<TurnCall> {
+        self.identity.as_ref().map(|(turn_id, call)| TurnCall {
+            agent_id: self.actor.clone(),
+            turn_id: turn_id.clone(),
+            call: call.clone(),
+            tool: self.kind.name().into(),
+            arguments: self.args.clone(),
         })
     }
     pub(super) fn actor(&self) -> &str {

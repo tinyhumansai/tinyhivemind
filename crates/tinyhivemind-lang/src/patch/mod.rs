@@ -20,7 +20,7 @@ pub(crate) fn whole(path: &str) -> bool {
 }
 
 /// The manifest sections the integration class owns.
-const INTEGRATION: [&str; 14] = [
+const INTEGRATION: [&str; 15] = [
     "runtime",
     "providers",
     "models",
@@ -35,6 +35,7 @@ const INTEGRATION: [&str; 14] = [
     "jev",
     "features",
     "workflows",
+    "harnesses",
 ];
 
 fn boundary(class: PatchClass, op: &Operation) -> bool {
@@ -329,7 +330,15 @@ pub fn apply(package: &Package, patch: &Patch) -> Result<AppliedPatch> {
 /// Rejects a forged candidate, forbidden class, immutable settings, read-only
 /// memory changes, canaries, or invalid package invariants and memory reaches.
 pub fn guard(original: &Package, proposed: &Package, patch: &Patch) -> Result<()> {
-    if !original.constitution.permitted_edits.contains(&patch.class) {
+    let permitted = &original.constitution.permitted_edits;
+    if !permitted.contains(&patch.class) {
+        return Err(Error::ForbiddenClass);
+    }
+    // A seat's `harness` is a roster field, but moving a seat to another
+    // harness changes what it can reach: it needs the integration class too.
+    if !permitted.contains(&PatchClass::Integration)
+        && !crate::harness::resolve::moves(&original.manifest, &proposed.manifest).is_empty()
+    {
         return Err(Error::ForbiddenClass);
     }
     if original.constitution != proposed.constitution {

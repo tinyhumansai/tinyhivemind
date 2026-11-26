@@ -132,6 +132,13 @@ pub struct RuntimeSettings {
     pub toolpacks: Vec<String>,
     /// Default turn limits.
     pub limits: Limits,
+    /// Default [`crate::Harness`] id for every seat; `None` is `openhuman`.
+    /// Not serialized when `None`, and an explicit `null` does not decode.
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::document::present"
+    )]
+    pub harness: Option<String>,
 }
 
 impl Default for RuntimeSettings {
@@ -152,6 +159,7 @@ impl Default for RuntimeSettings {
             permissions: None,
             toolpacks: Vec::new(),
             limits: Limits::default(),
+            harness: None,
         }
     }
 }
@@ -368,6 +376,14 @@ pub struct Profile {
     /// A harness built-in agent definition to start from.
     #[serde(default)]
     pub definition_base: Option<String>,
+    /// [`crate::Harness`] id; a delegated profile may not set one. Not
+    /// serialized when `None`, and an explicit `null` does not decode.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::document::present"
+    )]
+    pub harness: Option<String>,
 }
 
 /// The event a hook runs on.

@@ -173,12 +173,14 @@ pub(super) fn seat(package: &Package, seat: &Seat) -> LoweredSeatIntegration {
         programs,
         hooks,
         groups,
+        unlisted_groups: crate::harness::resolve::judged(m).then_some(GroupMode::Off),
         permissions,
         limits,
         context,
         subagents: p.subagents.clone(),
         bare_prompt: p.bare_prompt,
         definition_base: p.definition_base.clone(),
+        harness: crate::harness::resolve::resolve(m, seat).cloned(),
     }
 }
 

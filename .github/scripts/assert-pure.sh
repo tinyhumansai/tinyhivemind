@@ -18,9 +18,9 @@ set -euo pipefail
 pure_crates=("tinyhivemind-core" "tinyhivemind-lang")
 tool_crates=("tinyhivemind-tools")
 # Host and the process harness clients run harnesses as processes (ADR 0035),
-# so they may hold a runtime and an HTTP client, but they
-# must never link one.
-host_crates=("tinyhivemind-host" "tinyhivemind-openhuman-process")
+# and the MCP server serves them hive tools over loopback (ADR 0036), so they may
+# hold a runtime, a listener and an HTTP client, but none may link a harness.
+host_crates=("tinyhivemind-host" "tinyhivemind-mcp" "tinyhivemind-openhuman-process")
 
 forbidden_pure='tokio|futures|async-trait|axum|hyper|reqwest|ureq|curl|anyhow|rusqlite|git2|openhuman|tinyagents|tinytools'
 # Whole families: `openhuman-embed`, `tinyagents-harness` and so on.

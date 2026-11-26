@@ -202,3 +202,187 @@ fn a_package_seat_runs_a_shell_tool_and_an_unknown_group_is_refused() -> anyhow:
         Ok(())
     })
 }
+
+/// A package from `examples/hives/<name>` of the language crate.
+fn example(name: &str) -> anyhow::Result<PackageSource> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../tinyhivemind-lang/examples/hives")
+        .join(name);
+    let package = PackageSource::read(&root)?;
+    Ok(PackageSource::new(root, &package)?)
+}
+
+/// `mixed-harnesses` with its one remaining harness, `claw`, made an
+/// `openhuman` harness every seat but the lead names.
+fn openhuman_only() -> anyhow::Result<PackageSource> {
+    let source = example("mixed-harnesses")?;
+    let mut package = source.package().clone();
+    package.manifest.harnesses.truncate(1);
+    package.manifest.harnesses[0].kind = tinyhivemind_lang::HarnessKind::OpenHuman;
+    package.manifest.harnesses[0].isolation = None;
+    package.manifest.seats[2].harness = Some("claw".into());
+    package.manifest.profiles[0].harness = None;
+    Ok(PackageSource::new(source.root(), &package)?)
+}
+
+#[test]
+fn a_seat_on_any_harness_but_openhuman_is_refused_before_deployment() -> anyhow::Result<()> {
+    let refused = crate::deploy::packages::harnesses(&[example("mixed-harnesses")?]);
+    assert!(
+        matches!(
+            &refused,
+            Err(DeployError::UnsupportedHarness { seat, kind })
+                if seat == "scout" && *kind == tinyhivemind_lang::HarnessKind::OpenClaw
+        ),
+        "{refused:?}"
+    );
+    assert_eq!(
+        refused.err().map(|error| error.to_string()).as_deref(),
+        Some("seat scout runs on the openclaw harness, which the linked adapter cannot start")
+    );
+    // No harness anywhere, or an explicit `openhuman` one, deploys as today.
+    crate::deploy::packages::harnesses(&[example("integrations")?])?;
+    crate::deploy::packages::harnesses(&[openhuman_only()?])?;
+    Ok(())
+}
+
+#[test]
+fn packages_must_agree_on_a_harness_declared_under_one_id() -> anyhow::Result<()> {
+    let one = openhuman_only()?;
+    let mut package = one.package().clone();
+    package.manifest.harnesses[0].kind = tinyhivemind_lang::HarnessKind::Codex;
+    let other = PackageSource::new(one.root(), &package)?;
+    crate::deploy::packages::harnesses(&[one.clone(), one.clone()])?;
+    let refused = crate::deploy::packages::harnesses(&[one, other]);
+    assert!(
+        matches!(
+            &refused,
+            Err(DeployError::Config(crate::config::ConfigError::ConflictingDeclaration { section, id }))
+                if section == "harnesses" && id == "claw"
+        ),
+        "{refused:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn packages_that_mean_the_same_isolation_agree() -> anyhow::Result<()> {
+    let one = openhuman_only()?;
+    let mut package = one.package().clone();
+    // `seat` is what an `openhuman` harness takes when it says nothing.
+    package.manifest.harnesses[0].isolation = Some(tinyhivemind_lang::Isolation::Seat);
+    let explicit = PackageSource::new(one.root(), &package)?;
+    crate::deploy::packages::harnesses(&[one, explicit])?;
+    Ok(())
+}
+
+#[test]
+fn from_packages_refuses_a_seat_on_another_harness_before_starting_anything() -> anyhow::Result<()>
+{
+    let _lock = crate::RUNTIME_LOCK
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    run(async {
+        let (options, _backend, _model) = build_options().await;
+        let refused = Box::pin(HiveDeployment::from_packages(
+            vec![example("mixed-harnesses")?],
+            Arc::new(Secrets),
+            options,
+        ))
+        .await;
+        assert!(
+            matches!(refused, Err(DeployError::UnsupportedHarness { ref seat, .. }) if seat == "scout"),
+            "{refused:?}"
+        );
+        Ok(())
+    })
+}
+
+#[test]
+fn a_judged_seat_turns_every_tool_group_its_toolpacks_do_not_list_off() -> anyhow::Result<()> {
+    use openhuman_embed::{GroupMode, ToolGroups};
+    let runtime = ToolGroups::advertised();
+    let listed = std::collections::BTreeMap::from([(
+        ToolGroups::ids().next().unwrap_or_default().to_owned(),
+        tinyhivemind_lang::GroupMode::Withheld,
+    )]);
+    let judged = crate::deploy::profile::seat_groups(
+        &runtime,
+        &listed,
+        Some(tinyhivemind_lang::GroupMode::Off),
+    )?
+    .ok_or_else(|| anyhow::anyhow!("a judged seat sets its groups"))?;
+    for id in ToolGroups::ids() {
+        let expected = if listed.contains_key(id) {
+            GroupMode::Withheld
+        } else {
+            GroupMode::Off
+        };
+        assert_eq!(judged.mode(id), expected, "{id}");
+    }
+    // A seat of a package that names no harness keeps today's behaviour.
+    let unjudged =
+        crate::deploy::profile::seat_groups(&runtime, &std::collections::BTreeMap::new(), None)?;
+    assert_eq!(unjudged, None);
+    Ok(())
+}
+
+#[test]
+fn a_judged_openhuman_seat_deploys_with_no_built_in_tool_group() -> anyhow::Result<()> {
+    let _lock = crate::RUNTIME_LOCK
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    run(async {
+        let (options, _backend, model) = build_options().await;
+        mount(&model, Script::default()).await;
+        let source = openhuman_only()?;
+        let mut package = source.package().clone();
+        // The check judges the provider each seat's model names; the linked
+        // adapter uses the runtime's, so leaving that one to the fixture's
+        // injected provider deploys the same judged seats offline.
+        package.manifest.runtime.provider = None;
+        let deployment = Box::pin(HiveDeployment::from_packages(
+            vec![PackageSource::new(source.root(), &package)?],
+            Arc::new(Secrets),
+            options,
+        ))
+        .await?;
+        deployment
+            .host()
+            .coordinator()
+            .send_as_host(SendMessage {
+                message_id: "tools".into(),
+                sender: String::new(),
+                destination: Destination::Hive("mixed-harnesses".into()),
+                body: "Say hello".into(),
+                thread: None,
+                only_for: Vec::new(),
+                starters: vec!["lead".into()],
+            })
+            .await?;
+        let report = deployment.host().coordinator().run_until_idle().await?;
+        assert_eq!(report.failed, 0, "{report:?}");
+        let mut offered = std::collections::BTreeSet::new();
+        for request in model.received_requests().await.unwrap_or_default() {
+            let body: Value = serde_json::from_slice(&request.body).unwrap_or_default();
+            for tool in body["tools"].as_array().into_iter().flatten() {
+                if let Some(name) = tool["function"]["name"].as_str() {
+                    offered.insert(name.to_owned());
+                }
+            }
+        }
+        assert!(offered.contains("word_count"), "{offered:?}");
+        let none = openhuman_embed::ToolGroups::none();
+        let built_in: Vec<_> = offered
+            .iter()
+            .filter(|name| {
+                *name == "use_skill" || none.mode_for_tool(name) == openhuman_embed::GroupMode::Off
+            })
+            .collect();
+        assert!(
+            built_in.is_empty(),
+            "built-in tools reached the model: {built_in:?}"
+        );
+        Ok(())
+    })
+}
