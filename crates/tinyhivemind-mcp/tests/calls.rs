@@ -8,7 +8,8 @@ use support::{Hive, hook};
 use tinyhivemind_hives::HiveInfo;
 use tinyhivemind_host::Result as HostResult;
 use tinyhivemind_host::policy::{
-    AgentCreator, CreateFuture, ManagementAuthorizer, ManagementRequest, NewAgent,
+    AgentCreator, CreateFuture, ManagementAuthorizer, ManagementRequest, NewAgent, SendAuthorizer,
+    SendRequest,
 };
 
 fn post(hive: &Hive, call: &str, body: &str) -> Value {
@@ -317,4 +318,107 @@ async fn a_hook_denied_call_is_recorded_and_a_corrected_call_uses_a_new_call() {
     hive.settle().await;
     assert_eq!(hive.written("a", "forbidden"), 0);
     assert_eq!(hive.written("a", "allowed"), 1);
+}
+
+/// Refuses direct messages whose body says "secret", and joins to `closed`.
+struct Strict;
+impl SendAuthorizer for Strict {
+    fn authorize(&self, _: &str, request: &SendRequest) -> HostResult<()> {
+        match request {
+            SendRequest::Agent { body, .. } if body.contains("secret") => {
+                Err(tinyhivemind_host::Error::SendDenied("no secrets".into()))
+            }
+            _ => Ok(()),
+        }
+    }
+}
+impl ManagementAuthorizer for Strict {
+    fn authorize(&self, _: &str, request: &ManagementRequest) -> HostResult<()> {
+        match request {
+            ManagementRequest::JoinHive { hive_id, .. } if hive_id == "closed" => {
+                Err(tinyhivemind_host::Error::Unauthorized("closed hive".into()))
+            }
+            _ => Ok(()),
+        }
+    }
+}
+
+async fn guarded() -> Hive {
+    Hive::start(
+        |services| {
+            services
+                .with_send_policy(Arc::new(Strict))
+                .with_management(Arc::new(Strict), Arc::new(Open))
+        },
+        |seat, context| {
+            seat.with_context(context).with_hooks(vec![
+                hook("guard", "pre_tool_use", "hivemind_*", "guard"),
+                hook("audit", "post_tool_use", "hivemind_*", "audit"),
+            ])
+        },
+    )
+    .await
+}
+
+#[tokio::test]
+async fn a_send_the_policy_refuses_runs_no_hook_and_records_nothing() {
+    let hive = guarded().await;
+    let send = |call: &str, body: &str| json!({"agent_id": "b", "message_id": call, "body": body, "turn": hive.turn_id(), "call": call});
+    let (text, failed) = hive
+        .a
+        .call("hivemind_send_agent", send("s1", "a secret"))
+        .await;
+    assert!(failed && text.contains("no secrets"), "{text}");
+    assert_eq!((hive.lines("guard.log"), hive.lines("audit.log")), (0, 0));
+    // Nothing was recorded: the same call is judged again, not answered.
+    let (_, failed) = hive
+        .a
+        .call("hivemind_send_agent", send("s1", "a secret"))
+        .await;
+    assert!(failed);
+    assert_eq!((hive.lines("guard.log"), hive.lines("audit.log")), (0, 0));
+    assert_eq!(
+        hive.coordinator.read_direct("a", "b", None).unwrap().len(),
+        0
+    );
+    // An allowed send runs each hook once, and its retry runs none.
+    let (text, failed) = hive
+        .a
+        .call("hivemind_send_agent", send("s2", "hello"))
+        .await;
+    assert!(!failed, "{text}");
+    hive.a
+        .call("hivemind_send_agent", send("s2", "hello"))
+        .await;
+    assert_eq!((hive.lines("guard.log"), hive.lines("audit.log")), (1, 1));
+    assert_eq!(
+        hive.coordinator.read_direct("a", "b", None).unwrap().len(),
+        1
+    );
+}
+
+#[tokio::test]
+async fn a_join_management_refuses_runs_no_hook_and_records_nothing() {
+    let hive = guarded().await;
+    for id in ["closed", "open"] {
+        hive.coordinator
+            .create_hive(HiveInfo {
+                hive_id: id.into(),
+                name: id.into(),
+                description: None,
+                members: Vec::new(),
+            })
+            .await
+            .unwrap();
+    }
+    let join = |call: &str, hive_id: &str| json!({"hive_id": hive_id, "agent_id": "a", "turn": hive.turn_id(), "call": call});
+    let (text, failed) = hive
+        .a
+        .call("hivemind_join_hive", join("j1", "closed"))
+        .await;
+    assert!(failed && text.contains("closed hive"), "{text}");
+    assert_eq!(hive.lines("guard.log"), 0);
+    let (text, failed) = hive.a.call("hivemind_join_hive", join("j2", "open")).await;
+    assert!(!failed, "{text}");
+    assert_eq!((hive.lines("guard.log"), hive.lines("audit.log")), (1, 1));
 }

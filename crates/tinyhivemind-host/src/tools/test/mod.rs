@@ -1,4 +1,5 @@
 //! The belt acts for its bound caller, under the host's policies.
+mod authorize;
 mod declarations;
 mod episodes;
 mod identified;
