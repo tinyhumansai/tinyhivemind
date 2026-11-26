@@ -1,10 +1,39 @@
 # Harness kinds
 
-`HarnessKind`: the harnesses a package may name, and their wire names. The
-`harnesses` section, the capability table and the diagnostics of the
-[harness spec](../../../../docs/specs/harnesses.md) are not here yet.
+What a seat runs on, per the [harness spec](../../../../docs/specs/harnesses.md):
+the kinds, the `harnesses` section's entries, how a seat resolves to one, and
+the capability table every later crate queries.
+
+Public surface: `HarnessKind` (with `ALL`, `default_isolation`, `support`,
+`model_api` and `iteration_cap`), `Harness` and `Isolation` (the wire
+types), and `Capability`, `Support`, `Unlock` and `ModelApi`.
+
+The table is data, queried by `(kind, capability)`: `check` asks it for every
+setting a seat resolves to, a process runner asks it before writing a harness
+config, and plan step 6's gate enumerates `Capability::ALL` against
+`HarnessKind::ALL`. A rejected row carries its `Unlock`, so the rows only a
+conformance test can move (`Unlock::Conformance`) are named in code. Moving a
+row means editing `Capability::row` and the literal table pinned in `test.rs`
+in the change that proves it.
+
+`fields.rs` is the default-deny half: every field of every integration type
+maps to a capability, to `Structure` (identities, references, labels, the
+seat's `template`, the roster, desks, goals and coordinator policies), to a
+nested owner, or to a by-value rule. `test.rs` reads each type's field list
+from its decoder (so fields skipped when absent are included) and fails when
+one has no entry; a field the walker still finds unmapped is rejected as
+`Capability::Undecided`.
+
+`resolve.rs` is crate-private: a seat's own `harness`, else its profile's,
+else `runtime.harness`, and where it came from. Lowering, validation and the
+edit rules all resolve through it. `moves` finds the seats an edit moves to
+another harness, which needs the `integration` class.
 
 | File | Purpose |
 | --- | --- |
-| `mod.rs` | The type. |
-| `test.rs` | Pins the wire names. |
+| `mod.rs` | `HarnessKind` and the module surface |
+| `types.rs` | `Harness` and `Isolation` |
+| `capability.rs` | The capability table, model API and iteration cap per kind |
+| `fields.rs` | Every field of every integration type and the capability that decides it: the default-deny map `check` walks |
+| `resolve.rs` | Resolution by precedence, and harness moves between two manifests |
+| `test.rs` | Wire names and forms, absent-field omission, and the pinned table |

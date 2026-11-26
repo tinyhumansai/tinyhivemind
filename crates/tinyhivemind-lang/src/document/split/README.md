@@ -6,7 +6,7 @@ manifest's top-level sections under their usual keys:
 
 | File | May hold |
 | --- | --- |
-| `agents.json` | `roles`, `seats`, `profiles` |
+| `agents.json` | `roles`, `seats`, `profiles`, `harnesses` |
 | `tools.json` | `tools`, `toolpacks`, `mcp`, `skills`, `hooks` |
 | `desks.json` | `desks`, `topology`, `referrals` |
 

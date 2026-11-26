@@ -172,8 +172,9 @@ impl HiveDeployment {
         for seat in &config.seats {
             let mut spec = profile::seat(&config, seat, secrets.as_ref(), permissions.clone())?;
             let groups = &config.profile_for(seat)?.groups;
-            if !groups.is_empty() {
-                spec = spec.tool_groups(profile::groups(runtime.tool_groups(), groups)?);
+            let unlisted = extras.get(&seat.id).and_then(|exec| exec.unlisted_groups);
+            if let Some(groups) = profile::seat_groups(runtime.tool_groups(), groups, unlisted)? {
+                spec = spec.tool_groups(groups);
             }
             if let Some(exec) = extras.get(&seat.id).filter(|exec| !exec.hooks.is_empty()) {
                 spec = spec.tool_hook(Arc::new(packages::ScriptHooks(exec.hooks.clone())));

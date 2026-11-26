@@ -1,6 +1,12 @@
 //! Which harness a seat runs on.
+mod capability;
+pub(crate) mod fields;
+pub(crate) mod resolve;
+mod types;
+pub use capability::{Capability, ModelApi, Support, Unlock};
 use serde::{Deserialize, Serialize};
 use std::fmt;
+pub use types::{Harness, Isolation};
 
 /// A harness, by the name a package gives it.
 ///
@@ -15,6 +21,22 @@ pub enum HarnessKind {
     OpenClaw,
     /// `codex`.
     Codex,
+}
+
+impl HarnessKind {
+    /// Every kind, in the order the capability table lists them.
+    pub const ALL: [Self; 3] = [Self::OpenHuman, Self::OpenClaw, Self::Codex];
+
+    /// How instances of this kind are shared when a harness entry does not
+    /// say: one per deployment for `openclaw`, whose instance costs
+    /// gigabytes, one per seat otherwise.
+    #[must_use]
+    pub const fn default_isolation(self) -> Isolation {
+        match self {
+            Self::OpenClaw => Isolation::Deployment,
+            Self::OpenHuman | Self::Codex => Isolation::Seat,
+        }
+    }
 }
 
 impl fmt::Display for HarnessKind {

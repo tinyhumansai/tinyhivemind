@@ -8,7 +8,7 @@ use super::integration::{
     ExecTool, Hook, JevSettings, Limits, McpServer, Model, PermissionSet, Profile, Provider,
     RuntimeSettings, SessionSettings, Skill, Toolpack, Workflow,
 };
-use crate::{Constitution, MemorySpec};
+use crate::{Constitution, Harness, MemorySpec};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -151,6 +151,14 @@ pub struct Manifest {
     /// Scheduled prompts.
     #[serde(default)]
     pub workflows: Vec<Workflow>,
+    /// Harnesses seats may run on. Empty, it is not serialized, and every
+    /// seat is an `openhuman` seat; written, it holds at least one entry.
+    #[serde(
+        default,
+        skip_serializing_if = "Vec::is_empty",
+        deserialize_with = "super::defaults::nonempty"
+    )]
+    pub harnesses: Vec<Harness>,
 }
 impl Default for Manifest {
     fn default() -> Self {
@@ -183,6 +191,7 @@ impl Default for Manifest {
             jev: JevSettings::default(),
             features: BTreeMap::new(),
             workflows: vec![],
+            harnesses: vec![],
         }
     }
 }
@@ -206,7 +215,8 @@ pub struct Role {
 /// On the wire only `id`, `role`, `prompt` and `template` are required:
 /// `label` defaults to the seat's `id`, `config` to `{}`, `model`, `profile`,
 /// `agent_id` and `permissions` to `null`, `limits` to no limits, and every
-/// list to empty. Unknown fields are rejected.
+/// list to empty. `harness` is omitted when absent, on input and output alike.
+/// Unknown fields are rejected.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize, Default)]
 #[serde(from = "super::defaults::SeatWire")]
 pub struct Seat {
@@ -258,6 +268,11 @@ pub struct Seat {
     pub limits: Limits,
     /// Extra `context/*.md` paths composed into the seat's prompt.
     pub context: Vec<String>,
+    /// Id of the [`Harness`] the seat runs on; `None` inherits the profile's,
+    /// then the runtime's, and absent everywhere is an `openhuman` seat. Not
+    /// serialized when `None`, and an explicit `null` does not decode.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub harness: Option<String>,
 }
 /// A seat's tool access, enforced by the host; this crate only carries it.
 ///

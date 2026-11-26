@@ -167,3 +167,86 @@ fn seat_context_documents_lower_with_their_contents() {
     assert_eq!(context[0].0, "context/style.md");
     assert!(context[0].1.contains("imperative"));
 }
+
+/// The `integrations` package with harnesses `oh` (`openhuman`), `claw`
+/// (`openclaw`) and `codex` declared.
+fn with_harnesses() -> Package {
+    let mut package = integrations();
+    package.manifest.harnesses = [
+        ("oh", crate::HarnessKind::OpenHuman),
+        ("claw", crate::HarnessKind::OpenClaw),
+        ("codex", crate::HarnessKind::Codex),
+    ]
+    .into_iter()
+    .map(|(id, kind)| crate::Harness {
+        id: id.into(),
+        kind,
+        isolation: None,
+    })
+    .collect();
+    package
+}
+
+/// Each seat's resolved harness id, without the capability check `lower`
+/// would run first.
+fn harnesses(package: &Package) -> Vec<Option<String>> {
+    package
+        .manifest
+        .seats
+        .iter()
+        .map(|seat| {
+            super::integration::seat(package, seat)
+                .harness
+                .map(|harness| harness.id)
+        })
+        .collect()
+}
+
+#[test]
+fn a_seat_with_no_harness_anywhere_is_an_openhuman_seat() {
+    let hive = lower(&integrations()).unwrap();
+    for seat in &hive.seats {
+        assert_eq!(seat.integration.harness, None);
+        assert_eq!(
+            seat.integration.harness_kind(),
+            crate::HarnessKind::OpenHuman
+        );
+    }
+    // Declaring harnesses names none for a seat.
+    assert_eq!(harnesses(&with_harnesses()), [None, None]);
+}
+
+#[test]
+fn the_most_specific_harness_wins() {
+    let mut package = with_harnesses();
+    package.manifest.runtime.harness = Some("oh".into());
+    assert_eq!(harnesses(&package), [Some("oh".into()), Some("oh".into())]);
+    // The `editor` profile is the lead's; the scout names its own.
+    package.manifest.profiles[0].harness = Some("claw".into());
+    package.manifest.seats[1].harness = Some("codex".into());
+    assert_eq!(
+        harnesses(&package),
+        [Some("claw".into()), Some("codex".into())]
+    );
+    // The seat beats its profile.
+    package.manifest.profiles[1].harness = Some("claw".into());
+    assert_eq!(harnesses(&package)[1].as_deref(), Some("codex"));
+    let lead = super::integration::seat(&package, &package.manifest.seats[0]);
+    assert_eq!(lead.harness_kind(), crate::HarnessKind::OpenClaw);
+    assert_eq!(lead.harness, Some(package.manifest.harnesses[1].clone()));
+}
+
+#[test]
+fn a_judged_package_lowers_every_unlisted_tool_group_to_off() {
+    // No harness named: the harness keeps its own group defaults.
+    for seat in &lower(&integrations()).unwrap().seats {
+        assert_eq!(seat.integration.unlisted_groups, None);
+    }
+    let package = with_harnesses();
+    for seat in &package.manifest.seats {
+        let lowered = super::integration::seat(&package, seat);
+        assert_eq!(lowered.unlisted_groups, Some(crate::GroupMode::Off));
+        // The groups a toolpack lists are still carried as listed.
+        assert_eq!(lowered.groups["web3"], crate::GroupMode::Off);
+    }
+}
