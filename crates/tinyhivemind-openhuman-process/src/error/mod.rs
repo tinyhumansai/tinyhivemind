@@ -70,3 +70,6 @@ impl From<Error> for harness::Error {
         }
     }
 }
+
+#[cfg(test)]
+mod test;

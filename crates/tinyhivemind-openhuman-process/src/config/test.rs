@@ -187,3 +187,26 @@ fn an_effective_config_that_differs_anywhere_written_is_another_one() {
         assert_ne!(written.observe(&config), written.settings(), "{config}");
     }
 }
+
+#[test]
+fn the_writer_leaves_out_null_and_writes_other_shapes_inline() {
+    let tree = json!({
+        "gone": null,
+        "empty": [],
+        "mixed": [1, {"a": "b"}],
+        "table": {"inner": {"deep": true}},
+    });
+    let text = super::toml::write(&tree);
+    assert!(!text.contains("gone"), "{text}");
+    let table: ::toml::Table = text
+        .parse()
+        .unwrap_or_else(|error| unreachable!("{error}\n{text}"));
+    let parsed = serde_json::to_value(table).unwrap_or_else(|error| unreachable!("{error}"));
+    let expected = json!({
+        "empty": [],
+        "mixed": [1, {"a": "b"}],
+        "table": {"inner": {"deep": true}},
+    });
+    assert_eq!(parsed, expected);
+    assert_eq!(super::toml::write(&json!("not a table")), "");
+}
