@@ -50,12 +50,13 @@ against its kind's column of the capability table and reports each rejected
 setting once, at the field that sets it. It is default-deny: the runtime, the
 seat, its profile, model, permission sets, toolpacks and hooks, and `session`
 and `jev`, are walked field by field, and any field set away from its default
-asks for the capability `harness/fields.rs` gives it. By value it also judges the resolved provider's `kind`,
-`endpoint` or `credential` (or the `provider` field that should name one), a
-sandbox on the runtime or an applying permission set, `tool_rules`, a
-toolpack group turned on, a host session store or memory engine, a profile's
-`subagents` or `definition_base`, `jev`, each `session` setting, and
-`limits.iterations` above OpenHuman's cap at the layer that set it. Seats
+asks for the capability `harness/fields.rs` gives it. By value it also
+judges the resolved provider's `kind`, `endpoint` or `credential` (or the
+`provider` field that should name one), a sandbox on the runtime or an
+applying permission set, `tool_rules`, a toolpack group turned on, a
+`sqlite` or host session store, an in-process or host memory engine, a
+`stop` hook, and `limits.iterations` at the layer that set it (rejected but
+on OpenHuman, and there above its cap). Seats
 sharing one OpenClaw instance must resolve to one provider (reported at the
 harness's `isolation`), and a tool a judged seat receives may not declare an
 argument named `turn` or `call`. A package naming no harness is not judged:
