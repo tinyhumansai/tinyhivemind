@@ -477,3 +477,6 @@ impl Judge<'_, '_> {
 fn wire<T: serde::Serialize>(value: &T) -> Value {
     serde_json::to_value(value).unwrap_or(Value::Null)
 }
+
+#[cfg(test)]
+mod test;

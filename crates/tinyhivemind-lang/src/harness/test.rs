@@ -258,75 +258,53 @@ fn each_kind_names_its_model_api_and_iteration_cap() {
     assert_eq!(HarnessKind::Codex.default_isolation(), Isolation::Seat);
 }
 
-/// The keys `value` serializes with.
-fn wire_keys<T: serde::Serialize>(value: &T) -> Vec<String> {
-    let mut keys: Vec<String> = serde_json::to_value(value)
+/// Every field `T` declares, read from the decoder rather than from a
+/// serialized value, so a field skipped when absent is still listed: a
+/// `deny_unknown_fields` struct names them all when it refuses a stray key.
+fn declared_fields<T: serde::de::DeserializeOwned>() -> Vec<String> {
+    let message = serde_json::from_value::<T>(json!({"__probe__": 0}))
+        .err()
         .unwrap()
-        .as_object()
+        .to_string();
+    let list = message
+        .split_once("expected one of ")
+        .or_else(|| message.split_once("expected "))
         .unwrap()
-        .keys()
-        .cloned()
+        .1;
+    let mut fields: Vec<String> = list
+        .split(", ")
+        .map(|name| name.trim_matches('`').to_owned())
         .collect();
-    keys.sort();
-    keys
+    fields.sort();
+    fields
 }
 
-/// Every field of every integration type has a capability decision. A field
-/// added to one of these types without an entry in `fields.rs` fails here,
-/// so the default-deny judgement cannot drift from the language.
+/// Every field of every integration type has a capability decision. The
+/// field lists come from each type's decoder, so a field added to one of
+/// these types without an entry in `fields.rs` fails here, whether or not
+/// it serializes when absent.
 #[test]
 fn every_field_the_language_has_has_a_capability_decision() {
     use crate::*;
-    let harness = Some("h".to_owned());
-    let mut manifest = Manifest::default();
-    manifest.harnesses.push(Harness {
-        id: "h".into(),
-        kind: HarnessKind::Codex,
-        isolation: Some(Isolation::Seat),
-    });
-    let tool: ExecTool =
-        serde_json::from_value(json!({"id": "t", "description": "d", "command": ["t"]})).unwrap();
-    let workflow: Workflow = serde_json::from_value(
-        json!({"id": "w", "schedule": "* * * * *", "target": {"hive": "h"}, "prompt": "p"}),
-    )
-    .unwrap();
     let samples: Vec<(&str, Vec<String>)> = vec![
-        ("manifest", wire_keys(&manifest)),
-        (
-            "runtime",
-            wire_keys(&RuntimeSettings {
-                harness: harness.clone(),
-                ..RuntimeSettings::default()
-            }),
-        ),
-        ("limits", wire_keys(&Limits::default())),
-        ("provider", wire_keys(&Provider::default())),
-        ("model", wire_keys(&Model::default())),
-        ("mcp", wire_keys(&McpServer::default())),
-        ("skill", wire_keys(&Skill::default())),
-        ("tool", wire_keys(&tool)),
-        ("toolpack", wire_keys(&Toolpack::default())),
-        ("permissions", wire_keys(&PermissionSet::default())),
-        (
-            "profile",
-            wire_keys(&Profile {
-                harness: harness.clone(),
-                ..Profile::default()
-            }),
-        ),
-        ("tools", wire_keys(&ToolAccess::default())),
-        ("hook", wire_keys(&Hook::default())),
-        ("session", wire_keys(&SessionSettings::default())),
-        ("jev", wire_keys(&JevSettings::default())),
-        ("workflow", wire_keys(&workflow)),
-        (
-            "seat",
-            wire_keys(&Seat {
-                harness,
-                ..Seat::default()
-            }),
-        ),
-        ("harness", wire_keys(&manifest.harnesses[0])),
+        ("manifest", declared_fields::<Manifest>()),
+        ("runtime", declared_fields::<RuntimeSettings>()),
+        ("limits", declared_fields::<Limits>()),
+        ("provider", declared_fields::<Provider>()),
+        ("model", declared_fields::<Model>()),
+        ("mcp", declared_fields::<McpServer>()),
+        ("skill", declared_fields::<Skill>()),
+        ("tool", declared_fields::<ExecTool>()),
+        ("toolpack", declared_fields::<Toolpack>()),
+        ("permissions", declared_fields::<PermissionSet>()),
+        ("profile", declared_fields::<Profile>()),
+        ("tools", declared_fields::<ToolAccess>()),
+        ("hook", declared_fields::<Hook>()),
+        ("session", declared_fields::<SessionSettings>()),
+        ("jev", declared_fields::<JevSettings>()),
+        ("workflow", declared_fields::<Workflow>()),
+        ("seat", declared_fields::<Seat>()),
+        ("harness", declared_fields::<Harness>()),
     ];
     let owners: Vec<&str> = samples.iter().map(|(owner, _)| *owner).collect();
     assert_eq!(super::fields::owners(), owners);
@@ -338,4 +316,6 @@ fn every_field_the_language_has_has_a_capability_decision() {
             }
         }
     }
+    // The harness fields, skipped when absent, are among them.
+    assert!(declared_fields::<Seat>().contains(&"harness".to_owned()));
 }
