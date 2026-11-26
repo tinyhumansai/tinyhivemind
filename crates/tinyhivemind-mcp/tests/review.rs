@@ -272,3 +272,28 @@ async fn a_seats_records_are_bounded_and_refused_rather_than_evicted() {
     );
     assert_eq!(hive.lines("stamp.log"), 2);
 }
+
+#[tokio::test]
+async fn absent_arguments_are_empty_and_others_must_fit_even_for_a_read() {
+    let look = tool(
+        "look",
+        "look",
+        "read",
+        json!({"type": "object", "additionalProperties": false}),
+    );
+    let hive = Hive::start(
+        |services| services,
+        |seat, context| seat.with_context(context).with_programs(vec![look]),
+    )
+    .await;
+    let listed = hive
+        .a
+        .rpc("tools/call", json!({"name": "hivemind_list_hives"}))
+        .await;
+    assert_eq!(listed["result"]["isError"], false, "{listed}");
+    let (text, failed) = hive.a.call("hivemind_list_hives", json!([])).await;
+    assert!(failed && text.contains("must be an object"), "{text}");
+    let (text, failed) = hive.a.call("look", json!({"extra": 1})).await;
+    assert!(failed && text.contains("unknown argument extra"), "{text}");
+    assert_eq!(hive.lines("look.log"), 0);
+}
