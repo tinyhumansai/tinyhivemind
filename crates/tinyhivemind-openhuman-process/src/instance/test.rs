@@ -195,3 +195,60 @@ fn the_written_config_turns_compaction_off() {
         Some(serde_json::json!(false))
     );
 }
+
+/// What `resolved_scope` in 0.64.15's `definition_registry.rs` adds to an
+/// allowlist, each of which the start check must see.
+#[test]
+fn every_source_the_binary_adds_tools_from_is_counted() {
+    use serde_json::json;
+    let available: Vec<String> = ["mcp_s_post_1", "tool_search", "juice_retrieve", "juice_find", "juice_extract", "juice_summarize", "shell"]
+        .map(String::from)
+        .to_vec();
+    let entry = |extra: serde_json::Value| {
+        let mut entry = json!({"id": crate::config::AGENT_ID, "tool_allowlist": ["mcp_s_post_1"]});
+        if let (Some(entry), Some(extra)) = (entry.as_object_mut(), extra.as_object()) {
+            entry.extend(extra.clone());
+        }
+        entry
+    };
+    let config = |entry: serde_json::Value, rest: serde_json::Value| {
+        let mut config = json!({
+            "agent_registry": {"entries": [entry]},
+            "context": {"compaction_enabled": false},
+            "agent": {"chat_agent_id": crate::config::AGENT_ID},
+        });
+        if let (Some(config), Some(rest)) = (config.as_object_mut(), rest.as_object()) {
+            for (key, value) in rest {
+                config.insert(key.clone(), value.clone());
+            }
+        }
+        config
+    };
+    let seen = |config: &serde_json::Value| super::verify::visible(config, &available);
+    assert_eq!(seen(&config(entry(json!({})), json!({}))), ["mcp_s_post_1"]);
+    // Deferred tools, when the allowlist names the tool search.
+    let search = entry(json!({"tool_allowlist": ["mcp_s_post_1", "tool_search"]}));
+    assert!(seen(&config(search, json!({}))).iter().any(|tool| tool.contains("deferred")));
+    // The REPL tools, while results are stored behind a handle.
+    let repl = json!({
+        "context": {"compaction_enabled": true},
+        "tokenjuice": {"router_enabled": true, "ccr_enabled": true, "repl_handle_enabled": true},
+    });
+    let repl = seen(&config(entry(json!({})), repl));
+    for tool in ["juice_retrieve", "juice_find", "juice_extract", "juice_summarize"] {
+        assert!(repl.contains(&tool.to_owned()), "{tool} in {repl:?}");
+    }
+    // The summary stage, which only the orchestrator gets.
+    let orchestrator = json!({"id": "orchestrator", "tool_allowlist": ["mcp_s_post_1"]});
+    let summary = json!({
+        "agent": {"chat_agent_id": "orchestrator"},
+        "context": {"compaction_enabled": false, "summarizer_payload_threshold_tokens": 100},
+    });
+    let summary = seen(&config(orchestrator, summary));
+    assert!(summary.contains(&"juice_retrieve".to_owned()), "{summary:?}");
+    // `extra_tools`, and a session's delegation tools for an agent with subagents.
+    let extra = seen(&config(entry(json!({"extra_tools": ["shell"]})), json!({})));
+    assert!(extra.contains(&"shell".to_owned()), "{extra:?}");
+    let delegating = seen(&config(entry(json!({"subagents": ["helper"]})), json!({})));
+    assert!(delegating.iter().any(|tool| tool.contains("delegation")), "{delegating:?}");
+}
