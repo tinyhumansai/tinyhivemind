@@ -188,3 +188,40 @@ async fn identified_hive_management_acts_once() -> Result<()> {
     finish.notify_one();
     Ok(())
 }
+
+/// Admits sends until closed, counting what it is asked.
+#[derive(Default)]
+struct Closing {
+    closed: std::sync::atomic::AtomicBool,
+    asked: std::sync::atomic::AtomicUsize,
+}
+impl crate::policy::SendAuthorizer for Closing {
+    fn authorize(&self, _: &str, _: &crate::policy::SendRequest) -> Result<()> {
+        use std::sync::atomic::Ordering;
+        self.asked.fetch_add(1, Ordering::SeqCst);
+        if self.closed.load(Ordering::SeqCst) {
+            Err(Error::SendDenied("closed".into()))
+        } else {
+            Ok(())
+        }
+    }
+}
+
+#[tokio::test]
+async fn a_recorded_send_is_answered_without_asking_the_policy_again() -> Result<()> {
+    use std::sync::atomic::Ordering;
+    let (coordinator, request, finish) = running().await?;
+    let policy = Closing::default();
+    let belt = Belt::new(&coordinator).with_send_policy(&policy);
+    let args = json!({"agent_id": "b", "message_id": "m1", "body": "hi"});
+    let send = identified(&request, "s1", Kind::SendAgent, args)?;
+    let receipt = belt.call(&send).await?;
+    policy.closed.store(true, Ordering::SeqCst);
+    assert_eq!(belt.call(&send).await?, receipt);
+    assert_eq!(policy.asked.load(Ordering::SeqCst), 1);
+    let args = json!({"agent_id": "b", "message_id": "m2", "body": "hi"});
+    let other = identified(&request, "s2", Kind::SendAgent, args)?;
+    assert!(matches!(belt.call(&other).await, Err(Error::SendDenied(_))));
+    finish.notify_one();
+    Ok(())
+}

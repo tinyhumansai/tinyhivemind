@@ -56,7 +56,10 @@ async fn gated(gate: &Gate, options: ServerOptions) -> Hive {
     let approver = gate.clone();
     Hive::start_with(
         move |services| services.with_approver(Arc::new(approver)),
-        |seat, context| seat.with_context(context).with_programs(vec![stamp(), slow()]),
+        |seat, context| {
+            seat.with_context(context)
+                .with_programs(vec![stamp(), slow()])
+        },
         options,
     )
     .await
@@ -67,19 +70,28 @@ async fn an_approval_in_flight_across_a_turn_change_runs_nothing_and_keeps_the_n
     let gate = Gate::default();
     let mut hive = gated(&gate, ServerOptions::default()).await;
     let held = tokio::spawn({
-        let (a, args) = (hive.a.clone(), identified(&hive, "s1", json!({"note": "hold"})));
+        let (a, args) = (
+            hive.a.clone(),
+            identified(&hive, "s1", json!({"note": "hold"})),
+        );
         async move { a.call("stamp", args).await }
     });
     gate.waiting.notified().await;
     hive.next_turn().await;
-    let fresh = hive.a.call("stamp", identified(&hive, "s1", json!({"note": "new"}))).await;
+    let fresh = hive
+        .a
+        .call("stamp", identified(&hive, "s1", json!({"note": "new"})))
+        .await;
     assert!(!fresh.1, "{fresh:?}");
     gate.release.notify_one();
     let (text, failed) = held.await.unwrap();
     assert!(failed && text.contains("not the running turn"), "{text}");
     assert_eq!(hive.lines("stamp.log"), 1);
     // The new turn's record survived the stale call.
-    let again = hive.a.call("stamp", identified(&hive, "s1", json!({"note": "new"}))).await;
+    let again = hive
+        .a
+        .call("stamp", identified(&hive, "s1", json!({"note": "new"})))
+        .await;
     assert_eq!(again, fresh);
     assert_eq!(hive.lines("stamp.log"), 1);
 }
@@ -89,11 +101,17 @@ async fn a_retry_while_approval_is_pending_does_not_ask_twice() {
     let gate = Gate::default();
     let hive = gated(&gate, ServerOptions::default()).await;
     let held = tokio::spawn({
-        let (a, args) = (hive.a.clone(), identified(&hive, "s1", json!({"note": "hold"})));
+        let (a, args) = (
+            hive.a.clone(),
+            identified(&hive, "s1", json!({"note": "hold"})),
+        );
         async move { a.call("stamp", args).await }
     });
     gate.waiting.notified().await;
-    let (text, failed) = hive.a.call("stamp", identified(&hive, "s1", json!({"note": "hold"}))).await;
+    let (text, failed) = hive
+        .a
+        .call("stamp", identified(&hive, "s1", json!({"note": "hold"})))
+        .await;
     assert!(failed && text.contains("outcome is not known"), "{text}");
     assert_eq!(gate.asked.load(Ordering::SeqCst), 1);
     gate.release.notify_one();
@@ -103,17 +121,30 @@ async fn a_retry_while_approval_is_pending_does_not_ask_twice() {
 
 #[tokio::test]
 async fn a_client_hanging_up_mid_call_leaves_one_run_and_the_retry_gets_its_result() {
-    let hive = Hive::start(|services| services, |seat, context| {
-        seat.with_context(context).with_programs(vec![slow()]).with_access(Access::Autonomous)
-    })
+    let hive = Hive::start(
+        |services| services,
+        |seat, context| {
+            seat.with_context(context)
+                .with_programs(vec![slow()])
+                .with_access(Access::Autonomous)
+        },
+    )
     .await;
     let addr = hive.server.local_addr();
-    let socket = raw_post(addr, &hive.a.bearer, &call_message("slow", identified(&hive, "s1", json!({})))).await;
+    let socket = raw_post(
+        addr,
+        &hive.a.bearer,
+        &call_message("slow", identified(&hive, "s1", json!({}))),
+    )
+    .await;
     started(&hive, "slow.log").await;
     drop(socket);
     std::fs::write(hive.workspace.path().join("release"), "").unwrap();
     let answer = loop {
-        let answer = hive.a.call("slow", identified(&hive, "s1", json!({}))).await;
+        let answer = hive
+            .a
+            .call("slow", identified(&hive, "s1", json!({})))
+            .await;
         if !answer.0.contains("outcome is not known") {
             break answer;
         }
@@ -133,14 +164,22 @@ async fn calls_in_flight_are_bounded_per_seat_even_after_a_hang_up() {
         |services| services,
         |seat, context| {
             seat.with_context(context)
-                .with_programs(vec![slow(), tool("look", "look", "read", json!({"type": "object"}))])
+                .with_programs(vec![
+                    slow(),
+                    tool("look", "look", "read", json!({"type": "object"})),
+                ])
                 .with_access(Access::Autonomous)
         },
         options,
     )
     .await;
     let addr = hive.server.local_addr();
-    let socket = raw_post(addr, &hive.a.bearer, &call_message("slow", identified(&hive, "s1", json!({})))).await;
+    let socket = raw_post(
+        addr,
+        &hive.a.bearer,
+        &call_message("slow", identified(&hive, "s1", json!({}))),
+    )
+    .await;
     started(&hive, "slow.log").await;
     drop(socket);
     let waiting = tokio::spawn({
@@ -178,7 +217,10 @@ async fn arguments_outside_the_declared_schema_are_refused_before_anything_runs(
     assert_eq!((hive.lines("guard.log"), hive.lines("stamp.log")), (0, 0));
     assert_eq!(gate.asked.load(Ordering::SeqCst), 0);
     // Nothing was recorded, so the same call with fitting arguments acts.
-    let (text, failed) = hive.a.call("stamp", identified(&hive, "s1", json!({"note": "x"}))).await;
+    let (text, failed) = hive
+        .a
+        .call("stamp", identified(&hive, "s1", json!({"note": "x"})))
+        .await;
     assert!(!failed, "{text}");
     assert_eq!(hive.lines("stamp.log"), 1);
 }
@@ -192,19 +234,41 @@ async fn a_seats_records_are_bounded_and_refused_rather_than_evicted() {
     };
     let hive = Hive::start_with(
         |services| services,
-        |seat, context| seat.with_context(context).with_programs(vec![stamp()]).with_access(Access::Autonomous),
+        |seat, context| {
+            seat.with_context(context)
+                .with_programs(vec![stamp()])
+                .with_access(Access::Autonomous)
+        },
         options,
     )
     .await;
     for call in ["s1", "s2"] {
-        assert!(!hive.a.call("stamp", identified(&hive, call, json!({"note": "x"}))).await.1);
+        assert!(
+            !hive
+                .a
+                .call("stamp", identified(&hive, call, json!({"note": "x"})))
+                .await
+                .1
+        );
     }
-    let (text, failed) = hive.a.call("stamp", identified(&hive, "s3", json!({"note": "x"}))).await;
+    let (text, failed) = hive
+        .a
+        .call("stamp", identified(&hive, "s3", json!({"note": "x"})))
+        .await;
     assert!(failed && text.contains("records"), "{text}");
     let big = "x".repeat(5000);
-    let (text, failed) = hive.a.call("stamp", identified(&hive, "s1", json!({"note": big}))).await;
+    let (text, failed) = hive
+        .a
+        .call("stamp", identified(&hive, "s1", json!({"note": big})))
+        .await;
     assert!(failed, "{text}");
     // The first record is still there, answered without running.
-    assert!(!hive.a.call("stamp", identified(&hive, "s1", json!({"note": "x"}))).await.1);
+    assert!(
+        !hive
+            .a
+            .call("stamp", identified(&hive, "s1", json!({"note": "x"})))
+            .await
+            .1
+    );
     assert_eq!(hive.lines("stamp.log"), 2);
 }

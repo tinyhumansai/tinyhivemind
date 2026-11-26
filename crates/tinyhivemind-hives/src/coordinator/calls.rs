@@ -27,6 +27,21 @@ impl Coordinator {
             .get(agent_id)
             .map(|running| running.request.turn_id.clone()))
     }
+    /// Whether `call` is recorded on its agent's running turn with the same
+    /// tool and arguments, so that an `*_in_turn` retry of it would be
+    /// answered from the record rather than act.
+    /// # Errors
+    /// Returns a poisoned shared lock error.
+    pub fn call_recorded(&self, call: &TurnCall) -> Result<bool> {
+        Ok(self
+            .lock()?
+            .durable
+            .running
+            .get(&call.agent_id)
+            .filter(|running| running.request.turn_id == call.turn_id)
+            .and_then(|running| running.calls.get(&call.call))
+            .is_some_and(|record| record.tool == call.tool && record.arguments == call.arguments))
+    }
     /// [`Self::submit_action`] as an identified call of the caller's running turn.
     /// # Errors
     /// [`Error::StaleTurn`], [`Error::CallReused`], an empty identity, or the

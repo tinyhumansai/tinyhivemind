@@ -85,7 +85,15 @@ impl<'a> Belt<'a> {
     pub async fn call(&self, call: &ToolCall) -> Result<Value> {
         let coordinator = self.coordinator;
         let actor = call.actor();
-        if let (Some(policy), Some(request)) = (self.send_policy, call.outbound()) {
+        // A recorded identified call was authorized when it acted; its retry
+        // is answered from the record and acts on nothing, so policy is not
+        // asked again.
+        let recorded = match call.turn_call() {
+            Some(turn) => coordinator.call_recorded(&turn)?,
+            None => false,
+        };
+        if let (false, Some(policy), Some(request)) = (recorded, self.send_policy, call.outbound())
+        {
             policy.authorize_in_session(actor, &request, call.session())?;
         }
         match call.kind() {
@@ -137,7 +145,7 @@ impl<'a> Belt<'a> {
             }
             Kind::CreateHive | Kind::CreateAgent | Kind::JoinHive | Kind::LeaveHive => {
                 let turn = call.turn_call();
-                self.manage_as(actor, call.management()?, turn.as_ref())
+                self.manage_as(actor, call.management()?, turn.as_ref(), recorded)
                     .await
             }
         }
@@ -147,18 +155,22 @@ impl<'a> Belt<'a> {
     /// # Errors
     /// Disabled management, host denial, agent creation or coordinator errors.
     pub async fn manage(&self, actor: &str, request: ManagementRequest) -> Result<Value> {
-        self.manage_as(actor, request, None).await
+        self.manage_as(actor, request, None, false).await
     }
     /// [`Self::manage`], through the coordinator's identified calls when `turn`
-    /// is given. Creating an agent is the creator's, outside them.
+    /// is given, without asking the authorizer again for a `recorded` one.
+    /// Creating an agent is the creator's, outside them.
     async fn manage_as(
         &self,
         actor: &str,
         request: ManagementRequest,
         turn: Option<&TurnCall>,
+        recorded: bool,
     ) -> Result<Value> {
         let management = self.management.ok_or(Error::ManagementDisabled)?;
-        management.authorizer.authorize(actor, &request)?;
+        if !recorded {
+            management.authorizer.authorize(actor, &request)?;
+        }
         let coordinator = self.coordinator;
         match request {
             ManagementRequest::CreateHive(hive) => {

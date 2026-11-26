@@ -27,6 +27,15 @@ pub enum Error {
         /// `turn` or `call`.
         name: String,
     },
+    /// An executable tool's argument schema uses a keyword the server cannot
+    /// check, so it could not refuse arguments that break it.
+    #[error("tool {tool} declares the schema keyword {keyword}, which this server cannot check")]
+    UnsupportedSchema {
+        /// The tool.
+        tool: String,
+        /// The keyword.
+        keyword: String,
+    },
     /// Two of a seat's tools have one name.
     #[error("tool {0} is declared twice")]
     DuplicateTool(String),
@@ -37,3 +46,6 @@ pub enum Error {
     #[error("the server task failed: {0}")]
     Stopped(String),
 }
+
+#[cfg(test)]
+mod test;

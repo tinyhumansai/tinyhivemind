@@ -176,28 +176,51 @@ async fn a_lowered_seats_tool_allow_list_is_all_it_is_served() {
         programs: vec![tool("stamp", "stamp", "write", json!({"type": "object"}))],
         ..LoweredSeatIntegration::default()
     };
-    let seat_tools = SeatTools::from_lowered(&seat(integration), &RuntimeSettings::default(), context()).unwrap();
-    let coordinator = Coordinator::new("r".into(), Arc::new(MemoryStorage::new()), CoordinatorOptions::default())
+    let seat_tools =
+        SeatTools::from_lowered(&seat(integration), &RuntimeSettings::default(), context())
+            .unwrap();
+    let coordinator = Coordinator::new(
+        "r".into(),
+        Arc::new(MemoryStorage::new()),
+        CoordinatorOptions::default(),
+    )
+    .await
+    .unwrap();
+    let server = HiveToolServer::start(Services::new(coordinator), ServerOptions::default())
         .await
         .unwrap();
-    let server = HiveToolServer::start(Services::new(coordinator), ServerOptions::default()).await.unwrap();
     let endpoint = server.serve_seat(seat_tools).unwrap();
-    assert_eq!(endpoint.tools.iter().collect::<Vec<_>>(), ["hivemind_post", "hivemind_read", "stamp"]);
+    assert_eq!(
+        endpoint.tools.iter().collect::<Vec<_>>(),
+        ["hivemind_post", "hivemind_read", "stamp"]
+    );
     let client = Client::of(&server, &endpoint);
-    let listed: Vec<String> = client.tools().await.into_iter().map(|(name, _)| name).collect();
+    let listed: Vec<String> = client
+        .tools()
+        .await
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect();
     assert_eq!(listed, ["hivemind_read", "hivemind_post", "stamp"]);
-    let refused = client.rpc("tools/call", json!({"name": "hivemind_list_hives", "arguments": {}})).await;
+    let refused = client
+        .rpc(
+            "tools/call",
+            json!({"name": "hivemind_list_hives", "arguments": {}}),
+        )
+        .await;
     assert_eq!(refused["error"]["code"], -32602);
 }
 
 #[test]
 fn a_schema_keyword_the_server_cannot_check_is_refused() {
-    let args = json!({"type": "object", "properties": {"note": {"type": "string", "pattern": "^a"}}});
+    let args =
+        json!({"type": "object", "properties": {"note": {"type": "string", "pattern": "^a"}}});
     let integration = LoweredSeatIntegration {
         programs: vec![tool("stamp", "stamp", "write", args)],
         ..LoweredSeatIntegration::default()
     };
-    let refused = SeatTools::from_lowered(&seat(integration), &RuntimeSettings::default(), context());
+    let refused =
+        SeatTools::from_lowered(&seat(integration), &RuntimeSettings::default(), context());
     assert!(
         matches!(refused, Err(Error::UnsupportedSchema { ref tool, ref keyword }) if tool == "stamp" && keyword == "pattern"),
         "{refused:?}"

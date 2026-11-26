@@ -447,3 +447,21 @@ async fn hive_management_in_a_turn_acts_and_is_recorded() {
     assert_eq!(calls.keys().collect::<Vec<_>>(), ["create-1", "leave-1"]);
     held.end().await;
 }
+
+#[tokio::test]
+async fn a_recorded_call_is_reported_only_for_its_own_tool_arguments_and_turn() {
+    let c = setup().await;
+    let held = hold(&c).await;
+    let call = held.post("post-1", "hello");
+    assert!(!c.call_recorded(&call).unwrap());
+    c.submit_action_in_turn(&call, &held.episode(), posted("hello"))
+        .await
+        .unwrap();
+    assert!(c.call_recorded(&call).unwrap());
+    assert!(!c.call_recorded(&held.post("post-1", "other")).unwrap());
+    let mut stale = call.clone();
+    stale.turn_id = "0:0:a".into();
+    assert!(!c.call_recorded(&stale).unwrap());
+    held.end().await;
+    assert!(!c.call_recorded(&call).unwrap());
+}

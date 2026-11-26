@@ -429,7 +429,9 @@ struct Toggle(std::sync::atomic::AtomicBool);
 impl SendAuthorizer for Toggle {
     fn authorize(&self, _: &str, _: &SendRequest) -> HostResult<()> {
         if self.0.load(std::sync::atomic::Ordering::SeqCst) {
-            Err(tinyhivemind_host::Error::SendDenied("sends are closed".into()))
+            Err(tinyhivemind_host::Error::SendDenied(
+                "sends are closed".into(),
+            ))
         } else {
             Ok(())
         }
@@ -440,7 +442,11 @@ impl SendAuthorizer for Toggle {
 async fn a_recorded_send_is_answered_even_after_the_policy_changes() {
     let toggle = Arc::new(Toggle::default());
     let policy = toggle.clone();
-    let hive = Hive::start(move |services| services.with_send_policy(policy), |seat, _| seat).await;
+    let hive = Hive::start(
+        move |services| services.with_send_policy(policy),
+        |seat, _| seat,
+    )
+    .await;
     let send = |call: &str| json!({"agent_id": "b", "message_id": call, "body": "hi", "turn": hive.turn_id(), "call": call});
     let first = hive.a.call("hivemind_send_agent", send("s1")).await;
     assert!(!first.1, "{first:?}");

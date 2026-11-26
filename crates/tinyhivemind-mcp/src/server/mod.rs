@@ -131,6 +131,14 @@ pub struct ServerOptions {
     pub max_body_bytes: usize,
     /// Most connections open at once; nonzero.
     pub max_connections: usize,
+    /// Most tool calls running at once, across seats; nonzero.
+    pub max_calls: usize,
+    /// Most tool calls one seat may have running at once; nonzero.
+    pub max_calls_per_seat: usize,
+    /// Most call records one seat's running turn may hold.
+    pub max_records: usize,
+    /// Most bytes of arguments and results those records may hold.
+    pub max_record_bytes: usize,
     /// Longest a connection may take to send a request's headers.
     pub header_timeout: Duration,
     /// Longest a request may take to send its body.
@@ -145,6 +153,10 @@ impl Default for ServerOptions {
             name: "hivemind".into(),
             max_body_bytes: 1 << 20,
             max_connections: 32,
+            max_calls: 32,
+            max_calls_per_seat: 4,
+            max_records: 256,
+            max_record_bytes: 1 << 20,
             header_timeout: Duration::from_secs(10),
             body_timeout: Duration::from_secs(30),
             shutdown_grace: Duration::from_secs(5),
