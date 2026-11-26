@@ -78,6 +78,7 @@ crates/
 ├── tinyhivemind-host/      # hive tool belt, policies, package plans, harness processes
 ├── tinyhivemind-mcp/       # hive and package tools served to harness processes over loopback MCP
 ├── tinyhivemind-openhuman/ # package deployment, seat runners, host integration
+├── tinyhivemind-openhuman-process/ # OpenHuman seats as supervised processes
 ├── tinyhivemind-hives/    # durable cross-hive coordinator
 └── tinyhivemind-lang/     # pure hive packages: structure, integrations, edits, lineage
 wiki/                    # GitHub wiki submodule
@@ -99,6 +100,9 @@ permissions, profiles, hooks, session, Jev, features and workflows — as data,
 and lowering resolves it per seat; it names no harness type and starts no
 process. `tinyhivemind-exec` runs those executable tools and hooks
 (`docs/specs/executable-tools.md`) and is not one of the pure crates.
+`tinyhivemind-openhuman-process` implements the host's harness port for the
+`openhuman` kind over a pinned `openhuman-core` binary (`harnesses.lock`); it
+links no harness either.
 `tinyhivemind-host` depends on core, hives and lang, and owns what every harness
 shares: the hive tools and their dispatch, the send and management policy ports,
 turn scope and prompt, package loading, the deployment plan, and supervised

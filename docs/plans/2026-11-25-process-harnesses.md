@@ -72,9 +72,12 @@ cases are diagnosed at their location; a roster-only edit cannot change `harness
 
 - **4a. `tinyhivemind-openclaw`:** handshake with Ed25519 device identity,
   `agent` and its second response, `chat.abort`, generated config, recovery hold.
-- **4b. OpenHuman process runner** in `tinyhivemind-openhuman`, beside the linked
-  path: workspace and config per seat, `web_chat` and `/events`, `web_cancel`,
-  start-up verification, approvals through `list_pending` and `decide`.
+- **4b. OpenHuman process runner** in `tinyhivemind-openhuman-process`, a crate
+  beside the linked adapter rather than a module of it, so that step 6 deletes
+  the adapter without touching it: workspace and config per seat, `web_chat` and
+  `/events`, `web_cancel`, start-up verification, approvals through the
+  `approval_request` event and `decide`. Done: conformance offline and `live_*`
+  on 0.64.15.
 - **4c. `tinyhivemind-codex`:** app-server over stdio, pinned catalog, per-thread
   MCP. Medulla's `codex_app_server` is the reference for framing; its silent new
   thread on a failed resume is not copied.

@@ -171,3 +171,17 @@ fn a_port_error_reaches_the_coordinator_as_its_own_message() {
     };
     assert!(resume.to_string().contains("s1"));
 }
+
+#[test]
+fn a_refused_seat_keeps_the_clients_own_error() {
+    let reason = std::io::Error::other("no provider");
+    let error = Error::Refused(Box::new(reason));
+    assert_eq!(
+        error.to_string(),
+        "the seat cannot run on this harness: no provider"
+    );
+    let Error::Refused(source) = error else {
+        unreachable!("built as refused")
+    };
+    assert!(source.downcast_ref::<std::io::Error>().is_some());
+}

@@ -17,10 +17,10 @@ set -euo pipefail
 # whose vocabulary dependency includes `anyhow` and `async-trait`.
 pure_crates=("tinyhivemind-core" "tinyhivemind-lang")
 tool_crates=("tinyhivemind-tools")
-# Host runs harnesses as processes (ADR 0035), and the MCP server serves them
-# hive tools over loopback (ADR 0036), so both may hold a runtime and a
-# listener, but neither may link a harness.
-host_crates=("tinyhivemind-host" "tinyhivemind-mcp")
+# Host and the process harness clients run harnesses as processes (ADR 0035),
+# and the MCP server serves them hive tools over loopback (ADR 0036), so they may
+# hold a runtime, a listener and an HTTP client, but none may link a harness.
+host_crates=("tinyhivemind-host" "tinyhivemind-mcp" "tinyhivemind-openhuman-process")
 
 forbidden_pure='tokio|futures|async-trait|axum|hyper|reqwest|ureq|curl|anyhow|rusqlite|git2|openhuman|tinyagents|tinytools'
 # Whole families: `openhuman-embed`, `tinyagents-harness` and so on.
@@ -40,7 +40,9 @@ check_crate() {
     echo "assert-pure: cargo tree failed for '$crate'" >&2
     exit 1
   }
-  found="$(grep -Ei "^(${forbidden})(-embed)? v" <<<"$tree" || true)"
+  # The crate's own line is not a dependency: `tinyhivemind-openhuman-process`
+  # is named like the forbidden linked adapter's family.
+  found="$(grep -Ei "^(${forbidden})(-embed)? v" <<<"$tree" | grep -v "^${crate} v" || true)"
   if [ -n "$found" ]; then
     echo "$crate pulled in a dependency its manifest forbids:" >&2
     echo "$found" >&2
@@ -64,7 +66,8 @@ if [ "$status" -ne 0 ]; then
   echo "A pure crate is linked into the hot path of every agent turn and must" >&2
   echo "compile in a host's default build. It must stay free of async" >&2
   echo "runtimes, transports, HTTP clients and web frameworks. The host crate" >&2
-  echo "runs harnesses as processes and must link none (ADR 0035)." >&2
+  echo "and the process harness clients run harnesses as processes and must" >&2
+  echo "link none (ADR 0035)." >&2
   exit 1
 fi
 

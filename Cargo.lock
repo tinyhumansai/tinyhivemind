@@ -3642,6 +3642,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "tinyhivemind-openhuman-process"
+version = "0.2.1"
+dependencies = [
+ "anyhow",
+ "reqwest",
+ "rustix 1.1.5",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tinyhivemind-hives",
+ "tinyhivemind-host",
+ "tinyhivemind-lang",
+ "tokio",
+ "toml 0.8.23",
+]
+
+[[package]]
 name = "tinyhivemind-tools"
 version = "0.2.1"
 dependencies = [

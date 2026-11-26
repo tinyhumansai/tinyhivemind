@@ -5,16 +5,17 @@ Boundary: [ADR 0035](../adr/0035-a-harness-is-a-process.md),
 [ADR 0036](../adr/0036-hive-tools-are-served-over-loopback-mcp.md).
 Evidence: [the harness spike](../experiments/2026-11-25-process-harnesses.md).
 
-Implemented so far, by steps 1, 2 and 3 of the plan: the harness-neutral host
-crate, the harness port with the seat rules below, start verification, process
-supervision on Linux, a conformance suite that a scripted fake harness passes,
-the coordinator's per-turn call record, the `tinyhivemind-mcp` server, and the
-package schema: the `harnesses` section, `harness` on runtime, profile and seat,
-the capability table in `tinyhivemind-lang` and its `check` diagnostics. No
-client for a real harness exists yet, and the server does not proxy package MCP
-servers. Until the plan's removal phase lands, the linked OpenHuman adapter
-remains the way a package is deployed, and it refuses a seat whose harness is
-not `openhuman`.
+Implemented so far, by steps 1, 2, 3 and 4b of the plan: the harness-neutral
+host crate, the harness port with the seat rules below, start verification,
+process supervision on Linux, a conformance suite that a scripted fake harness
+passes, the coordinator's per-turn call record, the `tinyhivemind-mcp` server,
+the package schema (the `harnesses` section, `harness` on runtime, profile and
+seat, the capability table in `tinyhivemind-lang` and its `check` diagnostics),
+and the `openhuman` client, `crates/tinyhivemind-openhuman-process`, which passes
+the conformance suite offline and on the pinned binary. No deployment starts a
+process harness yet, and the server does not proxy package MCP servers. Until the
+plan's removal phase lands, the linked OpenHuman adapter remains the way a
+package is deployed, and it refuses a seat whose harness is not `openhuman`.
 
 ## Problem
 
@@ -431,6 +432,46 @@ reports it as a normal end. Until that is configurable, a package asking for mor
 iterations is rejected for this kind, and a turn that reaches the cap is reported
 as failed. The runner counts `iteration_start` events to tell.
 
+What implementing it on 0.64.15 settled:
+
+- No RPC reports the tools a custom agent's turn offers
+  (`agent_list_definitions` and `agent_get_definition` cover built-in agents;
+  the offline `openhuman agent dump-prompt --with-tools` CLI reports a
+  definition's tools but not a session's). So the model-visible list is
+  computed from the effective config the way `resolved_scope` in
+  `agent/tinyagents/host/definition_registry.rs` builds it: the chat agent's
+  allowlist, of the tools the instance has; every deferred tool if the list
+  names `tool_search`; the session's delegation tools for an agent with
+  subagents; `juice_retrieve` while compaction or the orchestrator's summary
+  stage is on; the REPL tools while results are stored behind a handle; and
+  `extra_tools`. A chat agent other than the written one counts as a
+  built-in's set. Any of these fails the start. The config turns compaction
+  off, since it defaults on. The live gate test checks the list at the model.
+- A turn that fails before its thread has a transcript reports no session,
+  as an error, so the next turn starts the thread rather than failing to
+  resume one that never existed. A failure on a thread with a transcript is a
+  failed turn in that session.
+- The hashed names are known only to a running instance, so a start is two:
+  one whose allowlist matches nothing, to read them, and the verified one.
+- A session is a `thread_id`, the same for a seat's life. A turn that names a
+  session runs only if `threads_transcript_get` has a transcript for it;
+  otherwise the turn fails as a resume failure and nothing reaches the model.
+- Every turn has its own `client_id`, and its `/events` subscription is open
+  before `channel_web_chat` is called, since the first events can precede its
+  answer. Events are taken only for the returned `request_id`, except
+  `approval_request`, whose `request_id` is the approval's.
+- A cancelled or failed turn leaves no message in the thread.
+- An approval the harness asks for goes to the seat's approver, which has a
+  time limit and is a denial past it. `approval_decide` takes no reason, so a
+  denial's reason is not passed on. Approvals still pending when a turn starts
+  are left by one that is over, and are denied first. A `chat_error` message is
+  cut to one line of at most 200 characters before it becomes the failure.
+- The top-level `embeddings_provider` is rewritten to the hosted default on
+  load whatever the file says, so it is neither written nor compared; memory
+  is off, so nothing embeds. The binary also carries a compiled-in Sentry DSN
+  that no config or environment entry empties, which is one more reason live
+  runs block egress.
+
 **OpenClaw.** Tool search and code mode off; `tools.allow` exactly the seat's
 server; the deny groups recorded in the experiment; agent-to-agent off. After a
 crash, do not admit a turn for a seat until its recovery is known to be settled.
@@ -448,7 +489,8 @@ Login tokens are a host secret and enter only the instance's environment.
 
 ## Pins
 
-A lock file records version, target and sha256 for each kind. A script fetches
+A lock file records version, target and sha256 for each kind: `harnesses.lock`
+at the repository root. A script, `.github/scripts/fetch-harness.sh`, fetches
 and verifies; the library takes a path. Live tests run against exactly the pin,
 with outbound network blocked except to the model endpoint under test.
 
