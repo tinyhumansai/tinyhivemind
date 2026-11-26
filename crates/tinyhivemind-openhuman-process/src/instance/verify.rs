@@ -70,30 +70,77 @@ pub(crate) async fn discover(
     }
 }
 
-/// The tool 0.64.15 adds to any allowlist while tool-output compaction is
-/// on, so that the model can recover a compacted result.
+/// The recovery tool 0.64.15 adds to a non-empty allowlist while tool
+/// output can be compacted or summarized.
 const RECOVERY: &str = "juice_retrieve";
+/// The tools it adds while results are stored behind a handle.
+const REPL: [&str; 3] = ["juice_find", "juice_extract", "juice_summarize"];
+/// The tool whose presence in an allowlist adds every deferred tool.
+const TOOL_SEARCH: &str = "tool_search";
+/// Stand-ins for tools only a running session knows the names of. None is
+/// ever expected, so any of them fails the check.
+const DEFERRED: &str = "<deferred tools behind tool_search>";
+const DELEGATION: &str = "<the session's delegation tools>";
 
-/// The tools the model sees: the agent's effective allowlist, of those the
-/// instance has, and the recovery tool unless compaction is off, which the
-/// binary defaults it to.
+fn enabled(value: &Value) -> bool {
+    // A switch the snapshot leaves out is the binary's default, on.
+    value != false
+}
+
+/// The tools the model sees, computed as 0.64.15's `resolved_scope` does
+/// (`agent/tinyagents/host/definition_registry.rs`): the chat agent's
+/// allowlist, of the tools the instance has; every deferred tool if it names
+/// `tool_search`; the session's delegation tools for an agent with
+/// subagents; the recovery tool while compaction or the orchestrator's
+/// summary stage is on, and the REPL tools while results are stored behind a
+/// handle, both only for a non-empty allowlist; and `extra_tools`. No RPC
+/// reports the set, so the live tests check it at the model.
 pub(super) fn visible(config: &Value, available: &[String]) -> Vec<String> {
+    let agent = config["agent"]["chat_agent_id"].as_str().unwrap_or("orchestrator");
     let entries = config["agent_registry"]["entries"].as_array().cloned();
-    let agent = entries
-        .unwrap_or_default()
-        .into_iter()
-        .find(|entry| entry["id"] == AGENT_ID);
-    let allowed = agent.map_or(Value::Null, |agent| agent["tool_allowlist"].clone());
-    let allowed = allowed.as_array().cloned().unwrap_or_default();
-    let names = allowed.iter().filter_map(Value::as_str);
-    let mut seen: Vec<String> = names
-        .filter(|name| available.iter().any(|tool| tool == name))
-        .map(str::to_owned)
-        .collect();
-    if config["context"]["compaction_enabled"] != false {
-        seen.push(RECOVERY.to_owned());
+    let Some(entry) = entries.unwrap_or_default().into_iter().find(|entry| entry["id"] == agent)
+    else {
+        return vec![format!("<the built-in agent {agent}>")];
+    };
+    let has = |name: &str| available.iter().any(|tool| tool == name);
+    let list = |key: &str| {
+        let names = entry[key].as_array().cloned().unwrap_or_default();
+        names.iter().filter_map(Value::as_str).map(str::to_owned).collect::<Vec<_>>()
+    };
+    let allowed = list("tool_allowlist");
+    let mut seen: Vec<String> = allowed.iter().filter(|name| has(name)).cloned().collect();
+    if allowed.iter().any(|name| name == TOOL_SEARCH) {
+        seen.push(DEFERRED.to_owned());
     }
-    seen
+    if !list("subagents").is_empty() {
+        seen.push(DELEGATION.to_owned());
+    }
+    let compaction = enabled(&config["context"]["compaction_enabled"]);
+    let threshold = &config["context"]["summarizer_payload_threshold_tokens"];
+    let summarizes = agent == "orchestrator" && threshold.as_u64() != Some(0);
+    let juice = &config["tokenjuice"];
+    let repl = compaction
+        && enabled(&juice["router_enabled"])
+        && enabled(&juice["ccr_enabled"])
+        && enabled(&juice["repl_handle_enabled"]);
+    if !allowed.is_empty() {
+        let mut companions = Vec::new();
+        if compaction || summarizes {
+            companions.push(RECOVERY);
+        }
+        if repl {
+            companions.extend(REPL);
+        }
+        seen.extend(companions.into_iter().filter(|name| has(name)).map(str::to_owned));
+    }
+    seen.extend(list("extra_tools"));
+    let mut unique = Vec::new();
+    for tool in seen {
+        if !unique.contains(&tool) {
+            unique.push(tool);
+        }
+    }
+    unique
 }
 
 /// Hold the instance at `client` against the child `pid`, the pinned

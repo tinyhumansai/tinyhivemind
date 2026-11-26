@@ -175,13 +175,17 @@ fn compaction_puts_the_recovery_tool_before_the_model_whatever_the_allowlist() {
     let available = ["juice_retrieve".to_owned(), "mcp_s_post_1".to_owned()];
     let agent =
         serde_json::json!({"id": crate::config::AGENT_ID, "tool_allowlist": ["mcp_s_post_1"]});
-    let on = serde_json::json!({"agent_registry": {"entries": [agent.clone()]}});
+    let chat = serde_json::json!({"chat_agent_id": crate::config::AGENT_ID});
+    let on = serde_json::json!({"agent": chat, "agent_registry": {"entries": [agent.clone()]}});
     assert_eq!(
         super::verify::visible(&on, &available),
         ["mcp_s_post_1", "juice_retrieve"]
     );
-    let off = serde_json::json!({"agent_registry": {"entries": [agent]}, "context": {"compaction_enabled": false}});
+    let off = serde_json::json!({"agent": chat, "agent_registry": {"entries": [agent]}, "context": {"compaction_enabled": false}});
     assert_eq!(super::verify::visible(&off, &available), ["mcp_s_post_1"]);
+    // Another chat agent is a built-in one, whose tools are not these.
+    let other = serde_json::json!({"agent_registry": {"entries": []}});
+    assert_eq!(super::verify::visible(&other, &available), ["<the built-in agent orchestrator>"]);
 }
 
 #[test]
