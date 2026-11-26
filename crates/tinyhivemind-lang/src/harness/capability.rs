@@ -65,7 +65,7 @@ pub enum Capability {
     UserSkills,
     /// `limits.budget_usd`.
     Budget,
-    /// `limits.iterations`; OpenHuman's own cap is
+    /// `limits.iterations`; `OpenHuman`'s own cap is
     /// [`HarnessKind::iteration_cap`].
     IterationLimit,
     /// A model's `temperature`.
@@ -216,13 +216,12 @@ impl Capability {
             | Self::BuiltinToolGroups
             | Self::BuiltinToolHooks
             | Self::HostSessionStore
-            | Self::HostMemoryEngine => [D, D, D],
-            Self::BuiltinToolRules => [R, D, D],
-            // The spec's table does not decide these, so they start
+            | Self::HostMemoryEngine
+            // The spec's first table does not decide these, so they start
             // rejected: a setting nothing on the process path enforces must
             // not be accepted. The tool lists and send policy are enforced
             // by the linked adapter's permission gate, not by the host.
-            Self::Skills
+            | Self::Skills
             | Self::UserSkills
             | Self::Budget
             | Self::Temperature
@@ -239,6 +238,7 @@ impl Capability {
             | Self::MaxAgents
             | Self::SqliteSessions
             | Self::InProcessMemory => [D, D, D],
+            Self::BuiltinToolRules => [R, D, D],
             // OpenHuman honours a limit up to its fixed cap.
             Self::IterationLimit => [H, D, D],
             Self::Subagents | Self::DefinitionBase | Self::Jev | Self::SessionTuning => [T, D, D],
