@@ -195,7 +195,12 @@ fn admissible(
 
 /// Refuse a hive call the host's send or management policy refuses, before
 /// any hook runs. The belt checks again as it dispatches.
-fn authorized(services: &Services, seat: &SeatState, kind: Kind, arguments: &Value) -> Result<(), Outcome> {
+fn authorized(
+    services: &Services,
+    seat: &SeatState,
+    kind: Kind,
+    arguments: &Value,
+) -> Result<(), Outcome> {
     let call = ToolCall::new(seat.id(), None, kind, arguments.clone())
         .map_err(|error| Outcome::refused(error.to_string()))?;
     services

@@ -5,7 +5,7 @@ Every test drives a real server over a loopback HTTP/1.1 client.
 | File | Covers |
 | --- | --- |
 | `http.rs` | Bearer, Host, Origin, body bound, methods and paths, version negotiation, notifications, malformed messages, tools-only surface, redacted `Debug`, the connection bound, shutdown |
-| `calls.rs` | Hive tools: the served schemas, turn and call checks, retries, reuse, another seat, a forged actor, sends, joins, `create_agent`, a hook-denied call |
+| `calls.rs` | Hive tools: the served schemas, turn and call checks, retries, reuse, another seat, a forged actor, sends, joins, `create_agent`, a hook-denied call, policy refusals before hooks |
 | `programs.rs` | Executable tools: retries, an unknown outcome, hooked reads, hook denial, the `read_only` and `supervised` gates, the approver |
 | `policy.rs` | The host send policy refusing a send; secrets and `Services` debug |
 | `seats.rs` | `SeatTools::from_lowered` refusals and access, permission tool names, duplicates |
