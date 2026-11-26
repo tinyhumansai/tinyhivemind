@@ -32,6 +32,8 @@ tokio = { workspace = true, features = ["time", "sync", "macros", "rt"] }
 [dev-dependencies]
 # The hive tests: a real coordinator and hive tool server.
 tinyhivemind-mcp.workspace = true
+# The edit test's workspace for the host's edit tool.
+tinyhivemind-exec.workspace = true
 # The mixed hive test runs an OpenHuman seat beside the ACP ones.
 tinyhivemind-openhuman-process = { path = "../tinyhivemind-openhuman-process" }
 # Fallible tests over several error types.

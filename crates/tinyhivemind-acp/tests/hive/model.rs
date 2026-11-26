@@ -5,9 +5,11 @@
 //! A request carries a seat's turn when one of its user texts is the
 //! rendered `TurnRequest`. The model reads the turn and episode from it and,
 //! counting the tool results after it, calls `hivemind_post` with call
-//! `post`, the same call again, then `hivemind_complete` with call `done`,
-//! then answers. Any other request, or one that offers no tools (a
-//! harness's own side call), gets a plain answer and changes nothing.
+//! `post`, the same call again, then, when it is offered the host's
+//! `write_file`, writes `<seat>.md` with call `edit`, then
+//! `hivemind_complete` with call `done`, then answers. Any other request, or
+//! one that offers no tools (a harness's own side call), gets a plain answer
+//! and changes nothing.
 #[expect(
     dead_code,
     reason = "shared with the OpenHuman runner's fakes; this model reads bodies only"
@@ -23,6 +25,14 @@ use tokio::sync::mpsc;
 
 /// The phrase that opens a rendered turn.
 const TURN: &str = "Incoming attributed Hivemind context";
+
+/// The host's edit tool, as the hive test declares it.
+pub(crate) const EDIT_TOOL: &str = "write_file";
+
+/// What seat `agent` writes to its file.
+pub(crate) fn edited(agent: &str) -> String {
+    format!("{agent} was here\n")
+}
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
@@ -228,6 +238,9 @@ fn answer(seen: &Arc<Mutex<Vec<Seen>>>, request: &Request) -> Reply {
             .find(|(_, tool)| tool.contains(name))
             .cloned()
     };
+    // A seat offered the edit tool writes one file before it completes.
+    let edit = find(EDIT_TOOL);
+    let complete_at = if edit.is_some() { 3 } else { 2 };
     let step = match (episode, read.results.len()) {
         (Some(episode), 0 | 1) => find("hivemind_post").map(|tool| {
             let body = format!("{agent} reporting");
@@ -236,7 +249,15 @@ fn answer(seen: &Arc<Mutex<Vec<Seen>>>, request: &Request) -> Reply {
                 json!({"episode_id": episode, "body": body, "turn": turn_id, "call": "post"}),
             )
         }),
-        (Some(episode), 2) => find("hivemind_complete").map(|tool| {
+        (Some(_), 2) if complete_at == 3 => edit.map(|tool| {
+            let path = format!("{agent}.md");
+            let content = edited(&agent);
+            (
+                tool,
+                json!({"path": path, "content": content, "turn": turn_id, "call": "edit"}),
+            )
+        }),
+        (Some(episode), at) if at == complete_at => find("hivemind_complete").map(|tool| {
             let body = format!("{agent} done");
             (
                 tool,
