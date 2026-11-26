@@ -7,10 +7,11 @@ Evidence: [the harness spike](../experiments/2026-11-25-process-harnesses.md).
 
 Implemented so far, by step 1 of the plan: the harness-neutral host crate, the
 harness port with the seat rules below, start verification, process supervision
-on Linux, and a conformance suite that a scripted fake harness passes. No client
-for a real harness, no MCP server and no `harnesses` section exist yet. Until the
-plan's removal phase lands, the linked OpenHuman adapter remains the way a
-package is deployed.
+on Linux, and a conformance suite that a scripted fake harness passes. Step 4b adds the
+`openhuman` client, `crates/tinyhivemind-openhuman-process`, which passes that
+suite offline and on the pinned binary. No MCP server and no `harnesses`
+section exist yet, so no deployment uses it. Until the plan's removal phase
+lands, the linked OpenHuman adapter remains the way a package is deployed.
 
 ## Problem
 
@@ -322,6 +323,28 @@ reports it as a normal end. Until that is configurable, a package asking for mor
 iterations is rejected for this kind, and a turn that reaches the cap is reported
 as failed. The runner counts `iteration_start` events to tell.
 
+What implementing it on 0.64.15 settled:
+
+- `context.compaction_enabled` defaults on, and while it is on the binary adds
+  `juice_retrieve` to every allowlist. The config turns it off, and the start
+  check counts `juice_retrieve` as model-visible unless the effective config
+  has it off.
+- The hashed names are known only to a running instance, so a start is two:
+  one whose allowlist matches nothing, to read them, and the verified one.
+- A session is a `thread_id`, the same for a seat's life. A turn that names a
+  session runs only if `threads_transcript_get` has a transcript for it;
+  otherwise the turn fails as a resume failure and nothing reaches the model.
+- Every turn has its own `client_id`, and its `/events` subscription is open
+  before `channel_web_chat` is called, since the first events can precede its
+  answer. Events are taken only for the returned `request_id`, except
+  `approval_request`, whose `request_id` is the approval's.
+- A cancelled turn leaves no message in the thread.
+- The top-level `embeddings_provider` is rewritten to the hosted default on
+  load whatever the file says, so it is neither written nor compared; memory
+  is off, so nothing embeds. The binary also carries a compiled-in Sentry DSN
+  that no config or environment entry empties, which is one more reason live
+  runs block egress.
+
 **OpenClaw.** Tool search and code mode off; `tools.allow` exactly the seat's
 server; the deny groups recorded in the experiment; agent-to-agent off. After a
 crash, do not admit a turn for a seat until its recovery is known to be settled.
@@ -339,7 +362,8 @@ Login tokens are a host secret and enter only the instance's environment.
 
 ## Pins
 
-A lock file records version, target and sha256 for each kind. A script fetches
+A lock file records version, target and sha256 for each kind: `harnesses.lock`
+at the repository root. A script, `.github/scripts/fetch-harness.sh`, fetches
 and verifies; the library takes a path. Live tests run against exactly the pin,
 with outbound network blocked except to the model endpoint under test.
 
