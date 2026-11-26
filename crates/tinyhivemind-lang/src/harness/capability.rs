@@ -59,6 +59,44 @@ pub enum Capability {
     SessionTuning,
     /// `workflows`.
     Workflows,
+    /// Skills: a seat's, a profile's or a toolpack's.
+    Skills,
+    /// `runtime.include_user_skills`.
+    UserSkills,
+    /// `limits.budget_usd`.
+    Budget,
+    /// `limits.iterations`; OpenHuman's own cap is
+    /// [`HarnessKind::iteration_cap`].
+    IterationLimit,
+    /// A model's `temperature`.
+    Temperature,
+    /// A model's `max_tokens`.
+    MaxTokens,
+    /// A profile's `bare_prompt`.
+    BarePrompt,
+    /// Tool allow and deny lists: `tools` on a seat or profile, and a
+    /// permission set's `allow_tools` and `deny_tools`.
+    ToolLists,
+    /// A permission set's `send_destinations` and `send_operations`.
+    SendPolicy,
+    /// A `stop` hook.
+    StopHooks,
+    /// A seat's factory `config`.
+    FactoryConfig,
+    /// A seat's harness `agent_id`.
+    AgentId,
+    /// `runtime.workspace`.
+    Workspace,
+    /// `runtime.deployment_id`.
+    DeploymentId,
+    /// `runtime.concurrency` other than its default.
+    Concurrency,
+    /// `runtime.max_agents`.
+    MaxAgents,
+    /// `session_store = "sqlite"`.
+    SqliteSessions,
+    /// `memory_engine = "memory"`.
+    InProcessMemory,
 }
 
 /// How one kind honours one [`Capability`].
@@ -81,9 +119,10 @@ pub enum Unlock {
     Conformance,
     /// A harness release that has the setting, then a conformance test.
     Release,
-    /// A change of the spec and host work: the setting cannot be honoured
-    /// on this path as designed, so no test alone moves it.
-    Decision,
+    /// A change of the spec, and usually host work: the spec rejects the
+    /// setting on this path, or does not decide it, so no test alone moves
+    /// it.
+    Spec,
 }
 
 /// The model API a kind speaks to an `openai` provider's endpoint.
@@ -105,7 +144,7 @@ impl Support {
 
 impl Capability {
     /// Every capability, in the order of the spec's table.
-    pub const ALL: [Self; 22] = [
+    pub const ALL: [Self; 40] = [
         Self::Essentials,
         Self::OpenaiEndpoint,
         Self::OpenaiDefaultEndpoint,
@@ -128,6 +167,24 @@ impl Capability {
         Self::Jev,
         Self::SessionTuning,
         Self::Workflows,
+        Self::Skills,
+        Self::UserSkills,
+        Self::Budget,
+        Self::IterationLimit,
+        Self::Temperature,
+        Self::MaxTokens,
+        Self::BarePrompt,
+        Self::ToolLists,
+        Self::SendPolicy,
+        Self::StopHooks,
+        Self::FactoryConfig,
+        Self::AgentId,
+        Self::Workspace,
+        Self::DeploymentId,
+        Self::Concurrency,
+        Self::MaxAgents,
+        Self::SqliteSessions,
+        Self::InProcessMemory,
     ];
 
     /// The row: support for `openhuman`, `openclaw` and `codex`, in that
@@ -136,7 +193,7 @@ impl Capability {
         use Support::{Harness as H, Host};
         const T: Support = Support::Rejected(Unlock::Conformance);
         const R: Support = Support::Rejected(Unlock::Release);
-        const D: Support = Support::Rejected(Unlock::Decision);
+        const D: Support = Support::Rejected(Unlock::Spec);
         match self {
             Self::Essentials | Self::OpenaiEndpoint | Self::NoSandbox => [H, H, H],
             Self::ServedToolPolicy | Self::Autonomy | Self::McpServers | Self::Workflows => {
@@ -161,6 +218,29 @@ impl Capability {
             | Self::HostSessionStore
             | Self::HostMemoryEngine => [D, D, D],
             Self::BuiltinToolRules => [R, D, D],
+            // The spec's table does not decide these, so they start
+            // rejected: a setting nothing on the process path enforces must
+            // not be accepted. The tool lists and send policy are enforced
+            // by the linked adapter's permission gate, not by the host.
+            Self::Skills
+            | Self::UserSkills
+            | Self::Budget
+            | Self::Temperature
+            | Self::MaxTokens
+            | Self::BarePrompt
+            | Self::ToolLists
+            | Self::SendPolicy
+            | Self::StopHooks
+            | Self::FactoryConfig
+            | Self::AgentId
+            | Self::Workspace
+            | Self::DeploymentId
+            | Self::Concurrency
+            | Self::MaxAgents
+            | Self::SqliteSessions
+            | Self::InProcessMemory => [D, D, D],
+            // OpenHuman honours a limit up to its fixed cap.
+            Self::IterationLimit => [H, D, D],
             Self::Subagents | Self::DefinitionBase | Self::Jev | Self::SessionTuning => [T, D, D],
         }
     }
@@ -227,6 +307,24 @@ impl fmt::Display for Capability {
             Self::Jev => "jev settings",
             Self::SessionTuning => "session tuning",
             Self::Workflows => "workflows",
+            Self::Skills => "skills",
+            Self::UserSkills => "the operator's own skills",
+            Self::Budget => "a turn budget",
+            Self::IterationLimit => "an iteration limit",
+            Self::Temperature => "a model temperature",
+            Self::MaxTokens => "a model token limit",
+            Self::BarePrompt => "a bare prompt",
+            Self::ToolLists => "tool allow and deny lists",
+            Self::SendPolicy => "send destination and operation limits",
+            Self::StopHooks => "stop hooks",
+            Self::FactoryConfig => "a factory config",
+            Self::AgentId => "a harness agent id",
+            Self::Workspace => "a runtime workspace",
+            Self::DeploymentId => "a deployment id",
+            Self::Concurrency => "a runtime concurrency",
+            Self::MaxAgents => "an agent limit",
+            Self::SqliteSessions => "sqlite sessions",
+            Self::InProcessMemory => "an in-process memory engine",
         })
     }
 }
@@ -238,7 +336,7 @@ impl fmt::Display for Unlock {
             Self::Release => {
                 "rejected until a harness release has it and a conformance test proves it"
             }
-            Self::Decision => "rejected by the harness spec",
+            Self::Spec => "rejected by the harness spec",
         })
     }
 }
