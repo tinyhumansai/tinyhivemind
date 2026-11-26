@@ -10,6 +10,12 @@ fit, and its actor and session come from the host, never from an argument.
 `Belt` executes one. Reads and sends are admitted by coordinator membership and
 visibility checks; episode actions require the caller's active episode.
 
+`ToolCall::in_turn(turn_id, call)` identifies a call as one action of the
+actor's running turn. The belt then sends, stages and manages hives through the
+coordinator's `*_in_turn` entry points, which refuse a turn that is not running
+and answer a retry from the record written with the effect. `create_agent` is
+the creator's, outside that record. Unidentified calls behave as before.
+
 `hivemind_read` requires exactly one of `hive_id` or `agent_id`. Hive reads may
 include `thread`; direct reads return only the caller's conversation with that
 peer. `after` is an exclusive sequence cursor in both. Reading schedules nothing.
@@ -18,6 +24,10 @@ With a send policy, the two sends, `hivemind_ask` and `hivemind_broadcast` offer
 it a `SendRequest` first; a refusal enqueues and stages nothing. Management
 consults its authorizer before any mutation, and reaches a harness only through
 `policy::AgentCreator`. Without it, the management tools are refused.
+
+`Belt::authorize(&call)` runs exactly that send and management policy with no
+effect, for a host that must act between authorization and dispatch (the MCP
+server runs package hooks there). `Belt::call` still checks again.
 
 | File | Responsibility |
 | --- | --- |

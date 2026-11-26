@@ -1,6 +1,6 @@
 # How the crates use each other
 
-The workspace has seven crates. An arrow points from a dependent crate to the
+The workspace has eight crates. An arrow points from a dependent crate to the
 crate it imports.
 
 ```mermaid
@@ -17,6 +17,10 @@ flowchart TD
     host --> hives
     host --> lang
     openhuman --> host
+    mcp["tinyhivemind-mcp"] --> host
+    mcp --> hives
+    mcp --> lang
+    mcp --> exec
 ```
 
 | Crate | Responsibility | External dependency boundary |
@@ -27,6 +31,7 @@ flowchart TD
 | [lang](../crates/tinyhivemind-lang/README.md) | Declarative packages — structure, policies and integrations — guarded edits, memory bindings and lineage | Pure serialization and hashing; no harness, store, process or transport |
 | [exec](../crates/tinyhivemind-exec/README.md) | Runs a package's executable tools and script hooks by the language-neutral calling convention | Child processes; `tinytools` vocabulary; no harness |
 | [host](../crates/tinyhivemind-host/README.md) | Hive tool dispatch, send and management policies, turn scope and prompt, package plans, supervised harness processes | `tinytools` vocabulary; no harness |
+| [mcp](../crates/tinyhivemind-mcp/README.md) | Serves hive and executable tools to harness processes over loopback MCP: per-seat bearers, the turn and call checks, hooks and the autonomy gate | A loopback HTTP/1.1 listener (hyper); no harness |
 | [OpenHuman](../crates/tinyhivemind-openhuman/README.md) | Deploys hive packages; permanent native tools and continuing turns on supplied handles | OpenHuman harness |
 
 Core's `runtime`, `hive`, `embed`, `typesafe`, and `driver` modules are

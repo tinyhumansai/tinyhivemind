@@ -1,0 +1,47 @@
+[package]
+name = "tinyhivemind-mcp"
+description = "Serves hive tools and a package's executable tools to harness processes over loopback MCP."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+publish = false
+# This crate opens a listening socket, on 127.0.0.1 only (ADR 0036), so it is
+# outside the pure crates. It names no harness and links none;
+# `.github/scripts/assert-pure.sh` asserts that no harness is in its graph.
+
+[dependencies]
+# The tool belt, its policy ports, `ToolEndpoint` and the `Approver` port.
+tinyhivemind-host.workspace = true
+# The coordinator: running turns and identified calls.
+tinyhivemind-hives.workspace = true
+# Seat declarations: executable tools, hooks, permissions, autonomy.
+tinyhivemind-lang.workspace = true
+# Runs executable tools and hooks under the package calling convention.
+tinyhivemind-exec.workspace = true
+# The HTTP/1.1 server; see the workspace entry for why.
+hyper.workspace = true
+hyper-util.workspace = true
+http-body-util.workspace = true
+# Bearer comparison and generation.
+subtle.workspace = true
+getrandom.workspace = true
+# JSON-RPC messages and tool arguments.
+serde_json.workspace = true
+# Typed errors.
+thiserror.workspace = true
+# The listener, connection tasks, the shutdown signal and body deadlines.
+tokio = { workspace = true, features = ["net", "rt", "sync", "time", "macros"] }
+
+[dev-dependencies]
+# The loopback client the tests drive the server with.
+hyper = { workspace = true, features = ["client"] }
+# Async tests on a multi-threaded runtime.
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+# Seat workspaces the fixture tools write in.
+tempfile.workspace = true
+
+[lints]
+workspace = true

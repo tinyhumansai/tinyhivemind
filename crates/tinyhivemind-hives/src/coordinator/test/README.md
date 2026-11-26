@@ -12,6 +12,7 @@
 | `transactions.rs` | Incremental appends, conflict reload/retry, storage failure, cancelled-turn flush, retention |
 | `observation.rs` | Host transcript reads, the revision watch, episode phases |
 | `starters.rs` | Host-chosen starters, their validation, and the unchanged wire form |
+| `calls.rs` | Identified calls: retries answered once, reuse and stale turns refused, failed commits, reload and restart |
 | `release.rs` | Release notes delivered once, across restart, and the unchanged wire form |
 
 Tests use scripted runner futures, barriers, and notifications. They require no

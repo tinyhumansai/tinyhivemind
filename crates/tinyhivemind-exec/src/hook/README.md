@@ -4,7 +4,7 @@ A seat's hooks: executable tools bound to an event.
 
 | File | Holds |
 | --- | --- |
-| `mod.rs` | `HookRunner` (`pre_tool_use`, `post_tool_use`, `stop`, `is_empty`) and `Verdict` |
+| `mod.rs` | `HookRunner` (`pre_tool_use`, `post_tool_use`, `stop`, `is_empty`, `matches_tool`) and `Verdict` |
 | `matcher.rs` | `*` wildcard matching of a hook's matcher against a tool name |
 | [`test/`](test/README.md) | Verdicts, matchers, order, failing hooks and event objects |
 

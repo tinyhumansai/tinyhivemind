@@ -3596,6 +3596,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "tinyhivemind-mcp"
+version = "0.2.1"
+dependencies = [
+ "getrandom 0.3.4",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "serde_json",
+ "subtle",
+ "tempfile",
+ "thiserror",
+ "tinyhivemind-exec",
+ "tinyhivemind-hives",
+ "tinyhivemind-host",
+ "tinyhivemind-lang",
+ "tokio",
+]
+
+[[package]]
 name = "tinyhivemind-openhuman"
 version = "0.2.1"
 dependencies = [

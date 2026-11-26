@@ -5,14 +5,16 @@ Boundary: [ADR 0035](../adr/0035-a-harness-is-a-process.md),
 [ADR 0036](../adr/0036-hive-tools-are-served-over-loopback-mcp.md).
 Evidence: [the harness spike](../experiments/2026-11-25-process-harnesses.md).
 
-Implemented so far, by steps 1 and 3 of the plan: the harness-neutral host
+Implemented so far, by steps 1, 2 and 3 of the plan: the harness-neutral host
 crate, the harness port with the seat rules below, start verification, process
 supervision on Linux, a conformance suite that a scripted fake harness passes,
-and the package schema: the `harnesses` section, `harness` on runtime, profile
-and seat, the capability table in `tinyhivemind-lang` and its `check`
-diagnostics. No client for a real harness and no MCP server exist yet. Until
-the plan's removal phase lands, the linked OpenHuman adapter remains the way a
-package is deployed, and it refuses a seat whose harness is not `openhuman`.
+the coordinator's per-turn call record, the `tinyhivemind-mcp` server, and the
+package schema: the `harnesses` section, `harness` on runtime, profile and seat,
+the capability table in `tinyhivemind-lang` and its `check` diagnostics. No
+client for a real harness exists yet, and the server does not proxy package MCP
+servers. Until the plan's removal phase lands, the linked OpenHuman adapter
+remains the way a package is deployed, and it refuses a seat whose harness is
+not `openhuman`.
 
 ## Problem
 
@@ -297,6 +299,62 @@ over Streamable HTTP on a random port of 127.0.0.1.
 - **Policy.** Package hooks, permission layers and send policy run here, before
   dispatch, for every tool this server serves.
 
+### What the server settled
+
+These details were left open above and are fixed by `tinyhivemind-mcp`:
+
+- **Protocol.** Revisions `2025-11-25`, `2025-06-18` and `2025-03-26` are
+  negotiated; the spike's OpenHuman and OpenClaw asked for the first, Codex
+  0.171 for the second, and anything else is answered with the newest. An
+  `MCP-Protocol-Version` header naming another revision gets 400. One message
+  per POST, answered as `application/json`; a batch is refused. Notifications
+  and client responses get 202. No `Mcp-Session-Id` is issued: the bearer names
+  the seat and none of the three harnesses needed one. A GET for the event
+  stream (OpenClaw sends one) and every method but POST get 405.
+- **Admission.** Exactly one `Host`, `127.0.0.1:<port>` or `localhost:<port>`,
+  else 403; any `Origin` 403; a path other than `/mcp` 404; a wrong or missing
+  bearer 401. Bodies are bounded (1 MiB by default, 413), as are header and
+  body time. Connections are not bounded: an idle or unauthenticated one is
+  closed after the header timeout and holds no call slot, so it cannot keep a
+  seat waiting. Calls in flight are bounded across seats and per seat, and a
+  call keeps its slot until it finishes, even when its client hung up.
+- **Results.** A refusal is the tool's error result, which the model reads; only
+  an unknown tool is a JSON-RPC error. Prompt lists are empty as well as
+  resource lists. A call runs on its own task, so a client hanging up does not
+  leave its outcome unknown.
+- **Order of checks.** For a state-changing call: `turn` and `call` taken out,
+  the turn check, argument validation, then the ledger, then policy (send and
+  management policy for a hive tool, the access gate for a program), then the
+  "started" record and the hooks. A policy refusal therefore runs no hook and
+  records nothing. The host's belt checks send and management policy again as
+  it dispatches, so a policy that changes between the two checks is judged by
+  the second.
+- **Records.** An out-of-transaction call is recorded as started only after the
+  coordinator confirms, inside the record's lock, that its turn is running, and
+  the turn is checked again after approval and before the tool runs. A call
+  held while its turn ended therefore runs nothing and cannot touch the newer
+  turn's records. A seat's records are bounded in count and bytes; a call past
+  either bound is refused, never recorded by evicting another. Records are
+  dropped when their turn ends and when the seat is withdrawn. A retry of a
+  recorded call is answered before policy is asked again: it acts on nothing.
+- **Approval.** The approver is the host's `Approver` port, asked with a
+  `ToolApproval` whose `call_id` is the model's `call`. The call is recorded as
+  pending first, so a retry while the approver decides is refused rather than
+  asked twice; a denial removes the record.
+- **Tool names.** A seat's non-empty `tools.allow` serves only the tools it
+  names plus the seat's executable tools, as on the linked path; a tool not
+  served is not listed.
+- **Arguments.** An executable tool's arguments are checked against its `args`
+  schema before the record, approver and hooks, so a misfit records nothing.
+  The checker covers `type`, `enum`, `const`, `properties`, `required`,
+  `additionalProperties`, `items` and the numeric, length and item-count
+  bounds, with annotations ignored; a schema using any other keyword is
+  refused when its seat is served.
+- **Refused seats.** A seat with package MCP servers (not proxied yet), with a
+  `sandbox` other than `none`, with a tool declaring `turn` or `call`, or with
+  an argument schema keyword the server cannot check is refused when it is
+  served, as well as by `check` for the first three.
+
 `turn` protects against stale calls, not against a hostile model: the model can
 read it. A seat acting within its own current turn has its own authority anyway.
 
@@ -338,10 +396,13 @@ refused while the outcome is unknown.
   a new `call` acts twice. The rule makes transport retries safe. It does not
   make a model careful.
 
-**Today the coordinator cannot record this.** `submit_action` pushes an action onto
-the running turn with no identity, so a retried post is staged twice. Only sends
-deduplicate, by `message_id`. The single-transaction commit that the record needs
-does exist. [Plan step 2](../plans/2026-11-25-process-harnesses.md) adds it.
+**How the coordinator records it.** `submit_action`, `send` and the hive
+management calls each have an `*_in_turn` variant taking a `TurnCall` (agent,
+turn, `call`, tool, arguments). It checks the turn, answers a known call from
+`RunningTurn::calls` or acts and records it, in one commit; a stale turn is
+`StaleTurn` and a reuse `CallReused`. The record is omitted when empty, so older
+snapshots load unchanged. The unidentified entry points behave as before, for
+the linked adapter.
 
 Two existing ids are not this one:
 
