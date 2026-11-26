@@ -120,16 +120,22 @@ impl Client {
     }
 }
 
-/// Hands its first turn to the test and holds it until told to finish.
+/// Where a runner hands the next turn it should hold; empty, it holds none.
+type Slot = Arc<std::sync::Mutex<Option<mpsc::UnboundedSender<TurnRequest>>>>;
+
+/// Holds a turn open, until told to finish, whenever its slot is armed.
 struct Holds {
-    started: mpsc::UnboundedSender<TurnRequest>,
+    slot: Slot,
     finish: Arc<Notify>,
 }
 impl AgentRunner for Holds {
     fn run(&self, request: TurnRequest) -> TurnFuture {
-        let (started, finish) = (self.started.clone(), self.finish.clone());
+        let (slot, finish) = (self.slot.clone(), self.finish.clone());
         Box::pin(async move {
-            if started.send(request.clone()).is_ok() {
+            let started = slot.lock().unwrap().take();
+            if let Some(started) = started
+                && started.send(request.clone()).is_ok()
+            {
                 finish.notified().await;
             }
             Ok(TurnOutcome {
@@ -154,6 +160,8 @@ pub struct Hive {
     pub workspace: tempfile::TempDir,
     drain:
         Option<tokio::task::JoinHandle<tinyhivemind_hives::Result<tinyhivemind_hives::RunReport>>>,
+    slot: Slot,
+    turns: usize,
 }
 impl Hive {
     /// Start with `services` adjusted by `configure` and seat `a` by `seat`.
@@ -177,13 +185,14 @@ impl Hive {
         .unwrap();
         let (started, mut requests) = mpsc::unbounded_channel();
         let finish = Arc::new(Notify::new());
-        for id in ["a", "b"] {
+        let slot: Slot = Arc::new(std::sync::Mutex::new(Some(started)));
+        for (id, slot) in [("a", slot.clone()), ("b", Slot::default())] {
             coordinator
                 .register_agent(AgentRegistration {
                     agent_id: id.into(),
                     runtime_id: "runtime".into(),
                     runner: Arc::new(Holds {
-                        started: started.clone(),
+                        slot,
                         finish: finish.clone(),
                     }),
                 })
@@ -231,8 +240,6 @@ impl Hive {
             async move { coordinator.run_until_idle().await }
         });
         let turn = requests.recv().await.unwrap();
-        // Later turns, such as the conductor's nudges, are not held.
-        drop(requests);
         Self {
             a: Client::of(&server, &endpoint),
             b: Client::of(&server, &other),
@@ -243,7 +250,34 @@ impl Hive {
             endpoint,
             workspace,
             drain: Some(drain),
+            slot,
+            turns: 1,
         }
+    }
+    /// Settle `a`'s turn, then start and hold its next one, on a direct
+    /// message from the host.
+    pub async fn next_turn(&mut self) {
+        self.settle().await;
+        let (started, mut requests) = mpsc::unbounded_channel();
+        *self.slot.lock().unwrap() = Some(started);
+        self.turns += 1;
+        self.coordinator
+            .send_as_host(SendMessage {
+                message_id: format!("again-{}", self.turns),
+                sender: String::new(),
+                destination: Destination::Agent("a".into()),
+                body: "again".into(),
+                thread: None,
+                only_for: Vec::new(),
+                starters: Vec::new(),
+            })
+            .await
+            .unwrap();
+        self.drain = Some(tokio::spawn({
+            let coordinator = self.coordinator.clone();
+            async move { coordinator.run_until_idle().await }
+        }));
+        self.turn = requests.recv().await.unwrap();
     }
     /// Let `a`'s turn end and the coordinator go idle.
     pub async fn settle(&mut self) {
