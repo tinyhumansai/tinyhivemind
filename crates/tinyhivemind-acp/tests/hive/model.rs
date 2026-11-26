@@ -5,9 +5,10 @@
 //! A request carries a seat's turn when one of its user texts is the
 //! rendered `TurnRequest`. The model reads the turn and episode from it and,
 //! counting the tool results after it, calls `hivemind_post` with call
-//! `post`, the same call again, then, when it is offered the host's
-//! `write_file`, writes `<seat>.md` with call `edit`, then
-//! `hivemind_complete` with call `done`, then answers. Any other request, or
+//! `post` and the same call again, then `hivemind_complete` with call
+//! `done`, then answers. A seat offered the host's `write_file` posts once
+//! and makes the edits [`EDITS`] lists before it completes, so that its turn
+//! stays within `OpenHuman`'s cap of eight model calls. Any other request, or
 //! one that offers no tools (a harness's own side call), gets a plain answer
 //! and changes nothing.
 #[expect(
@@ -28,6 +29,12 @@ const TURN: &str = "Incoming attributed Hivemind context";
 
 /// The host's edit tool, as the hive test declares it.
 pub(crate) const EDIT_TOOL: &str = "write_file";
+
+/// What an editing seat writes, in order, after its one post: its own file
+/// with call `edit`, the same call again, a path climbing out of its
+/// workspace, and an absolute path into the model's `outside` directory.
+/// Their results are a turn's results from index 1.
+pub(crate) const EDITS: [&str; 4] = ["edit", "retry", "escape", "absolute"];
 
 /// What seat `agent` writes to its file.
 pub(crate) fn edited(agent: &str) -> String {
@@ -65,13 +72,20 @@ pub(crate) struct HiveModel {
 
 impl HiveModel {
     pub(crate) async fn start() -> std::io::Result<Self> {
+        Self::start_with("/nonexistent").await
+    }
+
+    /// The model, whose editing seats aim their absolute write at `outside`.
+    pub(crate) async fn start_with(outside: &str) -> std::io::Result<Self> {
         let listener = TcpListener::bind("127.0.0.1:0").await?;
         let port = listener.local_addr()?.port();
         let seen = Arc::new(Mutex::new(Vec::new()));
         let serving = seen.clone();
+        let aim = outside.to_owned();
         let task = tokio::spawn(serve(listener, move |request| {
             let seen = serving.clone();
-            async move { answer(&seen, &request) }
+            let outside = aim.clone();
+            async move { answer(&seen, &outside, &request) }
         }));
         Ok(Self { port, seen, task })
     }
@@ -194,7 +208,7 @@ fn read(api: Api, body: &Value) -> Read {
     }
 }
 
-fn answer(seen: &Arc<Mutex<Vec<Seen>>>, request: &Request) -> Reply {
+fn answer(seen: &Arc<Mutex<Vec<Seen>>>, outside: &str, request: &Request) -> Reply {
     let path = request.path.as_str();
     if request.method == "GET" && path.ends_with("/models") {
         return Reply::Json(
@@ -238,23 +252,30 @@ fn answer(seen: &Arc<Mutex<Vec<Seen>>>, request: &Request) -> Reply {
             .find(|(_, tool)| tool.contains(name))
             .cloned()
     };
-    // A seat offered the edit tool writes one file before it completes.
+    // A seat offered the edit tool posts once, then makes the edits `EDITS`
+    // lists before it completes.
     let edit = find(EDIT_TOOL);
-    let complete_at = if edit.is_some() { 3 } else { 2 };
+    let posts = if edit.is_some() { 1 } else { 2 };
+    let complete_at = posts + edit.as_ref().map_or(0, |_| EDITS.len());
     let step = match (episode, read.results.len()) {
-        (Some(episode), 0 | 1) => find("hivemind_post").map(|tool| {
+        (Some(episode), at) if at < posts => find("hivemind_post").map(|tool| {
             let body = format!("{agent} reporting");
             (
                 tool,
                 json!({"episode_id": episode, "body": body, "turn": turn_id, "call": "post"}),
             )
         }),
-        (Some(_), 2) if complete_at == 3 => edit.map(|tool| {
-            let path = format!("{agent}.md");
+        (Some(_), at) if at >= posts && at < complete_at => edit.map(|tool| {
+            let (path, call) = match EDITS[at - posts] {
+                "escape" => (format!("../{agent}-escape.md"), "escape"),
+                "absolute" => (format!("{outside}/{agent}.md"), "absolute"),
+                // The retry repeats the edit's call exactly.
+                _ => (format!("{agent}.md"), "edit"),
+            };
             let content = edited(&agent);
             (
                 tool,
-                json!({"path": path, "content": content, "turn": turn_id, "call": "edit"}),
+                json!({"path": path, "content": content, "turn": turn_id, "call": call}),
             )
         }),
         (Some(episode), at) if at == complete_at => find("hivemind_complete").map(|tool| {
