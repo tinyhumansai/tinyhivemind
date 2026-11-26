@@ -66,3 +66,29 @@ pub(crate) fn kill_all(pids: Vec<u32>) {
         }
     }
 }
+
+/// A turn of the test seat, from the host.
+pub(crate) fn request(turn: &str, session: Option<&str>) -> tinyhivemind_hives::TurnRequest {
+    use tinyhivemind_hives::{Destination, Message, TurnRequest};
+    TurnRequest {
+        turn_id: turn.into(),
+        scheduled_job_id: None,
+        teammates: Vec::new(),
+        agent_id: "scout".into(),
+        session_id: session.map(Into::into),
+        messages: vec![Message {
+            scheduled_job_id: None,
+            message_id: format!("message-{turn}"),
+            sequence: 1,
+            sender: tinyhivemind_hives::HOST_ID.into(),
+            destination: Destination::Agent("scout".into()),
+            body: format!("turn {turn}"),
+            thread: None,
+            episode_id: None,
+            only_for: Vec::new(),
+        }],
+        memberships: Vec::new(),
+        episode: None,
+        resumption: None,
+    }
+}

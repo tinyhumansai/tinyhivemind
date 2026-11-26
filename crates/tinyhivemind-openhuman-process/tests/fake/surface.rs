@@ -397,7 +397,8 @@ impl State {
             let result = json!({"tool_name": tool, "tool_call_id": "call_1", "success": false});
             say("tool_result", result);
         }
-        let seen = self.remember(&ids.thread, "user", &message);
+        // Only a turn that ends is kept in the thread, as 0.64.15 does.
+        let seen = self.users(&ids.thread) + 1;
         let call = self.open(seen);
         if step.is_null() {
             cancel.notified().await;
@@ -418,6 +419,7 @@ impl State {
             return;
         }
         let reply = step["reply"].as_str().unwrap_or_default();
+        self.remember(&ids.thread, "user", &message);
         self.remember(&ids.thread, "assistant", reply);
         let tokens = step["tokens"].as_u64().unwrap_or(0);
         let usage = json!({"input_tokens": tokens, "output_tokens": 2,
@@ -441,8 +443,14 @@ impl State {
         }
     }
 
-    /// Append to the thread's transcript; the user messages in it.
-    fn remember(&self, thread: &str, role: &str, text: &str) -> usize {
+    /// The user messages in the thread's transcript.
+    fn users(&self, thread: &str) -> usize {
+        let text = fs::read_to_string(self.transcript(thread)).unwrap_or_default();
+        text.lines().filter(|line| line.contains("\"user\"")).count()
+    }
+
+    /// Append to the thread's transcript.
+    fn remember(&self, thread: &str, role: &str, text: &str) {
         let path = self.transcript(thread);
         if let Some(parent) = path.parent() {
             let _ = fs::create_dir_all(parent);
@@ -451,10 +459,6 @@ impl State {
         if let Ok(mut file) = file {
             let _ = writeln!(file, "{}", json!({"role": role, "text": text}));
         }
-        let text = fs::read_to_string(&path).unwrap_or_default();
-        text.lines()
-            .filter(|line| line.contains("\"user\""))
-            .count()
     }
 
     fn open(&self, seen: usize) -> u64 {

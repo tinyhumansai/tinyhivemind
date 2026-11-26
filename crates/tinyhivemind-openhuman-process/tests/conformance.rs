@@ -12,6 +12,7 @@ use anyhow::Result;
 use subject::FakeSubject;
 use tinyhivemind_host::harness::conformance::{Case, Subject as _};
 use tinyhivemind_host::harness::{Error, HarnessKind, SeatPlan};
+use tinyhivemind_hives::TurnDisposition;
 use tinyhivemind_openhuman_process::capability::Refusal;
 
 /// One test per case, and a check that no case is left out.
@@ -80,5 +81,28 @@ async fn a_running_seat_is_not_started_twice_and_a_stopped_one_is_already_stoppe
     harness.stop("scout").await?;
     assert_eq!(subject.processes(), Vec::<u32>::new());
     drop(runner);
+    Ok(())
+}
+
+/// A first turn that fails leaves no session behind: the next turn starts
+/// the seat's thread afresh instead of failing to resume it forever.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_failed_first_turn_leaves_the_seat_able_to_start() -> Result<()> {
+    let subject = FakeSubject::new()?;
+    let harness = subject.harness();
+    let runner = harness.start(subject.seat(), subject.endpoint()).await?;
+    let steps = subject.control().join("steps");
+    std::fs::write(steps.join("a"), r#"{"error": "provider down"}"#)?;
+    let first = runner.run(seat_support::request("t1", None)).await;
+    let failed = match &first {
+        Ok(outcome) => matches!(outcome.disposition, TurnDisposition::Failed(_)),
+        Err(_) => true,
+    };
+    assert!(failed, "{first:?}");
+    std::fs::write(steps.join("b"), r#"{"reply": "works", "tokens": 1}"#)?;
+    let second = runner.run(seat_support::request("t2", None)).await?;
+    assert_eq!(second.disposition, TurnDisposition::Completed);
+    assert_eq!(second.reply.as_deref(), Some("works"));
+    harness.stop("scout").await?;
     Ok(())
 }
