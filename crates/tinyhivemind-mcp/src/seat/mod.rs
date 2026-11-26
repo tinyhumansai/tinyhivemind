@@ -26,6 +26,7 @@ pub struct SeatTools {
     access: Access,
     permissions: Vec<PermissionSet>,
     denied: Vec<String>,
+    allowed: Vec<String>,
 }
 
 impl SeatTools {
@@ -45,19 +46,24 @@ impl SeatTools {
             access: Access::Supervised,
             permissions: Vec::new(),
             denied: Vec::new(),
+            allowed: Vec::new(),
         }
     }
 
     /// The seat a package lowered, on `runtime`, its tools running in
     /// `context`.
     ///
-    /// Access is the strictest of the runtime's `autonomy` and every
+    /// A non-empty `tools.allow` serves only the tools it names and the
+    /// seat's executable tools, as on the linked path. Access is the
+    /// strictest of the runtime's `autonomy` and every
     /// permission layer's `access`.
     ///
     /// # Errors
     /// [`Error::UnsupportedMcpServers`] for a seat with package MCP servers,
     /// [`Error::UnsupportedSandbox`] for any sandbox but `none`, and
-    /// [`Error::ReservedArgument`] for a tool declaring `turn` or `call`.
+    /// [`Error::ReservedArgument`] for a tool declaring `turn` or `call`, and
+    /// [`Error::UnsupportedSchema`] for an argument schema keyword the server
+    /// cannot check.
     pub fn from_lowered(
         seat: &LoweredSeat,
         runtime: &RuntimeSettings,
@@ -90,6 +96,7 @@ impl SeatTools {
             access,
             permissions: integration.permissions.clone(),
             denied: integration.tools.deny.clone(),
+            allowed: integration.tools.allow.clone(),
         };
         tools.check()?;
         Ok(tools)
@@ -113,6 +120,14 @@ impl SeatTools {
     #[must_use]
     pub fn with_context(mut self, context: ExecContext) -> Self {
         self.context = context;
+        self
+    }
+
+    /// Serve only the tools `allowed` names, and the seat's executable tools;
+    /// empty serves every tool.
+    #[must_use]
+    pub fn with_allowed(mut self, allowed: Vec<String>) -> Self {
+        self.allowed = allowed;
         self
     }
 
@@ -162,7 +177,11 @@ impl SeatTools {
 
     /// Whether the seat's tool rules let `name` be served.
     pub(crate) fn permits(&self, name: &str) -> bool {
-        !self.denied.iter().any(|denied| denied == name)
+        let allowed = self.allowed.is_empty()
+            || self.allowed.iter().any(|tool| tool == name)
+            || self.programs.iter().any(|tool| tool.id == name);
+        allowed
+            && !self.denied.iter().any(|denied| denied == name)
             && self.permissions.iter().all(|set| {
                 !set.deny_tools.iter().any(|denied| denied == name)
                     && set
@@ -172,9 +191,16 @@ impl SeatTools {
             })
     }
 
-    /// Refuse a tool declaring an argument the server adds.
+    /// Refuse a tool declaring an argument the server adds, or a schema
+    /// keyword it cannot check.
     pub(crate) fn check(&self) -> Result<()> {
         for tool in &self.programs {
+            if let Some(keyword) = crate::tools::unsupported(&tool.args) {
+                return Err(Error::UnsupportedSchema {
+                    tool: tool.id.clone(),
+                    keyword,
+                });
+            }
             for name in RESERVED {
                 if tool.args["properties"].get(name).is_some() {
                     return Err(Error::ReservedArgument {

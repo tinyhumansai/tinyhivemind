@@ -42,8 +42,7 @@ const ANNOTATIONS: [&str; 6] = [
 pub(crate) fn unsupported(schema: &Value) -> Option<String> {
     let object = schema.as_object()?;
     for (keyword, value) in object {
-        let known =
-            CHECKED.contains(&keyword.as_str()) || ANNOTATIONS.contains(&keyword.as_str());
+        let known = CHECKED.contains(&keyword.as_str()) || ANNOTATIONS.contains(&keyword.as_str());
         if !known {
             return Some(keyword.clone());
         }
@@ -81,7 +80,10 @@ pub(crate) fn check(schema: &Value, value: &Value, at: &str) -> Result<(), Strin
     {
         return Err(format!("{at} is not one of the allowed values"));
     }
-    if schema.get("const").is_some_and(|constant| constant != value) {
+    if schema
+        .get("const")
+        .is_some_and(|constant| constant != value)
+    {
         return Err(format!("{at} is not the allowed value"));
     }
     bounds(schema, value, at)?;
@@ -99,7 +101,9 @@ pub(crate) fn check(schema: &Value, value: &Value, at: &str) -> Result<(), Strin
 fn is(name: &str, value: &Value) -> bool {
     match name {
         "string" => value.is_string(),
-        "integer" => value.is_i64() || value.is_u64() || value.as_f64().is_some_and(|n| n.fract() == 0.0),
+        "integer" => {
+            value.is_i64() || value.is_u64() || value.as_f64().is_some_and(|n| n.fract() == 0.0)
+        }
         "number" => value.is_number(),
         "boolean" => value.is_boolean(),
         "object" => value.is_object(),
@@ -136,7 +140,11 @@ fn bounds(schema: &Map<String, Value>, value: &Value, at: &str) -> Result<(), St
     Ok(())
 }
 
-fn fields(schema: &Map<String, Value>, object: &Map<String, Value>, at: &str) -> Result<(), String> {
+fn fields(
+    schema: &Map<String, Value>,
+    object: &Map<String, Value>,
+    at: &str,
+) -> Result<(), String> {
     let path = |name: &str| {
         if at.is_empty() {
             name.to_owned()

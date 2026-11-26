@@ -2,10 +2,10 @@
 //!
 //! [`HiveToolServer::start`] binds a random port of 127.0.0.1 and serves
 //! HTTP/1.1 at `/mcp`. Each [`HiveToolServer::serve_seat`] draws a fresh
-//! bearer and returns the seat's [`ToolEndpoint`]. Connections beyond
-//! [`ServerOptions::max_connections`] wait to be accepted, and since an
-//! HTTP/1.1 connection carries one request at a time that also bounds the
-//! calls in flight. [`HiveToolServer::shutdown`] stops accepting, lets the
+//! bearer and returns the seat's [`ToolEndpoint`]. Calls in flight are
+//! bounded across seats and per seat, and a call keeps its place until it
+//! finishes, even when its client hung up; connections are not bounded, but
+//! an idle one is closed after the header timeout. [`HiveToolServer::shutdown`] stops accepting, lets the
 //! open requests finish within a grace period, and returns.
 mod http;
 mod rpc;
@@ -129,9 +129,8 @@ pub struct ServerOptions {
     pub name: String,
     /// Largest request body accepted; a larger one gets 413.
     pub max_body_bytes: usize,
-    /// Most connections open at once; nonzero.
-    pub max_connections: usize,
-    /// Most tool calls running at once, across seats; nonzero.
+    /// Most tool calls running at once, across seats; nonzero. A call holds
+    /// its place until it finishes, even when its client has hung up.
     pub max_calls: usize,
     /// Most tool calls one seat may have running at once; nonzero.
     pub max_calls_per_seat: usize,
@@ -139,7 +138,8 @@ pub struct ServerOptions {
     pub max_records: usize,
     /// Most bytes of arguments and results those records may hold.
     pub max_record_bytes: usize,
-    /// Longest a connection may take to send a request's headers.
+    /// Longest a connection may take to send a request's headers, which is
+    /// also how long an idle or unauthenticated connection is kept.
     pub header_timeout: Duration,
     /// Longest a request may take to send its body.
     pub body_timeout: Duration,
@@ -152,12 +152,11 @@ impl Default for ServerOptions {
         Self {
             name: "hivemind".into(),
             max_body_bytes: 1 << 20,
-            max_connections: 32,
             max_calls: 32,
             max_calls_per_seat: 4,
             max_records: 256,
             max_record_bytes: 1 << 20,
-            header_timeout: Duration::from_secs(10),
+            header_timeout: Duration::from_secs(5),
             body_timeout: Duration::from_secs(30),
             shutdown_grace: Duration::from_secs(5),
         }
@@ -172,6 +171,8 @@ pub(crate) struct Shared {
     pub(crate) port: u16,
     seats: RwLock<Vec<Arc<SeatState>>>,
     pub(crate) ledger: Ledger,
+    /// Calls in flight, across seats.
+    pub(crate) calls: Arc<Semaphore>,
 }
 
 impl Shared {
@@ -195,6 +196,7 @@ pub struct HiveToolServer {
     addr: SocketAddr,
     stop: watch::Sender<bool>,
     task: JoinHandle<()>,
+    purge: JoinHandle<()>,
 }
 
 impl HiveToolServer {
@@ -209,18 +211,21 @@ impl HiveToolServer {
         let addr = listener.local_addr().map_err(Error::Listen)?;
         let shared = Arc::new(Shared {
             services,
-            options,
             port: addr.port(),
             seats: RwLock::default(),
-            ledger: Ledger::default(),
+            ledger: Ledger::new(options.max_records, options.max_record_bytes),
+            calls: Arc::new(Semaphore::new(options.max_calls.max(1))),
+            options,
         });
         let (stop, stopped) = watch::channel(false);
-        let task = tokio::spawn(serve(listener, shared.clone(), stopped));
+        let task = tokio::spawn(serve(listener, shared.clone(), stopped.clone()));
+        let purge = tokio::spawn(purge_ended(shared.clone(), stopped));
         Ok(Self {
             shared,
             addr,
             stop,
             task,
+            purge,
         })
     }
 
@@ -243,7 +248,9 @@ impl HiveToolServer {
     /// [`Error::ReservedArgument`] or [`Error::Random`].
     pub fn serve_seat(&self, seat: SeatTools) -> Result<ToolEndpoint> {
         let managed = self.shared.services.management.is_some();
-        let state = SeatState::new(seat, Bearer::generate()?, managed, &self.shared.services)?;
+        let per_seat = self.shared.options.max_calls_per_seat;
+        let bearer = Bearer::generate()?;
+        let state = SeatState::new(seat, bearer, managed, &self.shared.services, per_seat)?;
         let mut seats = self
             .shared
             .seats
@@ -273,7 +280,15 @@ impl HiveToolServer {
             .unwrap_or_else(PoisonError::into_inner);
         let before = seats.len();
         seats.retain(|served| served.tools.seat() != seat_id);
-        seats.len() != before
+        drop(seats);
+        self.shared.ledger.forget(seat_id);
+        before
+            != self
+                .shared
+                .seats
+                .read()
+                .unwrap_or_else(PoisonError::into_inner)
+                .len()
     }
 
     /// Stop accepting, let open requests finish within the grace period, and
@@ -283,8 +298,10 @@ impl HiveToolServer {
     /// [`Error::Stopped`] when the server task panicked.
     pub async fn shutdown(mut self) -> Result<()> {
         let _ = self.stop.send(true);
-        (&mut self.task)
-            .await
+        let purged = (&mut self.purge).await;
+        let served = (&mut self.task).await;
+        served
+            .and(purged)
             .map_err(|error| Error::Stopped(error.to_string()))
     }
 }
@@ -311,15 +328,13 @@ impl fmt::Debug for HiveToolServer {
 }
 
 /// Accept connections until told to stop, then wind them down.
+///
+/// Accepting is not bounded: an idle or unauthenticated connection is closed
+/// after [`ServerOptions::header_timeout`] and holds no call slot, so it
+/// cannot keep a seat waiting. What is bounded is calls in flight.
 async fn serve(listener: TcpListener, shared: Arc<Shared>, mut stopped: watch::Receiver<bool>) {
-    let slots = Arc::new(Semaphore::new(shared.options.max_connections.max(1)));
     let graceful = GracefulShutdown::new();
     loop {
-        let slot = tokio::select! {
-            _ = stopped.wait_for(|stop| *stop) => break,
-            slot = slots.clone().acquire_owned() => slot,
-        };
-        let Ok(slot) = slot else { break };
         let stream = tokio::select! {
             _ = stopped.wait_for(|stop| *stop) => break,
             accepted = listener.accept() => match accepted {
@@ -334,11 +349,28 @@ async fn serve(listener: TcpListener, shared: Arc<Shared>, mut stopped: watch::R
             .header_read_timeout(shared.options.header_timeout)
             .serve_connection(TokioIo::new(stream), service);
         let connection = graceful.watch(connection);
-        tokio::spawn(async move {
-            let _ = connection.await;
-            drop(slot);
-        });
+        tokio::spawn(connection);
     }
     drop(listener);
     let _ = tokio::time::timeout(shared.options.shutdown_grace, graceful.shutdown()).await;
+}
+
+/// Drop the call records of every turn that has ended, as the coordinator
+/// commits.
+async fn purge_ended(shared: Arc<Shared>, mut stopped: watch::Receiver<bool>) {
+    let coordinator = shared.services.coordinator.clone();
+    let mut revisions = coordinator.subscribe();
+    loop {
+        tokio::select! {
+            _ = stopped.wait_for(|stop| *stop) => break,
+            changed = revisions.changed() => {
+                if changed.is_err() {
+                    break;
+                }
+                shared
+                    .ledger
+                    .purge(|seat| coordinator.running_turn(seat).ok().flatten());
+            }
+        }
+    }
 }

@@ -9,18 +9,19 @@
 //! (programs), record the start, run the `pre_tool_use` hooks, run the
 //! tool, run the `post_tool_use` hooks, record the finish. A call refused by
 //! validation or policy before any hook runs records nothing.
-use super::{gate, schema};
 use super::ledger::{Identity, Known, Ledger, Outcome};
 use super::{Catalog, Served, Target};
+use super::{gate, schema};
 use crate::seat::{Bearer, SeatTools};
 use crate::server::Services;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError};
 use tinyhivemind_exec::{HookRunner, Verdict};
 use tinyhivemind_host::harness::ToolApproval;
 use tinyhivemind_host::tools::{Kind, ToolCall};
 use tinyhivemind_lang::SideEffects;
+use tokio::sync::Semaphore;
 
 /// The note appended to a result whose stdout passed 1 MiB.
 const TRUNCATED: &str = "\n[output truncated at 1 MiB]";
@@ -38,6 +39,8 @@ pub(crate) struct SeatState {
     hooks: HookRunner,
     /// Runs of each executable tool, for `THM_CALL_ID`.
     runs: Mutex<HashMap<String, u64>>,
+    /// Calls of this seat in flight.
+    pub(crate) calls: Arc<Semaphore>,
 }
 
 impl SeatState {
@@ -46,11 +49,12 @@ impl SeatState {
         bearer: Bearer,
         managed: bool,
         services: &Services,
+        max_calls: usize,
     ) -> crate::Result<Self> {
         tools.check()?;
         let hooks = HookRunner::new(
             tools.hooks().to_vec(),
-            std::sync::Arc::new(tools.context().clone()),
+            Arc::new(tools.context().clone()),
             services.secrets.clone(),
         );
         let catalog = Catalog::build(&tools, &hooks, managed)?;
@@ -60,6 +64,7 @@ impl SeatState {
             catalog,
             hooks,
             runs: Mutex::default(),
+            calls: Arc::new(Semaphore::new(max_calls.max(1))),
         })
     }
 

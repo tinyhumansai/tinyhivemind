@@ -104,8 +104,25 @@ async fn call(
         return Err((INVALID_PARAMS, "tools/call needs a tool name".into()));
     };
     let arguments = params.get("arguments").cloned().unwrap_or(Value::Null);
+    // The seat's own slot first, so a seat at its bound holds no shared one.
+    // Both are held by the call's task, so they are released when the call
+    // ends, not when its client hangs up.
+    let stopping = || (INTERNAL_ERROR, "the server is stopping".to_owned());
+    let own = seat
+        .calls
+        .clone()
+        .acquire_owned()
+        .await
+        .map_err(|_| stopping())?;
+    let shared_slot = shared
+        .calls
+        .clone()
+        .acquire_owned()
+        .await
+        .map_err(|_| stopping())?;
     let shared = shared.clone();
     let task = tokio::spawn(async move {
+        let _slots = (own, shared_slot);
         tools::call(&shared.services, &shared.ledger, &seat, &name, arguments).await
     });
     match task.await {

@@ -30,6 +30,16 @@ impl Bearer {
     }
 }
 
+impl Drop for Bearer {
+    /// Overwrite the secret before its memory is freed. Copies handed out as
+    /// a `ToolEndpoint` are the host's to wipe.
+    fn drop(&mut self) {
+        let mut bytes = std::mem::take(&mut self.0).into_bytes();
+        bytes.fill(0);
+        std::hint::black_box(&bytes);
+    }
+}
+
 impl fmt::Debug for Bearer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("Bearer(redacted)")
