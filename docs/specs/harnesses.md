@@ -325,10 +325,23 @@ as failed. The runner counts `iteration_start` events to tell.
 
 What implementing it on 0.64.15 settled:
 
-- `context.compaction_enabled` defaults on, and while it is on the binary adds
-  `juice_retrieve` to every allowlist. The config turns it off, and the start
-  check counts `juice_retrieve` as model-visible unless the effective config
-  has it off.
+- No RPC reports the tools a custom agent's turn offers
+  (`agent_list_definitions` and `agent_get_definition` cover built-in agents;
+  the offline `openhuman agent dump-prompt --with-tools` CLI reports a
+  definition's tools but not a session's). So the model-visible list is
+  computed from the effective config the way `resolved_scope` in
+  `agent/tinyagents/host/definition_registry.rs` builds it: the chat agent's
+  allowlist, of the tools the instance has; every deferred tool if the list
+  names `tool_search`; the session's delegation tools for an agent with
+  subagents; `juice_retrieve` while compaction or the orchestrator's summary
+  stage is on; the REPL tools while results are stored behind a handle; and
+  `extra_tools`. A chat agent other than the written one counts as a
+  built-in's set. Any of these fails the start. The config turns compaction
+  off, since it defaults on. The live gate test checks the list at the model.
+- A turn that fails before its thread has a transcript reports no session,
+  as an error, so the next turn starts the thread rather than failing to
+  resume one that never existed. A failure on a thread with a transcript is a
+  failed turn in that session.
 - The hashed names are known only to a running instance, so a start is two:
   one whose allowlist matches nothing, to read them, and the verified one.
 - A session is a `thread_id`, the same for a seat's life. A turn that names a
@@ -338,7 +351,12 @@ What implementing it on 0.64.15 settled:
   before `channel_web_chat` is called, since the first events can precede its
   answer. Events are taken only for the returned `request_id`, except
   `approval_request`, whose `request_id` is the approval's.
-- A cancelled turn leaves no message in the thread.
+- A cancelled or failed turn leaves no message in the thread.
+- An approval the harness asks for goes to the seat's approver, which has a
+  time limit and is a denial past it. `approval_decide` takes no reason, so a
+  denial's reason is not passed on. Approvals still pending when a turn starts
+  are left by one that is over, and are denied first. A `chat_error` message is
+  cut to one line of at most 200 characters before it becomes the failure.
 - The top-level `embeddings_provider` is rewritten to the hosted default on
   load whatever the file says, so it is neither written nor compared; memory
   is off, so nothing embeds. The binary also carries a compiled-in Sentry DSN
