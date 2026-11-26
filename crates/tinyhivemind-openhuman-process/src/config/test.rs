@@ -210,3 +210,23 @@ fn the_writer_leaves_out_null_and_writes_other_shapes_inline() {
     assert_eq!(parsed, expected);
     assert_eq!(super::toml::write(&json!("not a table")), "");
 }
+
+#[test]
+fn debug_shows_neither_the_bearer_nor_the_prompt() {
+    let tools = tools();
+    let model = model();
+    let input = Input {
+        model: &model,
+        seat: "scout",
+        prompt: "You scout.",
+        server: "hivemind",
+        url: "http://127.0.0.1:7/mcp",
+        bearer: "secret-bearer",
+        tools: &tools,
+        turn_secs: 600,
+    };
+    let written = Written::new(&input);
+    for shown in [format!("{input:?}"), format!("{written:?}")] {
+        assert!(!shown.contains("secret-bearer"), "{shown}");
+    }
+}

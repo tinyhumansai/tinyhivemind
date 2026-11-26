@@ -79,10 +79,17 @@ impl FakeSubject {
     }
 }
 
+impl FakeSubject {
+    /// The harness itself, rather than behind the port.
+    pub(crate) fn openhuman(&self) -> OpenHumanHarness {
+        let program = Program::new(self.root.path().join("openhuman-core"), "0.64.15");
+        OpenHumanHarness::new(program).with_options(Self::options())
+    }
+}
+
 impl Subject for FakeSubject {
     fn harness(&self) -> Arc<dyn Harness> {
-        let program = Program::new(self.root.path().join("openhuman-core"), "0.64.15");
-        Arc::new(OpenHumanHarness::new(program).with_options(Self::options()))
+        Arc::new(self.openhuman())
     }
 
     fn seat(&self) -> SeatPlan {

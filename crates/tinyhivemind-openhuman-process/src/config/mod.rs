@@ -37,7 +37,7 @@ const PROVIDER: &str = "thm";
 const UNSET: [&str; 3] = ["api_key", "api_url", "inference_url"];
 
 /// What a seat's config is made of.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub(crate) struct Input<'a> {
     /// The provider route.
     pub(crate) model: &'a SeatModel,
@@ -59,9 +59,30 @@ pub(crate) struct Input<'a> {
 }
 
 /// A config as written.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub(crate) struct Written {
     tree: Value,
+}
+
+impl std::fmt::Debug for Input<'_> {
+    /// The bearer and the prompt are not shown.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Input")
+            .field("seat", &self.seat)
+            .field("server", &self.server)
+            .field("url", &self.url)
+            .field("tools", &self.tools)
+            .field("bearer", &"redacted")
+            .finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for Written {
+    /// Setting names only: the values hold the bearer.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let names: Vec<String> = self.settings().into_iter().map(|(name, _)| name).collect();
+        f.debug_struct("Written").field("settings", &names).finish()
+    }
 }
 
 impl Written {

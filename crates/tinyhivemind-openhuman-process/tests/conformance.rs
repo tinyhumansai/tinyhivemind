@@ -106,3 +106,39 @@ async fn a_failed_first_turn_leaves_the_seat_able_to_start() -> Result<()> {
     harness.stop("scout").await?;
     Ok(())
 }
+
+/// Neither the seat's bearer nor the instance's core token is in the
+/// harness's `Debug`, running seats included.
+#[tokio::test(flavor = "multi_thread")]
+async fn debug_of_a_running_harness_shows_no_secret() -> Result<()> {
+    use std::sync::{Arc, Mutex};
+    use tinyhivemind_host::harness::{Event, Harness as _, Observer};
+    #[derive(Default)]
+    struct Pid(Mutex<Option<u32>>);
+    impl Observer for Pid {
+        fn event(&self, _: &str, event: Event) {
+            if let Event::Started(started) = event {
+                *self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(started.pid);
+            }
+        }
+    }
+    let subject = FakeSubject::new()?;
+    let harness = subject.openhuman();
+    let pid = Arc::new(Pid::default());
+    let mut plan = subject.seat();
+    plan.observer = pid.clone();
+    let runner = harness.start(plan, subject.endpoint()).await?;
+    let started = *pid.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let environ = std::fs::read(format!("/proc/{}/environ", started.unwrap_or_default()))?;
+    let token = String::from_utf8_lossy(&environ)
+        .split('\0')
+        .find_map(|entry| entry.strip_prefix("OPENHUMAN_CORE_TOKEN=").map(str::to_owned))
+        .unwrap_or_default();
+    assert!(token.len() >= 32, "the child's core token was not found");
+    let shown = format!("{harness:?}");
+    assert!(!shown.contains(&token), "the core token is in {shown}");
+    assert!(!shown.contains("seat-bearer"), "the bearer is in {shown}");
+    harness.stop("scout").await?;
+    drop(runner);
+    Ok(())
+}

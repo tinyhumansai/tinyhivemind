@@ -136,3 +136,10 @@ fn an_sse_frame_that_is_not_json_is_an_error() {
         "{found:?}"
     );
 }
+
+#[test]
+fn debug_does_not_show_the_core_token() {
+    let client = Client::new(1, "secret-core-token").unwrap_or_else(|error| unreachable!("{error}"));
+    let shown = format!("{client:?}");
+    assert!(!shown.contains("secret-core-token"), "{shown}");
+}

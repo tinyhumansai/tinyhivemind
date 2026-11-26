@@ -52,7 +52,7 @@ impl From<reqwest::Error> for Error {
 }
 
 /// A client of one instance.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub(crate) struct Client {
     http: reqwest::Client,
     base: String,
@@ -136,6 +136,16 @@ impl Client {
             parser: sse::Parser::default(),
             ready: VecDeque::new(),
         })
+    }
+}
+
+impl std::fmt::Debug for Client {
+    /// The token is the instance's whole authority, so it is not shown.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Client")
+            .field("base", &self.base)
+            .field("token", &"redacted")
+            .finish_non_exhaustive()
     }
 }
 
