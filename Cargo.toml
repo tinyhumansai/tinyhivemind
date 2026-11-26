@@ -4,7 +4,7 @@ resolver = "3"
 # package, each directory named for the package it holds. There is no root
 # package: the crate a host links is `crates/tinyhivemind-core`, the same as any
 # other member. Keeping the root virtual is what makes that uniform.
-members = ["crates/tinyhivemind-core", "crates/tinyhivemind-tools", "crates/tinyhivemind-openhuman", "crates/tinyhivemind-hives", "crates/tinyhivemind-lang", "crates/tinyhivemind-exec", "crates/tinyhivemind-host", "crates/tinyhivemind-mcp", "crates/tinyhivemind-openhuman-process"]
+members = ["crates/tinyhivemind-core", "crates/tinyhivemind-tools", "crates/tinyhivemind-openhuman", "crates/tinyhivemind-hives", "crates/tinyhivemind-lang", "crates/tinyhivemind-exec", "crates/tinyhivemind-host", "crates/tinyhivemind-mcp", "crates/tinyhivemind-openhuman-process", "crates/tinyhivemind-acp"]
 # `worktrees/` holds `git worktree` checkouts of this same repository; each
 # contains a full copy of this manifest. Keep them excluded from Cargo
 # workspace discovery.

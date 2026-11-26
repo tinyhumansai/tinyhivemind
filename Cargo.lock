@@ -3529,6 +3529,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "tinyhivemind-acp"
+version = "0.2.1"
+dependencies = [
+ "anyhow",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tinyhivemind-hives",
+ "tinyhivemind-host",
+ "tinyhivemind-lang",
+ "tinyhivemind-mcp",
+ "tinyhivemind-openhuman-process",
+ "tokio",
+]
+
+[[package]]
 name = "tinyhivemind-core"
 version = "0.2.1"
 dependencies = [

@@ -63,6 +63,7 @@ link any earlier ADR it amends.
 | [0035](0035-a-harness-is-a-process.md) | A harness is a process | Accepted — amends 0034; supersedes 0020 and the linking crate of 0028 once the link is removed |
 | [0036](0036-hive-tools-are-served-over-loopback-mcp.md) | Hive tools are served over loopback MCP | Accepted — amends 0027 |
 | [0037](0037-claude-code-is-a-fourth-harness-kind.md) | Claude Code is a fourth harness kind | Proposed — amends 0035 |
+| [0038](0038-acp-agents-share-one-client.md) | ACP agents share one client | Proposed — amends 0035 |
 
 ## Reading order
 
