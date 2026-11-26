@@ -187,3 +187,6 @@ impl SeatTools {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test;

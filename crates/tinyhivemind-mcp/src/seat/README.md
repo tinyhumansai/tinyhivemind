@@ -12,3 +12,4 @@ here), and a tool whose own `args` declare `turn` or `call`.
 | --- | --- |
 | `mod.rs` | `SeatTools`, its builders and checks |
 | `bearer.rs` | A random 256-bit bearer, compared in constant time; `Debug` prints `redacted` |
+| `test.rs` | Bearer generation, comparison and redaction |
