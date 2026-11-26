@@ -294,11 +294,11 @@ fn the_keyring_key_is_made_once_and_a_bad_one_is_refused() {
     assert!(made.bytes().all(|byte| byte.is_ascii_hexdigit()));
     assert_eq!(layout.master_key().ok(), Some(made));
     let path = dir.path().join("keyring.key");
-    let mode = |mode| std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode));
-    assert!(mode(0o644).is_ok());
+    let chmod = |bits| std::fs::set_permissions(&path, std::fs::Permissions::from_mode(bits));
+    assert!(chmod(0o644).is_ok());
     assert!(matches!(layout.master_key(), Err(Error::KeyFile(_))));
     for bad in ["", "abc", &"z".repeat(64)] {
-        assert!(std::fs::write(&path, bad).is_ok() && mode(0o600).is_ok());
+        assert!(std::fs::write(&path, bad).is_ok() && chmod(0o600).is_ok());
         assert!(
             matches!(layout.master_key(), Err(Error::KeyFile(_))),
             "{bad:?}"

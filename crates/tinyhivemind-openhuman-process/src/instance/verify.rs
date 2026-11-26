@@ -1,6 +1,6 @@
 //! Whether a started instance is the one that was asked for, and the names
 //! its model sees the hive tools under.
-use crate::config::{AGENT_ID, Written};
+use crate::config::Written;
 use crate::error::{Error, Result};
 use crate::rpc::Client;
 use serde_json::{Value, json};
