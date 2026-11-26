@@ -37,8 +37,8 @@ async fn the_send_policy_refuses_before_anything_is_sent() {
     let send = json!({"agent_id": "b", "message_id": "m1", "body": "hi", "turn": hive.turn_id(), "call": "s1"});
     let (text, failed) = hive.a.call("hivemind_send_agent", send).await;
     assert!(failed && text.contains("no direct messages"), "{text}");
-    let sent = hive.coordinator.read_direct("a", "b", None).unwrap();
-    assert_eq!(sent.len(), 0);
+    let delivered = hive.coordinator.read_direct("a", "b", None).unwrap();
+    assert_eq!(delivered.len(), 0);
     assert_eq!(
         hive.server.url(),
         format!("http://{}/mcp", hive.server.local_addr())
