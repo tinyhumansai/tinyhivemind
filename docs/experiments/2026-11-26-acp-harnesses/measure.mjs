@@ -126,7 +126,9 @@ try {
   out("left after kill -9 of the agent", before.filter((p) => fs.existsSync(`/proc/${p}`)).length);
   for (const p of before) try { process.kill(p, "SIGKILL"); } catch {}
   n = fx().length; await start(); await sleep(15000);
-  out("model calls replayed within 15 s of a new agent", fx(n).filter((x) => x.kind === "model").length);
+  // The interrupted session is not loaded: this shows only what a new agent
+  // does when it starts, not whether loading that session replays its turn.
+  out("model calls a new agent made on its own within 15 s (session not loaded)", fx(n).filter((x) => x.kind === "model").length);
 } catch (e) {
   out("error", e.rpc ?? e.message);
 } finally {

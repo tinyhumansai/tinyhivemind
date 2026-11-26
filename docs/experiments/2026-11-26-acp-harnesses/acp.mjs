@@ -14,7 +14,10 @@ export function agent(cmd, args, { env, cwd, log }) {
   const pending = new Map();
   const updates = [];
   const requests = [];
+  let closed = null;
   const write = (o) => child.stdin.write(JSON.stringify(o) + "\n");
+  // Decoded as a stream, so a character split across chunks stays whole.
+  child.stdout.setEncoding("utf8");
   child.stdout.on("data", (d) => {
     buf += d;
     for (let i; (i = buf.indexOf("\n")) >= 0;) {
@@ -38,7 +41,14 @@ export function agent(cmd, args, { env, cwd, log }) {
       }
     }
   });
+  // Once the agent's output ends, every waiting call fails, and so does any later one.
+  child.stdout.on("close", () => {
+    closed = new Error("the agent closed the connection");
+    for (const p of pending.values()) p.reject(closed);
+    pending.clear();
+  });
   const call = (method, params) => new Promise((resolve, reject) => {
+    if (closed) return reject(closed);
     const n = ++id; pending.set(n, { resolve, reject }); write({ jsonrpc: "2.0", id: n, method, params });
   });
   const notify = (method, params) => write({ jsonrpc: "2.0", method, params });

@@ -17,7 +17,8 @@ Claude Code, Codex and OpenClaw all speak the Agent Client Protocol over stdio,
 Claude Code and Codex through adapters published by the protocol's maintainers
 and OpenClaw through a bridge it ships. Driven by one minimal ACP client
 against the spike's scripted model, each called the hive tool as the right
-seat, cancelled, resumed after a restart and replayed nothing, once one
+seat, cancelled, and resumed after a restart, and a restarted agent made no
+model call on its own, once one
 setting per agent was made: Claude Code's built-in tools and tool search off,
 and Codex out of its model-reviewed mode.
 

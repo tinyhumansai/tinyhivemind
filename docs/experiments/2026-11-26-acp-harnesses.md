@@ -31,7 +31,7 @@ Versions, on Linux x86_64 (all-in, load average around 80) with Node 24.16.0:
 | Codex | `@agentclientprotocol/codex-acp` 2.12.1 | `@openai/codex` 0.172.0 (`app-server`) |
 | OpenClaw | `openclaw acp` (built-in bridge) | `openclaw` 2026.10.33 Gateway |
 
-## Result: the gate passes for all three, except usage on OpenClaw
+## Result: the gate passes for all three, except usage on OpenClaw and cleanup on Claude Code
 
 | | Claude Code | Codex | OpenClaw |
 | --- | --- | --- | --- |
@@ -42,7 +42,7 @@ Versions, on Linux x86_64 (all-in, load average around 80) with Node 24.16.0:
 | Cancel: answered / model call closed | 3 ms / 5 ms | 154 ms / 5 ms | 4 ms / 21 ms |
 | Same session after restart (`session/load`) | yes | yes | yes |
 | Processes left after `kill -9` of the agent | 1 (the CLI child) | 0 | 0 (bridge only killed) |
-| Turn replayed by a new agent within 15 s | no | no | no |
+| Model calls a new agent made on its own within 15 s (the interrupted session not loaded) | 0 | 0 | 0 |
 | Processes per seat | 2 | 2 | 2, plus the shared Gateway's 2 |
 | Idle PSS (10 s) | 292 MB | 257 to 267 MB | 1,981 MB with the Gateway |
 | PSS after 13 turns | 341 MB | 258 to 282 MB | 2,163 MB with the Gateway |
@@ -52,6 +52,15 @@ Versions, on Linux x86_64 (all-in, load average around 80) with Node 24.16.0:
 
 Single runs on a loaded shared machine: the timings are indicative, and the
 start-up times varied by an order of magnitude between runs.
+
+Claude Code fails the "leave nothing running after a kill" part of the gate
+on its own: after `kill -9` of its adapter, its CLI child ran on. A seat
+kills the whole process tree, so a supervised Claude Code seat leaves
+nothing, but the adapter alone does not.
+
+The replay row shows only that a new agent makes no model call when it
+starts. The interrupted session was not loaded into it, so whether loading
+such a session replays its turn was not measured.
 
 ## What each harness needed
 
@@ -91,7 +100,8 @@ start-up times varied by an order of magnitude between runs.
 
 ## Not tested
 
-Real models and credentials; the Gateway's own crash and its turn replay (only
+Real models and credentials; whether `session/load` of an interrupted
+session replays its turn; the Gateway's own crash and its turn replay (only
 the bridge was killed here); concurrent seats; long sessions and compaction;
 ACP protocol v2; whether each adapter honours `session/cancel` during a tool
 call rather than a model call; macOS and ARM.
