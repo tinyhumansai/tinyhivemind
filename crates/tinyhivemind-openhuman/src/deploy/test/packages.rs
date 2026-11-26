@@ -358,7 +358,9 @@ fn a_judged_openhuman_seat_deploys_with_no_built_in_tool_group() -> anyhow::Resu
             })
             .await?;
         let report = deployment.host().coordinator().run_until_idle().await?;
-        assert_eq!(report.failed, 0, "{report:?}");
+        let seen = model.received_requests().await.unwrap_or_default();
+        assert_eq!(report.failed, 0, "{report:?} after {} requests: {:?}", seen.len(),
+            seen.first().map(|r| (r.url.to_string(), String::from_utf8_lossy(&r.body).chars().take(300).collect::<String>(), r.headers.get("authorization").cloned())));
         let mut offered = std::collections::BTreeSet::new();
         for request in model.received_requests().await.unwrap_or_default() {
             let body: Value = serde_json::from_slice(&request.body).unwrap_or_default();
