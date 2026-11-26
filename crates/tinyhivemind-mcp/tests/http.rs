@@ -236,23 +236,21 @@ async fn debug_output_never_carries_a_bearer() {
 }
 
 #[tokio::test]
-async fn connections_beyond_the_bound_wait_for_a_free_one() {
-    let options = ServerOptions {
-        max_connections: 1,
-        ..ServerOptions::default()
-    };
-    let hive = Hive::start_with(|services| services, |seat, _| seat, options).await;
+async fn idle_unauthenticated_sockets_cannot_block_a_seat() {
+    let hive = hive().await;
     let addr = hive.server.local_addr();
-    // An idle open connection holds the only slot.
-    let idle = tokio::net::TcpStream::connect(addr).await.unwrap();
-    let waiting = tokio::spawn({
-        let a = hive.a.clone();
-        async move { a.rpc("ping", json!({})).await }
-    });
-    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-    assert!(!waiting.is_finished());
+    let mut idle = Vec::new();
+    for _ in 0..40 {
+        idle.push(tokio::net::TcpStream::connect(addr).await.unwrap());
+    }
+    let ping = tokio::time::timeout(
+        std::time::Duration::from_secs(3),
+        hive.a.rpc("ping", json!({})),
+    )
+    .await
+    .expect("a seat is served while idle sockets are open");
+    assert_eq!(ping["result"], json!({}));
     drop(idle);
-    assert_eq!(waiting.await.unwrap()["result"], json!({}));
 }
 
 #[tokio::test]

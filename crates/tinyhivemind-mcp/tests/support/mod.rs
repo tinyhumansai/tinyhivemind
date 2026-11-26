@@ -343,3 +343,26 @@ pub fn hook(id: &str, event: &str, matcher: &str, script: &str) -> tinyhivemind_
         tool: tool(script, script, "write", json!({"type": "object"})),
     }
 }
+
+/// Write one MCP POST of `body` by hand and return the open socket, so a
+/// test can hang up mid-call by dropping it.
+pub async fn raw_post(addr: SocketAddr, bearer: &str, body: &Value) -> tokio::net::TcpStream {
+    use tokio::io::AsyncWriteExt;
+    let body = serde_json::to_vec(body).unwrap();
+    let head = format!(
+        "POST /mcp HTTP/1.1\r\nhost: 127.0.0.1:{}\r\nauthorization: Bearer {bearer}\r\ncontent-type: application/json\r\ncontent-length: {}\r\n\r\n",
+        addr.port(),
+        body.len()
+    );
+    let mut stream = tokio::net::TcpStream::connect(addr).await.unwrap();
+    stream.write_all(head.as_bytes()).await.unwrap();
+    stream.write_all(&body).await.unwrap();
+    stream
+}
+
+/// Wait until `file` in the seat's workspace has a line.
+pub async fn started(hive: &Hive, file: &str) {
+    while hive.lines(file) == 0 {
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+}

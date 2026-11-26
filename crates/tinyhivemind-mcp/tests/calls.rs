@@ -422,3 +422,30 @@ async fn a_join_management_refuses_runs_no_hook_and_records_nothing() {
     assert!(!failed, "{text}");
     assert_eq!((hive.lines("guard.log"), hive.lines("audit.log")), (1, 1));
 }
+
+/// Admits sends until told to refuse them.
+#[derive(Default)]
+struct Toggle(std::sync::atomic::AtomicBool);
+impl SendAuthorizer for Toggle {
+    fn authorize(&self, _: &str, _: &SendRequest) -> HostResult<()> {
+        if self.0.load(std::sync::atomic::Ordering::SeqCst) {
+            Err(tinyhivemind_host::Error::SendDenied("sends are closed".into()))
+        } else {
+            Ok(())
+        }
+    }
+}
+
+#[tokio::test]
+async fn a_recorded_send_is_answered_even_after_the_policy_changes() {
+    let toggle = Arc::new(Toggle::default());
+    let policy = toggle.clone();
+    let hive = Hive::start(move |services| services.with_send_policy(policy), |seat, _| seat).await;
+    let send = |call: &str| json!({"agent_id": "b", "message_id": call, "body": "hi", "turn": hive.turn_id(), "call": call});
+    let first = hive.a.call("hivemind_send_agent", send("s1")).await;
+    assert!(!first.1, "{first:?}");
+    toggle.0.store(true, std::sync::atomic::Ordering::SeqCst);
+    assert_eq!(hive.a.call("hivemind_send_agent", send("s1")).await, first);
+    let (text, failed) = hive.a.call("hivemind_send_agent", send("s2")).await;
+    assert!(failed && text.contains("sends are closed"), "{text}");
+}
