@@ -57,6 +57,8 @@ rustix = { version = "1.1", default-features = false, features = ["std", "proces
 
 [dev-dependencies]
 tinyhivemind-host = { workspace = true, features = ["conformance"] }
+# The hive test: a real coordinator and hive tool server for live seats.
+tinyhivemind-mcp.workspace = true
 # Fallible tests over several error types.
 anyhow.workspace = true
 # Async tests, and the in-process fake's listener.

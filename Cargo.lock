@@ -3654,6 +3654,7 @@ dependencies = [
  "tinyhivemind-hives",
  "tinyhivemind-host",
  "tinyhivemind-lang",
+ "tinyhivemind-mcp",
  "tokio",
  "toml 0.8.23",
 ]

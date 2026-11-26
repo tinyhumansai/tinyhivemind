@@ -31,6 +31,9 @@ tinyhivemind-exec = { path = "crates/tinyhivemind-exec" }
 sha2 = "0.10"
 # Harness-neutral tool belt, policies, package plans and process supervision.
 tinyhivemind-host = { path = "crates/tinyhivemind-host" }
+# Hive tools served to harness processes over loopback MCP. Only tests take
+# it: the process runners link no server, and their hive tests start one.
+tinyhivemind-mcp = { path = "crates/tinyhivemind-mcp" }
 # The HTTP/1.1 server under `tinyhivemind-mcp`, which serves hive tools to
 # harness processes over Streamable HTTP on loopback (ADR 0036). hyper 1 is a
 # protocol implementation and no framework: no router, no TLS, no HTTP/2, no
