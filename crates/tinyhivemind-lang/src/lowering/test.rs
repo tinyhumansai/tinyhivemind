@@ -235,3 +235,18 @@ fn the_most_specific_harness_wins() {
     assert_eq!(lead.harness_kind(), crate::HarnessKind::OpenClaw);
     assert_eq!(lead.harness, Some(package.manifest.harnesses[1].clone()));
 }
+
+#[test]
+fn a_judged_package_lowers_every_unlisted_tool_group_to_off() {
+    // No harness named: the harness keeps its own group defaults.
+    for seat in &lower(&integrations()).unwrap().seats {
+        assert_eq!(seat.integration.unlisted_groups, None);
+    }
+    let package = with_harnesses();
+    for seat in &package.manifest.seats {
+        let lowered = super::integration::seat(&package, seat);
+        assert_eq!(lowered.unlisted_groups, Some(crate::GroupMode::Off));
+        // The groups a toolpack lists are still carried as listed.
+        assert_eq!(lowered.groups["web3"], crate::GroupMode::Off);
+    }
+}

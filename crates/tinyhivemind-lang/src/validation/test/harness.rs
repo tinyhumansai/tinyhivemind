@@ -20,13 +20,20 @@ fn mixed(edit: impl FnOnce(&mut Value)) -> Vec<Diagnostic> {
     after("mixed-harnesses", edit)
 }
 
-/// The pointers of every `integration` finding.
+/// The pointers of every `integration` finding, each once, in order: one
+/// setting may be reported once per harness kind that rejects it.
 fn integration_pointers(found: &[Diagnostic]) -> Vec<&str> {
-    found
+    let mut pointers: Vec<&str> = Vec::new();
+    for pointer in found
         .iter()
         .filter(|d| d.rule == Rule::Integration)
         .filter_map(|d| d.pointer.as_deref())
-        .collect()
+    {
+        if !pointers.contains(&pointer) {
+            pointers.push(pointer);
+        }
+    }
+    pointers
 }
 
 #[test]
@@ -469,4 +476,67 @@ fn a_stop_hook_is_rejected_and_a_tool_hook_is_the_hosts() {
     };
     assert_eq!(integration_pointers(&with_hook("stop")), ["/hooks/0/event"]);
     assert_eq!(with_hook("pre_tool_use"), vec![]);
+}
+
+#[test]
+fn one_setting_rejected_by_several_kinds_keeps_each_kinds_reason() {
+    let found = mixed_at(&json!(["providers", 0, "credential", {"env": "KEY"}]));
+    let reasons: Vec<&str> = found
+        .iter()
+        .filter(|d| d.pointer.as_deref() == Some("/providers/0/credential"))
+        .map(|d| d.message.as_str())
+        .collect();
+    assert_eq!(reasons.len(), 3, "{reasons:?}");
+    for kind in ["openhuman", "openclaw", "codex"] {
+        assert!(
+            reasons
+                .iter()
+                .any(|r| r.contains(&format!("the {kind} harness"))),
+            "{kind}"
+        );
+    }
+}
+
+#[test]
+fn the_sections_a_seat_reaches_are_walked_too() {
+    let mut docs = example("mixed-harnesses");
+    let mut manifest: Value = serde_json::from_str(&docs["hive.json"]).unwrap();
+    manifest["skills"] = json!([{"id": "notes"}]);
+    manifest["toolpacks"][0]["skills"] = json!(["notes"]);
+    manifest["mcp"] =
+        json!([{"id": "issues", "transport": "http", "endpoint": "https://mcp.example.com"}]);
+    manifest["toolpacks"][0]["mcp"] = json!(["issues"]);
+    manifest["workflows"] = json!([{"id": "nightly", "schedule": "0 3 * * *",
+        "target": {"hive": "mixed-harnesses"}, "prompt": "Summarise the day"}]);
+    docs.insert("hive.json".into(), manifest.to_string());
+    docs.insert("skills/notes/SKILL.md".into(), "Take notes.\n".into());
+    let found = diagnose_documents(&docs).1;
+    // The skill is rejected at its declaration as well as where it is
+    // granted; the MCP server and the workflow are the host's.
+    assert_eq!(
+        integration_pointers(&found),
+        ["/toolpacks/0/skills", "/skills/0/id"],
+        "{found:?}"
+    );
+}
+
+#[test]
+fn a_shared_instance_without_an_explicit_isolation_is_reported_at_its_entry() {
+    let found = mixed(|m| {
+        m["providers"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"id": "other", "kind": "openai", "endpoint": "http://127.0.0.1:9090/v1"}));
+        m["models"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"id": "second", "provider": "other", "name": "second-model"}));
+        m["seats"][0]["harness"] = json!("claw");
+        m["seats"][0]["model"] = json!("second");
+        m["harnesses"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("isolation");
+    });
+    assert_eq!(integration_pointers(&found), ["/harnesses/0"]);
 }

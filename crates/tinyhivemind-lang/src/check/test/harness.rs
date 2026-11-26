@@ -48,10 +48,19 @@ fn harnesses_and_runtime_harness_are_integration_edits() {
     );
     let edit = edited(&base, |m| m["runtime"]["harness"] = json!("codex"));
     let refused = check(&base, &edit).expect_err("integration is not permitted");
-    assert!(
-        refusals(&refused).contains(&(Rule::ForbiddenClass, Some("/runtime/harness"))),
-        "{refused:?}"
+    // One finding, though the edit moves the lead and touches every seat.
+    assert_eq!(
+        refusals(&refused),
+        [(Rule::ForbiddenClass, Some("/runtime/harness"))]
     );
+    let moved = crate::harness::resolve::moves(
+        &parse(&base).expect("the original parses").manifest,
+        &crate::diagnose_documents(&edit)
+            .0
+            .expect("the edit decodes")
+            .manifest,
+    );
+    assert_eq!(moved, ["/runtime/harness"]);
     let base = original(&[PatchClass::Integration]);
     let edit = edited(&base, |m| m["runtime"]["harness"] = json!("codex"));
     let review = check(&base, &edit).expect("integration is permitted");
