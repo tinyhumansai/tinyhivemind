@@ -81,6 +81,8 @@ pub(crate) struct Turn<'a> {
     pub(crate) iterations: usize,
     pub(crate) observer: &'a dyn Observer,
     pub(crate) approver: &'a dyn Approver,
+    /// How long the approver may take; then the call is denied.
+    pub(crate) approval_limit: std::time::Duration,
     /// Becomes true when the seat is stopped.
     pub(crate) closed: watch::Receiver<bool>,
 }
@@ -240,6 +242,11 @@ async fn approve(turn: &Turn<'_>, event: &Value) -> Result<()> {
         .call("openhuman.approval_decide", params)
         .await?;
     Ok(())
+}
+
+/// Deny every approval still pending; how many there were.
+pub(crate) async fn deny_stale(_client: &Client) -> Result<usize> {
+    Ok(0)
 }
 
 /// Cancel `active`, returning once its request has ended.

@@ -42,6 +42,17 @@ pub(crate) enum Error {
     /// The turn's request could not be rendered as its message.
     #[error("the turn could not be rendered: {0}")]
     Render(String),
+    /// The keyring key file is not a private 256-bit hex key.
+    #[error("the keyring key file is unusable: {0}")]
+    KeyFile(&'static str),
+    /// A start failed, and so did stopping what it had started.
+    #[error("{error}; and its instance could not be stopped: {stop}")]
+    Abandoned {
+        /// Why the start failed.
+        error: Box<Error>,
+        /// Why the stop did.
+        stop: process::Error,
+    },
     /// A file of the instance could not be written or read.
     #[error("{what}: {source}")]
     Io {

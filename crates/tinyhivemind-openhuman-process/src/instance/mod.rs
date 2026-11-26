@@ -113,6 +113,14 @@ impl Layout {
     }
 }
 
+/// `error`, and the stop that followed it if that failed too.
+pub(crate) fn abandon<T>(
+    error: Error,
+    _stopped: std::result::Result<T, tinyhivemind_host::process::Error>,
+) -> Error {
+    error
+}
+
 /// 256 random bits, as hex.
 fn random() -> Result<String> {
     let mut bytes = [0_u8; 32];

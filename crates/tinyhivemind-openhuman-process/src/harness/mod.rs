@@ -49,15 +49,20 @@ pub struct Options {
     pub warm_up: Duration,
     /// Each step of a stop.
     pub stop: StopPolicy,
+    /// For the seat's approver to decide what the harness asks; then the
+    /// call is denied.
+    pub approval: Duration,
 }
 
 impl Default for Options {
-    /// 30 s to be healthy, 20 s to warm up, and the supervisor's own stop.
+    /// 30 s to be healthy, 20 s to warm up, the supervisor's own stop, and
+    /// 2 minutes for an approval.
     fn default() -> Self {
         Self {
             ready: Duration::from_secs(30),
             warm_up: Duration::from_secs(20),
             stop: StopPolicy::default(),
+            approval: Duration::from_secs(120),
         }
     }
 }
@@ -111,13 +116,24 @@ impl Harness for OpenHumanHarness {
             let model = capability::check(&plan.seat)
                 .map_err(|refusal| Error::Refused(Box::new(refusal)))?;
             let id = plan.seat.id.clone();
-            if lock(&seats).contains_key(&id) {
-                return Err(Error::Harness(format!("seat {id} is already running")));
-            }
             let timeout = plan.turn_timeout();
             let seat = Arc::new(Seat::new(program, options, plan, tools, model));
-            seat.start().await?;
-            lock(&seats).insert(id, seat.clone());
+            {
+                // Reserved before anything starts, so that a second start is
+                // refused and a stop meanwhile finds the seat to stop.
+                let mut seats = lock(&seats);
+                if seats.contains_key(&id) {
+                    return Err(Error::Harness(format!("seat {id} is already running")));
+                }
+                seats.insert(id.clone(), seat.clone());
+            }
+            if let Err(error) = seat.start().await {
+                let mut seats = lock(&seats);
+                if seats.get(&id).is_some_and(|held| Arc::ptr_eq(held, &seat)) {
+                    seats.remove(&id);
+                }
+                return Err(error.into());
+            }
             let runner = SeatRunner::new(Arc::new(Runner(seat))).with_timeout(timeout);
             Ok(Arc::new(runner) as Arc<dyn AgentRunner>)
         })

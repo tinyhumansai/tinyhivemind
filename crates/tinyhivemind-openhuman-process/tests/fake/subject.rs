@@ -75,6 +75,7 @@ impl FakeSubject {
                 terminate: Duration::from_secs(2),
                 kill: Duration::from_secs(10),
             },
+            approval: Duration::from_secs(5),
         }
     }
 }

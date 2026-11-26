@@ -69,6 +69,7 @@ impl Harnessed {
             iterations,
             observer: self.events.as_ref(),
             approver,
+            approval_limit: std::time::Duration::from_secs(5),
             closed: self.closed.subscribe(),
         }
     }
@@ -242,4 +243,79 @@ async fn a_message_the_instance_does_not_accept_fails_and_agent_chat_is_never_us
     let methods = harnessed.fixture.log("methods.jsonl");
     assert!(!methods.contains(&json!("openhuman.inference_agent_chat")));
     assert!(methods.contains(&json!("openhuman.channel_web_chat")));
+}
+
+/// Never answers.
+struct Silent;
+
+impl Approver for Silent {
+    fn decide(&self, _: ToolApproval) -> ApprovalFuture {
+        Box::pin(std::future::pending())
+    }
+}
+
+#[tokio::test]
+async fn an_approver_that_does_not_answer_in_time_is_a_denial() {
+    let harnessed = Harnessed::new(&[json!({"reply": "after", "approval": "shell"})]).await;
+    let mut turn = harnessed.turn(&Silent, 8);
+    turn.approval_limit = std::time::Duration::from_millis(100);
+    assert!(run(turn, "go", &harnessed.active).await.is_ok());
+    let decided = harnessed.fixture.log("decisions.jsonl");
+    assert_eq!(
+        decided.first().map(|entry| entry["decision"].clone()),
+        Some(json!("deny"))
+    );
+}
+
+#[tokio::test]
+async fn an_approval_request_without_an_id_fails_the_turn_clearly() {
+    let step = json!({"reply": "after", "approval": "shell", "approval_id": ""});
+    let harnessed = Harnessed::new(&[step]).await;
+    let ended = harnessed.run(8).await;
+    let error = ended.err().map(|error| error.to_string());
+    assert!(error.is_some_and(|error| error.contains("approval_request without a request_id")));
+}
+
+#[tokio::test]
+async fn an_approval_left_by_a_dropped_turn_is_denied_before_the_next() {
+    let harnessed =
+        Arc::new(Harnessed::new(&[json!({"reply": "late", "approval": "shell"})]).await);
+    let running = harnessed.clone();
+    let task = tokio::spawn(async move {
+        run(running.turn(&Silent, 8), "go", &running.active)
+            .await
+            .is_ok()
+    });
+    let client = harnessed.fixture.client.clone();
+    let mut pending = 0;
+    while pending == 0 {
+        let listed = client
+            .call("openhuman.approval_list_pending", json!({}))
+            .await;
+        pending = listed
+            .ok()
+            .and_then(|listed| listed["result"].as_array().map(Vec::len))
+            .unwrap_or(0);
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+    }
+    task.abort();
+    let denied = super::deny_stale(&client).await;
+    assert_eq!(denied.ok(), Some(1));
+    let decided = harnessed.fixture.log("decisions.jsonl");
+    assert_eq!(
+        decided.first().map(|entry| entry["decision"].clone()),
+        Some(json!("deny"))
+    );
+    assert_eq!(super::deny_stale(&client).await.ok(), Some(0));
+}
+
+#[tokio::test]
+async fn a_chat_error_is_bounded_and_carries_no_payload() {
+    let payload = format!("upstream said:\n{{\"error\": \"{}\"}}", "x".repeat(5000));
+    let harnessed = Harnessed::new(&[json!({"error": payload})]).await;
+    let failure = harnessed.run(8).await.ok().and_then(|ended| ended.failure);
+    let failure = failure.unwrap_or_else(|| unreachable!("a failure"));
+    assert!(failure.len() <= 300, "{} bytes", failure.len());
+    assert!(!failure.contains('\n'), "{failure}");
+    assert!(failure.starts_with("chat_error (inference)"), "{failure}");
 }

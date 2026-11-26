@@ -79,7 +79,8 @@ fn answer(state: &Arc<State>, request: &Request) -> Reply {
         let mut failures = lock(&state.failures);
         if *failures > 0 {
             *failures -= 1;
-            let error = json!({"error": {"message": "scripted refusal", "type": "invalid_request_error"}});
+            let error =
+                json!({"error": {"message": "scripted refusal", "type": "invalid_request_error"}});
             return Reply::Json(400, error);
         }
     }

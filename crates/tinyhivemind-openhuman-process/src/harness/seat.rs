@@ -67,6 +67,9 @@ impl Seat {
     /// Start an instance if none is running, reporting it.
     pub(super) async fn start(&self) -> Result<Arc<Live>> {
         let mut live = self.live.lock().await;
+        if *self.closed.borrow() {
+            return Err(turn::Error::Closed.into());
+        }
         if let Some(running) = live.as_ref().filter(|live| live.instance.exit().is_none()) {
             return Ok(running.clone());
         }
@@ -81,6 +84,11 @@ impl Seat {
             model: &self.model,
         };
         let started = Arc::new(launcher.launch().await?);
+        if *self.closed.borrow() {
+            // Stopped while it started: what started is stopped too.
+            started.instance.stop(async {}, self.options.stop).await?;
+            return Err(turn::Error::Closed.into());
+        }
         let event = Event::Started(started.started.clone());
         self.plan.observer.event(&self.plan.seat.id, event);
         *live = Some(started.clone());
@@ -110,6 +118,7 @@ impl Seat {
             iterations: self.model.iterations,
             observer: self.plan.observer.as_ref(),
             approver: self.plan.approver.as_ref(),
+            approval_limit: self.options.approval,
             closed: self.closed.subscribe(),
         };
         let ended = turn::run(turn, &message, &self.active).await?;

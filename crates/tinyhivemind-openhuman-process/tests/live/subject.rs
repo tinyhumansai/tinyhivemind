@@ -88,6 +88,7 @@ pub(crate) fn options() -> Options {
         ready: Duration::from_secs(30),
         warm_up: Duration::from_secs(20),
         stop: StopPolicy::default(),
+        approval: Duration::from_secs(5),
     }
 }
 

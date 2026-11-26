@@ -282,3 +282,71 @@ fn every_source_the_binary_adds_tools_from_is_counted() {
         "{delegating:?}"
     );
 }
+
+#[test]
+fn the_keyring_key_is_made_once_and_a_bad_one_is_refused() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let dir = tempfile::tempdir().unwrap_or_else(|error| unreachable!("{error}"));
+    let layout = Layout::new(dir.path());
+    let made = layout.master_key();
+    let made = made.unwrap_or_else(|error| unreachable!("a new key: {error}"));
+    assert_eq!(made.len(), 64);
+    assert!(made.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    assert_eq!(layout.master_key().ok(), Some(made));
+    let path = dir.path().join("keyring.key");
+    let mode = |mode| std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode));
+    assert!(mode(0o644).is_ok());
+    assert!(matches!(layout.master_key(), Err(Error::KeyFile(_))));
+    for bad in ["", "abc", &"z".repeat(64)] {
+        assert!(std::fs::write(&path, bad).is_ok() && mode(0o600).is_ok());
+        assert!(
+            matches!(layout.master_key(), Err(Error::KeyFile(_))),
+            "{bad:?}"
+        );
+    }
+}
+
+#[test]
+fn a_config_already_there_is_made_private_when_written() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let dir = tempfile::tempdir().unwrap_or_else(|error| unreachable!("{error}"));
+    let layout = Layout::new(dir.path());
+    assert!(std::fs::create_dir_all(layout.workspace()).is_ok());
+    let path = layout.workspace().join("config.toml");
+    assert!(std::fs::write(&path, "old").is_ok());
+    assert!(std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).is_ok());
+    assert!(layout.write_config(&Fixture::written_for_test()).is_ok());
+    let mode = std::fs::metadata(&path).map(|meta| meta.permissions().mode() & 0o777);
+    assert_eq!(mode.ok(), Some(0o600));
+}
+
+#[test]
+fn a_stop_that_fails_after_a_failed_start_keeps_both_errors() {
+    let start = Error::Resume("t".into());
+    let kept = super::abandon(start, Ok::<(), tinyhivemind_host::process::Error>(()));
+    assert!(matches!(kept, Error::Resume(_)));
+    let stopped: Result<(), _> = Err(tinyhivemind_host::process::Error::Unproven);
+    let both = super::abandon(Error::Resume("t".into()), stopped);
+    let shown = both.to_string();
+    assert!(
+        shown.contains("no thread t") && shown.contains("could not be proven gone"),
+        "{shown}"
+    );
+}
+
+#[tokio::test]
+async fn tools_whose_names_differ_only_in_hex_like_suffixes_are_told_apart() {
+    let served = r#"["post", "post_a", "post_ab", "post_abc123"]"#;
+    let fixture = Fixture::with(&[("served", served), ("warm", "0")]).await;
+    let wanted: BTreeSet<String> = ["post", "post_a", "post_ab", "post_abc123"]
+        .map(String::from)
+        .into_iter()
+        .collect();
+    let found = discover(&fixture.client, SERVER, &wanted, WARM).await;
+    let mut expected: Vec<String> = wanted
+        .iter()
+        .map(|tool| crate::fake::hashed(SERVER, tool))
+        .collect();
+    expected.sort();
+    assert_eq!(found.ok(), Some(expected));
+}

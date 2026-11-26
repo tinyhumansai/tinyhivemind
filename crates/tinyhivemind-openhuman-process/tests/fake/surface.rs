@@ -208,6 +208,13 @@ impl State {
             }
             "openhuman.channel_web_chat" => self.chat(params).map(envelope),
             "openhuman.channel_web_cancel" => Ok(envelope(self.cancel(params))),
+            "openhuman.approval_list_pending" => {
+                let pending = lock(&self.approvals)
+                    .keys()
+                    .map(|id| json!({"request_id": id}))
+                    .collect::<Vec<_>>();
+                Ok(envelope(json!(pending)))
+            }
             "openhuman.approval_decide" => {
                 let id = params["request_id"].as_str().unwrap_or_default();
                 let decision = params["decision"].as_str().unwrap_or_default().to_owned();
@@ -378,7 +385,10 @@ impl State {
             self.publish(&ids.client, &ids.thread, "req-stray", "chat_done", stray);
         }
         if let Some(tool) = step["approval"].as_str() {
-            let id = format!("approval-{}", self.next.fetch_add(1, Ordering::Relaxed));
+            let id = match step["approval_id"].as_str() {
+                Some(id) => id.to_owned(),
+                None => format!("approval-{}", self.next.fetch_add(1, Ordering::Relaxed)),
+            };
             let (sender, decided) = oneshot::channel();
             lock(&self.approvals).insert(id.clone(), sender);
             // Its `request_id` is the approval's, not the turn's.

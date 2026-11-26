@@ -118,7 +118,10 @@ async fn debug_of_a_running_harness_shows_no_secret() -> Result<()> {
     impl Observer for Pid {
         fn event(&self, _: &str, event: Event) {
             if let Event::Started(started) = event {
-                *self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(started.pid);
+                *self
+                    .0
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(started.pid);
             }
         }
     }
@@ -128,11 +131,18 @@ async fn debug_of_a_running_harness_shows_no_secret() -> Result<()> {
     let mut plan = subject.seat();
     plan.observer = pid.clone();
     let runner = harness.start(plan, subject.endpoint()).await?;
-    let started = *pid.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let started = *pid
+        .0
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let environ = std::fs::read(format!("/proc/{}/environ", started.unwrap_or_default()))?;
     let token = String::from_utf8_lossy(&environ)
         .split('\0')
-        .find_map(|entry| entry.strip_prefix("OPENHUMAN_CORE_TOKEN=").map(str::to_owned))
+        .find_map(|entry| {
+            entry
+                .strip_prefix("OPENHUMAN_CORE_TOKEN=")
+                .map(str::to_owned)
+        })
         .unwrap_or_default();
     assert!(token.len() >= 32, "the child's core token was not found");
     let shown = format!("{harness:?}");
@@ -140,5 +150,44 @@ async fn debug_of_a_running_harness_shows_no_secret() -> Result<()> {
     assert!(!shown.contains("seat-bearer"), "the bearer is in {shown}");
     harness.stop("scout").await?;
     drop(runner);
+    Ok(())
+}
+
+/// Two starts of one seat at once: one runs, the other is refused.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_seat_starting_twice_at_once_runs_once() -> Result<()> {
+    use tinyhivemind_host::harness::Harness as _;
+    let subject = FakeSubject::new()?;
+    let harness = subject.openhuman();
+    let (one, two) = tokio::join!(
+        harness.start(subject.seat(), subject.endpoint()),
+        harness.start(subject.seat(), subject.endpoint()),
+    );
+    let started = [one.is_ok(), two.is_ok()];
+    assert_eq!(started.iter().filter(|ok| **ok).count(), 1, "{started:?}");
+    let refused = one.err().or(two.err()).map(|error| error.to_string());
+    assert!(refused.is_some_and(|reason| reason.contains("already")));
+    harness.stop("scout").await?;
+    assert_eq!(subject.processes(), Vec::<u32>::new());
+    Ok(())
+}
+
+/// A stop while the seat starts stops what it starts, and the start fails.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_stop_during_start_leaves_nothing_running() -> Result<()> {
+    use tinyhivemind_host::harness::Harness as _;
+    let subject = FakeSubject::new()?;
+    let harness = std::sync::Arc::new(subject.openhuman());
+    let starting = harness.clone();
+    let (seat, endpoint) = (subject.seat(), subject.endpoint());
+    let start = tokio::spawn(async move { starting.start(seat, endpoint).await.err() });
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    harness.stop("scout").await?;
+    let refused = start.await?;
+    assert!(refused.is_some(), "the start succeeded after its stop");
+    assert_eq!(subject.processes(), Vec::<u32>::new());
+    // The seat may be started again.
+    harness.start(subject.seat(), subject.endpoint()).await?;
+    harness.stop("scout").await?;
     Ok(())
 }
