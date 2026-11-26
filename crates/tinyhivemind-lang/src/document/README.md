@@ -20,7 +20,10 @@ three cases plain `#[serde(default)]` cannot express. `policies` is decoded
 as an overlay on `Policies::default()` (objects merge key by key, anything
 else replaces), a desk's `description` defaults to `None` without relaxing
 core's own `Desk` wire form, and a seat's `label` defaults to its `id`.
-Serialization still writes every field. The integration sections default to
+Serialization still writes every field but the harness ones (`harnesses`,
+and `harness` on runtime, profile and seat), which are omitted when absent so
+older packages keep their content ids; `present` and `nonempty` in
+`defaults.rs` therefore refuse `null` and `[]` for them. The integration sections default to
 empty (or to the defaults listed in [`integration/`](integration/README.md)),
 so a package that predates them is unchanged. Because serde reads a struct from an
 array of its fields, and an empty array as all defaults, a JSON array where

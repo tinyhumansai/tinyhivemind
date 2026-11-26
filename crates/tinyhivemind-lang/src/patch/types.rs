@@ -23,8 +23,9 @@ pub enum PatchClass {
     Goal,
     /// What the agents run with: the runtime, providers, models, MCP
     /// servers, skills, tools, toolpacks, permissions, profiles, hooks,
-    /// session, Jev, features and workflows, and the files under `tools/`
-    /// and `skills/`.
+    /// session, Jev, features, workflows and harnesses, and the files under
+    /// `tools/` and `skills/`. Moving a seat to another harness needs this
+    /// class as well as [`PatchClass::Roster`].
     Integration,
 }
 

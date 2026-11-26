@@ -5,12 +5,14 @@ Boundary: [ADR 0035](../adr/0035-a-harness-is-a-process.md),
 [ADR 0036](../adr/0036-hive-tools-are-served-over-loopback-mcp.md).
 Evidence: [the harness spike](../experiments/2026-11-25-process-harnesses.md).
 
-Implemented so far, by step 1 of the plan: the harness-neutral host crate, the
-harness port with the seat rules below, start verification, process supervision
-on Linux, and a conformance suite that a scripted fake harness passes. No client
-for a real harness, no MCP server and no `harnesses` section exist yet. Until the
-plan's removal phase lands, the linked OpenHuman adapter remains the way a
-package is deployed.
+Implemented so far, by steps 1 and 3 of the plan: the harness-neutral host
+crate, the harness port with the seat rules below, start verification, process
+supervision on Linux, a conformance suite that a scripted fake harness passes,
+and the package schema: the `harnesses` section, `harness` on runtime, profile
+and seat, the capability table in `tinyhivemind-lang` and its `check`
+diagnostics. No client for a real harness and no MCP server exist yet. Until
+the plan's removal phase lands, the linked OpenHuman adapter remains the way a
+package is deployed, and it refuses a seat whose harness is not `openhuman`.
 
 ## Problem
 
@@ -82,7 +84,9 @@ in it, and opens an MCP session for each of them on every run.
   executable tools; this rule keeps the process that *enforces* permissions out
   of reach of a package edit.
 - An absent field is not serialized, so an existing package keeps its content
-  id. A test pins one.
+  id. A test pins one. Written, `harness` is a string and `harnesses` holds at
+  least one entry: `null` and `[]` would not survive the round trip, so they
+  are decode errors. In a split package `harnesses` lives in `agents.json`.
 - `harnesses` and `runtime.harness` are in the `integration` edit class. A
   change to a seat's `harness` requires `integration` as well as `roster`, so a
   hive allowed to edit its roster cannot move a seat to another harness.
@@ -94,6 +98,36 @@ in it, and opens an MCP session for each of them on every run.
 `tinyhivemind-lang` holds one capability table per kind. `check` reports a field
 the resolved harness cannot honour under the existing `integration` rule, at the
 field's location.
+
+The last nine rows are fields this table did not originally decide. The check
+is default-deny: every field of every integration type has a row, a field the
+table does not support is rejected, and a test fails when a field is added to
+the language without one. The send limits and tool lists are enforced today by
+the linked adapter's permission gate, not by the host, so they start rejected
+like the rest. Only language structure is exempt: identities, references
+(whose target is judged where it is declared), labels, a seat's `template` (a
+name the host maps to how it creates the agent), the hive's roster, desks,
+goals and policies, which the coordinator runs whatever the harness, and the
+harness entries themselves. Feature flags and `context` count with executable
+tools and the prompt: lowering applies the switches, and `tinyhivemind-exec`
+passes every flag to a tool.
+
+The table judges a package once it declares a harness or names one anywhere,
+and then every seat, the implicit `openhuman` ones included. A package that
+does neither is deployed by the linked adapter, which keeps its own limits
+(below), so the table does not judge it and every existing package stays
+valid. A field the map has no decision for is rejected too, so even a field
+added to the language before its row is rejected rather than passed. Plan step 6 flips this: with the link gone, every package is judged.
+
+In the table as data (`HarnessKind::support`), each rejected row also says
+what moves it: only a conformance test (provider shapes, `credential`, and
+OpenHuman's subagents, `definition_base`, `jev` and `session` tuning), a
+harness release then a test (OpenHuman's `tool_rules`), or a spec decision
+(everything else rejected). The OpenHuman eight-iteration cap below is a
+per-kind rule beside the table (`HarnessKind::iteration_cap`), reported at the
+layer that sets `limits.iterations`. No built-in tool can be turned on, so no
+hook can match one; `check` does not inspect hook matchers for built-in tool
+names.
 
 | Field | openhuman | openclaw | codex |
 | --- | --- | --- | --- |
@@ -107,16 +141,30 @@ field's location.
 | `sandbox` `none` or absent, on `runtime` and `permissions` | yes | yes | yes |
 | `sandbox` `read_only` or `sandboxed` | rejected | rejected | rejected |
 | `autonomy` and `permissions.access` | yes, host side | yes, host side | yes, host side |
-| built-in tool groups | exact allowlist | off | off |
+| built-in tool groups | off | off | off |
 | `tool_rules` on built-in tools | rejected until a release has them | rejected | rejected |
 | hooks on built-in tools | rejected | rejected | rejected |
 | package MCP servers | through the host server | through the host server | through the host server |
 | `session_store = "host"`, `memory_engine = "host"` | rejected | rejected | rejected |
 | subagents, `definition_base`, `jev`, `session` tuning | rejected at first | rejected | rejected |
 | workflows | coordinator schedule | coordinator schedule | coordinator schedule |
+| `limits.iterations` | up to the cap below | rejected | rejected |
+| skills, `include_user_skills` | rejected | rejected | rejected |
+| `limits.budget_usd`, a model's `temperature` and `max_tokens` | rejected | rejected | rejected |
+| `bare_prompt`, a seat's `config` and `agent_id` | rejected | rejected | rejected |
+| tool allow and deny lists (`tools`, `allow_tools`, `deny_tools`) | rejected | rejected | rejected |
+| `send_destinations`, `send_operations` | rejected | rejected | rejected |
+| `stop` hooks | rejected | rejected | rejected |
+| `runtime` `workspace`, `deployment_id`, `max_agents`, a non-default `concurrency` | rejected | rejected | rejected |
+| `session_store = "sqlite"`, `memory_engine = "memory"` | rejected | rejected | rejected |
 
 Built-in tools start **off** for every kind. Turning one on is a later change
-that must first show its permissions are enforced. "Rejected" is the starting
+that must first show its permissions are enforced. "Off" is the rule for every
+group a package does not list, too: a judged package lowers each seat with
+`unlisted_groups = Off`, so no harness default can switch a group on, and the
+linked adapter registers a judged `openhuman` seat with every unlisted group
+off. (The OpenHuman process runner will configure that as an exact
+`tool_allowlist`; that is how it is enforced, not a permission.) "Rejected" is the starting
 point, not a promise: a row moves when a conformance test proves the setting.
 
 A `sandbox` is rejected because executable tools on this path run from the host's
@@ -367,3 +415,10 @@ or tool environment.
 
 Live tests (`live_*`, opt-in) run the same cases on the pinned binaries, then a
 mixed hive reaches a decision with every message in the coordinator transcript.
+
+## Open questions
+
+- A roster edit may still change a seat's other integration fields (`model`,
+  `toolpacks`, `permissions` and the rest) without the `integration` class;
+  only `harness` needs both today. Whether those fields move to the same
+  two-class rule is undecided.

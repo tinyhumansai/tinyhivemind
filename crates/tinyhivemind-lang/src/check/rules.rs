@@ -339,6 +339,19 @@ pub(super) fn classify(
             Some(class) => owned.push((class, operation)),
         }
     }
+    if !permitted.contains(&PatchClass::Integration) {
+        for pointer in crate::harness::resolve::moves(&base.manifest, &edit.manifest) {
+            let message = "moving a seat to another harness needs the integration class as \
+                           well as roster, and the constitution does not permit integration edits"
+                .to_owned();
+            out.push(diagnostic(
+                HIVE,
+                Some(pointer),
+                Rule::ForbiddenClass,
+                message,
+            ));
+        }
+    }
     owned
 }
 

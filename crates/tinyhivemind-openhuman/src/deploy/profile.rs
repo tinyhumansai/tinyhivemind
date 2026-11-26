@@ -255,3 +255,32 @@ pub(super) fn groups(
     }
     Ok(groups)
 }
+
+/// The tool groups a seat registers with, or `None` to keep the runtime's.
+///
+/// `unlisted` is the lowered mode of every group the seat's toolpacks do not
+/// list: `None` for a package that names no harness, which keeps the
+/// runtime's defaults, and `Some(Off)` for one that does, whose seats may run
+/// no built-in tool. The listed groups apply under the runtime's ceiling as
+/// [`groups`] does.
+///
+/// # Errors
+/// An unknown group, or one more exposed than the runtime allows.
+pub(super) fn seat_groups(
+    runtime: &openhuman_embed::ToolGroups,
+    listed: &std::collections::BTreeMap<String, tinyhivemind_lang::GroupMode>,
+    unlisted: Option<tinyhivemind_lang::GroupMode>,
+) -> DeployResult<Option<openhuman_embed::ToolGroups>> {
+    if unlisted.is_none() && listed.is_empty() {
+        return Ok(None);
+    }
+    let mut seat = groups(runtime, listed)?;
+    if unlisted == Some(tinyhivemind_lang::GroupMode::Off) {
+        for id in openhuman_embed::ToolGroups::ids() {
+            if !listed.contains_key(id) {
+                seat = seat.with(id, openhuman_embed::GroupMode::Off);
+            }
+        }
+    }
+    Ok(Some(seat))
+}

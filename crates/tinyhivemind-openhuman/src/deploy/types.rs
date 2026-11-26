@@ -24,6 +24,15 @@ pub enum DeployError {
     /// A workflow could not be registered or triggered.
     #[error("workflow operation failed for {0}")]
     Workflow(String),
+    /// A seat resolves to a harness this adapter cannot start: it links
+    /// `OpenHuman` and runs no harness process.
+    #[error("seat {seat} runs on the {kind} harness, which the linked adapter cannot start")]
+    UnsupportedHarness {
+        /// The seat.
+        seat: String,
+        /// The kind it resolves to.
+        kind: tinyhivemind_lang::HarnessKind,
+    },
 }
 /// Deployment result, with credential-safe errors.
 pub type DeployResult<T> = std::result::Result<T, DeployError>;
