@@ -7,7 +7,7 @@
 //! `openhuman` seats included: those run as a process too.
 use super::{capability, identities, reference};
 use crate::{
-    Error, HarnessKind, Isolation, Manifest, Package,
+    Error, HarnessKind, Isolation, Package,
     diagnostic::{Findings, HIVE},
 };
 
@@ -55,16 +55,7 @@ pub(super) fn harnesses(package: &Package, found: &mut Findings) {
             );
         }
     }
-    if judged(m) {
+    if crate::harness::resolve::judged(m) {
         capability::capabilities(package, found);
     }
-}
-
-/// Whether the capability table judges `m`: it declares a harness, or names
-/// one anywhere.
-fn judged(m: &Manifest) -> bool {
-    !m.harnesses.is_empty()
-        || m.runtime.harness.is_some()
-        || m.profiles.iter().any(|p| p.harness.is_some())
-        || m.seats.iter().any(|s| s.harness.is_some())
 }

@@ -51,6 +51,16 @@ pub(crate) fn named<'a>(manifest: &'a Manifest, seat: &'a Seat) -> Option<(&'a s
         .map(|id| (id, Origin::Runtime))
 }
 
+/// Whether the capability table judges `manifest`: it declares a harness,
+/// or names one anywhere. One that does neither is deployed by the linked
+/// adapter under its own limits.
+pub(crate) fn judged(manifest: &Manifest) -> bool {
+    !manifest.harnesses.is_empty()
+        || manifest.runtime.harness.is_some()
+        || manifest.profiles.iter().any(|p| p.harness.is_some())
+        || manifest.seats.iter().any(|s| s.harness.is_some())
+}
+
 /// The declared harness `id`, if the `harnesses` section has it.
 pub(crate) fn declared<'a>(manifest: &'a Manifest, id: &str) -> Option<&'a Harness> {
     manifest.harnesses.iter().find(|harness| harness.id == id)

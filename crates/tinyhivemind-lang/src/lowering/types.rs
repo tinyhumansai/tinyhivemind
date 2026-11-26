@@ -106,6 +106,11 @@ pub struct LoweredSeatIntegration {
     pub hooks: Vec<LoweredHook>,
     /// Harness tool group modes from its toolpacks.
     pub groups: BTreeMap<String, GroupMode>,
+    /// The mode of every harness tool group `groups` does not list: `None`
+    /// keeps the harness's own defaults, which only a package that names no
+    /// harness gets; a package that names one lowers to `Some(Off)`, since
+    /// no built-in tool may be on.
+    pub unlisted_groups: Option<GroupMode>,
     /// Permission sets that all apply, broadest first: runtime, profile,
     /// seat.
     pub permissions: Vec<PermissionSet>,

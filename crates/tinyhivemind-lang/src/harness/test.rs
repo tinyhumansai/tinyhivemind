@@ -273,6 +273,7 @@ fn declared_fields<T: serde::de::DeserializeOwned>() -> Vec<String> {
         .1;
     let mut fields: Vec<String> = list
         .split(", ")
+        .flat_map(|part| part.split(" or "))
         .map(|name| name.trim_matches('`').to_owned())
         .collect();
     fields.sort();
@@ -318,4 +319,22 @@ fn every_field_the_language_has_has_a_capability_decision() {
     }
     // The harness fields, skipped when absent, are among them.
     assert!(declared_fields::<Seat>().contains(&"harness".to_owned()));
+}
+
+#[test]
+fn a_runtime_harness_change_is_one_move_however_many_seats_inherit_it() {
+    let mut base: crate::Manifest = serde_json::from_value(json!({
+        "$schema": "https://tinyhumans.ai/schemas/hive/v1", "version": 1, "id": "h", "name": "H",
+        "harnesses": [{"id": "codex", "kind": "codex"}],
+        "seats": [
+            {"id": "a", "role": "r", "prompt": "seats/a.md", "template": "t"},
+            {"id": "b", "role": "r", "prompt": "seats/b.md", "template": "t"}
+        ]
+    }))
+    .unwrap();
+    let mut edit = base.clone();
+    edit.runtime.harness = Some("codex".into());
+    assert_eq!(super::resolve::moves(&base, &edit), ["/runtime/harness"]);
+    base.runtime.harness = Some("codex".into());
+    assert!(super::resolve::moves(&base, &base.clone()).is_empty());
 }
