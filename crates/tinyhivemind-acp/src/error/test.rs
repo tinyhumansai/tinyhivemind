@@ -15,6 +15,16 @@ fn errors_keep_their_meaning_at_the_port() {
     assert!(matches!(resume, Port::Resume { ref session_id, .. } if session_id == "x"));
     let closed: Port = Error::Closed.into();
     assert_eq!(closed.to_string(), "harness failed: the seat is stopped");
+    let unsupported: Port = Error::Unsupported("no HTTP MCP".into()).into();
+    assert_eq!(
+        unsupported.to_string(),
+        "harness failed: the agent cannot run a seat: no HTTP MCP"
+    );
+    let broken: Port = Error::Broken("no stopReason".into()).into();
+    assert_eq!(
+        broken.to_string(),
+        "harness failed: the agent broke the protocol: no stopReason"
+    );
     let io = Error::io("a file")(std::io::Error::other("full"));
     assert_eq!(io.to_string(), "a file: full");
 }

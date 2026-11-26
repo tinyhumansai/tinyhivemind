@@ -22,6 +22,12 @@ pub(crate) enum Error {
     /// The agent is not the one asked for.
     #[error(transparent)]
     Mismatch(#[from] Mismatch),
+    /// The agent cannot run a seat: it does not offer what a seat needs.
+    #[error("the agent cannot run a seat: {0}")]
+    Unsupported(String),
+    /// The agent broke the protocol.
+    #[error("the agent broke the protocol: {0}")]
+    Broken(String),
     /// The seat's session could not be resumed; no new one is started.
     #[error("session {session} could not be resumed: {reason}")]
     Resume { session: String, reason: String },

@@ -29,6 +29,32 @@ pub(crate) fn agent_version(result: &Value) -> Option<&str> {
     result["agentInfo"]["version"].as_str()
 }
 
+/// What an agent's `initialize` result promises that a seat relies on.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct Accepted {
+    /// Whether it can `session/load` a session it ran before.
+    pub(crate) load_session: bool,
+}
+
+/// Accept an `initialize` result, or say why a seat cannot use the agent:
+/// it must speak protocol version 1 and connect to an HTTP MCP server,
+/// which is how the host's tools reach it.
+pub(crate) fn accept(result: &Value) -> Result<Accepted, String> {
+    let version = &result["protocolVersion"];
+    if version.as_u64() != Some(VERSION) {
+        return Err(format!(
+            "the agent speaks protocol version {version}, not {VERSION}"
+        ));
+    }
+    let capabilities = &result["agentCapabilities"];
+    if capabilities["mcpCapabilities"]["http"] != true {
+        return Err("the agent cannot connect to an HTTP MCP server".to_owned());
+    }
+    Ok(Accepted {
+        load_session: capabilities["loadSession"] == true,
+    })
+}
+
 /// The host's tool server as an ACP HTTP MCP server, its bearer in a header.
 pub(crate) fn mcp_server(tools: &ToolEndpoint) -> Value {
     json!({
@@ -115,8 +141,13 @@ pub(crate) fn allow(options: &Value) -> Option<String> {
 pub(crate) fn refuse(options: &Value) -> Value {
     match pick(options, &["reject_once", "reject_always"]) {
         Some(option) => selected(&option),
-        None => json!({"outcome": {"outcome": "cancelled"}}),
+        None => cancelled(),
     }
+}
+
+/// The answer to a permission request whose turn was cancelled.
+pub(crate) fn cancelled() -> Value {
+    json!({"outcome": {"outcome": "cancelled"}})
 }
 
 /// The answer that selects `option`.

@@ -4,5 +4,5 @@ The ACP version 1 messages a seat needs. Reading is tolerant; usage is read wher
 
 | File | Purpose |
 | --- | --- |
-| `mod.rs` | `initialize`, MCP server, prompt, usage, stop reasons, updates, permission answers |
+| `mod.rs` | `initialize` and accepting its result, MCP server, prompt, usage, stop reasons, updates, permission answers |
 | `test.rs` | Each message built and read |

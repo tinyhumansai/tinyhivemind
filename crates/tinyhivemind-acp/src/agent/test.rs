@@ -1,5 +1,5 @@
 //! Descriptors and their templates.
-#![allow(clippy::unwrap_used)] // Tests fail loudly on unexpected results.
+#![allow(clippy::unwrap_used, clippy::panic)] // Tests fail loudly on unexpected results.
 use super::*;
 use serde_json::json;
 
@@ -70,8 +70,76 @@ fn codex_writes_its_config_and_runs_read_only() {
 }
 
 #[test]
-fn a_catalog_cannot_be_written_without_codex() {
+fn a_value_is_never_expanded_again() {
+    let mut values = values();
+    values
+        .values
+        .insert("catalog".into(), "/tmp/{model}/catalog.json".into());
+    assert_eq!(
+        values.fill("{catalog} for {model}"),
+        "/tmp/{model}/catalog.json for mock"
+    );
+    assert_eq!(values.fill("{{model}} {model"), "{mock} {model");
+}
+
+#[test]
+fn a_toml_file_gets_its_values_escaped() {
+    let mut values = values();
+    values
+        .values
+        .insert("catalog".into(), "/tmp/a\"b\\c\n\u{1}.json".into());
+    let template = "model_catalog_json = \"{catalog}\"";
+    let filled = values.fill_file(Path::new("codex/config.toml"), template);
+    assert_eq!(
+        filled,
+        "model_catalog_json = \"/tmp/a\\\"b\\\\c\\n\\u0001.json\""
+    );
+    assert_eq!(
+        values.fill_file(Path::new("notes.txt"), "{catalog}"),
+        "/tmp/a\"b\\c\n\u{1}.json"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn each_catalog_failure_says_which_it_was() {
+    use std::os::unix::fs::PermissionsExt;
     let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("c.json");
+    let script = |name: &str, body: &str| {
+        let path = dir.path().join(name);
+        std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        path
+    };
     let missing = dir.path().join("no-codex");
-    assert!(write_codex_catalog(&missing, &dir.path().join("c.json"), "mock").is_err());
+    assert!(matches!(
+        write_codex_catalog(&missing, &out, "mock"),
+        Err(CatalogError::Launch(_))
+    ));
+    let failing = script("failing", "echo broken >&2; exit 3");
+    match write_codex_catalog(&failing, &out, "mock") {
+        Err(CatalogError::Exit { stderr, .. }) => assert_eq!(stderr, "broken"),
+        other => panic!("{other:?}"),
+    }
+    let text = script("text", "echo not json");
+    assert!(matches!(
+        write_codex_catalog(&text, &out, "mock"),
+        Err(CatalogError::Json(_))
+    ));
+    let empty = script("empty", "echo '{}'");
+    assert!(matches!(
+        write_codex_catalog(&empty, &out, "mock"),
+        Err(CatalogError::NoModels)
+    ));
+    let models = script("models", r#"echo '{"models": [{"slug": "other"}]}'"#);
+    let unwritable = dir.path().join("missing-dir").join("c.json");
+    assert!(matches!(
+        write_codex_catalog(&models, &unwritable, "mock"),
+        Err(CatalogError::Write(_))
+    ));
+    write_codex_catalog(&models, &out, "mock").unwrap();
+    let catalog: Value = serde_json::from_slice(&std::fs::read(&out).unwrap()).unwrap();
+    assert_eq!(catalog["models"][0]["slug"], "mock");
+    assert_eq!(catalog["models"][1]["tool_mode"], "direct");
 }

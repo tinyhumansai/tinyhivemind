@@ -148,6 +148,27 @@ impl Connection {
         Ok(self.sender.send(&response).await?)
     }
 
+    /// Answer the agent's request `id` from a task of the current runtime,
+    /// with a result or a refusal, for a caller that cannot wait, such as a
+    /// `Drop`. Without a runtime nothing is sent; the connection is then
+    /// ending anyway.
+    pub(crate) fn answer_detached(&self, id: &Value, answer: Result<Value, String>) {
+        let Ok(runtime) = tokio::runtime::Handle::try_current() else {
+            return;
+        };
+        let response = match answer {
+            Ok(result) => json!({"jsonrpc": "2.0", "id": id, "result": result}),
+            Err(message) => {
+                let error = json!({"code": NOT_OFFERED, "message": message});
+                json!({"jsonrpc": "2.0", "id": id, "error": error})
+            }
+        };
+        let sender = self.sender.clone();
+        runtime.spawn(async move {
+            let _ = sender.send(&response).await;
+        });
+    }
+
     /// Take what the agent sends unasked, until [`Self::unroute`] or another
     /// route replaces this one.
     pub(crate) fn route(&self) -> mpsc::UnboundedReceiver<Incoming> {
@@ -156,7 +177,9 @@ impl Connection {
         receiver
     }
 
-    /// Stop routing; requests are refused again.
+    /// Stop routing; requests are refused again. Once this returns, nothing
+    /// more reaches the route's receiver: the reader sends to it only while
+    /// holding the route.
     pub(crate) fn unroute(&self) {
         lock(&self.route).take();
     }

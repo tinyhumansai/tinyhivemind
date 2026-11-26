@@ -47,5 +47,5 @@ mod harness;
 mod protocol;
 mod seat;
 
-pub use agent::Agent;
+pub use agent::{Agent, CatalogError};
 pub use harness::{AcpHarness, Options};

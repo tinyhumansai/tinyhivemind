@@ -5,11 +5,16 @@
 //! `session/request_permission`: a call to the host's own MCP server is
 //! allowed here, since the tool server judges hive tools itself; any other
 //! goes to the seat's approver, and is refused if the approver does not
-//! answer in time. Requests for a file system or a terminal, which this
-//! client never offered, are refused.
+//! answer in time. Once the turn is cancelled, a permission request pending
+//! or new is answered `cancelled`, as ACP requires. Requests for a file
+//! system or a terminal, which this client never offered, are refused.
+//!
+//! The route is closed before the turn's last messages are read, and closed
+//! again if the turn's future is dropped, answering whatever it still held,
+//! so the agent never waits on a request nobody will answer.
 use super::Live;
-use crate::connection::Incoming;
-use crate::error::Result;
+use crate::connection::{Connection, Incoming};
+use crate::error::{Error, Result};
 use crate::protocol::{self, Update};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -18,6 +23,7 @@ use tinyhivemind_hives::TurnDisposition;
 use tinyhivemind_host::harness::{
     Event, Progress, SeatPlan, ToolApproval, ToolDecision, TurnUsage,
 };
+use tokio::sync::{mpsc, watch};
 
 /// A turn to run.
 pub(super) struct Turn<'a> {
@@ -28,6 +34,32 @@ pub(super) struct Turn<'a> {
     pub(super) session: &'a str,
     pub(super) plan: &'a SeatPlan,
     pub(super) approval: Duration,
+    /// Set once the turn is cancelled.
+    pub(super) cancelled: watch::Receiver<bool>,
+}
+
+/// A turn's hold on the connection's route. Dropped, it closes the route and
+/// answers every request still queued: a permission request `cancelled`,
+/// anything else refused.
+struct Held<'a> {
+    connection: &'a Connection,
+    incoming: mpsc::UnboundedReceiver<Incoming>,
+}
+
+impl Drop for Held<'_> {
+    fn drop(&mut self) {
+        self.connection.unroute();
+        while let Ok(message) = self.incoming.try_recv() {
+            if let Incoming::Request { id, method, .. } = message {
+                let answer = if method == "session/request_permission" {
+                    Ok(protocol::cancelled())
+                } else {
+                    Err(format!("{method} came after its turn"))
+                };
+                self.connection.answer_detached(&id, answer);
+            }
+        }
+    }
 }
 
 /// How a turn ended.
@@ -49,7 +81,10 @@ impl Turn<'_> {
     /// Prompt with `text` and follow the turn until the prompt is answered.
     pub(super) async fn run(self, text: &str) -> Result<Ended> {
         let connection = &self.live.connection;
-        let mut incoming = connection.route();
+        let mut held = Held {
+            connection,
+            incoming: connection.route(),
+        };
         let prompt = connection.call("session/prompt", protocol::prompt(self.session, text));
         tokio::pin!(prompt);
         let mut reply = String::new();
@@ -57,18 +92,22 @@ impl Turn<'_> {
         let answered = loop {
             tokio::select! {
                 answered = &mut prompt => break answered,
-                Some(message) = incoming.recv() => {
+                Some(message) = held.incoming.recv() => {
                     self.handle(message, &mut reply, &mut calls).await;
                 }
             }
         };
-        // What the agent sent just before it answered still belongs to the turn.
-        while let Ok(message) = incoming.try_recv() {
+        // Closed first, so nothing more arrives; what the agent sent before
+        // it answered still belongs to the turn.
+        connection.unroute();
+        while let Ok(message) = held.incoming.try_recv() {
             self.handle(message, &mut reply, &mut calls).await;
         }
-        connection.unroute();
+        drop(held);
         let result = answered?;
-        let reason = result["stopReason"].as_str().unwrap_or("end_turn");
+        let reason = result["stopReason"]
+            .as_str()
+            .ok_or_else(|| Error::Broken("session/prompt answered without a stopReason".into()))?;
         let disposition =
             protocol::failure(reason).map_or(TurnDisposition::Completed, TurnDisposition::Failed);
         Ok(Ended {
@@ -135,6 +174,10 @@ impl Turn<'_> {
     /// The answer to a permission request: allowed for the host's own
     /// server, otherwise the approver's.
     async fn permission(&self, params: &Value, calls: &HashMap<String, Call>) -> Value {
+        let mut cancelled = self.cancelled.clone();
+        if *cancelled.borrow() {
+            return protocol::cancelled();
+        }
         let options = &params["options"];
         let tool_call = &params["toolCall"];
         let call_id = tool_call["toolCallId"].as_str().unwrap_or_default();
@@ -164,7 +207,12 @@ impl Turn<'_> {
             tool: title.to_owned(),
             arguments,
         };
-        let decided = tokio::time::timeout(self.approval, self.plan.approver.decide(request)).await;
+        let decide = tokio::time::timeout(self.approval, self.plan.approver.decide(request));
+        let decided = tokio::select! {
+            decided = decide => decided,
+            // Cancelled, or the seat has let the turn go.
+            _ = cancelled.wait_for(|cancelled| *cancelled) => return protocol::cancelled(),
+        };
         match (decided, protocol::allow(options)) {
             (Ok(ToolDecision::Allow), Some(option)) => protocol::selected(&option),
             _ => protocol::refuse(options),

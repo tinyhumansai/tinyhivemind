@@ -17,8 +17,14 @@
 //!
 //! In `session_meta`, a string that is exactly `{allowed_tools}` becomes the
 //! array of the host's tools under the names [`Agent::tool_name`] gives them.
+//!
+//! A template is read once, left to right: a value is never itself expanded,
+//! so a path holding `{model}` stays that path. In a file whose name ends in
+//! `.toml` each value is escaped for a TOML basic string, which the template
+//! puts it in.
 use serde_json::Value;
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use tinyhivemind_lang::HarnessKind;
 
@@ -36,7 +42,8 @@ pub struct Agent {
     /// The environment, templated. Nothing else is inherited.
     pub env: Vec<(String, String)>,
     /// Files written into the state directory before each start: a path
-    /// relative to it, and templated content.
+    /// relative to it, and templated content (TOML-escaped for a `.toml`
+    /// path).
     pub files: Vec<(PathBuf, String)>,
     /// The `_meta` of `session/new` and `session/load`, templated.
     pub session_meta: Option<Value>,
@@ -218,6 +225,31 @@ api_key_model_discovery = false
 enabled = false
 "#;
 
+/// Why [`write_codex_catalog`] failed.
+#[derive(Debug, thiserror::Error)]
+pub enum CatalogError {
+    /// `codex` could not be started.
+    #[error("codex could not be run: {0}")]
+    Launch(#[source] std::io::Error),
+    /// `codex debug models` failed.
+    #[error("codex debug models failed ({status}): {stderr}")]
+    Exit {
+        /// How it exited.
+        status: std::process::ExitStatus,
+        /// The end of what it wrote to stderr.
+        stderr: String,
+    },
+    /// Its output was not JSON.
+    #[error("codex's catalog is not JSON: {0}")]
+    Json(#[source] serde_json::Error),
+    /// Its catalog has no `models` array.
+    #[error("codex's catalog has no models")]
+    NoModels,
+    /// `out` could not be written.
+    #[error("the catalog could not be written: {0}")]
+    Write(#[source] std::io::Error),
+}
+
 /// Write the model catalog Codex needs to `out`, from `codex`'s own bundled
 /// one: every model calls tools directly, with no shell, patch tool, tool
 /// search or sub-agents, and `model` is added with the first model's
@@ -225,8 +257,9 @@ enabled = false
 /// routed them through code mode (`docs/experiments/2026-11-25-process-harnesses`).
 ///
 /// # Errors
-/// `codex` could not be run, or its catalog read or `out` written.
-pub fn write_codex_catalog(codex: &Path, out: &Path, model: &str) -> std::io::Result<()> {
+/// A [`CatalogError`]: `codex` could not be run or failed, its catalog was
+/// not JSON or had no models, or `out` could not be written.
+pub fn write_codex_catalog(codex: &Path, out: &Path, model: &str) -> Result<(), CatalogError> {
     let home = out.parent().unwrap_or(Path::new("."));
     let output = std::process::Command::new(codex)
         .args(["debug", "models", "--bundled"])
@@ -234,14 +267,24 @@ pub fn write_codex_catalog(codex: &Path, out: &Path, model: &str) -> std::io::Re
         .env("PATH", "/usr/bin:/bin")
         .env("HOME", home)
         .env("CODEX_HOME", home)
-        .output()?;
+        .output()
+        .map_err(CatalogError::Launch)?;
     if !output.status.success() {
-        return Err(std::io::Error::other("codex debug models failed"));
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let tail = stderr
+            .char_indices()
+            .rev()
+            .nth(4095)
+            .map_or(0, |(at, _)| at);
+        return Err(CatalogError::Exit {
+            status: output.status,
+            stderr: stderr[tail..].trim().to_owned(),
+        });
     }
-    let mut catalog: Value = serde_json::from_slice(&output.stdout)?;
+    let mut catalog: Value = serde_json::from_slice(&output.stdout).map_err(CatalogError::Json)?;
     let models = catalog["models"]
         .as_array_mut()
-        .ok_or_else(|| std::io::Error::other("the catalog has no models"))?;
+        .ok_or(CatalogError::NoModels)?;
     for entry in models.iter_mut() {
         let Some(entry) = entry.as_object_mut() else {
             continue;
@@ -269,7 +312,8 @@ pub fn write_codex_catalog(codex: &Path, out: &Path, model: &str) -> std::io::Re
         added["display_name"] = model.into();
         models.insert(0, added);
     }
-    std::fs::write(out, serde_json::to_vec(&catalog)?)
+    let bytes = serde_json::to_vec(&catalog).map_err(CatalogError::Json)?;
+    std::fs::write(out, bytes).map_err(CatalogError::Write)
 }
 
 /// The values one seat's templates are filled from.
@@ -282,10 +326,48 @@ pub(crate) struct Values {
 impl Values {
     /// Fill `template`'s `{name}`s.
     pub(crate) fn fill(&self, template: &str) -> String {
-        let mut filled = template.to_owned();
-        for (name, value) in &self.values {
-            filled = filled.replace(&format!("{{{name}}}"), value);
+        self.fill_with(template, str::to_owned)
+    }
+
+    /// Fill `template`'s `{name}`s with values escaped for a TOML basic
+    /// string.
+    pub(crate) fn fill_toml(&self, template: &str) -> String {
+        self.fill_with(template, toml_escape)
+    }
+
+    /// Fill the file at `path`: TOML-escaped when it is a `.toml` file.
+    pub(crate) fn fill_file(&self, path: &Path, template: &str) -> String {
+        if path
+            .extension()
+            .is_some_and(|extension| extension == "toml")
+        {
+            self.fill_toml(template)
+        } else {
+            self.fill(template)
         }
+    }
+
+    /// One pass over `template`: each known `{name}` becomes its value as
+    /// `escape` writes it, and nothing a value brings in is read again.
+    fn fill_with(&self, template: &str, escape: impl Fn(&str) -> String) -> String {
+        let mut filled = String::with_capacity(template.len());
+        let mut rest = template;
+        while let Some(open) = rest.find('{') {
+            filled.push_str(&rest[..open]);
+            let after = &rest[open + 1..];
+            let known = after.find('}').and_then(|close| {
+                let value = self.values.get(&after[..close])?;
+                Some((close, value))
+            });
+            if let Some((close, value)) = known {
+                filled.push_str(&escape(value));
+                rest = &after[close + 1..];
+            } else {
+                filled.push('{');
+                rest = after;
+            }
+        }
+        filled.push_str(rest);
         filled
     }
 
@@ -305,6 +387,26 @@ impl Values {
             other => other.clone(),
         }
     }
+}
+
+/// `value` as the inside of a TOML basic string: quotes, backslashes and
+/// control characters escaped.
+fn toml_escape(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for character in value.chars() {
+        match character {
+            '"' => escaped.push_str("\\\""),
+            '\\' => escaped.push_str("\\\\"),
+            '\n' => escaped.push_str("\\n"),
+            '\t' => escaped.push_str("\\t"),
+            '\r' => escaped.push_str("\\r"),
+            control if control.is_control() => {
+                let _ = write!(escaped, "\\u{:04X}", u32::from(control));
+            }
+            other => escaped.push(other),
+        }
+    }
+    escaped
 }
 
 #[cfg(test)]

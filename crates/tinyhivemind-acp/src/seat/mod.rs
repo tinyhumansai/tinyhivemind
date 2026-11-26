@@ -37,8 +37,27 @@ pub(crate) struct Live {
     pub(crate) instance: Instance,
     pub(crate) connection: Connection,
     pub(crate) started: Started,
+    /// Whether the agent can `session/load` a session.
+    load_session: bool,
     /// Sessions opened or loaded by this process.
     sessions: Mutex<HashSet<String>>,
+    /// Of those, the ones in the descriptor's mode.
+    moded: Mutex<HashSet<String>>,
+}
+
+/// The turn running now: its session, and the signal that it is cancelled.
+#[derive(Debug)]
+struct Active {
+    session: String,
+    cancelled: watch::Sender<bool>,
+}
+
+impl Active {
+    /// Tell the turn it is cancelled; its session.
+    fn cancel(&self) -> String {
+        self.cancelled.send_replace(true);
+        self.session.clone()
+    }
 }
 
 /// A seat and its process, if one is running.
@@ -50,8 +69,8 @@ pub(crate) struct Seat {
     tools: ToolEndpoint,
     values: Values,
     live: AsyncMutex<Option<Arc<Live>>>,
-    /// The session of the turn running now, for a cancel.
-    active: Mutex<Option<String>>,
+    /// The turn running now, for a cancel.
+    active: Mutex<Option<Active>>,
     /// The seat's one session, once it has one.
     session: Mutex<Option<String>>,
     closed: watch::Sender<bool>,
@@ -127,8 +146,10 @@ impl Seat {
         if let Some(running) = live.as_ref().filter(|live| live.instance.exit().is_none()) {
             return Ok(running.clone());
         }
-        if let Some(dead) = live.take() {
+        // Kept until it is proved stopped, so a failed stop can be retried.
+        if let Some(dead) = live.clone() {
             dead.instance.stop(async {}, self.options.stop).await?;
+            *live = None;
         }
         let started = Arc::new(self.launch().await?);
         if *self.closed.borrow() {
@@ -154,13 +175,14 @@ impl Seat {
                 .map_err(Error::io("the instance directories"))?;
         }
         for (path, template) in &self.agent.files {
+            let content = self.values.fill_file(path, template);
             let path = state.join(path);
             if let Some(parent) = path.parent() {
                 builder
                     .create(parent)
                     .map_err(Error::io("an agent file's directory"))?;
             }
-            fs::write(&path, self.values.fill(template)).map_err(Error::io("an agent file"))?;
+            fs::write(&path, content).map_err(Error::io("an agent file"))?;
         }
         let mut launch = Launch::new(&self.agent.program, dir.clone())
             .current_dir(self.cwd())
@@ -185,6 +207,13 @@ impl Seat {
                 return Err(error.into());
             }
         };
+        let accepted = match protocol::accept(&init) {
+            Ok(accepted) => accepted,
+            Err(reason) => {
+                let _ = instance.stop(async {}, self.options.stop).await;
+                return Err(Error::Unsupported(reason));
+            }
+        };
         let pid = instance.pid();
         let version = protocol::agent_version(&init).unwrap_or_default();
         let names = self.values.allowed_tools.clone();
@@ -196,7 +225,9 @@ impl Seat {
                 instance,
                 connection,
                 started,
+                load_session: accepted.load_session,
                 sessions: Mutex::default(),
+                moded: Mutex::default(),
             }),
             Err(mismatch) => {
                 let _ = instance.stop(async {}, self.options.stop).await;
@@ -218,37 +249,58 @@ impl Seat {
     }
 
     /// The session for a turn that asks for `requested`: the one this process
-    /// has, one it loads, or a new one for the seat's first turn.
+    /// has, one it loads, or a new one for the seat's first turn; in the
+    /// descriptor's mode.
+    ///
+    /// A session is the seat's once it is opened, before its mode is set, so
+    /// a failed `session/set_mode` is retried on that session next turn
+    /// rather than leaving it behind for a new one.
     async fn session(&self, live: &Live, requested: Option<String>) -> Result<String> {
         let requested = requested.or_else(|| lock(&self.session).clone());
-        if let Some(session) = &requested
-            && lock(&live.sessions).contains(session)
-        {
-            return Ok(session.clone());
-        }
-        let mut params = self.session_params();
-        let session = if let Some(session) = requested {
-            params["sessionId"] = session.clone().into();
-            let loaded = live.connection.call("session/load", params).await;
-            loaded.map_err(|error| Error::Resume {
-                session: session.clone(),
-                reason: error.to_string(),
-            })?;
-            session
-        } else {
-            let created = live.connection.call("session/new", params).await?;
-            created["sessionId"]
-                .as_str()
-                .filter(|id| !id.is_empty())
-                .map(str::to_owned)
-                .ok_or(crate::connection::Error::Closed)?
+        let open = requested
+            .as_ref()
+            .filter(|session| lock(&live.sessions).contains(*session))
+            .cloned();
+        let session = match (open, requested) {
+            (Some(session), _) => session,
+            (None, Some(session)) => self.load(live, session).await?,
+            (None, None) => {
+                let params = self.session_params();
+                let created = live.connection.call("session/new", params).await?;
+                created["sessionId"]
+                    .as_str()
+                    .filter(|id| !id.is_empty())
+                    .map(str::to_owned)
+                    .ok_or_else(|| Error::Broken("session/new returned no sessionId".into()))?
+            }
         };
-        if let Some(mode) = &self.agent.mode {
-            let params = json!({"sessionId": session, "modeId": mode});
-            live.connection.call("session/set_mode", params).await?;
-        }
         lock(&live.sessions).insert(session.clone());
         *lock(&self.session) = Some(session.clone());
+        if let Some(mode) = &self.agent.mode
+            && !lock(&live.moded).contains(&session)
+        {
+            let params = json!({"sessionId": session, "modeId": mode});
+            live.connection.call("session/set_mode", params).await?;
+            lock(&live.moded).insert(session.clone());
+        }
+        Ok(session)
+    }
+
+    /// Load `session` into this process, which must be able to.
+    async fn load(&self, live: &Live, session: String) -> Result<String> {
+        if !live.load_session {
+            return Err(Error::Resume {
+                session,
+                reason: "the agent cannot load a session".into(),
+            });
+        }
+        let mut params = self.session_params();
+        params["sessionId"] = session.clone().into();
+        let loaded = live.connection.call("session/load", params).await;
+        loaded.map_err(|error| Error::Resume {
+            session: session.clone(),
+            reason: error.to_string(),
+        })?;
         Ok(session)
     }
 
@@ -260,7 +312,11 @@ impl Seat {
         let session = self.session(&live, request.session_id.clone()).await?;
         let text = tinyhivemind_host::turn::render(&request)
             .map_err(|error| Error::Render(error.to_string()))?;
-        *lock(&self.active) = Some(session.clone());
+        let (cancelled, cancel) = watch::channel(false);
+        *lock(&self.active) = Some(Active {
+            session: session.clone(),
+            cancelled,
+        });
         let turn = turn::Turn {
             live: &live,
             seat: &self.plan.seat.id,
@@ -269,6 +325,7 @@ impl Seat {
             session: &session,
             plan: &self.plan,
             approval: self.options.approval,
+            cancelled: cancel,
         };
         let ended = turn.run(&text).await;
         lock(&self.active).take();
@@ -290,7 +347,7 @@ impl Seat {
     /// Cancel the running turn and see its prompt answered, or stop the
     /// process.
     async fn cancel(&self) -> Result<()> {
-        let Some(session) = lock(&self.active).clone() else {
+        let Some(session) = lock(&self.active).as_ref().map(Active::cancel) else {
             return Ok(());
         };
         let mut live = self.live.lock().await;
@@ -315,13 +372,15 @@ impl Seat {
         Ok(())
     }
 
-    /// Cancel, then stop the process and prove it gone.
+    /// Cancel, then stop the process and prove it gone. The process is kept
+    /// until then, so a failed stop can be retried.
     pub(crate) async fn stop(&self) -> Result<()> {
         self.closed.send_replace(true);
-        let Some(live) = self.live.lock().await.take() else {
+        let mut held = self.live.lock().await;
+        let Some(live) = held.clone() else {
             return Ok(());
         };
-        let active = lock(&self.active).clone();
+        let active = lock(&self.active).as_ref().map(Active::cancel);
         let cancel = async {
             if let Some(session) = active {
                 let params = json!({"sessionId": session});
@@ -329,6 +388,7 @@ impl Seat {
             }
         };
         live.instance.stop(cancel, self.options.stop).await?;
+        *held = None;
         Ok(())
     }
 }
