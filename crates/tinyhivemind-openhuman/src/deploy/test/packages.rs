@@ -277,7 +277,8 @@ fn packages_that_mean_the_same_isolation_agree() -> anyhow::Result<()> {
 }
 
 #[test]
-fn from_packages_refuses_a_seat_on_another_harness_before_starting_anything() -> anyhow::Result<()> {
+fn from_packages_refuses_a_seat_on_another_harness_before_starting_anything() -> anyhow::Result<()>
+{
     let _lock = crate::RUNTIME_LOCK
         .lock()
         .unwrap_or_else(PoisonError::into_inner);
@@ -377,7 +378,10 @@ fn a_judged_openhuman_seat_deploys_with_no_built_in_tool_group() -> anyhow::Resu
                 *name == "use_skill" || none.mode_for_tool(name) == openhuman_embed::GroupMode::Off
             })
             .collect();
-        assert!(built_in.is_empty(), "built-in tools reached the model: {built_in:?}");
+        assert!(
+            built_in.is_empty(),
+            "built-in tools reached the model: {built_in:?}"
+        );
         Ok(())
     })
 }

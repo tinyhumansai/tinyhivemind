@@ -23,7 +23,10 @@ needs no toolpack. Setting the feature `mcp`, `skills`,
 `script_tools` or `hooks` to `false` empties that integration.
 `harness` resolves like `model` (seat, then profile, then runtime) to the
 declared `Harness`; `None`, which `harness_kind` reports as `openhuman`, means
-no layer names one, and lowers exactly as before the field existed. Lowering runs
+no layer names one, and lowers exactly as before the field existed.
+`unlisted_groups` is `Some(Off)` in a package that names a harness, so every
+tool group its toolpacks do not list is off, and `None` otherwise, which
+keeps the harness's own group defaults. Lowering runs
 on a validated package, so an id that does not resolve is skipped, not
 reported; call `validate` first.
 

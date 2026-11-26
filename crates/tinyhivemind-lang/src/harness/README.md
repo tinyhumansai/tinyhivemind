@@ -19,9 +19,10 @@ in the change that proves it.
 `fields.rs` is the default-deny half: every field of every integration type
 maps to a capability, to `Structure` (identities, references, labels, the
 seat's `template`, the roster, desks, goals and coordinator policies), to a
-nested owner, or to a by-value rule. `test.rs` serializes each type and fails
-when a field has no entry, so a new field must be decided before a judged
-package may set it.
+nested owner, or to a by-value rule. `test.rs` reads each type's field list
+from its decoder (so fields skipped when absent are included) and fails when
+one has no entry; a field the walker still finds unmapped is rejected as
+`Capability::Undecided`.
 
 `resolve.rs` is crate-private: a seat's own `harness`, else its profile's,
 else `runtime.harness`, and where it came from. Lowering, validation and the

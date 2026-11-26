@@ -116,7 +116,8 @@ The table judges a package once it declares a harness or names one anywhere,
 and then every seat, the implicit `openhuman` ones included. A package that
 does neither is deployed by the linked adapter, which keeps its own limits
 (below), so the table does not judge it and every existing package stays
-valid. Plan step 6 flips this: with the link gone, every package is judged.
+valid. A field the map has no decision for is rejected too, so even a field
+added to the language before its row is rejected rather than passed. Plan step 6 flips this: with the link gone, every package is judged.
 
 In the table as data (`HarnessKind::support`), each rejected row also says
 what moves it: only a conformance test (provider shapes, `credential`, and
@@ -140,7 +141,7 @@ names.
 | `sandbox` `none` or absent, on `runtime` and `permissions` | yes | yes | yes |
 | `sandbox` `read_only` or `sandboxed` | rejected | rejected | rejected |
 | `autonomy` and `permissions.access` | yes, host side | yes, host side | yes, host side |
-| built-in tool groups | exact allowlist | off | off |
+| built-in tool groups | off | off | off |
 | `tool_rules` on built-in tools | rejected until a release has them | rejected | rejected |
 | hooks on built-in tools | rejected | rejected | rejected |
 | package MCP servers | through the host server | through the host server | through the host server |
@@ -158,7 +159,12 @@ names.
 | `session_store = "sqlite"`, `memory_engine = "memory"` | rejected | rejected | rejected |
 
 Built-in tools start **off** for every kind. Turning one on is a later change
-that must first show its permissions are enforced. "Rejected" is the starting
+that must first show its permissions are enforced. "Off" is the rule for every
+group a package does not list, too: a judged package lowers each seat with
+`unlisted_groups = Off`, so no harness default can switch a group on, and the
+linked adapter registers a judged `openhuman` seat with every unlisted group
+off. (The OpenHuman process runner will configure that as an exact
+`tool_allowlist`; that is how it is enforced, not a permission.) "Rejected" is the starting
 point, not a promise: a row moves when a conformance test proves the setting.
 
 A `sandbox` is rejected because executable tools on this path run from the host's

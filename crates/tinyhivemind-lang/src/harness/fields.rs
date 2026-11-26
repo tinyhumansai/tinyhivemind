@@ -239,8 +239,9 @@ const FIELDS: &[(&str, &[(&str, Field)])] = &[
             ("label", S),
             ("role", S),
             ("prompt", J(C::Essentials)),
-            // A name the host maps to how it creates the agent; on a
-            // process deployment that is the harness kind.
+            // The host's name for the factory that creates the agent. It
+            // carries no setting a harness applies; what the seat runs on
+            // is its `harness`, judged on its own.
             ("template", S),
             ("config", J(C::FactoryConfig)),
             ("model", S),

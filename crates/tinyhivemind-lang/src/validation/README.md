@@ -20,7 +20,7 @@ frontmatter and context markers on the Markdown file, memory findings in
 | `memory.rs` | Memory identities, bindings and reaches |
 | `integration.rs` | The integration sections: identities, references, shipped skill and tool files, bounds, and settings OpenHuman cannot run as written |
 | `harness.rs` | The `harnesses` section and `harness` fields: identities, references, isolation, and whether the capability table judges the package |
-| `capability.rs` | The capability table judged per seat, default-deny: every field a seat runs with is walked against its default through `harness/fields.rs`; plus the by-value rules, the shared-OpenClaw provider rule and the reserved `turn`/`call` arguments |
+| `capability/` | The capability table judged per seat, default-deny; see [`capability/README.md`](capability/README.md) |
 | `test/` | Fail-fast regressions and finding locations; see [`test/README.md`](test/README.md) |
 
 ## Integration rules

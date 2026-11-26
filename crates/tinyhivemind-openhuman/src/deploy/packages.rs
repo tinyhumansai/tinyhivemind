@@ -44,6 +44,9 @@ pub(super) struct SeatExec {
     pub(super) context: Arc<ExecContext>,
     pub(super) programs: Vec<lang::ExecTool>,
     pub(super) hooks: Arc<HookRunner>,
+    /// The mode of every tool group the seat's toolpacks do not list, as
+    /// lowered: `Some(Off)` when its package names a harness.
+    pub(super) unlisted_groups: Option<lang::GroupMode>,
 }
 
 /// Executable tools and hooks, by seat id.
@@ -66,6 +69,16 @@ pub(super) fn prepare(
     apply_session(native, &session);
     apply_jev(native, &jev);
     let exec_secrets: Arc<dyn Secrets> = Arc::new(ExecSecrets(secrets.clone()));
+    // A seat several packages share has one lowered integration (the plan
+    // requires them to agree), so the first package's is the seat's.
+    let mut unlisted = BTreeMap::new();
+    for source in packages {
+        for seat in &source.lowered().seats {
+            unlisted
+                .entry(seat.id.clone())
+                .or_insert(seat.integration.unlisted_groups);
+        }
+    }
     let mut extras = Extras::new();
     for (seat, plan) in &seats {
         if let Some(dir) = skills_dir(&config.runtime.deployment_id, seat, plan)? {
@@ -92,6 +105,7 @@ pub(super) fn prepare(
                 context,
                 programs: plan.programs.clone(),
                 hooks,
+                unlisted_groups: unlisted.get(seat).copied().flatten(),
             },
         );
     }
@@ -105,9 +119,15 @@ pub(super) fn harnesses(packages: &[PackageSource]) -> DeployResult<()> {
     let mut declared = BTreeMap::<&str, &lang::Harness>::new();
     for source in packages {
         for harness in &source.package().manifest.harnesses {
+            // Two entries agree when they start the same kind the same way;
+            // an omitted isolation is the kind's default.
+            let same = |earlier: &&lang::Harness| {
+                earlier.kind == harness.kind
+                    && earlier.resolved_isolation() == harness.resolved_isolation()
+            };
             if declared
                 .insert(&harness.id, harness)
-                .is_some_and(|earlier| earlier != harness)
+                .is_some_and(|earlier| !same(&earlier))
             {
                 return Err(ConfigError::ConflictingDeclaration {
                     section: "harnesses".into(),
