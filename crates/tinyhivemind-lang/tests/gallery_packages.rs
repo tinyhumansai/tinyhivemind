@@ -340,11 +340,11 @@ fn no_gallery_seat_may_reach_the_web_outside_euler_hives_research_desk() -> Resu
         "self-improving",
     ] {
         assert!(
-            packages.iter().any(|(name, _)| name == listed),
+            packages.iter().any(|(name, _, _)| name == listed),
             "{listed} is read"
         );
     }
-    for (name, hive) in &packages {
+    for (name, hive, judged) in &packages {
         assert!(!hive.seats.is_empty(), "{name}");
         let researchers: Vec<&str> = if name == WEB_RESEARCH_PACKAGE {
             hive.desks
@@ -374,6 +374,20 @@ fn no_gallery_seat_may_reach_the_web_outside_euler_hives_research_desk() -> Resu
                 );
             } else {
                 assert!(allowed.is_empty(), "{name}/{} allows {allowed:?}", seat.id);
+            }
+            // A package that names a harness may not carry a deny list (the
+            // capability table rejects one); its seats stay off the web
+            // because no built-in tool group can be turned on.
+            if *judged {
+                assert!(
+                    seat.integration
+                        .groups
+                        .values()
+                        .all(|mode| *mode == tinyhivemind_lang::GroupMode::Off),
+                    "{name}/{} turns a built-in tool group on",
+                    seat.id
+                );
+                continue;
             }
             for tool in WEB_TOOLS {
                 if allowed.contains(&tool) {
