@@ -281,7 +281,10 @@ const WEB_RESEARCH_DESK: &str = "research";
 
 /// Every package directory under `examples/hives/`, read from disk the way a
 /// host loads it, so a package added later is checked without being listed.
-fn gallery_from_disk() -> Result<Vec<(String, LoweredHive)>> {
+///
+/// The flag says whether the package names a harness, which holds it to the
+/// capability table.
+fn gallery_from_disk() -> Result<Vec<(String, LoweredHive, bool)>> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/hives");
     let mut dirs: Vec<_> = std::fs::read_dir(&root)?
         .map(|entry| entry.map(|entry| entry.path()))
@@ -297,8 +300,8 @@ fn gallery_from_disk() -> Result<Vec<(String, LoweredHive)>> {
             .ok_or("package directory has a name")?
             .to_string_lossy()
             .into_owned();
-        let (_, hive) = lowered(&documents).map_err(|error| format!("{name}: {error}"))?;
-        packages.push((name, hive));
+        let (package, hive) = lowered(&documents).map_err(|error| format!("{name}: {error}"))?;
+        packages.push((name, hive, !package.manifest.harnesses.is_empty()));
     }
     Ok(packages)
 }

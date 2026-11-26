@@ -2,16 +2,26 @@
 //! to that its harness kind rejects is an [`Error::Integration`] at the
 //! field that sets it.
 //!
-//! The table is [`HarnessKind::support`]; this module only finds where each
-//! row's setting lives. A row that moves to supported stops being reported
-//! here with no change to this file. A seat whose harness reference does not
-//! resolve is skipped: `harness.rs` has already reported it.
+//! The judgement is default-deny. Every object a seat runs with (the
+//! runtime, the seat, its profile, model, permission sets, toolpacks and
+//! hooks, and the session and Jev settings) is walked field by field against
+//! its default, and a field set to anything else asks for the capability
+//! `harness/fields.rs` assigns it; the table is [`HarnessKind::support`]. A
+//! row that moves to supported stops being reported with no change here. The
+//! fields judged by value (provider shape, sandbox, stores, tool rules and
+//! groups, a hook's event, the iteration limit) are handled by hand. A seat
+//! whose harness reference does not resolve is skipped: `harness.rs` has
+//! already reported it.
 use crate::{
-    Capability, Error, GroupMode, HarnessKind, Manifest, Package, ProviderKind, Sandbox, Seat,
-    Support,
+    Capability, Error, GroupMode, HarnessKind, HookEvent, Manifest, MemoryEngine, Package,
+    ProviderKind, Sandbox, Seat, SessionStore, Support,
     diagnostic::{Findings, HIVE, escape},
-    harness::resolve,
+    harness::{
+        fields::{Field, field},
+        resolve,
+    },
 };
+use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Arguments the host adds to every served tool for call identity.
@@ -195,13 +205,78 @@ impl Judge<'_, '_> {
         }
     }
 
+    /// Walk `value` against `default` as `owner`'s fields: a judged field
+    /// that differs asks for its capability, a nested one is walked in turn.
+    fn walk(&mut self, owner: &str, value: &Value, default: &Value, at: &str, name: &str) {
+        let Some(fields) = value.as_object() else {
+            return;
+        };
+        for (key, value) in fields {
+            let base = default.get(key).unwrap_or(&Value::Null);
+            let (at, name) = (format!("{at}/{}", escape(key)), format!("{name}.{key}"));
+            match field(owner, key) {
+                Some(Field::Nested(inner)) => self.walk(inner, value, base, &at, &name),
+                Some(Field::Judged(capability)) if value != base => {
+                    self.reject(capability, name, at);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Walk one declaration of `owner` against its default.
+    fn declared<T: serde::Serialize>(
+        &mut self,
+        owner: &str,
+        value: &T,
+        base: &T,
+        at: &str,
+        name: &str,
+    ) {
+        let (value, base) = (wire(value), wire(base));
+        self.walk(owner, &value, &base, at, name);
+    }
+
     /// What the runtime, the seat's profile and the seat layer onto it:
-    /// permission sets, toolpacks and the tools they grant, delegation, and
-    /// the iteration limit.
+    /// every field of each, permission sets, toolpacks and the tools they
+    /// grant, hooks, and the iteration limit.
     fn layers(&mut self, seat: &Seat, i: usize) {
         let m = self.m;
         let p = profile(m, seat);
         let from_profile = p.map(|k| &m.profiles[k]);
+        let seat_default = Seat {
+            config: Value::Object(serde_json::Map::new()),
+            ..Seat::default()
+        };
+        self.declared(
+            "seat",
+            seat,
+            &seat_default,
+            &format!("/seats/{i}"),
+            &format!("seats.{}", seat.id),
+        );
+        if let (Some(k), Some(declared)) = (p, from_profile) {
+            let name = format!("profiles.{}", declared.id);
+            self.declared(
+                "profile",
+                declared,
+                &crate::Profile::default(),
+                &format!("/profiles/{k}"),
+                &name,
+            );
+        }
+        if let Some(k) = model_id(m, seat).and_then(|id| m.models.iter().position(|v| &v.id == id))
+        {
+            let model = &m.models[k];
+            let name = format!("models.{}", model.id);
+            self.declared(
+                "model",
+                model,
+                &crate::Model::default(),
+                &format!("/models/{k}"),
+                &name,
+            );
+        }
         let permissions = indices(
             &m.permissions,
             [
@@ -214,20 +289,7 @@ impl Judge<'_, '_> {
             |v| &v.id,
         );
         for k in permissions {
-            let layer = &m.permissions[k];
-            if layer.sandbox != Sandbox::None {
-                let field = format!("permissions.{}.sandbox", layer.id);
-                self.reject(
-                    Capability::Sandbox,
-                    field,
-                    format!("/permissions/{k}/sandbox"),
-                );
-            }
-            if !layer.tool_rules.is_null() {
-                let field = format!("permissions.{}.tool_rules", layer.id);
-                let at = format!("/permissions/{k}/tool_rules");
-                self.reject(Capability::BuiltinToolRules, field, at);
-            }
+            self.permission_set(k);
         }
         let packs = m
             .runtime
@@ -236,34 +298,80 @@ impl Judge<'_, '_> {
             .chain(from_profile.into_iter().flat_map(|p| &p.toolpacks))
             .chain(&seat.toolpacks);
         for k in indices(&m.toolpacks, packs, |v| &v.id) {
-            let pack = &m.toolpacks[k];
-            for (group, mode) in &pack.groups {
-                if *mode != GroupMode::Off {
-                    let field = format!("toolpacks.{}.groups.{group}", pack.id);
-                    let at = format!("/toolpacks/{k}/groups/{}", escape(group));
-                    self.reject(Capability::BuiltinToolGroups, field, at);
-                }
-            }
-            for t in indices(&m.tools, &pack.tools, |v| &v.id) {
-                self.reserved(t);
-            }
+            self.toolpack(k);
         }
-        if let (Some(k), Some(declared)) = (p, from_profile) {
-            if !declared.subagents.is_empty() {
-                let field = format!("profiles.{}.subagents", declared.id);
+        let hooks = from_profile
+            .into_iter()
+            .flat_map(|p| &p.hooks)
+            .chain(&seat.hooks);
+        for k in indices(&m.hooks, hooks, |v| &v.id) {
+            let hook = &m.hooks[k];
+            let name = format!("hooks.{}", hook.id);
+            self.declared(
+                "hook",
+                hook,
+                &crate::Hook::default(),
+                &format!("/hooks/{k}"),
+                &name,
+            );
+            if hook.event == HookEvent::Stop {
                 self.reject(
-                    Capability::Subagents,
-                    field,
-                    format!("/profiles/{k}/subagents"),
+                    Capability::StopHooks,
+                    format!("{name}.event"),
+                    format!("/hooks/{k}/event"),
                 );
-            }
-            if declared.definition_base.is_some() {
-                let field = format!("profiles.{}.definition_base", declared.id);
-                let at = format!("/profiles/{k}/definition_base");
-                self.reject(Capability::DefinitionBase, field, at);
             }
         }
         self.iterations(seat, i, p);
+    }
+
+    /// One permission set that applies to the seat.
+    fn permission_set(&mut self, k: usize) {
+        let layer = &self.m.permissions[k];
+        let name = format!("permissions.{}", layer.id);
+        let at = format!("/permissions/{k}");
+        self.declared(
+            "permissions",
+            layer,
+            &crate::PermissionSet::default(),
+            &at,
+            &name,
+        );
+        if layer.sandbox != Sandbox::None {
+            self.reject(
+                Capability::Sandbox,
+                format!("{name}.sandbox"),
+                format!("{at}/sandbox"),
+            );
+        }
+        if !layer.tool_rules.is_null() {
+            let (field, at) = (format!("{name}.tool_rules"), format!("{at}/tool_rules"));
+            self.reject(Capability::BuiltinToolRules, field, at);
+        }
+    }
+
+    /// One toolpack the seat receives, and the tools it grants.
+    fn toolpack(&mut self, k: usize) {
+        let m = self.m;
+        let pack = &m.toolpacks[k];
+        let name = format!("toolpacks.{}", pack.id);
+        self.declared(
+            "toolpack",
+            pack,
+            &crate::Toolpack::default(),
+            &format!("/toolpacks/{k}"),
+            &name,
+        );
+        for (group, mode) in &pack.groups {
+            if *mode != GroupMode::Off {
+                let field = format!("{name}.groups.{group}");
+                let at = format!("/toolpacks/{k}/groups/{}", escape(group));
+                self.reject(Capability::BuiltinToolGroups, field, at);
+            }
+        }
+        for t in indices(&m.tools, &pack.tools, |v| &v.id) {
+            self.reserved(t);
+        }
     }
 
     /// An executable tool whose own arguments use a name the host reserves.
@@ -285,13 +393,11 @@ impl Judge<'_, '_> {
         }
     }
 
-    /// The seat's resolved `limits.iterations` against the kind's fixed cap,
-    /// reported at whichever layer set it.
+    /// The seat's resolved `limits.iterations`, reported at whichever layer
+    /// set it: rejected where the kind has no iteration limit, and above the
+    /// kind's fixed cap where it has one.
     fn iterations(&mut self, seat: &Seat, i: usize, p: Option<usize>) {
         let m = self.m;
-        let Some(cap) = self.kind.iteration_cap() else {
-            return;
-        };
         let model = model_id(m, seat).and_then(|id| m.models.iter().position(|v| &v.id == id));
         let layers = [
             Some((&seat.limits, format!("/seats/{i}"))),
@@ -299,23 +405,23 @@ impl Judge<'_, '_> {
             model.map(|k| (&m.models[k].limits, format!("/models/{k}"))),
             Some((&m.runtime.limits, "/runtime".to_owned())),
         ];
-        let resolved = layers
+        let Some((iterations, at)) = layers
             .into_iter()
             .flatten()
-            .find_map(|(limits, at)| Some((limits.iterations?, at)));
-        if let Some((iterations, at)) = resolved
+            .find_map(|(limits, at)| Some((limits.iterations?, format!("{at}/limits/iterations"))))
+        else {
+            return;
+        };
+        let field = format!("seats.{}.limits.iterations", seat.id);
+        self.reject(Capability::IterationLimit, field.clone(), at.clone());
+        if let Some(cap) = self.kind.iteration_cap()
             && iterations > cap
         {
-            self.found.push(
-                Error::Integration {
-                    field: format!("seats.{}.limits.iterations", seat.id),
-                    reason: format!(
-                        "the {} harness ends a turn after {cap} model iterations",
-                        self.kind
-                    ),
-                },
-                format!("{at}/limits/iterations"),
+            let reason = format!(
+                "the {} harness ends a turn after {cap} model iterations",
+                self.kind
             );
+            self.found.push(Error::Integration { field, reason }, at);
         }
     }
 
@@ -323,45 +429,51 @@ impl Judge<'_, '_> {
     fn hive(&mut self) {
         let m = self.m;
         let r = &m.runtime;
+        self.declared(
+            "runtime",
+            r,
+            &crate::RuntimeSettings::default(),
+            "/runtime",
+            "runtime",
+        );
         if r.sandbox != Sandbox::None {
-            let at = "/runtime/sandbox".to_owned();
-            self.reject(Capability::Sandbox, "runtime.sandbox".into(), at);
+            self.reject(
+                Capability::Sandbox,
+                "runtime.sandbox".into(),
+                "/runtime/sandbox".into(),
+            );
         }
-        if r.session_store == crate::SessionStore::Host {
+        let store = match r.session_store {
+            SessionStore::Memory => None,
+            SessionStore::Sqlite => Some(Capability::SqliteSessions),
+            SessionStore::Host => Some(Capability::HostSessionStore),
+        };
+        if let Some(capability) = store {
             let at = "/runtime/session_store".to_owned();
-            self.reject(
-                Capability::HostSessionStore,
-                "runtime.session_store".into(),
-                at,
-            );
+            self.reject(capability, "runtime.session_store".into(), at);
         }
-        if r.memory_engine == crate::MemoryEngine::Host {
+        let engine = match r.memory_engine {
+            MemoryEngine::Disabled => None,
+            MemoryEngine::Memory => Some(Capability::InProcessMemory),
+            MemoryEngine::Host => Some(Capability::HostMemoryEngine),
+        };
+        if let Some(capability) = engine {
             let at = "/runtime/memory_engine".to_owned();
-            self.reject(
-                Capability::HostMemoryEngine,
-                "runtime.memory_engine".into(),
-                at,
-            );
+            self.reject(capability, "runtime.memory_engine".into(), at);
         }
-        if m.jev != crate::JevSettings::default() {
-            self.reject(Capability::Jev, "jev".into(), "/jev".into());
-        }
-        let s = &m.session;
-        for (set, key) in [
-            (s.compact_context.is_some(), "compact_context"),
-            (s.max_history_messages.is_some(), "max_history_messages"),
-            (
-                s.tool_result_budget_bytes.is_some(),
-                "tool_result_budget_bytes",
-            ),
-            (s.max_tool_iterations.is_some(), "max_tool_iterations"),
-            (s.parallel_tools.is_some(), "parallel_tools"),
-            (s.agents_md.is_some(), "agents_md"),
-        ] {
-            if set {
-                let field = format!("session.{key}");
-                self.reject(Capability::SessionTuning, field, format!("/session/{key}"));
-            }
-        }
+        self.declared(
+            "session",
+            &m.session,
+            &crate::SessionSettings::default(),
+            "/session",
+            "session",
+        );
+        self.declared("jev", &m.jev, &crate::JevSettings::default(), "/jev", "jev");
     }
+}
+
+/// A package value as wire JSON; the wire types serialize infallibly, and a
+/// failure would only skip the walk.
+fn wire<T: serde::Serialize>(value: &T) -> Value {
+    serde_json::to_value(value).unwrap_or(Value::Null)
 }

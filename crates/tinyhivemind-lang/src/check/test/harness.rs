@@ -102,8 +102,7 @@ fn a_new_seat_may_take_the_default_harness_but_not_name_another() {
         let base = base.clone();
         let mut edit = edited(&base, |m| {
             let mut seat = json!({"id": "second", "role": "builder",
-                "prompt": "seats/second.md", "template": "default",
-                "tools": {"allow": [], "deny": ["web_search", "web_fetch", "browser", "http"]}});
+                "prompt": "seats/second.md", "template": "default"});
             if let Some(harness) = harness {
                 seat["harness"] = json!(harness);
             }
