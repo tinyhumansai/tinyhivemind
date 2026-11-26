@@ -30,7 +30,7 @@ use crate::rpc::Client;
 use std::fmt::Write as _;
 use std::fs;
 use std::io::{Read as _, Write as _};
-use std::os::unix::fs::{DirBuilderExt as _, OpenOptionsExt as _};
+use std::os::unix::fs::{DirBuilderExt as _, OpenOptionsExt as _, PermissionsExt as _};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tinyhivemind_host::harness::{SeatPlan, Started, ToolEndpoint};
@@ -84,7 +84,14 @@ impl Layout {
     /// The keyring's master key, made on first use.
     fn master_key(&self) -> Result<String> {
         let path = self.state.join("keyring.key");
-        if let Ok(key) = fs::read_to_string(&path) {
+        if let Ok(meta) = fs::symlink_metadata(&path) {
+            if !meta.is_file() || meta.permissions().mode() & 0o777 != 0o600 {
+                return Err(Error::KeyFile("it is not a file of mode 0600"));
+            }
+            let key = fs::read_to_string(&path).map_err(Error::io("the keyring key"))?;
+            if key.len() != 64 || !key.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                return Err(Error::KeyFile("it does not hold 64 hex digits"));
+            }
             return Ok(key);
         }
         let key = random()?;
@@ -108,6 +115,10 @@ impl Layout {
             .mode(0o600)
             .open(path)
             .map_err(Error::io("the config"))?;
+        // The mode above applies only to a new file.
+        let private = fs::Permissions::from_mode(0o600);
+        file.set_permissions(private)
+            .map_err(Error::io("the config"))?;
         file.write_all(written.toml().as_bytes())
             .map_err(Error::io("the config"))
     }
@@ -116,9 +127,15 @@ impl Layout {
 /// `error`, and the stop that followed it if that failed too.
 pub(crate) fn abandon<T>(
     error: Error,
-    _stopped: std::result::Result<T, tinyhivemind_host::process::Error>,
+    stopped: std::result::Result<T, tinyhivemind_host::process::Error>,
 ) -> Error {
-    error
+    match stopped {
+        Ok(_) => error,
+        Err(stop) => Error::Abandoned {
+            error: Box::new(error),
+            stop,
+        },
+    }
 }
 
 /// 256 random bits, as hex.
@@ -188,8 +205,14 @@ impl Launcher<'_> {
         let ((probe, client), _) = self.start(&dir, &layout, &key, &nothing).await?;
         let server = &self.tools.server;
         let names = discover(&client, server, &self.tools.tools, self.options.warm_up).await;
-        probe.stop(async {}, self.options.stop).await?;
-        let names = names?;
+        let stopped = probe.stop(async {}, self.options.stop).await;
+        let names = match names {
+            Ok(names) => {
+                stopped?;
+                names
+            }
+            Err(error) => return Err(abandon(error, stopped)),
+        };
         let ((instance, client), written) = self.start(&dir, &layout, &key, &names).await?;
         let version = &self.program.version;
         let pid = instance.pid();
@@ -200,10 +223,10 @@ impl Launcher<'_> {
                 client,
                 started,
             }),
-            Err(error) => {
-                instance.stop(async {}, self.options.stop).await?;
-                Err(error)
-            }
+            Err(error) => Err(abandon(
+                error,
+                instance.stop(async {}, self.options.stop).await,
+            )),
         }
     }
 
@@ -245,8 +268,8 @@ impl Launcher<'_> {
             Ok::<(), String>(())
         };
         if let Err(error) = instance.ready(probe, self.options.ready).await {
-            instance.stop(async {}, self.options.stop).await?;
-            return Err(error.into());
+            let stopped = instance.stop(async {}, self.options.stop).await;
+            return Err(abandon(error.into(), stopped));
         }
         Ok(((instance, client), written))
     }

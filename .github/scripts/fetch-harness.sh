@@ -28,6 +28,17 @@ entry="$(awk -v kind="[[$kind]]" -v target="$target" '
   }
   inside && /^binary_sha256 = / && fields["target"] == target { print "binary_sha256=" fields["binary_sha256"] }
 ' "$lock" | sort -u)"
+# One entry per kind and target: two would leave the pin ambiguous.
+count="$(awk -v kind="[[$kind]]" -v target="target = \"$target\"" '
+  $0 == kind { inside = 1; next }
+  /^\[\[/ { inside = 0 }
+  inside && $0 == target { n++ }
+  END { print n + 0 }
+' "$lock")"
+if [ "$count" -gt 1 ]; then
+  echo "fetch-harness: harnesses.lock has $count $kind entries for $target" >&2
+  exit 1
+fi
 field() { sed -n "s/^$1=//p" <<<"$entry"; }
 url="$(field url)"; sha="$(field sha256)"; version="$(field version)"
 binary="$(field binary)"; binary_sha="$(field binary_sha256)"
@@ -40,7 +51,7 @@ mkdir -p "$dest"
 dest="$(cd "$dest" && pwd)"
 asset="$dest/$(basename "$url")"
 if ! echo "$sha  $asset" | sha256sum -c --status >/dev/null 2>&1; then
-  curl -fsSL --proto '=https' -o "$asset.partial" "$url"
+  curl -fsSL --proto '=https' --proto-redir '=https' -o "$asset.partial" "$url"
   mv "$asset.partial" "$asset"
 fi
 if ! echo "$sha  $asset" | sha256sum -c --status; then

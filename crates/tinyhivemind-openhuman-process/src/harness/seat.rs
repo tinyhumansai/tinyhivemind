@@ -106,6 +106,7 @@ impl Seat {
         {
             return Err(Error::Resume(session.clone()));
         }
+        turn::deny_stale(&live.client).await?;
         let message = tinyhivemind_host::turn::render(&request)
             .map_err(|error| Error::Render(error.to_string()))?;
         let number = self.turns.fetch_add(1, Ordering::Relaxed);

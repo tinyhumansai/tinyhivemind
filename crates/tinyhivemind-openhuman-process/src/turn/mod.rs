@@ -45,6 +45,9 @@ pub(crate) enum Error {
     /// The seat is being stopped.
     #[error("the turn was closed by a stop")]
     Closed,
+    /// An event the API does not allow.
+    #[error("the instance broke its protocol: {0}")]
+    Protocol(&'static str),
 }
 
 /// The submitted turn of a seat, which a cancellation names.
@@ -200,7 +203,7 @@ async fn follow(turn: &Turn<'_>, request_id: &str, events: &mut Events) -> Resul
                 return Ok((ended, true));
             }
             "chat_error" | "chat_cancelled" => {
-                let failure = format!("{name} ({}): {}", text("error_type"), text("message"));
+                let failure = bounded(name, &text("error_type"), &text("message"));
                 let ended = Ended {
                     failure: Some(failure),
                     ..Ended::default()
@@ -225,7 +228,9 @@ fn usage(usage: &Value) -> Option<TurnUsage> {
 
 /// Ask the seat's approver, and tell the instance.
 async fn approve(turn: &Turn<'_>, event: &Value) -> Result<()> {
-    let id = event["request_id"].as_str().unwrap_or_default().to_owned();
+    let id = event["request_id"].as_str().filter(|id| !id.is_empty());
+    let id = id.ok_or(Error::Protocol("an approval_request without a request_id"))?;
+    let id = id.to_owned();
     let request = ToolApproval {
         seat: turn.seat.to_owned(),
         turn_id: turn.id.to_owned(),
@@ -233,9 +238,12 @@ async fn approve(turn: &Turn<'_>, event: &Value) -> Result<()> {
         tool: event["tool_name"].as_str().unwrap_or_default().to_owned(),
         arguments: event["args"].clone(),
     };
-    let decision = match turn.approver.decide(request).await {
-        ToolDecision::Allow => "approve_once",
-        ToolDecision::Deny { .. } => "deny",
+    // 0.64.15's `approval_decide` takes no reason, so a denial's is not
+    // passed on; the model is told only that the call was refused.
+    let decision = turn.approver.decide(request);
+    let decision = match tokio::time::timeout(turn.approval_limit, decision).await {
+        Ok(ToolDecision::Allow) => "approve_once",
+        Ok(ToolDecision::Deny { .. }) | Err(_) => "deny",
     };
     let params = json!({"request_id": id, "decision": decision});
     turn.client
@@ -244,9 +252,42 @@ async fn approve(turn: &Turn<'_>, event: &Value) -> Result<()> {
     Ok(())
 }
 
-/// Deny every approval still pending; how many there were.
-pub(crate) async fn deny_stale(_client: &Client) -> Result<usize> {
-    Ok(0)
+/// Deny every approval still pending, which only a turn that is over can
+/// have left, as a seat runs one turn at a time; how many there were.
+pub(crate) async fn deny_stale(client: &Client) -> Result<usize> {
+    let listed = client
+        .call("openhuman.approval_list_pending", json!({}))
+        .await?;
+    let pending = listed["result"].as_array().cloned().unwrap_or_default();
+    let ids: Vec<&str> = pending
+        .iter()
+        .filter_map(|row| row["request_id"].as_str())
+        .collect();
+    for id in &ids {
+        let params = json!({"request_id": id, "decision": "deny"});
+        client.call("openhuman.approval_decide", params).await?;
+    }
+    Ok(ids.len())
+}
+
+/// At most this much of a `chat_error` message is kept.
+const MESSAGE: usize = 200;
+
+/// The harness's own failure text, one bounded line, without what a
+/// provider may have put after it.
+fn bounded(name: &str, kind: &str, message: &str) -> String {
+    let kind: String = kind
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
+        .take(40)
+        .collect();
+    let line = message.lines().next().unwrap_or_default();
+    let line: String = line
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(MESSAGE)
+        .collect();
+    format!("{name} ({kind}): {line}")
 }
 
 /// Cancel `active`, returning once its request has ended.
