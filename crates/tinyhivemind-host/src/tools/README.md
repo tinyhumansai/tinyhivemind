@@ -25,6 +25,10 @@ it a `SendRequest` first; a refusal enqueues and stages nothing. Management
 consults its authorizer before any mutation, and reaches a harness only through
 `policy::AgentCreator`. Without it, the management tools are refused.
 
+`Belt::authorize(&call)` runs exactly that send and management policy with no
+effect, for a host that must act between authorization and dispatch (the MCP
+server runs package hooks there). `Belt::call` still checks again.
+
 | File | Responsibility |
 | --- | --- |
 | `mod.rs` | `Belt`: policies, then the coordinator |

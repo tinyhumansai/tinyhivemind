@@ -51,6 +51,32 @@ impl<'a> Belt<'a> {
         self.management = Some(management);
         self
     }
+    /// Run exactly the send and management policy [`Self::call`] would run
+    /// for `call`, with no effect.
+    ///
+    /// A host that has to act between authorization and dispatch, such as
+    /// running a package hook, calls this first. [`Self::call`] still checks
+    /// again, so a policy that changes between the two is judged by the
+    /// second check.
+    ///
+    /// # Errors
+    /// The send policy's refusal, disabled management, the management
+    /// authorizer's refusal, or a memory contract that does not decode.
+    pub fn authorize(&self, call: &ToolCall) -> Result<()> {
+        if let (Some(policy), Some(request)) = (self.send_policy, call.outbound()) {
+            policy.authorize_in_session(call.actor(), &request, call.session())?;
+        }
+        if matches!(
+            call.kind(),
+            Kind::CreateHive | Kind::CreateAgent | Kind::JoinHive | Kind::LeaveHive
+        ) {
+            let management = self.management.ok_or(Error::ManagementDisabled)?;
+            management
+                .authorizer
+                .authorize(call.actor(), &call.management()?)?;
+        }
+        Ok(())
+    }
     /// Execute one validated call as its bound actor.
     ///
     /// # Errors

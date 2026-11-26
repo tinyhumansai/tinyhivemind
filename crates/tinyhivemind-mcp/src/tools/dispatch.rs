@@ -5,7 +5,8 @@
 //! validate; then either hand a coordinator action with no hook to the belt
 //! as an identified call, whose record the coordinator writes with the
 //! effect, or go through the [`Ledger`]: answer a known call, judge the
-//! access gate, record the start, run the `pre_tool_use` hooks, run the
+//! host's send and management policy (hive tools) or the access gate
+//! (programs), record the start, run the `pre_tool_use` hooks, run the
 //! tool, run the `post_tool_use` hooks, record the finish. A call refused by
 //! validation or policy before any hook runs records nothing.
 use super::gate;
@@ -125,6 +126,11 @@ pub(crate) async fn call(
     if let Some(answer) = answered(ledger.lookup(&identity, name, &arguments), &identity) {
         return Ok(answer);
     }
+    if let Target::Hive(kind) = tool.target
+        && let Err(refusal) = authorized(services, seat, kind, &arguments)
+    {
+        return Ok(refusal);
+    }
     if let Target::Program(program) = &tool.target
         && program.side_effects != SideEffects::Read
     {
@@ -185,6 +191,17 @@ fn admissible(
             .map_err(|error| Outcome::refused(error.to_string()))?;
     }
     Ok(())
+}
+
+/// Refuse a hive call the host's send or management policy refuses, before
+/// any hook runs. The belt checks again as it dispatches.
+fn authorized(services: &Services, seat: &SeatState, kind: Kind, arguments: &Value) -> Result<(), Outcome> {
+    let call = ToolCall::new(seat.id(), None, kind, arguments.clone())
+        .map_err(|error| Outcome::refused(error.to_string()))?;
+    services
+        .belt()
+        .authorize(&call)
+        .map_err(|error| Outcome::refused(error.to_string()))
 }
 
 /// The answer the ledger already has for a call, if any.

@@ -15,11 +15,14 @@ argument validation, and one of two records.
   identified call; the coordinator records it in the transaction of its effect.
 - Everything else (executable tools, `create_agent`, any hooked call) uses the
   in-memory `Ledger`: a known call is answered from it, or refused while its
-  outcome is unknown or when its `call` was used for something else; then the
-  access gate; then "started" is recorded, the hooks and tool run, and
+  outcome is unknown or when its `call` was used for something else; then
+  policy: the host's send and management policy (`Belt::authorize`) for a
+  hive tool, the access gate for a program; then "started" is recorded, the hooks and tool run, and
   "finished" is recorded. A hooked coordinator action has both records.
 
-A refusal before any hook runs records nothing. Each call runs on its own task,
+A refusal before any hook runs records nothing. The belt checks send and
+management policy again at dispatch, so a policy that changes in between is
+judged by that second check. Each call runs on its own task,
 so a client that hangs up does not cancel it halfway.
 
 | File | Responsibility |

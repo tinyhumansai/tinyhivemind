@@ -271,10 +271,12 @@ These details were left open above and are fixed by `tinyhivemind-mcp`:
   resource lists. A call runs on its own task, so a client hanging up does not
   leave its outcome unknown.
 - **Order of checks.** For a state-changing call: `turn` and `call` taken out,
-  the turn check, argument validation, then the ledger, the access gate, the
-  "started" record and the hooks. Send and management policy run in the host's
-  belt as it dispatches, so for a hooked hive call a policy refusal comes after
-  its hooks and is recorded with them.
+  the turn check, argument validation, then the ledger, then policy (send and
+  management policy for a hive tool, the access gate for a program), then the
+  "started" record and the hooks. A policy refusal therefore runs no hook and
+  records nothing. The host's belt checks send and management policy again as
+  it dispatches, so a policy that changes between the two checks is judged by
+  the second.
 - **Approval.** The approver is the host's `Approver` port, asked with a
   `ToolApproval` whose `call_id` is the model's `call`.
 - **Refused seats.** A seat with package MCP servers (not proxied yet), with a
