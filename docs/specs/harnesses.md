@@ -42,7 +42,7 @@ embeddable agent runtime, and Codex is a command-line program.
 
 ## Vocabulary
 
-- **Harness kind:** `openhuman`, `openclaw` or `codex`.
+- **Harness kind:** `openhuman`, `openclaw`, `codex` or `claude-code`.
 - **Instance:** one supervised process tree and its private state directory.
 - **Turn:** one coordinator reservation, identified by `TurnRequest.turn_id`.
 
@@ -51,6 +51,7 @@ embeddable agent runtime, and Codex is a command-line program.
 | `openhuman` | `openhuman-core run --headless-api`: JSON-RPC, SSE | one |
 | `openclaw` | `openclaw gateway`: WebSocket protocol 4 | one deployment, or one seat if `isolation` is `seat` |
 | `codex` | `codex app-server`: JSON-RPC over stdio | one |
+| `claude-code` | `claude --print --input-format stream-json --output-format stream-json`: newline-delimited JSON over stdio | one |
 
 OpenHuman needs one instance per seat because `web_chat` takes its agent from
 process configuration. Codex does not need it for tool identity; it is the
@@ -132,34 +133,35 @@ layer that sets `limits.iterations`. No built-in tool can be turned on, so no
 hook can match one; `check` does not inspect hook matchers for built-in tool
 names.
 
-| Field | openhuman | openclaw | codex |
-| --- | --- | --- | --- |
-| prompt, model name, hive and executable tools, limits.timeout_ms | yes | yes | yes |
-| provider `openai` with an explicit `endpoint`, no `credential` | Chat Completions | Chat Completions | Responses API |
-| provider `openai` without an `endpoint` | rejected | rejected | rejected |
-| provider `openrouter`, `anthropic` | rejected | rejected | rejected |
-| provider `inherit`, or no provider at all | rejected | rejected | rejected |
-| provider `credential` | rejected | rejected | rejected |
-| hooks and permissions on hive and executable tools | yes, host side | yes, host side | yes, host side |
-| `sandbox` `none` or absent, on `runtime` and `permissions` | yes | yes | yes |
-| `sandbox` `read_only` or `sandboxed` | rejected | rejected | rejected |
-| `autonomy` and `permissions.access` | yes, host side | yes, host side | yes, host side |
-| built-in tool groups | off | off | off |
-| `tool_rules` on built-in tools | rejected until a release has them | rejected | rejected |
-| hooks on built-in tools | rejected | rejected | rejected |
-| package MCP servers | through the host server | through the host server | through the host server |
-| `session_store = "host"`, `memory_engine = "host"` | rejected | rejected | rejected |
-| subagents, `definition_base`, `jev`, `session` tuning | rejected at first | rejected | rejected |
-| workflows | coordinator schedule | coordinator schedule | coordinator schedule |
-| `limits.iterations` | up to the cap below | rejected | rejected |
-| skills, `include_user_skills` | rejected | rejected | rejected |
-| `limits.budget_usd`, a model's `temperature` and `max_tokens` | rejected | rejected | rejected |
-| `bare_prompt`, a seat's `config` and `agent_id` | rejected | rejected | rejected |
-| tool allow and deny lists (`tools`, `allow_tools`, `deny_tools`) | rejected | rejected | rejected |
-| `send_destinations`, `send_operations` | rejected | rejected | rejected |
-| `stop` hooks | rejected | rejected | rejected |
-| `runtime` `workspace`, `deployment_id`, `max_agents`, a non-default `concurrency` | rejected | rejected | rejected |
-| `session_store = "sqlite"`, `memory_engine = "memory"` | rejected | rejected | rejected |
+| Field | openhuman | openclaw | codex | claude-code |
+| --- | --- | --- | --- | --- |
+| prompt, model name, hive and executable tools, limits.timeout_ms | yes | yes | yes | yes |
+| provider `openai` with an explicit `endpoint`, no `credential` | Chat Completions | Chat Completions | Responses API | rejected: Messages API only |
+| provider `anthropic` with an explicit `endpoint`, no `credential` | rejected | rejected | rejected | Messages API |
+| provider `openai` without an `endpoint` | rejected | rejected | rejected | rejected |
+| provider `openrouter`, or `anthropic` without an `endpoint` | rejected | rejected | rejected | rejected |
+| provider `inherit`, or no provider at all | rejected | rejected | rejected | rejected |
+| provider `credential` | rejected | rejected | rejected | rejected |
+| hooks and permissions on hive and executable tools | yes, host side | yes, host side | yes, host side | yes, host side |
+| `sandbox` `none` or absent, on `runtime` and `permissions` | yes | yes | yes | yes |
+| `sandbox` `read_only` or `sandboxed` | rejected | rejected | rejected | rejected |
+| `autonomy` and `permissions.access` | yes, host side | yes, host side | yes, host side | yes, host side |
+| built-in tool groups | off | off | off | off |
+| `tool_rules` on built-in tools | rejected until a release has them | rejected | rejected | rejected |
+| hooks on built-in tools | rejected | rejected | rejected | rejected |
+| package MCP servers | through the host server | through the host server | through the host server | through the host server |
+| `session_store = "host"`, `memory_engine = "host"` | rejected | rejected | rejected | rejected |
+| subagents, `definition_base`, `jev`, `session` tuning | rejected at first | rejected | rejected | rejected |
+| workflows | coordinator schedule | coordinator schedule | coordinator schedule | coordinator schedule |
+| `limits.iterations` | up to the cap below | rejected | rejected | rejected |
+| skills, `include_user_skills` | rejected | rejected | rejected | rejected |
+| `limits.budget_usd`, a model's `temperature` and `max_tokens` | rejected | rejected | rejected | rejected |
+| `bare_prompt`, a seat's `config` and `agent_id` | rejected | rejected | rejected | rejected |
+| tool allow and deny lists (`tools`, `allow_tools`, `deny_tools`) | rejected | rejected | rejected | rejected |
+| `send_destinations`, `send_operations` | rejected | rejected | rejected | rejected |
+| `stop` hooks | rejected | rejected | rejected | rejected |
+| `runtime` `workspace`, `deployment_id`, `max_agents`, a non-default `concurrency` | rejected | rejected | rejected | rejected |
+| `session_store = "sqlite"`, `memory_engine = "memory"` | rejected | rejected | rejected | rejected |
 
 Built-in tools start **off** for every kind. Turning one on is a later change
 that must first show its permissions are enforced. "Off" is the rule for every

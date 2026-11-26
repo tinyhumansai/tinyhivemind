@@ -194,15 +194,20 @@ impl Judge<'_, '_> {
             ProviderKind::Openrouter => {
                 self.reject(Capability::Openrouter, field("kind"), at("kind"));
             }
-            ProviderKind::Anthropic => {
+            ProviderKind::Anthropic if provider.endpoint.is_none() => {
                 self.reject(Capability::Anthropic, field("kind"), at("kind"));
+            }
+            ProviderKind::Anthropic => {
+                self.reject(Capability::AnthropicEndpoint, field("kind"), at("kind"));
             }
             ProviderKind::Openai if provider.endpoint.is_none() => self.reject(
                 Capability::OpenaiDefaultEndpoint,
                 field("endpoint"),
                 at("endpoint"),
             ),
-            ProviderKind::Openai => {}
+            ProviderKind::Openai => {
+                self.reject(Capability::OpenaiEndpoint, field("kind"), at("kind"));
+            }
         }
         if provider.credential.is_some() {
             self.reject(
