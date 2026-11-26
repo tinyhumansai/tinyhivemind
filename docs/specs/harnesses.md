@@ -99,6 +99,19 @@ in it, and opens an MCP session for each of them on every run.
 the resolved harness cannot honour under the existing `integration` rule, at the
 field's location.
 
+The last nine rows are fields this table did not originally decide. The check
+is default-deny: every field of every integration type has a row, a field the
+table does not support is rejected, and a test fails when a field is added to
+the language without one. The send limits and tool lists are enforced today by
+the linked adapter's permission gate, not by the host, so they start rejected
+like the rest. Only language structure is exempt: identities, references
+(whose target is judged where it is declared), labels, a seat's `template` (a
+name the host maps to how it creates the agent), the hive's roster, desks,
+goals and policies, which the coordinator runs whatever the harness, and the
+harness entries themselves. Feature flags and `context` count with executable
+tools and the prompt: lowering applies the switches, and `tinyhivemind-exec`
+passes every flag to a tool.
+
 The table judges a package once it declares a harness or names one anywhere,
 and then every seat, the implicit `openhuman` ones included. A package that
 does neither is deployed by the linked adapter, which keeps its own limits
@@ -134,6 +147,15 @@ names.
 | `session_store = "host"`, `memory_engine = "host"` | rejected | rejected | rejected |
 | subagents, `definition_base`, `jev`, `session` tuning | rejected at first | rejected | rejected |
 | workflows | coordinator schedule | coordinator schedule | coordinator schedule |
+| `limits.iterations` | up to the cap below | rejected | rejected |
+| skills, `include_user_skills` | rejected | rejected | rejected |
+| `limits.budget_usd`, a model's `temperature` and `max_tokens` | rejected | rejected | rejected |
+| `bare_prompt`, a seat's `config` and `agent_id` | rejected | rejected | rejected |
+| tool allow and deny lists (`tools`, `allow_tools`, `deny_tools`) | rejected | rejected | rejected |
+| `send_destinations`, `send_operations` | rejected | rejected | rejected |
+| `stop` hooks | rejected | rejected | rejected |
+| `runtime` `workspace`, `deployment_id`, `max_agents`, a non-default `concurrency` | rejected | rejected | rejected |
+| `session_store = "sqlite"`, `memory_engine = "memory"` | rejected | rejected | rejected |
 
 Built-in tools start **off** for every kind. Turning one on is a later change
 that must first show its permissions are enforced. "Rejected" is the starting
@@ -387,3 +409,10 @@ or tool environment.
 
 Live tests (`live_*`, opt-in) run the same cases on the pinned binaries, then a
 mixed hive reaches a decision with every message in the coordinator transcript.
+
+## Open questions
+
+- A roster edit may still change a seat's other integration fields (`model`,
+  `toolpacks`, `permissions` and the rest) without the `integration` class;
+  only `harness` needs both today. Whether those fields move to the same
+  two-class rule is undecided.

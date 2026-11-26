@@ -20,7 +20,7 @@ frontmatter and context markers on the Markdown file, memory findings in
 | `memory.rs` | Memory identities, bindings and reaches |
 | `integration.rs` | The integration sections: identities, references, shipped skill and tool files, bounds, and settings OpenHuman cannot run as written |
 | `harness.rs` | The `harnesses` section and `harness` fields: identities, references, isolation, and whether the capability table judges the package |
-| `capability.rs` | The capability table judged per seat, at each setting's location, plus the shared-OpenClaw provider rule and the reserved `turn`/`call` arguments |
+| `capability.rs` | The capability table judged per seat, default-deny: every field a seat runs with is walked against its default through `harness/fields.rs`; plus the by-value rules, the shared-OpenClaw provider rule and the reserved `turn`/`call` arguments |
 | `test/` | Fail-fast regressions and finding locations; see [`test/README.md`](test/README.md) |
 
 ## Integration rules
@@ -47,7 +47,10 @@ argument, and a feature name outside `[a-z0-9_]+`.
 (`integration`); `integration.rs` reports a harness on a delegated profile.
 Once a package declares or names a harness, `capability.rs` judges every seat
 against its kind's column of the capability table and reports each rejected
-setting once, at the field that sets it: the resolved provider's `kind`,
+setting once, at the field that sets it. It is default-deny: the runtime, the
+seat, its profile, model, permission sets, toolpacks and hooks, and `session`
+and `jev`, are walked field by field, and any field set away from its default
+asks for the capability `harness/fields.rs` gives it. By value it also judges the resolved provider's `kind`,
 `endpoint` or `credential` (or the `provider` field that should name one), a
 sandbox on the runtime or an applying permission set, `tool_rules`, a
 toolpack group turned on, a host session store or memory engine, a profile's

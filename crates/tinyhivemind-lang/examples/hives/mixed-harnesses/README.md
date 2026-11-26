@@ -25,7 +25,9 @@ What it shows:
 - The one provider is `openai` with an explicit loopback `endpoint` and no
   `credential`, the only provider shape every kind is known to run. The
   runtime sandbox is `none`, the toolpack turns no built-in tool group on,
-  and `session` and `jev` are left at their defaults.
+  and `session`, `jev`, `deployment_id` and `concurrency` are left at their
+  defaults. Seats carry no tool deny lists, which no harness enforces yet:
+  they stay off the web because no built-in tool can be turned on.
 
 Because it declares harnesses, every seat, the implicit `openhuman` one
 included, is held to the capability table. The linked OpenHuman adapter
