@@ -76,7 +76,7 @@ struct Entry {
 }
 
 #[derive(Debug, Default)]
-struct Turn {
+struct Records {
     turn: String,
     calls: HashMap<String, Entry>,
     bytes: usize,
@@ -85,7 +85,7 @@ struct Turn {
 /// Every seat's records for its running turn.
 #[derive(Debug)]
 pub(crate) struct Ledger {
-    seats: Mutex<HashMap<String, Turn>>,
+    seats: Mutex<HashMap<String, Records>>,
     max_records: usize,
     max_bytes: usize,
 }
@@ -129,9 +129,9 @@ impl Ledger {
         let turn = seats.entry(identity.seat.clone()).or_default();
         if turn.turn != identity.turn {
             // The stored turn is not running, so it has ended.
-            *turn = Turn {
+            *turn = Records {
                 turn: identity.turn.clone(),
-                ..Turn::default()
+                ..Records::default()
             };
         }
         let known = known(&turn.calls, &identity.call, tool, arguments);
@@ -189,7 +189,7 @@ impl Ledger {
         seats.retain(|seat, turn| running(seat).as_deref() == Some(turn.turn.as_str()));
     }
 
-    fn with_entry(&self, identity: &Identity, act: impl FnOnce(&mut Turn, &str)) {
+    fn with_entry(&self, identity: &Identity, act: impl FnOnce(&mut Records, &str)) {
         let mut seats = self.seats.lock().unwrap_or_else(PoisonError::into_inner);
         if let Some(turn) = seats
             .get_mut(&identity.seat)
