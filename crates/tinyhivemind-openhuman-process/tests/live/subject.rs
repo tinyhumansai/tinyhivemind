@@ -127,6 +127,10 @@ impl LiveSubject {
         }))
     }
 
+    pub(crate) fn model(&self) -> &ScriptedModel {
+        &self.model
+    }
+
     fn instance(&self) -> PathBuf {
         self.root.path().join("instance")
     }

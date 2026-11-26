@@ -96,16 +96,25 @@ fn enabled(value: &Value) -> bool {
 /// handle, both only for a non-empty allowlist; and `extra_tools`. No RPC
 /// reports the set, so the live tests check it at the model.
 pub(super) fn visible(config: &Value, available: &[String]) -> Vec<String> {
-    let agent = config["agent"]["chat_agent_id"].as_str().unwrap_or("orchestrator");
+    let agent = config["agent"]["chat_agent_id"]
+        .as_str()
+        .unwrap_or("orchestrator");
     let entries = config["agent_registry"]["entries"].as_array().cloned();
-    let Some(entry) = entries.unwrap_or_default().into_iter().find(|entry| entry["id"] == agent)
+    let Some(entry) = entries
+        .unwrap_or_default()
+        .into_iter()
+        .find(|entry| entry["id"] == agent)
     else {
         return vec![format!("<the built-in agent {agent}>")];
     };
     let has = |name: &str| available.iter().any(|tool| tool == name);
     let list = |key: &str| {
         let names = entry[key].as_array().cloned().unwrap_or_default();
-        names.iter().filter_map(Value::as_str).map(str::to_owned).collect::<Vec<_>>()
+        names
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::to_owned)
+            .collect::<Vec<_>>()
     };
     let allowed = list("tool_allowlist");
     let mut seen: Vec<String> = allowed.iter().filter(|name| has(name)).cloned().collect();
@@ -131,7 +140,12 @@ pub(super) fn visible(config: &Value, available: &[String]) -> Vec<String> {
         if repl {
             companions.extend(REPL);
         }
-        seen.extend(companions.into_iter().filter(|name| has(name)).map(str::to_owned));
+        seen.extend(
+            companions
+                .into_iter()
+                .filter(|name| has(name))
+                .map(str::to_owned),
+        );
     }
     seen.extend(list("extra_tools"));
     let mut unique = Vec::new();

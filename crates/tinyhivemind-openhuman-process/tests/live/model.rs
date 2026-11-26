@@ -19,6 +19,8 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 
 #[derive(Default)]
 struct State {
+    /// Requests to refuse with a 400 before the script plays on.
+    failures: Mutex<usize>,
     steps: Mutex<VecDeque<ModelStep>>,
     calls: Mutex<Vec<ModelCall>>,
 }
@@ -47,6 +49,11 @@ impl ScriptedModel {
         *lock(&self.state.steps) = steps.iter().cloned().collect();
     }
 
+    /// Refuse the next request, as a provider refuses a bad one.
+    pub(crate) fn fail_next(&self) {
+        *lock(&self.state.failures) += 1;
+    }
+
     pub(crate) fn calls(&self) -> Vec<ModelCall> {
         lock(&self.state.calls).clone()
     }
@@ -67,6 +74,14 @@ fn answer(state: &Arc<State>, request: &Request) -> Reply {
     }
     if !request.path.ends_with("/chat/completions") {
         return Reply::Json(404, json!({}));
+    }
+    {
+        let mut failures = lock(&state.failures);
+        if *failures > 0 {
+            *failures -= 1;
+            let error = json!({"error": {"message": "scripted refusal", "type": "invalid_request_error"}});
+            return Reply::Json(400, error);
+        }
     }
     let body = request.json();
     let messages = body["messages"].as_array().cloned().unwrap_or_default();

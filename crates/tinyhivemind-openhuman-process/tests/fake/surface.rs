@@ -446,7 +446,9 @@ impl State {
     /// The user messages in the thread's transcript.
     fn users(&self, thread: &str) -> usize {
         let text = fs::read_to_string(self.transcript(thread)).unwrap_or_default();
-        text.lines().filter(|line| line.contains("\"user\"")).count()
+        text.lines()
+            .filter(|line| line.contains("\"user\""))
+            .count()
     }
 
     /// Append to the thread's transcript.

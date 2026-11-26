@@ -36,6 +36,9 @@ pub(crate) enum Error {
     /// The seat's session is gone from the instance; no new one is started.
     #[error("the instance has no thread {0}")]
     Resume(String),
+    /// The seat's first turn failed, so there is no session to report.
+    #[error("the turn failed before its thread had a transcript: {0}")]
+    FailedWithoutSession(String),
     /// The turn's request could not be rendered as its message.
     #[error("the turn could not be rendered: {0}")]
     Render(String),

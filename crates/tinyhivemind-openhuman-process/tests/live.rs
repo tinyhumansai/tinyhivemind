@@ -194,3 +194,32 @@ async fn live_the_spike_gate_holds_through_the_runner() -> Result<()> {
     assert_eq!(left, Vec::<u32>::new());
     Ok(())
 }
+
+/// A first turn the provider refuses leaves the seat able to start its
+/// thread on the next turn.
+#[tokio::test(flavor = "multi_thread")]
+async fn live_a_failed_first_turn_leaves_the_seat_able_to_start() -> Result<()> {
+    use tinyhivemind_host::harness::conformance::{ModelStep, Subject as _};
+    let Some(subject) = LiveSubject::new().await? else {
+        return Ok(());
+    };
+    let harness = subject.harness();
+    let runner = harness.start(subject.seat(), subject.endpoint()).await?;
+    subject.model().fail_next();
+    let first = runner.run(seat_support::request("t1", None)).await;
+    let failed = match &first {
+        Ok(outcome) => matches!(outcome.disposition, TurnDisposition::Failed(_)),
+        Err(_) => true,
+    };
+    anyhow::ensure!(failed, "the refused turn did not fail: {first:?}");
+    let reply = ModelStep::Reply {
+        text: "works".into(),
+        usage: tinyhivemind_host::harness::TurnUsage::default(),
+    };
+    subject.model().script(&[reply]);
+    let second = runner.run(seat_support::request("t2", None)).await?;
+    assert_eq!(second.disposition, TurnDisposition::Completed);
+    assert_eq!(second.reply.as_deref(), Some("works"));
+    harness.stop("scout").await?;
+    Ok(())
+}

@@ -93,17 +93,10 @@ impl Seat {
         }
         let live = self.start().await?;
         let thread = request.session_id.clone().unwrap_or_else(|| self.thread());
-        if let Some(session) = &request.session_id {
-            let found = live
-                .client
-                .call(
-                    "openhuman.threads_transcript_get",
-                    json!({"thread_id": session}),
-                )
-                .await?;
-            if found["data"]["hasTranscript"] != true {
-                return Err(Error::Resume(session.clone()));
-            }
+        if let Some(session) = &request.session_id
+            && !has_transcript(&live, session).await?
+        {
+            return Err(Error::Resume(session.clone()));
         }
         let message = tinyhivemind_host::turn::render(&request)
             .map_err(|error| Error::Render(error.to_string()))?;
@@ -126,6 +119,14 @@ impl Seat {
                 usage,
             };
             self.plan.observer.event(&self.plan.seat.id, event);
+        }
+        // A thread exists once a turn on it has ended. A failure before that
+        // reports no session, or the next turn would be refused its resume
+        // of a thread that never was.
+        if let Some(reason) = &ended.failure
+            && !has_transcript(&live, &thread).await?
+        {
+            return Err(Error::FailedWithoutSession(reason.clone()));
         }
         let disposition = ended
             .failure
@@ -178,6 +179,16 @@ impl Seat {
         clear(&self.active);
         Ok(())
     }
+}
+
+/// Whether the instance keeps a transcript of `thread`.
+async fn has_transcript(live: &Live, thread: &str) -> Result<bool> {
+    let params = json!({"thread_id": thread});
+    let found = live
+        .client
+        .call("openhuman.threads_transcript_get", params)
+        .await?;
+    Ok(found["data"]["hasTranscript"] == true)
 }
 
 /// The seat as the seat runner sees it.

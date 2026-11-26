@@ -48,6 +48,10 @@ fn everything_else_is_a_harness_failure_with_its_message() {
             "the config: disk full",
         ),
         (
+            Error::FailedWithoutSession("chat_error".into()),
+            "the turn failed before its thread had a transcript: chat_error",
+        ),
+        (
             Error::Render("bad request".into()),
             "the turn could not be rendered: bad request",
         ),

@@ -10,9 +10,9 @@ mod subject;
 
 use anyhow::Result;
 use subject::FakeSubject;
+use tinyhivemind_hives::TurnDisposition;
 use tinyhivemind_host::harness::conformance::{Case, Subject as _};
 use tinyhivemind_host::harness::{Error, HarnessKind, SeatPlan};
-use tinyhivemind_hives::TurnDisposition;
 use tinyhivemind_openhuman_process::capability::Refusal;
 
 /// One test per case, and a check that no case is left out.
