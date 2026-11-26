@@ -12,7 +12,7 @@
 //! unchecked.
 use serde_json::{Map, Value};
 
-const CHECKED: [&str; 14] = [
+const CHECKED: [&str; 15] = [
     "type",
     "enum",
     "const",
@@ -27,8 +27,8 @@ const CHECKED: [&str; 14] = [
     "minLength",
     "maxLength",
     "minItems",
+    "maxItems",
 ];
-const ALSO_CHECKED: [&str; 1] = ["maxItems"];
 const ANNOTATIONS: [&str; 6] = [
     "description",
     "title",
@@ -42,9 +42,8 @@ const ANNOTATIONS: [&str; 6] = [
 pub(crate) fn unsupported(schema: &Value) -> Option<String> {
     let object = schema.as_object()?;
     for (keyword, value) in object {
-        let known = CHECKED.contains(&keyword.as_str())
-            || ALSO_CHECKED.contains(&keyword.as_str())
-            || ANNOTATIONS.contains(&keyword.as_str());
+        let known =
+            CHECKED.contains(&keyword.as_str()) || ANNOTATIONS.contains(&keyword.as_str());
         if !known {
             return Some(keyword.clone());
         }

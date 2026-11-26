@@ -9,11 +9,13 @@
 mod dispatch;
 mod gate;
 mod ledger;
+mod schema;
 
 use crate::seat::{RESERVED, SeatTools};
 use crate::{Error, Result};
 pub(crate) use dispatch::{SeatState, call};
 pub(crate) use ledger::Ledger;
+pub(crate) use schema::unsupported;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
 use tinyhivemind_exec::HookRunner;

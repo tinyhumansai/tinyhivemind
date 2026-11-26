@@ -9,7 +9,7 @@
 //! (programs), record the start, run the `pre_tool_use` hooks, run the
 //! tool, run the `post_tool_use` hooks, record the finish. A call refused by
 //! validation or policy before any hook runs records nothing.
-use super::gate;
+use super::{gate, schema};
 use super::ledger::{Identity, Known, Ledger, Outcome};
 use super::{Catalog, Served, Target};
 use crate::seat::{Bearer, SeatTools};
@@ -99,6 +99,9 @@ pub(crate) async fn call(
         return Ok(Outcome::refused("arguments must be an object"));
     };
     if !tool.changes_state {
+        if let Err(refusal) = validated(tool, &arguments) {
+            return Ok(refusal);
+        }
         return Ok(run(services, seat, tool, &arguments, None).await);
     }
     let Some(turn) = take_text(object, "turn") else {
@@ -116,7 +119,7 @@ pub(crate) async fn call(
         turn,
         call,
     };
-    if let Err(refusal) = admissible(services, seat, tool, &identity, &arguments) {
+    if let Err(refusal) = running(services, &identity).and_then(|()| validated(tool, &arguments)) {
         return Ok(refusal);
     }
     let in_transaction = matches!(tool.target, Target::Hive(kind) if kind != Kind::CreateAgent);
@@ -131,6 +134,14 @@ pub(crate) async fn call(
     {
         return Ok(refusal);
     }
+    let running_turn = || services.coordinator.running_turn(seat.id()).ok().flatten();
+    let started = ledger.start(&identity, name, &arguments, running_turn);
+    if let Some(answer) = answered(started, &identity) {
+        return Ok(answer);
+    }
+    // Recorded as pending before the approver is asked, so a retry while it
+    // decides is refused rather than asking twice. A refusal here ran
+    // nothing, so it records nothing.
     if let Target::Program(program) = &tool.target
         && program.side_effects != SideEffects::Read
     {
@@ -143,17 +154,20 @@ pub(crate) async fn call(
         };
         let approver = services.approver.as_ref();
         if let Err(refusal) = gate::admit(seat.tools.access(), approver, request).await {
+            ledger.abandon(&identity);
             return Ok(Outcome::refused(refusal));
         }
     }
-    if let Some(answer) = answered(ledger.start(&identity, name, &arguments), &identity) {
-        return Ok(answer);
+    // The approver may have taken long enough for the turn to end.
+    if let Err(refusal) = running(services, &identity) {
+        ledger.abandon(&identity);
+        return Ok(refusal);
     }
     let outcome = if tool.hooked {
         match seat.hooks.pre_tool_use(name, &arguments).await {
             Verdict::Deny(message) => Outcome::refused(message),
             Verdict::Allow => {
-                let outcome = run(services, seat, tool, &arguments, Some(&identity)).await;
+                let outcome = run_in_turn(services, seat, tool, &arguments, &identity).await;
                 seat.hooks
                     .post_tool_use(name, &arguments, &outcome.text)
                     .await;
@@ -161,36 +175,51 @@ pub(crate) async fn call(
             }
         }
     } else {
-        run(services, seat, tool, &arguments, Some(&identity)).await
+        run_in_turn(services, seat, tool, &arguments, &identity).await
     };
     ledger.finish(&identity, outcome.clone());
     Ok(outcome)
 }
 
-/// Refuse a call from a turn that is not running, or with bad arguments.
-fn admissible(
+/// Run `tool` as `identity` if its turn is still running, which hooks may
+/// have outlasted.
+async fn run_in_turn(
     services: &Services,
     seat: &SeatState,
     tool: &Served,
-    identity: &Identity,
     arguments: &Value,
-) -> Result<(), Outcome> {
-    match services.coordinator.running_turn(seat.id()) {
-        Ok(Some(running)) if running == identity.turn => {}
-        Ok(_) => {
-            let stale = tinyhivemind_hives::Error::StaleTurn {
-                agent_id: identity.seat.clone(),
-                turn_id: identity.turn.clone(),
-            };
-            return Err(Outcome::refused(stale.to_string()));
-        }
-        Err(error) => return Err(Outcome::refused(error.to_string())),
+    identity: &Identity,
+) -> Outcome {
+    match running(services, identity) {
+        Ok(()) => run(services, seat, tool, arguments, Some(identity)).await,
+        Err(refusal) => refusal,
     }
-    if let Target::Hive(kind) = tool.target {
-        kind.validate(arguments)
-            .map_err(|error| Outcome::refused(error.to_string()))?;
+}
+
+/// Refuse a call whose turn is not the seat's running turn.
+fn running(services: &Services, identity: &Identity) -> Result<(), Outcome> {
+    match services.coordinator.running_turn(&identity.seat) {
+        Ok(Some(running)) if running == identity.turn => Ok(()),
+        Ok(_) => Err(stale(identity)),
+        Err(error) => Err(Outcome::refused(error.to_string())),
     }
-    Ok(())
+}
+
+fn stale(identity: &Identity) -> Outcome {
+    let stale = tinyhivemind_hives::Error::StaleTurn {
+        agent_id: identity.seat.clone(),
+        turn_id: identity.turn.clone(),
+    };
+    Outcome::refused(stale.to_string())
+}
+
+/// Refuse arguments that do not fit the tool's declaration.
+fn validated(tool: &Served, arguments: &Value) -> Result<(), Outcome> {
+    match &tool.target {
+        Target::Hive(kind) => kind.validate(arguments).map_err(|error| error.to_string()),
+        Target::Program(program) => schema::check(&program.args, arguments, ""),
+    }
+    .map_err(Outcome::refused)
 }
 
 /// Refuse a hive call the host's send or management policy refuses, before
@@ -221,6 +250,11 @@ fn answered(known: Known, identity: &Identity) -> Option<Outcome> {
         Known::Reused => Some(Outcome::refused(
             tinyhivemind_hives::Error::CallReused(identity.call.clone()).to_string(),
         )),
+        Known::Stale => Some(stale(identity)),
+        Known::Full => Some(Outcome::refused(format!(
+            "call {} is refused: this turn already holds as many call records as the server keeps",
+            identity.call
+        ))),
     }
 }
 
