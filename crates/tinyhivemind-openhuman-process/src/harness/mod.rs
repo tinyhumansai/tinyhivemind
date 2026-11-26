@@ -62,7 +62,7 @@ impl Default for Options {
     }
 }
 
-/// Runs seats on OpenHuman, one supervised `openhuman-core` per seat.
+/// Runs seats on `OpenHuman`, one supervised `openhuman-core` per seat.
 ///
 /// Its futures must be driven within a Tokio runtime with time and I/O
 /// enabled.
@@ -108,7 +108,8 @@ impl Harness for OpenHumanHarness {
         let options = self.options;
         let seats = self.seats.clone();
         Box::pin(async move {
-            let model = capability::check(&plan.seat).map_err(|refusal| Error::Refused(Box::new(refusal)))?;
+            let model = capability::check(&plan.seat)
+                .map_err(|refusal| Error::Refused(Box::new(refusal)))?;
             let id = plan.seat.id.clone();
             if lock(&seats).contains_key(&id) {
                 return Err(Error::Harness(format!("seat {id} is already running")));

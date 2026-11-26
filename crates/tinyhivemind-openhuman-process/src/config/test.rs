@@ -27,7 +27,10 @@ fn written(prompt: &str, tools: &[String]) -> Written {
 }
 
 fn tools() -> Vec<String> {
-    vec!["mcp_hivemind_post_1a2b3c".into(), "mcp_hivemind_ask_4d5e6f".into()]
+    vec![
+        "mcp_hivemind_post_1a2b3c".into(),
+        "mcp_hivemind_ask_4d5e6f".into(),
+    ]
 }
 
 /// The file as `openhuman-core` reads it.
@@ -111,7 +114,10 @@ fn memory_search_hooks_suggestions_and_compression_are_off() {
 fn a_prompt_cannot_break_out_of_its_string() {
     let prompt = "line one\n[hooks]\nenabled = true\n\"\"\" ' \\ \u{1}";
     let config = parsed(&written(prompt, &tools()));
-    assert_eq!(config["agent_registry"]["entries"][0]["system_prompt"], prompt);
+    assert_eq!(
+        config["agent_registry"]["entries"][0]["system_prompt"],
+        prompt
+    );
     assert_eq!(config["hooks"], json!({"enabled": false}));
 }
 

@@ -46,13 +46,21 @@ fn refused(change: impl FnOnce(&mut LoweredSeat)) -> Refusal {
 }
 
 fn provider(seat: &mut LoweredSeat) -> &mut Provider {
-    let model = seat.integration.model.as_mut().map(|model| &mut model.provider);
+    let model = seat
+        .integration
+        .model
+        .as_mut()
+        .map(|model| &mut model.provider);
     let provider = model.and_then(Option::as_mut);
     provider.unwrap_or_else(|| unreachable!("the seat has a provider"))
 }
 
 fn model(seat: &mut LoweredSeat) -> &mut Model {
-    let model = seat.integration.model.as_mut().map(|model| &mut model.model);
+    let model = seat
+        .integration
+        .model
+        .as_mut()
+        .map(|model| &mut model.model);
     model.unwrap_or_else(|| unreachable!("the seat has a model"))
 }
 
@@ -160,7 +168,9 @@ fn a_sandbox_and_built_in_tools_are_rejected() {
     }
     let mut none = seat();
     none.integration.permissions.push(PermissionSet::default());
-    none.integration.groups.insert("shell".into(), GroupMode::Off);
+    none.integration
+        .groups
+        .insert("shell".into(), GroupMode::Off);
     assert!(check(&none).is_ok());
     for mode in [GroupMode::Advertised, GroupMode::Withheld] {
         let refusal = refused(|seat| {
@@ -175,7 +185,8 @@ fn a_sandbox_and_built_in_tools_are_rejected() {
 
 #[test]
 fn fields_this_harness_does_not_take_are_named() {
-    let cases: [(&str, fn(&mut LoweredSeat)); 6] = [
+    type Change = fn(&mut LoweredSeat);
+    let cases: [(&str, Change); 6] = [
         ("agent_id", |seat| {
             seat.integration.agent_id = Some("a".into());
         }),
@@ -192,9 +203,8 @@ fn fields_this_harness_does_not_take_are_named() {
         ("bare_prompt", |seat| seat.integration.bare_prompt = true),
         ("skills", |seat| {
             let skill = serde_json::json!({"id": "s"});
-            let skill = serde_json::from_value(skill).unwrap_or_else(|error| {
-                unreachable!("a skill of an id and a path: {error}")
-            });
+            let skill = serde_json::from_value(skill)
+                .unwrap_or_else(|error| unreachable!("a skill of an id and a path: {error}"));
             seat.integration.skills.push(skill);
         }),
     ];

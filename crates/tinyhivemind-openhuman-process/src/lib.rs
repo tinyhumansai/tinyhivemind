@@ -1,4 +1,4 @@
-//! Hive seats on OpenHuman, each a supervised `openhuman-core` process.
+//! Hive seats on `OpenHuman`, each a supervised `openhuman-core` process.
 //!
 //! [`OpenHumanHarness`] implements the host's
 //! [`Harness`](tinyhivemind_host::harness::Harness) port for the `openhuman`
@@ -35,7 +35,7 @@
 //! # drop(runner); Ok(()) }
 //! ```
 //!
-//! What this crate does not hold: it names no OpenHuman type and links no
+//! What this crate does not hold: it names no `OpenHuman` type and links no
 //! harness, so it outlives the linked adapter; it serves no tools (the host's
 //! MCP server does, and judges their policy); and it never downloads a
 //! binary: `.github/scripts/fetch-harness.sh` fetches the one pinned in
@@ -51,10 +51,10 @@ mod turn;
 pub use harness::{OpenHumanHarness, Options, Program};
 
 #[cfg(test)]
-#[path = "../tests/support/http.rs"]
-mod http;
-#[cfg(test)]
 #[path = "../tests/fake/surface.rs"]
 mod fake;
 #[cfg(test)]
 mod fixture;
+#[cfg(test)]
+#[path = "../tests/support/http.rs"]
+mod http;

@@ -65,7 +65,7 @@ async fn a_seat_it_cannot_honour_is_refused_before_anything_starts() -> Result<(
     };
     let refusal = refusal.downcast_ref::<Refusal>();
     assert_eq!(refusal, Some(&Refusal::Iterations { asked: 20, cap: 8 }));
-    assert!(subject.processes().is_empty());
+    assert_eq!(subject.processes(), Vec::<u32>::new());
     Ok(())
 }
 
@@ -78,7 +78,7 @@ async fn a_running_seat_is_not_started_twice_and_a_stopped_one_is_already_stoppe
     assert!(matches!(again, Err(Error::Harness(reason)) if reason.contains("already running")));
     harness.stop("scout").await?;
     harness.stop("scout").await?;
-    assert!(subject.processes().is_empty());
+    assert_eq!(subject.processes(), Vec::<u32>::new());
     drop(runner);
     Ok(())
 }

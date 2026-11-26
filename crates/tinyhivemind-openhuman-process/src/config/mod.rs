@@ -182,12 +182,14 @@ fn lookup<'a>(value: &'a Value, path: &str) -> Option<&'a Value> {
 fn project(written: &Value, found: Value) -> Value {
     match (written, found) {
         (Value::Array(written), Value::Array(found)) => {
-            let entries = found.into_iter().enumerate().map(|(index, entry)| {
-                match written.get(index) {
-                    Some(shape) => project(shape, entry),
-                    None => entry,
-                }
-            });
+            let entries =
+                found
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, entry)| match written.get(index) {
+                        Some(shape) => project(shape, entry),
+                        None => entry,
+                    });
             Value::Array(entries.collect())
         }
         (Value::Object(written), Value::Object(mut found)) => {

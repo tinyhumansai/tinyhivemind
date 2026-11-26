@@ -27,6 +27,7 @@ use crate::config::{Input, Written};
 use crate::error::{Error, Result};
 use crate::harness::{Options, Program};
 use crate::rpc::Client;
+use std::fmt::Write as _;
 use std::fs;
 use std::io::{Read as _, Write as _};
 use std::os::unix::fs::{DirBuilderExt as _, OpenOptionsExt as _};
@@ -73,7 +74,9 @@ impl Layout {
         let mut builder = fs::DirBuilder::new();
         builder.recursive(true).mode(0o700);
         for dir in [self.workspace(), self.home(), self.action()] {
-            builder.create(dir).map_err(Error::io("the instance directories"))?;
+            builder
+                .create(dir)
+                .map_err(Error::io("the instance directories"))?;
         }
         Ok(())
     }
@@ -91,7 +94,8 @@ impl Layout {
             .mode(0o600)
             .open(&path)
             .map_err(Error::io("the keyring key"))?;
-        file.write_all(key.as_bytes()).map_err(Error::io("the keyring key"))?;
+        file.write_all(key.as_bytes())
+            .map_err(Error::io("the keyring key"))?;
         Ok(key)
     }
 
@@ -104,7 +108,8 @@ impl Layout {
             .mode(0o600)
             .open(path)
             .map_err(Error::io("the config"))?;
-        file.write_all(written.toml().as_bytes()).map_err(Error::io("the config"))
+        file.write_all(written.toml().as_bytes())
+            .map_err(Error::io("the config"))
     }
 }
 
@@ -112,8 +117,13 @@ impl Layout {
 fn random() -> Result<String> {
     let mut bytes = [0_u8; 32];
     let mut source = fs::File::open("/dev/urandom").map_err(Error::io("/dev/urandom"))?;
-    source.read_exact(&mut bytes).map_err(Error::io("/dev/urandom"))?;
-    Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
+    source
+        .read_exact(&mut bytes)
+        .map_err(Error::io("/dev/urandom"))?;
+    Ok(bytes.iter().fold(String::new(), |mut hex, byte| {
+        let _ = write!(hex, "{byte:02x}");
+        hex
+    }))
 }
 
 /// The child's whole environment, besides what the supervisor adds.

@@ -14,7 +14,10 @@ struct Recorder(Mutex<Vec<Event>>);
 
 impl Observer for Recorder {
     fn event(&self, _: &str, event: Event) {
-        self.0.lock().unwrap_or_else(PoisonError::into_inner).push(event);
+        self.0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(event);
     }
 }
 
@@ -61,7 +64,7 @@ impl Harnessed {
             client: &self.fixture.client,
             seat: "scout",
             thread: "thm-scout",
-            turn_id: "t1",
+            id: "t1",
             client_id: "thm-1".into(),
             iterations,
             observer: self.events.as_ref(),
@@ -93,11 +96,14 @@ async fn a_turn_ends_with_its_reply_and_its_own_usage() {
     assert_eq!(ended.ok(), Some(expected));
     // Published before `channel_web_chat` answered, and still seen.
     let progress = harnessed.events.progress();
-    assert_eq!(progress.first(), Some(&Progress::ModelCall { iteration: 1 }));
+    assert_eq!(
+        progress.first(),
+        Some(&Progress::ModelCall { iteration: 1 })
+    );
     assert!(progress.contains(&Progress::Text {
         delta: "done".into()
     }));
-    assert!(harnessed.active.lock().ok().is_some_and(|active| active.is_none()));
+    assert!(harnessed.active.lock().is_ok_and(|active| active.is_none()));
 }
 
 #[tokio::test]
@@ -105,7 +111,10 @@ async fn another_requests_events_are_not_this_turns() {
     let step = json!({"reply": "mine", "tokens": 1, "stray": true});
     let harnessed = Harnessed::new(&[step]).await;
     let ended = harnessed.run(8).await;
-    assert_eq!(ended.ok().and_then(|ended| ended.reply), Some("mine".into()));
+    assert_eq!(
+        ended.ok().and_then(|ended| ended.reply),
+        Some("mine".into())
+    );
 }
 
 #[tokio::test]
@@ -142,13 +151,19 @@ async fn a_seat_limit_below_the_cap_fails_the_turn_past_it() {
 #[tokio::test]
 async fn a_harness_approval_is_decided_by_the_approver() {
     let step = json!({"reply": "after", "approval": "shell"});
-    let harnessed = Harnessed::new(&[step.clone()]).await;
+    let harnessed = Harnessed::new(std::slice::from_ref(&step)).await;
     assert!(harnessed.run(8).await.is_ok());
     let allowed = Harnessed::new(&[step]).await;
-    assert!(run(allowed.turn(&AllowAll, 8), "go", &allowed.active).await.is_ok());
+    assert!(
+        run(allowed.turn(&AllowAll, 8), "go", &allowed.active)
+            .await
+            .is_ok()
+    );
     let decided = |harnessed: &Harnessed| {
         let log = harnessed.fixture.log("decisions.jsonl");
-        log.iter().map(|entry| entry["decision"].clone()).collect::<Vec<_>>()
+        log.iter()
+            .map(|entry| entry["decision"].clone())
+            .collect::<Vec<_>>()
     };
     assert_eq!(decided(&harnessed), [json!("deny")]);
     assert_eq!(decided(&allowed), [json!("approve_once")]);
@@ -168,7 +183,10 @@ async fn a_tool_call_and_its_result_are_progress() {
         call_id: "call_1".into(),
         failed: true,
     };
-    assert!(progress.contains(&call) && progress.contains(&result), "{progress:?}");
+    assert!(
+        progress.contains(&call) && progress.contains(&result),
+        "{progress:?}"
+    );
 }
 
 #[tokio::test]
@@ -180,7 +198,11 @@ async fn a_cancelled_turn_is_shown_to_have_stopped() {
         tokio::time::sleep(std::time::Duration::from_millis(5)).await;
     }
     task.abort();
-    let active = harnessed.active.lock().ok().and_then(|mut active| active.take());
+    let active = harnessed
+        .active
+        .lock()
+        .ok()
+        .and_then(|mut active| active.take());
     let active = active.unwrap_or_else(|| unreachable!("a dropped turn leaves itself"));
     assert!(active.request_id.is_some());
     let cancelled = cancel(&harnessed.fixture.client, &active).await;

@@ -39,7 +39,9 @@ fn main() -> ExitCode {
     ) else {
         return ExitCode::from(2);
     };
-    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build();
     let Ok(runtime) = runtime else {
         return ExitCode::FAILURE;
     };

@@ -76,7 +76,10 @@ impl Client {
         let response = self.http.get(url).timeout(CALL).send().await?;
         let status = response.status().as_u16();
         if status != 200 {
-            return Err(Error::Status { what: "/health", status });
+            return Err(Error::Status {
+                what: "/health",
+                status,
+            });
         }
         decode(&response.bytes().await?)
     }
@@ -95,7 +98,10 @@ impl Client {
             .await?;
         let status = response.status().as_u16();
         if status != 200 {
-            return Err(Error::Status { what: "/rpc", status });
+            return Err(Error::Status {
+                what: "/rpc",
+                status,
+            });
         }
         let mut answer = decode(&response.bytes().await?)?;
         if let Some(error) = answer.get("error").filter(|error| !error.is_null()) {
@@ -120,7 +126,10 @@ impl Client {
             .await?;
         let status = response.status().as_u16();
         if status != 200 {
-            return Err(Error::Status { what: "/events", status });
+            return Err(Error::Status {
+                what: "/events",
+                status,
+            });
         }
         Ok(Events {
             response,

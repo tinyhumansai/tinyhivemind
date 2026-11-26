@@ -33,7 +33,8 @@ impl Parser {
             }
             let line = String::from_utf8_lossy(&line);
             if let Some(data) = line.strip_prefix("data:") {
-                self.data.push(data.strip_prefix(' ').unwrap_or(data).to_owned());
+                self.data
+                    .push(data.strip_prefix(' ').unwrap_or(data).to_owned());
             }
         }
         frames

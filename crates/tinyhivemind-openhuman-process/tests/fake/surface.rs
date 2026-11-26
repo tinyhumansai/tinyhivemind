@@ -72,7 +72,7 @@ impl Fake {
         let serving = state.clone();
         let task = tokio::spawn(serve(listener, move |request| {
             let state = serving.clone();
-            async move { state.handle(request).await }
+            async move { state.handle(&request) }
         }));
         Self { port, task, state }
     }
@@ -138,7 +138,7 @@ impl State {
         }
     }
 
-    async fn handle(self: Arc<Self>, request: Request) -> Reply {
+    fn handle(self: Arc<Self>, request: &Request) -> Reply {
         if request.method == "GET" && request.path == "/health" {
             let health = json!({"pid": self.setup.pid, "healthy": true, "components": {}});
             return Reply::Json(200, health);
@@ -148,14 +148,14 @@ impl State {
             return Reply::Json(401, json!({"ok": false, "error": "unauthorized"}));
         }
         match (request.method.as_str(), request.path.as_str()) {
-            ("GET", "/events") => self.subscribe(&request),
+            ("GET", "/events") => self.subscribe(request),
             ("POST", "/rpc") => {
                 let body = request.json();
                 let id = body["id"].clone();
                 let method = body["method"].as_str().unwrap_or_default().to_owned();
                 self.append("methods.jsonl", &json!(method));
                 let params = body["params"].clone();
-                let answer = match self.clone().call(&method, &params).await {
+                let answer = match self.clone().call(&method, &params) {
                     Ok(result) => json!({"jsonrpc": "2.0", "id": id, "result": result}),
                     Err(message) => json!({"jsonrpc": "2.0", "id": id,
                         "error": {"code": -32000, "message": message, "data": null}}),
@@ -189,7 +189,7 @@ impl State {
         }
     }
 
-    async fn call(self: Arc<Self>, method: &str, params: &Value) -> Result<Value, String> {
+    fn call(self: Arc<Self>, method: &str, params: &Value) -> Result<Value, String> {
         let envelope = |result: Value| json!({"logs": ["fake"], "result": result});
         match method {
             "core.version" => {
@@ -224,7 +224,10 @@ impl State {
     fn tools(&self) -> Vec<Value> {
         let builtin = ["shell", "mcp_call_tool", "juice_retrieve"];
         let mut tools: Vec<String> = builtin.map(String::from).to_vec();
-        let warm: usize = self.read("warm").and_then(|n| n.trim().parse().ok()).unwrap_or(2);
+        let warm: usize = self
+            .read("warm")
+            .and_then(|n| n.trim().parse().ok())
+            .unwrap_or(2);
         if self.listed.fetch_add(1, Ordering::Relaxed) >= warm {
             let mut served: Vec<String> = self
                 .read("served")
@@ -241,31 +244,61 @@ impl State {
                 }
             }
         }
-        let tools = tools.into_iter().map(|name| json!({"name": name, "description": ""}));
+        let tools = tools
+            .into_iter()
+            .map(|name| json!({"name": name, "description": ""}));
         tools.collect()
     }
 
     fn transcript(&self, thread: &str) -> PathBuf {
         let safe: String = thread
             .chars()
-            .map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' })
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '-' {
+                    c
+                } else {
+                    '_'
+                }
+            })
             .collect();
-        self.setup.workspace.join("workspace/session_raw").join(format!("{safe}.jsonl"))
+        self.setup
+            .workspace
+            .join("workspace/session_raw")
+            .join(format!("{safe}.jsonl"))
     }
 
     fn chat(self: Arc<Self>, params: &Value) -> Result<Value, String> {
-        let known = ["client_id", "thread_id", "message", "model_override", "queue_mode"];
+        let known = [
+            "client_id",
+            "thread_id",
+            "message",
+            "model_override",
+            "queue_mode",
+        ];
         for key in params.as_object().into_iter().flatten().map(|(key, _)| key) {
             if !known.contains(&key.as_str()) {
                 return Err(format!("unknown param '{key}' for channel.web_chat"));
             }
         }
-        let agent = self.config["agent"]["chat_agent_id"].as_str().unwrap_or("orchestrator");
+        let agent = self.config["agent"]["chat_agent_id"]
+            .as_str()
+            .unwrap_or("orchestrator");
         let entries = self.config["agent_registry"]["entries"].as_array().cloned();
-        if !entries.unwrap_or_default().iter().any(|entry| entry["id"] == agent) {
-            return Err(format!("chat_agent_id '{agent}' is not a runnable agent definition"));
+        if !entries
+            .unwrap_or_default()
+            .iter()
+            .any(|entry| entry["id"] == agent)
+        {
+            return Err(format!(
+                "chat_agent_id '{agent}' is not a runnable agent definition"
+            ));
         }
-        let text = |key: &str| params[key].as_str().filter(|text| !text.is_empty()).map(str::to_owned);
+        let text = |key: &str| {
+            params[key]
+                .as_str()
+                .filter(|text| !text.is_empty())
+                .map(str::to_owned)
+        };
         let (Some(client), Some(thread), Some(message)) =
             (text("client_id"), text("thread_id"), text("message"))
         else {
@@ -287,7 +320,11 @@ impl State {
         self.publish(&client, &thread, &request_id, "iteration_start", first);
         let ack = json!({"accepted": true, "client_id": client, "thread_id": thread,
             "request_id": request_id});
-        let ids = Ids { client, thread, request_id };
+        let ids = Ids {
+            client,
+            thread,
+            request_id,
+        };
         tokio::spawn(async move { self.run(ids, message, cancel).await });
         Ok(ack)
     }
@@ -299,7 +336,11 @@ impl State {
         let target = in_flight
             .get(thread)
             .is_some_and(|flight| scoped.is_none_or(|id| id == flight.request_id));
-        let cancelled = if target { in_flight.remove(thread) } else { None };
+        let cancelled = if target {
+            in_flight.remove(thread)
+        } else {
+            None
+        };
         let request_id = cancelled.as_ref().map(|flight| flight.request_id.clone());
         if let Some(flight) = cancelled {
             flight.cancel.notify_one();
@@ -361,13 +402,19 @@ impl State {
         if step.is_null() {
             cancel.notified().await;
             self.append("calls.jsonl", &json!({"call": call, "state": "aborted"}));
-            say("chat_error", json!({"message": "Cancelled", "error_type": "cancelled"}));
+            say(
+                "chat_error",
+                json!({"message": "Cancelled", "error_type": "cancelled"}),
+            );
             return;
         }
         self.append("calls.jsonl", &json!({"call": call, "state": "answered"}));
         self.finish(&ids.thread, &ids.request_id);
         if let Some(error) = step["error"].as_str() {
-            say("chat_error", json!({"message": error, "error_type": "inference"}));
+            say(
+                "chat_error",
+                json!({"message": error, "error_type": "inference"}),
+            );
             return;
         }
         let reply = step["reply"].as_str().unwrap_or_default();
@@ -375,7 +422,10 @@ impl State {
         let tokens = step["tokens"].as_u64().unwrap_or(0);
         let usage = json!({"input_tokens": tokens, "output_tokens": 2,
             "cached_input_tokens": tokens / 10, "cost_usd": 0.0, "context_window": 0});
-        say("text_delta", json!({"delta": reply, "delta_kind": "text", "round": 1}));
+        say(
+            "text_delta",
+            json!({"delta": reply, "delta_kind": "text", "round": 1}),
+        );
         say("turn_cost", json!({"usage": usage, "round": 1}));
         say("chat_done", json!({"full_response": reply, "usage": usage}));
     }
@@ -383,7 +433,10 @@ impl State {
     /// The turn on `thread` ended, unless a newer one replaced it.
     fn finish(&self, thread: &str, request_id: &str) {
         let mut in_flight = lock(&self.in_flight);
-        if in_flight.get(thread).is_some_and(|flight| flight.request_id == request_id) {
+        if in_flight
+            .get(thread)
+            .is_some_and(|flight| flight.request_id == request_id)
+        {
             in_flight.remove(thread);
         }
     }
@@ -399,7 +452,9 @@ impl State {
             let _ = writeln!(file, "{}", json!({"role": role, "text": text}));
         }
         let text = fs::read_to_string(&path).unwrap_or_default();
-        text.lines().filter(|line| line.contains("\"user\"")).count()
+        text.lines()
+            .filter(|line| line.contains("\"user\""))
+            .count()
     }
 
     fn open(&self, seen: usize) -> u64 {

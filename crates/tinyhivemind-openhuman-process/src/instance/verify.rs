@@ -14,9 +14,13 @@ const POLL: Duration = Duration::from_millis(100);
 
 /// Every tool name the instance offers.
 async fn available(client: &Client) -> Result<Vec<String>> {
-    let listed = client.call("openhuman.agent_registry_available_tools", json!({})).await?;
+    let listed = client
+        .call("openhuman.agent_registry_available_tools", json!({}))
+        .await?;
     let tools = listed["tools"].as_array().cloned().unwrap_or_default();
-    let names = tools.iter().filter_map(|tool| tool["name"].as_str().map(str::to_owned));
+    let names = tools
+        .iter()
+        .filter_map(|tool| tool["name"].as_str().map(str::to_owned));
     Ok(names.collect())
 }
 
@@ -46,7 +50,10 @@ pub(crate) async fn discover(
     let deadline = Instant::now() + warm_up;
     loop {
         let names = available(client).await?;
-        let found: Vec<_> = tools.iter().map(|tool| name_of(&names, server, tool)).collect();
+        let found: Vec<_> = tools
+            .iter()
+            .map(|tool| name_of(&names, server, tool))
+            .collect();
         if found.iter().all(Option::is_some) {
             let mut found: Vec<String> = found.into_iter().flatten().cloned().collect();
             found.sort();
@@ -72,12 +79,17 @@ const RECOVERY: &str = "juice_retrieve";
 /// binary defaults it to.
 pub(super) fn visible(config: &Value, available: &[String]) -> Vec<String> {
     let entries = config["agent_registry"]["entries"].as_array().cloned();
-    let agent = entries.unwrap_or_default().into_iter().find(|entry| entry["id"] == AGENT_ID);
-    let allowed = agent.map(|agent| agent["tool_allowlist"].clone()).unwrap_or(Value::Null);
+    let agent = entries
+        .unwrap_or_default()
+        .into_iter()
+        .find(|entry| entry["id"] == AGENT_ID);
+    let allowed = agent.map_or(Value::Null, |agent| agent["tool_allowlist"].clone());
     let allowed = allowed.as_array().cloned().unwrap_or_default();
     let names = allowed.iter().filter_map(Value::as_str);
-    let mut seen: Vec<String> =
-        names.filter(|name| available.iter().any(|tool| tool == name)).map(str::to_owned).collect();
+    let mut seen: Vec<String> = names
+        .filter(|name| available.iter().any(|tool| tool == name))
+        .map(str::to_owned)
+        .collect();
     if config["context"]["compaction_enabled"] != false {
         seen.push(RECOVERY.to_owned());
     }
@@ -99,7 +111,9 @@ pub(crate) async fn verify(
     warm_up: Duration,
 ) -> Result<Started> {
     let health = client.health().await?;
-    let answering = health["pid"].as_u64().and_then(|pid| u32::try_from(pid).ok());
+    let answering = health["pid"]
+        .as_u64()
+        .and_then(|pid| u32::try_from(pid).ok());
     let running = client.call("core.version", json!({})).await?;
     let running = running["version"].as_str().unwrap_or_default().to_owned();
     let snapshot = client.call("openhuman.config_get", json!({})).await?;

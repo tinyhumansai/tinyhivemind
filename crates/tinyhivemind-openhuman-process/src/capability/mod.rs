@@ -1,4 +1,4 @@
-//! What a lowered seat may ask of an OpenHuman process, and what it gets.
+//! What a lowered seat may ask of an `OpenHuman` process, and what it gets.
 //!
 //! [`check`] reads a [`LoweredSeat`] against the `openhuman` column of the
 //! capability table in `docs/specs/harnesses.md` and returns the [`SeatModel`]
@@ -103,9 +103,12 @@ pub fn check(seat: &LoweredSeat) -> Result<SeatModel, Refusal> {
     let integration = &seat.integration;
     let lowered = integration.model.as_ref().ok_or(Refusal::NoModel)?;
     let model = &lowered.model;
-    let provider = lowered.provider.as_ref().ok_or_else(|| Refusal::NoProvider {
-        model: model.id.clone(),
-    })?;
+    let provider = lowered
+        .provider
+        .as_ref()
+        .ok_or_else(|| Refusal::NoProvider {
+            model: model.id.clone(),
+        })?;
     let kind = match provider.kind {
         ProviderKind::Openai => None,
         ProviderKind::Inherit => Some("inherit"),

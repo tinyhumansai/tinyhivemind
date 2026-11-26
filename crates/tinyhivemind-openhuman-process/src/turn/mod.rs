@@ -74,7 +74,8 @@ pub(crate) struct Turn<'a> {
     pub(crate) client: &'a Client,
     pub(crate) seat: &'a str,
     pub(crate) thread: &'a str,
-    pub(crate) turn_id: &'a str,
+    /// The coordinator's turn id.
+    pub(crate) id: &'a str,
     pub(crate) client_id: String,
     /// The seat's iteration limit, at most [`ITERATION_CAP`].
     pub(crate) iterations: usize,
@@ -103,9 +104,14 @@ pub(crate) async fn run(
     };
     set(active, Some(submitted.clone()));
     let params = json!({"client_id": turn.client_id, "thread_id": turn.thread, "message": message});
-    let ack = turn.client.call("openhuman.channel_web_chat", params).await?;
+    let ack = turn
+        .client
+        .call("openhuman.channel_web_chat", params)
+        .await?;
     let ack = &ack["result"];
-    let request_id = ack["request_id"].as_str().filter(|_| ack["accepted"] == true);
+    let request_id = ack["request_id"]
+        .as_str()
+        .filter(|_| ack["accepted"] == true);
     let request_id = request_id.ok_or_else(|| Error::NotAccepted(ack.to_string()))?;
     submitted.request_id = Some(request_id.to_owned());
     set(active, Some(submitted));
@@ -124,14 +130,10 @@ pub(crate) async fn run(
 
 /// Read events until the request ends, or fails while it runs on: whether
 /// the instance's turn is over.
-async fn follow(
-    turn: &Turn<'_>,
-    request_id: &str,
-    events: &mut Events,
-) -> Result<(Ended, bool)> {
+async fn follow(turn: &Turn<'_>, request_id: &str, events: &mut Events) -> Result<(Ended, bool)> {
     let mut iterations = 0_usize;
     let progress = |progress| Event::Progress {
-        turn_id: turn.turn_id.to_owned(),
+        turn_id: turn.id.to_owned(),
         progress,
     };
     while let Some(event) = events.next().await? {
@@ -163,7 +165,9 @@ async fn follow(
                 }
             }
             "text_delta" if event["delta_kind"] == "text" => {
-                let delta = Progress::Text { delta: text("delta") };
+                let delta = Progress::Text {
+                    delta: text("delta"),
+                };
                 turn.observer.event(turn.seat, progress(delta));
             }
             "tool_call" => {
@@ -222,7 +226,7 @@ async fn approve(turn: &Turn<'_>, event: &Value) -> Result<()> {
     let id = event["request_id"].as_str().unwrap_or_default().to_owned();
     let request = ToolApproval {
         seat: turn.seat.to_owned(),
-        turn_id: turn.turn_id.to_owned(),
+        turn_id: turn.id.to_owned(),
         call_id: id.clone(),
         tool: event["tool_name"].as_str().unwrap_or_default().to_owned(),
         arguments: event["args"].clone(),
@@ -232,7 +236,9 @@ async fn approve(turn: &Turn<'_>, event: &Value) -> Result<()> {
         ToolDecision::Deny { .. } => "deny",
     };
     let params = json!({"request_id": id, "decision": decision});
-    turn.client.call("openhuman.approval_decide", params).await?;
+    turn.client
+        .call("openhuman.approval_decide", params)
+        .await?;
     Ok(())
 }
 

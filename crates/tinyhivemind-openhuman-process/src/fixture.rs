@@ -112,7 +112,9 @@ impl Fixture {
     /// Each line of a control file the fake writes.
     pub(crate) fn log(&self, name: &str) -> Vec<Value> {
         let text = fs::read_to_string(self.control.join(name)).unwrap_or_default();
-        text.lines().filter_map(|line| serde_json::from_str(line).ok()).collect()
+        text.lines()
+            .filter_map(|line| serde_json::from_str(line).ok())
+            .collect()
     }
 
     /// The states of the model calls, in order.

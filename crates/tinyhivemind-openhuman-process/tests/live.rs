@@ -63,7 +63,10 @@ struct Recorder(Mutex<Vec<Event>>);
 
 impl Observer for Recorder {
     fn event(&self, _: &str, event: Event) {
-        self.0.lock().unwrap_or_else(PoisonError::into_inner).push(event);
+        self.0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(event);
     }
 }
 
@@ -119,14 +122,25 @@ async fn live_the_spike_gate_holds_through_the_runner() -> Result<()> {
     assert_eq!(outcome.disposition, TurnDisposition::Completed);
     assert_eq!(outcome.reply.as_deref(), Some("MOCK_REPLY turns=1"));
     let entries: Vec<Value> = fixture.entries().split_off(since);
-    let calls: Vec<&Value> = entries.iter().filter(|entry| entry["rpc"] == "tools/call").collect();
+    let calls: Vec<&Value> = entries
+        .iter()
+        .filter(|entry| entry["rpc"] == "tools/call")
+        .collect();
     assert_eq!(calls.len(), 1, "{entries:?}");
     assert_eq!(calls[0]["seat"], "a");
-    let models: Vec<&Value> = entries.iter().filter(|entry| entry["kind"] == "model").collect();
-    let started = events.0.lock().unwrap_or_else(PoisonError::into_inner).iter().find_map(|event| match event {
-        Event::Started(started) => Some(started.clone()),
-        _ => None,
-    });
+    let models: Vec<&Value> = entries
+        .iter()
+        .filter(|entry| entry["kind"] == "model")
+        .collect();
+    let started = events
+        .0
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .iter()
+        .find_map(|event| match event {
+            Event::Started(started) => Some(started.clone()),
+            _ => None,
+        });
     let started = started.context("no started event")?;
     assert_eq!(started.version, PINNED);
     let offered: Vec<Value> = started.tools.iter().map(|tool| json!(tool)).collect();
@@ -134,31 +148,49 @@ async fn live_the_spike_gate_holds_through_the_runner() -> Result<()> {
     for model in &models {
         assert_eq!(model["tools"], json!(offered), "the model saw other tools");
     }
-    let usage = events.0.lock().unwrap_or_else(PoisonError::into_inner).iter().find_map(|event| match event {
-        Event::Usage { turn_id, usage } if turn_id == "t1" => Some(*usage),
-        _ => None,
-    });
+    let usage = events
+        .0
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .iter()
+        .find_map(|event| match event {
+            Event::Usage { turn_id, usage } if turn_id == "t1" => Some(*usage),
+            _ => None,
+        });
     assert_eq!(usage.map(|usage| usage.input_tokens), Some(200));
 
     let session = outcome.session_id;
     let slow = tokio::spawn(runner.run(request("t2", "SLOW please", Some(&session))));
     let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
     while !fixture.entries().iter().any(|entry| entry["key"] == "SLOW") {
-        anyhow::ensure!(tokio::time::Instant::now() < deadline, "the slow turn never reached the model");
+        anyhow::ensure!(
+            tokio::time::Instant::now() < deadline,
+            "the slow turn never reached the model"
+        );
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
     slow.abort();
-    while !fixture.entries().iter().any(|entry| entry["kind"] == "model-disconnect") {
-        anyhow::ensure!(tokio::time::Instant::now() < deadline, "the dropped turn kept its model call open");
+    while !fixture
+        .entries()
+        .iter()
+        .any(|entry| entry["kind"] == "model-disconnect")
+    {
+        anyhow::ensure!(
+            tokio::time::Instant::now() < deadline,
+            "the dropped turn kept its model call open"
+        );
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
-    let again = runner.run(request("t3", "PLAIN again", Some(&session))).await?;
+    let again = runner
+        .run(request("t3", "PLAIN again", Some(&session)))
+        .await?;
     // The same thread, without the cancelled turn's message: the binary keeps
     // only turns that ended, as the spike saw too.
     assert_eq!(again.reply.as_deref(), Some("MOCK_REPLY turns=2"));
     assert_eq!(again.session_id, session);
 
     harness.stop("scout").await?;
-    assert!(seat_support::processes_in(&root.path().join("instance")).is_empty());
+    let left = seat_support::processes_in(&root.path().join("instance"));
+    assert_eq!(left, Vec::<u32>::new());
     Ok(())
 }

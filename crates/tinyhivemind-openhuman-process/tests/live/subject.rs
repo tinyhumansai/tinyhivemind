@@ -9,7 +9,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::time::Duration;
-use tinyhivemind_host::harness::conformance::{EscapeFuture, ModelCall, ModelStep, Subject, ToolFault};
+use tinyhivemind_host::harness::conformance::{
+    EscapeFuture, ModelCall, ModelStep, Subject, ToolFault,
+};
 use tinyhivemind_host::harness::{Harness, SeatPlan, ToolEndpoint};
 use tinyhivemind_host::process::StopPolicy;
 use tinyhivemind_openhuman_process::{OpenHumanHarness, Options, Program};
@@ -26,7 +28,9 @@ pub(crate) fn requirements() -> Result<(PathBuf, PathBuf), String> {
         .ok_or("THM_OPENHUMAN_CORE is not set to the pinned openhuman-core")?;
     let node = std::env::var_os("THM_NODE").map(PathBuf::from).or_else(|| {
         let path = std::env::var_os("PATH")?;
-        std::env::split_paths(&path).map(|dir| dir.join("node")).find(|node| node.is_file())
+        std::env::split_paths(&path)
+            .map(|dir| dir.join("node"))
+            .find(|node| node.is_file())
     });
     let node = node.ok_or("node is neither THM_NODE nor on PATH, and the fixture needs it")?;
     Ok((binary, node))
@@ -42,7 +46,9 @@ pub(crate) struct Fixture {
 
 impl Fixture {
     pub(crate) async fn start(node: &Path, dir: &Path) -> std::io::Result<Self> {
-        let port = std::net::TcpListener::bind("127.0.0.1:0")?.local_addr()?.port();
+        let port = std::net::TcpListener::bind("127.0.0.1:0")?
+            .local_addr()?
+            .port();
         let script = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../docs/experiments/2026-11-25-process-harnesses/fixture/server.mjs");
         let log = dir.join("fixture.jsonl");
@@ -57,7 +63,11 @@ impl Fixture {
         let mut lines = BufReader::new(stdout).lines();
         while let Some(line) = lines.next_line().await? {
             if line.trim() == "ready" {
-                return Ok(Self { port, log, _child: child });
+                return Ok(Self {
+                    port,
+                    log,
+                    _child: child,
+                });
             }
         }
         Err(std::io::ErrorKind::UnexpectedEof.into())
@@ -153,7 +163,12 @@ impl Subject for LiveSubject {
 
     fn lose_sessions(&self) {
         let workspace = self.instance().join("state/ws/workspace");
-        for store in ["session_raw", "sessions", "session_db", "memory/conversations"] {
+        for store in [
+            "session_raw",
+            "sessions",
+            "session_db",
+            "memory/conversations",
+        ] {
             let _ = fs::remove_dir_all(workspace.join(store));
         }
     }
@@ -169,7 +184,11 @@ impl Subject for LiveSubject {
         };
         self.fault.store(code, Ordering::Relaxed);
         let marker = self.root.path().join("misconfigured");
-        let _ = if misconfigured { fs::write(marker, "") } else { fs::remove_file(marker) };
+        let _ = if misconfigured {
+            fs::write(marker, "")
+        } else {
+            fs::remove_file(marker)
+        };
     }
 
     fn misconfigure(&self) {

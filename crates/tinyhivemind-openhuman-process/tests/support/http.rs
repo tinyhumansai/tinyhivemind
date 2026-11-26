@@ -27,7 +27,10 @@ pub(crate) struct Request {
 impl Request {
     /// The header `name`, case-insensitively.
     pub(crate) fn header(&self, name: &str) -> Option<&str> {
-        let found = self.headers.iter().find(|(key, _)| key.eq_ignore_ascii_case(name));
+        let found = self
+            .headers
+            .iter()
+            .find(|(key, _)| key.eq_ignore_ascii_case(name));
         found.map(|(_, value)| value.as_str())
     }
 

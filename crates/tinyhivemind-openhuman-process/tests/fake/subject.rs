@@ -8,8 +8,8 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::os::unix::fs::PermissionsExt as _;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use tinyhivemind_host::harness::conformance::{
     CallState, EscapeFuture, ModelCall, ModelStep, Subject, ToolFault,

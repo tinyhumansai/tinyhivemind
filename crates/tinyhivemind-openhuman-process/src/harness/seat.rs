@@ -8,7 +8,9 @@ use serde_json::json;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use tinyhivemind_hives::{AgentRunner, TurnDisposition, TurnFuture, TurnOutcome, TurnRequest};
-use tinyhivemind_host::harness::{self, CancelFuture, CancellableRunner, Event, SeatPlan, ToolEndpoint};
+use tinyhivemind_host::harness::{
+    self, CancelFuture, CancellableRunner, Event, SeatPlan, ToolEndpoint,
+};
 use tokio::sync::{Mutex as AsyncMutex, watch};
 
 /// A seat and its instance, if one is running.
@@ -26,7 +28,10 @@ pub(super) struct Seat {
 }
 
 fn current(active: &Mutex<Option<Active>>) -> Option<Active> {
-    active.lock().unwrap_or_else(PoisonError::into_inner).clone()
+    active
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone()
 }
 
 fn clear(active: &Mutex<Option<Active>>) {
@@ -91,7 +96,10 @@ impl Seat {
         if let Some(session) = &request.session_id {
             let found = live
                 .client
-                .call("openhuman.threads_transcript_get", json!({"thread_id": session}))
+                .call(
+                    "openhuman.threads_transcript_get",
+                    json!({"thread_id": session}),
+                )
                 .await?;
             if found["data"]["hasTranscript"] != true {
                 return Err(Error::Resume(session.clone()));
@@ -104,7 +112,7 @@ impl Seat {
             client: &live.client,
             seat: &self.plan.seat.id,
             thread: &thread,
-            turn_id: &request.turn_id,
+            id: &request.turn_id,
             client_id: format!("thm-turn-{number}"),
             iterations: self.model.iterations,
             observer: self.plan.observer.as_ref(),

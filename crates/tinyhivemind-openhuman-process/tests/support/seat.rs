@@ -66,4 +66,3 @@ pub(crate) fn kill_all(pids: Vec<u32>) {
         }
     }
 }
-

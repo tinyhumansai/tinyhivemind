@@ -60,17 +60,26 @@ impl Drop for ScriptedModel {
 
 fn answer(state: &Arc<State>, request: &Request) -> Reply {
     if request.method == "GET" && request.path.ends_with("/models") {
-        return Reply::Json(200, json!({"object": "list", "data": [{"id": "mock", "object": "model"}]}));
+        return Reply::Json(
+            200,
+            json!({"object": "list", "data": [{"id": "mock", "object": "model"}]}),
+        );
     }
     if !request.path.ends_with("/chat/completions") {
         return Reply::Json(404, json!({}));
     }
     let body = request.json();
     let messages = body["messages"].as_array().cloned().unwrap_or_default();
-    let seen = messages.iter().filter(|message| message["role"] == "user").count();
+    let seen = messages
+        .iter()
+        .filter(|message| message["role"] == "user")
+        .count();
     let index = {
         let mut calls = lock(&state.calls);
-        calls.push(ModelCall { seen, state: CallState::Open });
+        calls.push(ModelCall {
+            seen,
+            state: CallState::Open,
+        });
         calls.len() - 1
     };
     let step = lock(&state.steps).pop_front().unwrap_or(ModelStep::Hang);
@@ -108,8 +117,14 @@ fn answer(state: &Arc<State>, request: &Request) -> Reply {
                 format!("data: {chunk}\n\n")
             };
             let frames = [
-                chunk(json!([{"index": 0, "delta": {"role": "assistant", "content": text}, "finish_reason": null}]), None),
-                chunk(json!([{"index": 0, "delta": {}, "finish_reason": "stop"}]), None),
+                chunk(
+                    json!([{"index": 0, "delta": {"role": "assistant", "content": text}, "finish_reason": null}]),
+                    None,
+                ),
+                chunk(
+                    json!([{"index": 0, "delta": {}, "finish_reason": "stop"}]),
+                    None,
+                ),
                 chunk(json!([]), Some(usage)),
                 "data: [DONE]\n\n".to_owned(),
             ];
