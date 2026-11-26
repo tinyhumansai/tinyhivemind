@@ -246,6 +246,12 @@ impl Instance {
 
     /// The pids of every member running now, the child among them.
     ///
+    /// Only [`Containment::Tree`] can list members. Under
+    /// [`Containment::ProcessGroup`] (and on every platform but Linux) the
+    /// group's members cannot be told apart, so this is the child's pid alone
+    /// while anything in the group is alive, the child's zombie included, and
+    /// empty once the group is gone. It never lists a descendant there.
+    ///
     /// # Errors
     /// [`Error::Table`] if the process table cannot be read,
     /// [`Error::Unproven`] if it cannot be read fast enough to find everyone,
