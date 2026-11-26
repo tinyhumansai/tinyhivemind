@@ -321,7 +321,8 @@ fn a_judged_seat_turns_every_tool_group_its_toolpacks_do_not_list_off() -> anyho
         assert_eq!(judged.mode(id), expected, "{id}");
     }
     // A seat of a package that names no harness keeps today's behaviour.
-    let unjudged = crate::deploy::profile::seat_groups(&runtime, &Default::default(), None)?;
+    let unjudged =
+        crate::deploy::profile::seat_groups(&runtime, &std::collections::BTreeMap::new(), None)?;
     assert_eq!(unjudged, None);
     Ok(())
 }

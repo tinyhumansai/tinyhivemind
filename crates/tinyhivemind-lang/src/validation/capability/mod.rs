@@ -301,38 +301,7 @@ impl Judge<'_, '_> {
         for k in permissions {
             self.permission_set(k);
         }
-        let packs = m
-            .runtime
-            .toolpacks
-            .iter()
-            .chain(from_profile.into_iter().flat_map(|p| &p.toolpacks))
-            .chain(&seat.toolpacks);
-        for k in indices(&m.toolpacks, packs, |v| &v.id) {
-            self.toolpack(k);
-        }
-        let hooks = from_profile
-            .into_iter()
-            .flat_map(|p| &p.hooks)
-            .chain(&seat.hooks);
-        for k in indices(&m.hooks, hooks, |v| &v.id) {
-            let hook = &m.hooks[k];
-            let name = format!("hooks.{}", hook.id);
-            self.declared(
-                "hook",
-                hook,
-                &crate::Hook::default(),
-                &format!("/hooks/{k}"),
-                &name,
-            );
-            if hook.event == HookEvent::Stop {
-                self.reject(
-                    Capability::StopHooks,
-                    format!("{name}.event"),
-                    format!("/hooks/{k}/event"),
-                );
-            }
-        }
-        let packs: Vec<&crate::Toolpack> = indices(
+        let packs = indices(
             &m.toolpacks,
             m.runtime
                 .toolpacks
@@ -340,10 +309,11 @@ impl Judge<'_, '_> {
                 .chain(from_profile.into_iter().flat_map(|p| &p.toolpacks))
                 .chain(&seat.toolpacks),
             |v| &v.id,
-        )
-        .into_iter()
-        .map(|k| &m.toolpacks[k])
-        .collect();
+        );
+        for k in &packs {
+            self.toolpack(*k);
+        }
+        let packs: Vec<&crate::Toolpack> = packs.into_iter().map(|k| &m.toolpacks[k]).collect();
         let mcp: Vec<&String> = from_profile
             .into_iter()
             .flat_map(|p| &p.mcp)
@@ -357,7 +327,29 @@ impl Judge<'_, '_> {
             .chain(packs.iter().flat_map(|pack| &pack.skills))
             .collect();
         self.reached(&mcp, &skills);
+        self.hooks(
+            from_profile
+                .into_iter()
+                .flat_map(|p| &p.hooks)
+                .chain(&seat.hooks),
+        );
         self.iterations(seat, i, p);
+    }
+
+    /// The hooks that run on the seat's turns, each walked at its
+    /// declaration; a `stop` hook is rejected.
+    fn hooks<'h>(&mut self, ids: impl IntoIterator<Item = &'h String>) {
+        let m = self.m;
+        for k in indices(&m.hooks, ids, |v| &v.id) {
+            let hook = &m.hooks[k];
+            let name = format!("hooks.{}", hook.id);
+            let at = format!("/hooks/{k}");
+            self.declared("hook", hook, &crate::Hook::default(), &at, &name);
+            if hook.event == HookEvent::Stop {
+                let (field, at) = (format!("{name}.event"), format!("{at}/event"));
+                self.reject(Capability::StopHooks, field, at);
+            }
+        }
     }
 
     /// One permission set that applies to the seat.

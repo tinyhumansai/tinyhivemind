@@ -337,5 +337,8 @@ fn a_runtime_harness_change_is_one_move_however_many_seats_inherit_it() {
     edit.runtime.harness = Some("codex".into());
     assert_eq!(super::resolve::moves(&base, &edit), ["/runtime/harness"]);
     base.runtime.harness = Some("codex".into());
-    assert!(super::resolve::moves(&base, &base.clone()).is_empty());
+    assert_eq!(
+        super::resolve::moves(&base, &base.clone()),
+        Vec::<String>::new()
+    );
 }
