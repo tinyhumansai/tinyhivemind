@@ -6,9 +6,13 @@ seat's `ToolEndpoint`; `withdraw_seat` refuses that bearer from then on;
 `shutdown` stops accepting, lets open requests finish within
 `ServerOptions::shutdown_grace`, and closes the listener.
 
-Bounds: `max_connections` connections at once (one request in flight each, so
-this bounds calls too; more wait to be accepted), a header read timeout, a body
-timeout, and `max_body_bytes`.
+Bounds: `max_calls` calls in flight across seats and `max_calls_per_seat` per
+seat, each held by the call's own task until it finishes, so a client that
+hangs up does not free its slot early; a header read timeout (which also
+closes idle and unauthenticated connections, so accepting needs no bound and
+idle sockets cannot keep a seat waiting); a body timeout; `max_body_bytes`;
+and `max_records` and `max_record_bytes` per seat's call records. A
+background task drops the records of every turn that ends.
 
 Protocol: revisions `2025-11-25`, `2025-06-18` and `2025-03-26`. The spike's
 harnesses asked for the first two (OpenHuman 0.64.15 and OpenClaw

@@ -158,3 +158,6 @@ fn identified(mut schema: Value) -> Value {
     }
     schema
 }
+
+#[cfg(test)]
+mod test;

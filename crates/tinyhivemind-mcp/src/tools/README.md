@@ -9,15 +9,18 @@ schema gets the required `turn` and `call`, which dispatch removes before
 anything else sees the arguments.
 
 A call then goes: turn check (refused unless it is the seat's running turn),
-argument validation, and one of two records.
+argument validation (a hive tool's declaration, or a program's `args` schema),
+and one of two records.
 
 - A coordinator action with no matching hook goes to the host's belt as an
   identified call; the coordinator records it in the transaction of its effect.
 - Everything else (executable tools, `create_agent`, any hooked call) uses the
   in-memory `Ledger`: a known call is answered from it, or refused while its
-  outcome is unknown or when its `call` was used for something else; then
-  policy: the host's send and management policy (`Belt::authorize`) for a
-  hive tool, the access gate for a program; then "started" is recorded, the hooks and tool run, and
+  outcome is unknown or when its `call` was used for something else; then the
+  host's send and management policy (`Belt::authorize`) for a hive tool; then
+  "started" is recorded, only if the coordinator still says the turn is
+  running; then the access gate for a program (a denial drops the record);
+  then the turn is checked again, the hooks and tool run, and
   "finished" is recorded. A hooked coordinator action has both records.
 
 A refusal before any hook runs records nothing. The belt checks send and
@@ -31,3 +34,5 @@ so a client that hangs up does not cancel it halfway.
 | `dispatch.rs` | One call, from arguments to result |
 | `ledger.rs` | Started and finished records of out-of-transaction calls |
 | `gate.rs` | `read_only`, `supervised` with the host's approver, `autonomous` |
+| `schema.rs` | Executable tool arguments checked against their declared `args` |
+| `test.rs` | Ledger turn rules and bounds; the schema checker |

@@ -265,7 +265,10 @@ These details were left open above and are fixed by `tinyhivemind-mcp`:
 - **Admission.** Exactly one `Host`, `127.0.0.1:<port>` or `localhost:<port>`,
   else 403; any `Origin` 403; a path other than `/mcp` 404; a wrong or missing
   bearer 401. Bodies are bounded (1 MiB by default, 413), as are header and
-  body time and open connections, which also bounds calls in flight.
+  body time. Connections are not bounded: an idle or unauthenticated one is
+  closed after the header timeout and holds no call slot, so it cannot keep a
+  seat waiting. Calls in flight are bounded across seats and per seat, and a
+  call keeps its slot until it finishes, even when its client hung up.
 - **Results.** A refusal is the tool's error result, which the model reads; only
   an unknown tool is a JSON-RPC error. Prompt lists are empty as well as
   resource lists. A call runs on its own task, so a client hanging up does not
@@ -277,11 +280,31 @@ These details were left open above and are fixed by `tinyhivemind-mcp`:
   records nothing. The host's belt checks send and management policy again as
   it dispatches, so a policy that changes between the two checks is judged by
   the second.
+- **Records.** An out-of-transaction call is recorded as started only after the
+  coordinator confirms, inside the record's lock, that its turn is running, and
+  the turn is checked again after approval and before the tool runs. A call
+  held while its turn ended therefore runs nothing and cannot touch the newer
+  turn's records. A seat's records are bounded in count and bytes; a call past
+  either bound is refused, never recorded by evicting another. Records are
+  dropped when their turn ends and when the seat is withdrawn. A retry of a
+  recorded call is answered before policy is asked again: it acts on nothing.
 - **Approval.** The approver is the host's `Approver` port, asked with a
-  `ToolApproval` whose `call_id` is the model's `call`.
+  `ToolApproval` whose `call_id` is the model's `call`. The call is recorded as
+  pending first, so a retry while the approver decides is refused rather than
+  asked twice; a denial removes the record.
+- **Tool names.** A seat's non-empty `tools.allow` serves only the tools it
+  names plus the seat's executable tools, as on the linked path; a tool not
+  served is not listed.
+- **Arguments.** An executable tool's arguments are checked against its `args`
+  schema before the record, approver and hooks, so a misfit records nothing.
+  The checker covers `type`, `enum`, `const`, `properties`, `required`,
+  `additionalProperties`, `items` and the numeric, length and item-count
+  bounds, with annotations ignored; a schema using any other keyword is
+  refused when its seat is served.
 - **Refused seats.** A seat with package MCP servers (not proxied yet), with a
-  `sandbox` other than `none`, or with a tool declaring `turn` or `call` is
-  refused when it is served, as well as by `check`.
+  `sandbox` other than `none`, with a tool declaring `turn` or `call`, or with
+  an argument schema keyword the server cannot check is refused when it is
+  served, as well as by `check` for the first three.
 
 `turn` protects against stale calls, not against a hostile model: the model can
 read it. A seat acting within its own current turn has its own authority anyway.
