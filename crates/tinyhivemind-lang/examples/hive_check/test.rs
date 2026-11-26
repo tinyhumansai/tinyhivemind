@@ -135,7 +135,11 @@ fn the_broken_harnesses_package_reports_each_harness_finding_once() {
         ("/harnesses/1/isolation", "integration"),
         ("/profiles/1/harness", "integration"),
         ("/profiles/0/subagents", "integration"),
+        // Rejected by both the openclaw and the codex seat, each with its
+        // own kind's reason.
         ("/providers/0/credential", "integration"),
+        ("/providers/0/credential", "integration"),
+        ("/runtime/sandbox", "integration"),
         ("/runtime/sandbox", "integration"),
         ("/tools/0/args/properties/call", "integration"),
     ]

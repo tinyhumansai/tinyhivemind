@@ -60,6 +60,13 @@ pub(super) fn capabilities(package: &Package, found: &mut Findings) {
             && harness.resolved_isolation() == crate::Isolation::Deployment
             && seen.len() > 1
         {
+            // At the isolation that shares the instance, or at the entry
+            // when it is the kind's default and has no field of its own.
+            let at = if harness.isolation.is_some() {
+                format!("/harnesses/{h}/isolation")
+            } else {
+                format!("/harnesses/{h}")
+            };
             out.push(
                 Error::Integration {
                     field: format!("harnesses.{}.isolation", harness.id),
@@ -67,7 +74,7 @@ pub(super) fn capabilities(package: &Package, found: &mut Findings) {
                              use isolation seat"
                         .into(),
                 },
-                format!("/harnesses/{h}/isolation"),
+                at,
             );
         }
     }
@@ -76,17 +83,18 @@ pub(super) fn capabilities(package: &Package, found: &mut Findings) {
     }
 }
 
-/// Findings in the order met, one per location: a setting several seats
-/// share is reported once, for the first seat that resolves to it.
+/// Findings in the order met, one per location and message: a setting
+/// several seats share is reported once per harness kind that rejects it,
+/// each with its own kind's reason.
 #[derive(Default)]
 struct Out {
-    seen: BTreeSet<String>,
+    seen: BTreeSet<(String, String)>,
     findings: Vec<(Error, String)>,
 }
 
 impl Out {
     fn push(&mut self, error: Error, at: String) {
-        if self.seen.insert(at.clone()) {
+        if self.seen.insert((at.clone(), error.to_string())) {
             self.findings.push((error, at));
         }
     }
@@ -219,7 +227,9 @@ impl Judge<'_, '_> {
                 Some(Field::Judged(capability)) if value != base => {
                     self.reject(capability, name, at);
                 }
-                _ => {}
+                // Default-deny: a field with no decision is never passed.
+                None => self.reject(Capability::Undecided, name, at),
+                Some(Field::Judged(_) | Field::Structure | Field::Special) => {}
             }
         }
     }
@@ -322,6 +332,31 @@ impl Judge<'_, '_> {
                 );
             }
         }
+        let packs: Vec<&crate::Toolpack> = indices(
+            &m.toolpacks,
+            m.runtime
+                .toolpacks
+                .iter()
+                .chain(from_profile.into_iter().flat_map(|p| &p.toolpacks))
+                .chain(&seat.toolpacks),
+            |v| &v.id,
+        )
+        .into_iter()
+        .map(|k| &m.toolpacks[k])
+        .collect();
+        let mcp: Vec<&String> = from_profile
+            .into_iter()
+            .flat_map(|p| &p.mcp)
+            .chain(&seat.mcp)
+            .chain(packs.iter().flat_map(|pack| &pack.mcp))
+            .collect();
+        let skills: Vec<&String> = from_profile
+            .into_iter()
+            .flat_map(|p| &p.skills)
+            .chain(&seat.skills)
+            .chain(packs.iter().flat_map(|pack| &pack.skills))
+            .collect();
+        self.reached(&mcp, &skills);
         self.iterations(seat, i, p);
     }
 
@@ -370,7 +405,38 @@ impl Judge<'_, '_> {
             }
         }
         for t in indices(&m.tools, &pack.tools, |v| &v.id) {
+            let tool = &m.tools[t];
+            let name = format!("tools.{}", tool.id);
+            self.declared("tool", tool, tool, &format!("/tools/{t}"), &name);
             self.reserved(t);
+        }
+    }
+
+    /// The MCP servers and skills a seat reaches, by id, each walked at its
+    /// declaration.
+    fn reached(&mut self, mcp: &[&String], skills: &[&String]) {
+        let m = self.m;
+        for k in indices(&m.mcp, mcp.iter().copied(), |v| &v.id) {
+            let server = &m.mcp[k];
+            let name = format!("mcp.{}", server.id);
+            self.declared(
+                "mcp",
+                server,
+                &crate::McpServer::default(),
+                &format!("/mcp/{k}"),
+                &name,
+            );
+        }
+        for k in indices(&m.skills, skills.iter().copied(), |v| &v.id) {
+            let skill = &m.skills[k];
+            let name = format!("skills.{}", skill.id);
+            self.declared(
+                "skill",
+                skill,
+                &crate::Skill::default(),
+                &format!("/skills/{k}"),
+                &name,
+            );
         }
     }
 
@@ -469,6 +535,13 @@ impl Judge<'_, '_> {
             "session",
         );
         self.declared("jev", &m.jev, &crate::JevSettings::default(), "/jev", "jev");
+        // The manifest's own fields (context, features, workflows), then
+        // each workflow; the sections are walked where a seat reaches them.
+        self.declared("manifest", m, &Manifest::default(), "", "hive");
+        for (k, job) in m.workflows.iter().enumerate() {
+            let name = format!("workflows.{}", job.id);
+            self.declared("workflow", job, job, &format!("/workflows/{k}"), &name);
+        }
     }
 }
 

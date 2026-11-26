@@ -15,7 +15,7 @@ part of the language; each one's `README.md` opens with what it demonstrates.
 | `math-panel/` | 5 | 1 | Five unreliable seats solving exact problems (`sim.json`) |
 | `math-swarm/` | 50 | 5 | Fifty seats in five linked desks on the same problems, rounds of ten |
 | `integrations/` | 2 | 1 | Every integration section: runtime, provider, models, an MCP server, a skill, bash and Python tools, a toolpack, permissions, profiles, a script hook, session, Jev, features and a workflow. `hive_check` accepts it; `broken/integrations` is the same package with five faults |
-| `mixed-harnesses/` | 3 | 1 | A `harnesses` section: one seat on the default `openhuman`, one on a shared OpenClaw instance, one on Codex through its profile, with only settings every kind honours. `hive_check` accepts it; `broken/harnesses` is the same package with eight faults |
+| `mixed-harnesses/` | 3 | 1 | A `harnesses` section: one seat on the default `openhuman`, one on a shared OpenClaw instance, one on Codex through its profile, with only settings every kind honours. `hive_check` accepts it; `broken/harnesses` is the same package with eight faults (ten findings) |
 | `euler-hive/` | 14 | 5 | A live, problem-agnostic hive: per-seat tool access (web search on research only, Python on compute and verify only), referrals, an agent memory per seat and a shared verified pool. Its own test is `tests/euler_hive_package.rs`. |
 
 `sim.json` and `script.json` are neither canonical nor Markdown, so `parse`

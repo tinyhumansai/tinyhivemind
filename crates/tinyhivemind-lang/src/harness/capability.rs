@@ -97,6 +97,9 @@ pub enum Capability {
     SqliteSessions,
     /// `memory_engine = "memory"`.
     InProcessMemory,
+    /// A field with no decision at all: the default-deny fallback, which the
+    /// field map's own test keeps unreachable for the language's types.
+    Undecided,
 }
 
 /// How one kind honours one [`Capability`].
@@ -144,7 +147,7 @@ impl Support {
 
 impl Capability {
     /// Every capability, in the order of the spec's table.
-    pub const ALL: [Self; 40] = [
+    pub const ALL: [Self; 41] = [
         Self::Essentials,
         Self::OpenaiEndpoint,
         Self::OpenaiDefaultEndpoint,
@@ -185,6 +188,7 @@ impl Capability {
         Self::MaxAgents,
         Self::SqliteSessions,
         Self::InProcessMemory,
+        Self::Undecided,
     ];
 
     /// The row: support for `openhuman`, `openclaw` and `codex`, in that
@@ -237,7 +241,8 @@ impl Capability {
             | Self::Concurrency
             | Self::MaxAgents
             | Self::SqliteSessions
-            | Self::InProcessMemory => [D, D, D],
+            | Self::InProcessMemory
+            | Self::Undecided => [D, D, D],
             Self::BuiltinToolRules => [R, D, D],
             // OpenHuman honours a limit up to its fixed cap.
             Self::IterationLimit => [H, D, D],
@@ -325,6 +330,7 @@ impl fmt::Display for Capability {
             Self::MaxAgents => "an agent limit",
             Self::SqliteSessions => "sqlite sessions",
             Self::InProcessMemory => "an in-process memory engine",
+            Self::Undecided => "a setting the harness spec has not decided",
         })
     }
 }

@@ -1,8 +1,10 @@
 # broken/harnesses
 
 The [`mixed-harnesses`](../../hives/mixed-harnesses/README.md) package with
-eight deliberate faults, one per harness diagnostic, so `hive_check` reports
-each once. The report is pinned by
+eight deliberate faults, one per harness diagnostic. `hive_check` reports ten
+findings: the provider credential and the runtime sandbox are each rejected
+twice, once by the openclaw seat and once by the codex seat, with that kind's
+reason. The report is pinned by
 `the_broken_harnesses_package_reports_each_harness_finding_once` in
 `../../hive_check/test.rs`.
 

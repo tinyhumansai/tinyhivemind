@@ -90,14 +90,21 @@ pub(crate) fn moves(base: &Manifest, edit: &Manifest) -> Vec<String> {
             Some(before) => named(base, before).map(|(id, _)| id),
             None => edit.runtime.harness.as_deref(),
         };
-        if seat.harness.as_ref() != was {
-            found.push(Origin::Seat.pointer(i));
+        let at = if seat.harness.as_ref() != was {
+            Origin::Seat.pointer(i)
         } else if resolved.map(|(id, _)| id) != baseline {
             let profile_changed = before.is_none_or(|before| before.profile != seat.profile);
-            found.push(match resolved {
+            match resolved {
                 Some((_, origin)) if !profile_changed => origin.pointer(i),
                 _ => format!("/seats/{i}/profile"),
-            });
+            }
+        } else {
+            continue;
+        };
+        // Every seat that inherits a changed `runtime.harness` moves at one
+        // field, and is one finding.
+        if !found.contains(&at) {
+            found.push(at);
         }
     }
     found

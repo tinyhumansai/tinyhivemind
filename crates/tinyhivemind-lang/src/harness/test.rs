@@ -206,6 +206,7 @@ fn the_capability_table_is_the_spec_table() {
         (C::MaxAgents, [D, D, D]),
         (C::SqliteSessions, [D, D, D]),
         (C::InProcessMemory, [D, D, D]),
+        (C::Undecided, [D, D, D]),
     ];
     assert_eq!(
         table.iter().map(|(c, _)| *c).collect::<Vec<_>>(),
