@@ -1,5 +1,6 @@
 //! Which harness a seat runs on.
 mod capability;
+pub(crate) mod fields;
 pub(crate) mod resolve;
 mod types;
 pub use capability::{Capability, ModelApi, Support, Unlock};

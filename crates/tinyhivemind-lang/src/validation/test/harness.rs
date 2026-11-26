@@ -125,8 +125,10 @@ fn capabilities_are_judged_only_once_a_package_names_a_harness() {
         "/providers/0/credential",
         "/permissions/0/sandbox",
         "/session/compact_context",
-        "/jev",
+        "/jev/top_k",
         "/profiles/0/subagents",
+        "/runtime/deployment_id",
+        "/seats/0/tools/deny",
     ] {
         assert!(pointers.contains(&pointer), "{pointer}: {found:?}");
     }
@@ -201,7 +203,7 @@ fn a_sandbox_and_built_in_tool_settings_are_rejected() {
             json!(["profiles", 0, "definition_base", "coder"]),
             "/profiles/0/definition_base",
         ),
-        (json!(["jev", "top_k", 5]), "/jev"),
+        (json!(["jev", "top_k", 5]), "/jev/top_k"),
         (
             json!(["session", "max_tool_iterations", 4]),
             "/session/max_tool_iterations",
@@ -247,7 +249,7 @@ fn openhuman_rejects_more_iterations_than_its_fixed_cap() {
     // only the `openhuman` one reports it.
     let found = mixed(|m| m["runtime"]["limits"]["iterations"] = json!(20));
     assert_eq!(integration_pointers(&found), ["/runtime/limits/iterations"]);
-    let found = mixed(|m| m["runtime"]["limits"]["iterations"] = json!(8));
+    let found = mixed(|m| m["seats"][0]["limits"]["iterations"] = json!(8));
     assert_eq!(found, vec![]);
 }
 
@@ -330,4 +332,141 @@ fn a_seat_prompt_frontmatter_may_restate_its_own_harness_only() {
         found.iter().any(|d| d.rule == Rule::Frontmatter),
         "{found:?}"
     );
+}
+
+/// `mixed-harnesses` with the JSON at `path` (keys and indices, then the
+/// value) set.
+fn mixed_at(path: &Value) -> Vec<Diagnostic> {
+    let path = path.as_array().unwrap();
+    mixed(|m| {
+        let (value, keys) = path.split_last().unwrap();
+        let mut at = &mut *m;
+        for key in keys {
+            at = match key {
+                Value::String(key) => &mut at[key.as_str()],
+                Value::Number(i) => &mut at[usize::try_from(i.as_u64().unwrap()).unwrap()],
+                _ => unreachable!(),
+            };
+        }
+        *at = value.clone();
+    })
+}
+
+/// A field the spec's table does not list is rejected on every kind, at
+/// its own pointer: nothing is accepted and left unenforced.
+#[test]
+fn every_field_the_spec_does_not_decide_is_rejected_where_it_is_set() {
+    for (edit, pointer) in [
+        (
+            json!(["runtime", "include_user_skills", true]),
+            "/runtime/include_user_skills",
+        ),
+        (
+            json!(["runtime", "limits", "budget_usd", 1.0]),
+            "/runtime/limits/budget_usd",
+        ),
+        (
+            json!(["models", 0, "temperature", 0.2]),
+            "/models/0/temperature",
+        ),
+        (
+            json!(["models", 0, "max_tokens", 100]),
+            "/models/0/max_tokens",
+        ),
+        (
+            json!(["profiles", 0, "bare_prompt", true]),
+            "/profiles/0/bare_prompt",
+        ),
+        (
+            json!(["permissions", 0, "allow_tools", ["word_count"]]),
+            "/permissions/0/allow_tools",
+        ),
+        (
+            json!(["permissions", 0, "deny_tools", ["word_count"]]),
+            "/permissions/0/deny_tools",
+        ),
+        (
+            json!(["permissions", 0, "send_destinations", ["floor"]]),
+            "/permissions/0/send_destinations",
+        ),
+        (
+            json!(["permissions", 0, "send_operations", ["post"]]),
+            "/permissions/0/send_operations",
+        ),
+        (
+            json!(["seats", 0, "tools", "deny", ["web_search"]]),
+            "/seats/0/tools/deny",
+        ),
+        (
+            json!(["profiles", 0, "tools", "allow", ["word_count"]]),
+            "/profiles/0/tools/allow",
+        ),
+        (
+            json!(["seats", 1, "limits", "iterations", 4]),
+            "/seats/1/limits/iterations",
+        ),
+        (
+            json!(["seats", 0, "config", {"flavour": "plain"}]),
+            "/seats/0/config",
+        ),
+        (
+            json!(["seats", 0, "agent_id", "lead-agent"]),
+            "/seats/0/agent_id",
+        ),
+        (
+            json!(["runtime", "workspace", "/srv/hive"]),
+            "/runtime/workspace",
+        ),
+        (
+            json!(["runtime", "deployment_id", "mixed"]),
+            "/runtime/deployment_id",
+        ),
+        (json!(["runtime", "concurrency", 2]), "/runtime/concurrency"),
+        (json!(["runtime", "max_agents", 3]), "/runtime/max_agents"),
+        (
+            json!(["runtime", "memory_engine", "memory"]),
+            "/runtime/memory_engine",
+        ),
+    ] {
+        assert_eq!(integration_pointers(&mixed_at(&edit)), [pointer], "{edit}");
+    }
+    // Skills are rejected wherever a seat receives them, even unresolved.
+    let found = mixed_at(&json!(["seats", 0, "skills", ["notes"]]));
+    assert!(
+        integration_pointers(&found).contains(&"/seats/0/skills"),
+        "{found:?}"
+    );
+    let found = mixed_at(&json!(["toolpacks", 0, "skills", ["notes"]]));
+    assert!(
+        integration_pointers(&found).contains(&"/toolpacks/0/skills"),
+        "{found:?}"
+    );
+    let found = mixed(|m| {
+        m["runtime"]["session_store"] = json!("sqlite");
+        m["runtime"]["workspace"] = json!("/srv/hive");
+    });
+    assert!(
+        integration_pointers(&found).contains(&"/runtime/session_store"),
+        "{found:?}"
+    );
+    // OpenHuman honours an iteration limit up to its cap.
+    assert_eq!(
+        mixed_at(&json!(["seats", 0, "limits", "iterations", 4])),
+        vec![]
+    );
+}
+
+#[test]
+fn a_stop_hook_is_rejected_and_a_tool_hook_is_the_hosts() {
+    let with_hook = |event: &str| {
+        mixed(|m| {
+            m["hooks"] = json!([{"id": "done", "event": event, "run": "word_count"}]);
+            if event == "stop" {
+                m["hooks"][0]["matcher"] = json!(null);
+            }
+            m["seats"][0]["hooks"] = json!(["done"]);
+        })
+    };
+    assert_eq!(integration_pointers(&with_hook("stop")), ["/hooks/0/event"]);
+    assert_eq!(with_hook("pre_tool_use"), vec![]);
 }
