@@ -310,7 +310,7 @@ dependencies = [
  "io-lifetimes 3.0.1",
  "ipnet",
  "maybe-owned",
- "rustix 1.1.5",
+ "rustix 1.1.6",
  "rustix-linux-procfs",
  "windows-sys 0.61.2",
  "winx",
@@ -325,7 +325,7 @@ dependencies = [
  "cap-primitives",
  "io-extras",
  "io-lifetimes 3.0.1",
- "rustix 1.1.5",
+ "rustix 1.1.6",
 ]
 
 [[package]]
@@ -882,7 +882,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94e7099f6313ecacbe1256e8ff9d617b75d1bcb16a6fddef94866d225a01a14a"
 dependencies = [
  "io-lifetimes 2.0.4",
- "rustix 1.1.5",
+ "rustix 1.1.6",
  "windows-sys 0.52.0",
 ]
 
@@ -902,7 +902,7 @@ version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e72ed92b67c146290f88e9c89d60ca163ea417a446f61ffd7b72df3e7f1dfd5"
 dependencies = [
- "rustix 1.1.5",
+ "rustix 1.1.6",
  "windows-sys 0.61.2",
 ]
 
@@ -2633,9 +2633,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "1.1.5"
+version = "1.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "891efababe418670775f199f0d233d84843c227a0949a883ce15b37c78d6629d"
+checksum = "e5e76742e5294153d4dde1207dbec5bdd81eef6fabdc0d2118babadabfd858aa"
 dependencies = [
  "bitflags 2.13.2",
  "errno",
@@ -2651,7 +2651,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2fc84bf7e9aa16c4f2c758f27412dc9841341e16aa682d9c7ac308fe3ee12056"
 dependencies = [
  "once_cell",
- "rustix 1.1.5",
+ "rustix 1.1.6",
 ]
 
 [[package]]
@@ -3128,7 +3128,7 @@ dependencies = [
  "fastrand",
  "getrandom 0.3.4",
  "once_cell",
- "rustix 1.1.5",
+ "rustix 1.1.6",
  "windows-sys 0.61.2",
 ]
 
@@ -3207,7 +3207,7 @@ dependencies = [
  "libc",
  "regex",
  "reqwest",
- "rustix 1.1.5",
+ "rustix 1.1.6",
  "serde",
  "serde_json",
  "sha2 0.11.0",
@@ -3248,7 +3248,7 @@ dependencies = [
  "parking_lot",
  "regex",
  "reqwest",
- "rustix 1.1.5",
+ "rustix 1.1.6",
  "serde",
  "serde_json",
  "sha2 0.11.0",
@@ -3568,6 +3568,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "tinyhivemind-host"
+version = "0.2.1"
+dependencies = [
+ "anyhow",
+ "rustix 1.1.6",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tinyhivemind-core",
+ "tinyhivemind-hives",
+ "tinyhivemind-lang",
+ "tinytools",
+ "tokio",
+]
+
+[[package]]
 name = "tinyhivemind-lang"
 version = "0.2.1"
 dependencies = [
@@ -3576,6 +3593,25 @@ dependencies = [
  "sha2 0.10.9",
  "thiserror",
  "tinyhivemind-core",
+]
+
+[[package]]
+name = "tinyhivemind-mcp"
+version = "0.2.1"
+dependencies = [
+ "getrandom 0.3.4",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "serde_json",
+ "subtle",
+ "tempfile",
+ "thiserror",
+ "tinyhivemind-exec",
+ "tinyhivemind-hives",
+ "tinyhivemind-host",
+ "tinyhivemind-lang",
+ "tokio",
 ]
 
 [[package]]
@@ -3596,12 +3632,30 @@ dependencies = [
  "tinyhivemind-core",
  "tinyhivemind-exec",
  "tinyhivemind-hives",
+ "tinyhivemind-host",
  "tinyhivemind-lang",
  "tinymemory-api",
  "tinymemory-tools",
  "tinytools",
  "tokio",
  "wiremock",
+]
+
+[[package]]
+name = "tinyhivemind-openhuman-process"
+version = "0.2.1"
+dependencies = [
+ "anyhow",
+ "reqwest",
+ "rustix 1.1.6",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tinyhivemind-hives",
+ "tinyhivemind-host",
+ "tinyhivemind-lang",
+ "tokio",
+ "toml 0.8.23",
 ]
 
 [[package]]
@@ -3857,7 +3911,7 @@ version = "0.5.1"
 dependencies = [
  "cap-fs-ext",
  "cap-std",
- "rustix 1.1.5",
+ "rustix 1.1.6",
  "serde",
  "serde_json",
  "serde_norway",
@@ -4018,7 +4072,7 @@ dependencies = [
  "fs4",
  "getrandom 0.4.3",
  "hkdf 0.13.0",
- "rustix 1.1.5",
+ "rustix 1.1.6",
  "serde",
  "serde_json",
  "sha2 0.11.0",
@@ -5052,7 +5106,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32e45ad4206f6d2479085147f02bc2ef834ac85886624a23575ae137c8aa8156"
 dependencies = [
  "libc",
- "rustix 1.1.5",
+ "rustix 1.1.6",
 ]
 
 [[package]]
@@ -5264,6 +5318,10 @@ name = "tinychannels"
 version = "0.1.42"
 
 [[patch.unused]]
+name = "tinytools-std"
+version = "0.6.0"
+
+[[patch.unused]]
 name = "tinystoragedrivers-testkit"
 version = "2.1.0"
 
@@ -5274,7 +5332,3 @@ version = "0.5.0"
 [[patch.unused]]
 name = "tinystoragedrivers-testkit"
 version = "2.1.0"
-
-[[patch.unused]]
-name = "tinytools-std"
-version = "0.6.0"

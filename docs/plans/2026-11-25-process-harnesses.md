@@ -38,7 +38,7 @@ commits a whole `StoredState` in one compare-and-swap, so the change is:
   their behaviour for the linked adapter.
 
 In the server: the started and finished record for executable tools, proxied MCP
-calls and `create_agent`.
+calls, `create_agent` and any call a hook matches, and the `autonomy` gate.
 
 Done when tests refuse: a wrong bearer, another seat's episode, a stale `turn`, a
 call with no running turn, a forged actor, a bad `Host`, any `Origin`, an
@@ -50,7 +50,8 @@ values both act; reuse with different arguments or another tool is refused, as
 are a missing `call` and a retry whose outcome is unknown; a failed commit leaves
 neither effect nor record; the record survives a storage reload of a running turn
 and an older snapshot still loads; after a coordinator restart the retry is
-refused; a hook-denied call records nothing and may be corrected; two sends with
+refused; a hook-denied call is recorded, a retry reruns no hook, and a corrected call uses
+a new `call`; two sends with
 one `message_id` under different calls are one message.
 
 ## 3. Schema
@@ -71,9 +72,12 @@ cases are diagnosed at their location; a roster-only edit cannot change `harness
 
 - **4a. `tinyhivemind-openclaw`:** handshake with Ed25519 device identity,
   `agent` and its second response, `chat.abort`, generated config, recovery hold.
-- **4b. OpenHuman process runner** in `tinyhivemind-openhuman`, beside the linked
-  path: workspace and config per seat, `web_chat` and `/events`, `web_cancel`,
-  start-up verification, approvals through `list_pending` and `decide`.
+- **4b. OpenHuman process runner** in `tinyhivemind-openhuman-process`, a crate
+  beside the linked adapter rather than a module of it, so that step 6 deletes
+  the adapter without touching it: workspace and config per seat, `web_chat` and
+  `/events`, `web_cancel`, start-up verification, approvals through the
+  `approval_request` event and `decide`. Done: conformance offline and `live_*`
+  on 0.64.15.
 - **4c. `tinyhivemind-codex`:** app-server over stdio, pinned catalog, per-thread
   MCP. Medulla's `codex_app_server` is the reference for framing; its silent new
   thread on a failed resume is not copied.

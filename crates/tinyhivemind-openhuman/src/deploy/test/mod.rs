@@ -1,9 +1,10 @@
 //! Deployment construction and policy regression tests.
-use crate::config::HiveConfig;
+use crate::config::{HiveConfig, Validate as _};
 use crate::deploy::{EnvironmentSecrets, HiveDeployment};
 #[tokio::test]
 async fn refuses_unavailable_host_session_storage_before_starting_runtime() -> anyhow::Result<()> {
-    let config = HiveConfig::from_json(r#"{"runtime":{"session_store":"host"}}"#)?.validate()?;
+    let config = serde_json::from_str::<HiveConfig>(r#"{"runtime":{"session_store":"host"}}"#)?
+        .validate()?;
     let result = Box::pin(HiveDeployment::build(
         config,
         std::sync::Arc::new(EnvironmentSecrets),

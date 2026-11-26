@@ -48,19 +48,19 @@ pub(crate) mod config;
 pub mod deploy;
 mod error;
 mod host;
-pub mod journal;
 pub mod language;
 mod memory;
 #[cfg(any(test, feature = "offline"))]
 pub mod offline;
 mod tools;
-pub use error::{ConfigError, Error, Result};
+pub use config::ConfigError;
+pub use error::{Error, Result};
 pub use host::{
     AgentFactory, AgentFuture, HostedTurn, ManagementAuthorizer, ManagementRequest, OpenHumanHost,
     RegisteredAgent, SendAuthorizer, SendRequest, TURN_TIMEOUT, TurnHooks, TurnOptions,
     TurnProgressSink, TurnScope,
 };
-pub use journal::MemoryLog;
 pub use memory::{HiveMemory, HiveMemoryStore};
+pub use tinyhivemind_host::journal::{self, MemoryLog};
 #[cfg(test)]
 pub(crate) static RUNTIME_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());

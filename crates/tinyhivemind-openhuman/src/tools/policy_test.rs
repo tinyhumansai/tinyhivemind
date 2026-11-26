@@ -2,8 +2,9 @@
 #![allow(clippy::unwrap_used)]
 use super::test::{active, registered_coordinator};
 use super::*;
-use crate::{SendAuthorizer, SendRequest};
+use crate::{Result, SendAuthorizer, SendRequest};
 use std::sync::{Arc, Mutex};
+use tinyhivemind_hives::HiveInfo;
 
 /// Refuses any body mentioning "secret"; records every request it sees.
 #[derive(Default)]
@@ -140,19 +141,4 @@ async fn admitted_sends_execute_and_other_tools_are_not_consulted() {
         host.clone().with_send_policy(policy.clone()),
         Err(Error::ManagementAlreadyStarted)
     ));
-}
-#[test]
-fn send_request_wire_shape_is_explicit() {
-    let request = SendRequest::Hive {
-        hive_id: "h".into(),
-        body: "b".into(),
-        thread: Some(3),
-        only_for: vec![],
-    };
-    let wire = serde_json::json!({"Hive":{"hive_id":"h","body":"b","thread":3,"only_for":[]}});
-    assert_eq!(serde_json::to_value(&request).unwrap(), wire);
-    assert_eq!(
-        serde_json::from_value::<SendRequest>(wire).unwrap(),
-        request
-    );
 }

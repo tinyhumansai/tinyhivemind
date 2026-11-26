@@ -41,100 +41,10 @@ impl Coordinator {
         request: SendMessage,
         scheduled_job_id: Option<String>,
     ) -> Result<Receipt> {
-        identifier(&request.message_id, "message id")?;
-        if request.message_id.starts_with("hivemind:") {
-            return Err(Error::InvalidIdentifier("reserved message id"));
-        }
+        admissible(&request)?;
         let retention = self.inner.options.retention;
-        self.update(|state| {
-            let scheduled_job_id = scheduled_job_id.clone().or_else(|| {
-                state
-                    .running
-                    .get(&request.sender)
-                    .and_then(|running| running.request.scheduled_job_id.clone())
-            });
-            if let Some(receipt) = retry_receipt(state, &request, scheduled_job_id.as_deref())? {
-                return Ok(receipt);
-            }
-            let recipients = recipients(state, &request)?;
-            let only_for = narrow_readers(
-                state,
-                &request.destination,
-                request.thread,
-                request.only_for.clone(),
-            )?;
-            let sequence = next_sequence(state)?;
-            let episode_id = matches!(request.destination, Destination::Hive(_))
-                .then(|| format!("episode:{sequence}"));
-            let message = Message {
-                scheduled_job_id: scheduled_job_id.clone(),
-                message_id: request.message_id.clone(),
-                sequence,
-                sender: request.sender.clone(),
-                destination: request.destination.clone(),
-                body: request.body.clone(),
-                thread: request.thread,
-                episode_id: episode_id.clone(),
-                only_for,
-            };
-            match &request.destination {
-                Destination::Agent(_) => {
-                    for agent_id in &recipients {
-                        retention.admit_pending(state, agent_id)?;
-                    }
-                    for agent_id in recipients {
-                        state.deliveries.push(Delivery {
-                            sequence,
-                            agent_id,
-                            status: DeliveryStatus::Pending,
-                        });
-                    }
-                }
-                Destination::Hive(id) => {
-                    let mut hive = state
-                        .hives
-                        .get(id)
-                        .cloned()
-                        .ok_or_else(|| Error::UnknownHive(id.clone()))?;
-                    if request.thread.is_some() {
-                        let scope = thread_readers(state, &request.destination, request.thread)?;
-                        if !scope.is_empty() {
-                            hive.members.retain(|member| scope.contains(member));
-                        }
-                    }
-                    let id = episode_id
-                        .ok_or_else(|| Error::InvalidState("hive message has no episode".into()))?;
-                    state.episodes.push(EpisodeRecord {
-                        settings: state.hive_settings.get(&hive.hive_id).cloned(),
-                        scheduled_job_id: scheduled_job_id.clone(),
-                        episode_id: id,
-                        hive,
-                        opened_at: sequence,
-                        thread: request.thread,
-                        starters: if request.starters.is_empty() {
-                            recipients.clone()
-                        } else {
-                            request.starters.clone()
-                        },
-                        conductor: None,
-                        pending: Vec::new(),
-                        wave_open: false,
-                        waiting: false,
-                        finished: false,
-                        failure: None,
-                    });
-                }
-            }
-            state.messages.push(message);
-            state
-                .accepted
-                .insert(request.message_id.clone(), request.clone());
-            Ok(Receipt {
-                message_id: request.message_id.clone(),
-                sequence,
-            })
-        })
-        .await
+        self.update(|state| accept_state(state, &request, scheduled_job_id.clone(), retention))
+            .await
     }
     /// Read the caller's direct conversation with a registered peer in durable
     /// sequence order, including replies returned by the peer's runner.
@@ -202,6 +112,108 @@ impl Coordinator {
             .cloned()
             .collect())
     }
+}
+/// Refuse a request whose identity no transaction could accept.
+pub(super) fn admissible(request: &SendMessage) -> Result<()> {
+    identifier(&request.message_id, "message id")?;
+    if request.message_id.starts_with("hivemind:") {
+        return Err(Error::InvalidIdentifier("reserved message id"));
+    }
+    Ok(())
+}
+/// Accept `request` into `state`, or answer its retry with the first receipt.
+pub(super) fn accept_state(
+    state: &mut StoredState,
+    request: &SendMessage,
+    scheduled_job_id: Option<String>,
+    retention: crate::RetentionPolicy,
+) -> Result<Receipt> {
+    let scheduled_job_id = scheduled_job_id.or_else(|| {
+        state
+            .running
+            .get(&request.sender)
+            .and_then(|running| running.request.scheduled_job_id.clone())
+    });
+    if let Some(receipt) = retry_receipt(state, request, scheduled_job_id.as_deref())? {
+        return Ok(receipt);
+    }
+    let recipients = recipients(state, request)?;
+    let only_for = narrow_readers(
+        state,
+        &request.destination,
+        request.thread,
+        request.only_for.clone(),
+    )?;
+    let sequence = next_sequence(state)?;
+    let episode_id =
+        matches!(request.destination, Destination::Hive(_)).then(|| format!("episode:{sequence}"));
+    let message = Message {
+        scheduled_job_id: scheduled_job_id.clone(),
+        message_id: request.message_id.clone(),
+        sequence,
+        sender: request.sender.clone(),
+        destination: request.destination.clone(),
+        body: request.body.clone(),
+        thread: request.thread,
+        episode_id: episode_id.clone(),
+        only_for,
+    };
+    match &request.destination {
+        Destination::Agent(_) => {
+            for agent_id in &recipients {
+                retention.admit_pending(state, agent_id)?;
+            }
+            for agent_id in recipients {
+                state.deliveries.push(Delivery {
+                    sequence,
+                    agent_id,
+                    status: DeliveryStatus::Pending,
+                });
+            }
+        }
+        Destination::Hive(id) => {
+            let mut hive = state
+                .hives
+                .get(id)
+                .cloned()
+                .ok_or_else(|| Error::UnknownHive(id.clone()))?;
+            if request.thread.is_some() {
+                let scope = thread_readers(state, &request.destination, request.thread)?;
+                if !scope.is_empty() {
+                    hive.members.retain(|member| scope.contains(member));
+                }
+            }
+            let id = episode_id
+                .ok_or_else(|| Error::InvalidState("hive message has no episode".into()))?;
+            state.episodes.push(EpisodeRecord {
+                settings: state.hive_settings.get(&hive.hive_id).cloned(),
+                scheduled_job_id: scheduled_job_id.clone(),
+                episode_id: id,
+                hive,
+                opened_at: sequence,
+                thread: request.thread,
+                starters: if request.starters.is_empty() {
+                    recipients.clone()
+                } else {
+                    request.starters.clone()
+                },
+                conductor: None,
+                pending: Vec::new(),
+                wave_open: false,
+                waiting: false,
+                finished: false,
+                failure: None,
+            });
+        }
+    }
+    state.messages.push(message);
+    state
+        .accepted
+        .insert(request.message_id.clone(), request.clone());
+    Ok(Receipt {
+        message_id: request.message_id.clone(),
+        sequence,
+    })
 }
 pub(super) fn membership(state: &StoredState, agent_id: &str, hive_id: &str) -> Result<()> {
     let hive = state

@@ -281,7 +281,10 @@ const WEB_RESEARCH_DESK: &str = "research";
 
 /// Every package directory under `examples/hives/`, read from disk the way a
 /// host loads it, so a package added later is checked without being listed.
-fn gallery_from_disk() -> Result<Vec<(String, LoweredHive)>> {
+///
+/// The flag says whether the package names a harness, which holds it to the
+/// capability table.
+fn gallery_from_disk() -> Result<Vec<(String, LoweredHive, bool)>> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/hives");
     let mut dirs: Vec<_> = std::fs::read_dir(&root)?
         .map(|entry| entry.map(|entry| entry.path()))
@@ -297,8 +300,8 @@ fn gallery_from_disk() -> Result<Vec<(String, LoweredHive)>> {
             .ok_or("package directory has a name")?
             .to_string_lossy()
             .into_owned();
-        let (_, hive) = lowered(&documents).map_err(|error| format!("{name}: {error}"))?;
-        packages.push((name, hive));
+        let (package, hive) = lowered(&documents).map_err(|error| format!("{name}: {error}"))?;
+        packages.push((name, hive, !package.manifest.harnesses.is_empty()));
     }
     Ok(packages)
 }
@@ -337,11 +340,11 @@ fn no_gallery_seat_may_reach_the_web_outside_euler_hives_research_desk() -> Resu
         "self-improving",
     ] {
         assert!(
-            packages.iter().any(|(name, _)| name == listed),
+            packages.iter().any(|(name, _, _)| name == listed),
             "{listed} is read"
         );
     }
-    for (name, hive) in &packages {
+    for (name, hive, judged) in &packages {
         assert!(!hive.seats.is_empty(), "{name}");
         let researchers: Vec<&str> = if name == WEB_RESEARCH_PACKAGE {
             hive.desks
@@ -371,6 +374,20 @@ fn no_gallery_seat_may_reach_the_web_outside_euler_hives_research_desk() -> Resu
                 );
             } else {
                 assert!(allowed.is_empty(), "{name}/{} allows {allowed:?}", seat.id);
+            }
+            // A package that names a harness may not carry a deny list (the
+            // capability table rejects one); its seats stay off the web
+            // because no built-in tool group can be turned on.
+            if *judged {
+                assert!(
+                    seat.integration
+                        .groups
+                        .values()
+                        .all(|mode| *mode == tinyhivemind_lang::GroupMode::Off),
+                    "{name}/{} turns a built-in tool group on",
+                    seat.id
+                );
+                continue;
             }
             for tool in WEB_TOOLS {
                 if allowed.contains(&tool) {

@@ -21,7 +21,7 @@ use serde_json::{Map, Value};
 use std::collections::BTreeMap;
 use tinyhivemind_core::desk::Desk;
 
-/// `agents.json`: who the hive's agents are.
+/// `agents.json`: who the hive's agents are, and what they run on.
 pub(crate) const AGENTS: &str = "agents.json";
 /// `tools.json`: what the agents can run.
 pub(crate) const TOOLS: &str = "tools.json";
@@ -30,7 +30,7 @@ pub(crate) const DESKS: &str = "desks.json";
 
 /// Each split file and the manifest sections it may hold.
 pub(crate) const SPLITS: [(&str, &[&str]); 3] = [
-    (AGENTS, &["roles", "seats", "profiles"]),
+    (AGENTS, &["roles", "seats", "profiles", "harnesses"]),
     (TOOLS, &["tools", "toolpacks", "mcp", "skills", "hooks"]),
     (DESKS, &["desks", "topology", "referrals"]),
 ];
@@ -46,6 +46,12 @@ struct AgentsFile {
     seats: Vec<Seat>,
     #[serde(default)]
     profiles: Vec<Profile>,
+    #[serde(
+        default,
+        skip_serializing_if = "Vec::is_empty",
+        deserialize_with = "super::defaults::nonempty"
+    )]
+    harnesses: Vec<crate::Harness>,
 }
 
 /// The typed form of `tools.json`.

@@ -53,11 +53,13 @@ is not advisory — do not add an exception to it to land a change.
 
 ## Project Structure
 
-This is a Rust 2024 virtual Cargo workspace with six packages. Core owns all
+This is a Rust 2024 virtual Cargo workspace with eight packages. Core owns all
 host-neutral behavior; lang is where a hive mind is defined, integrations
 included; tools renders native tool definitions and records calls; exec runs a
-package's executable tools and hooks; OpenHuman is the only crate that links an
-agent harness, and it deploys hive packages.
+package's executable tools and hooks; host is the harness-neutral
+half of running seats; mcp serves hive tools to seats that run as processes;
+OpenHuman is the only crate that links an agent harness,
+and it deploys hive packages.
 
 ```text
 Cargo.toml
@@ -73,7 +75,10 @@ crates/
 │       └── driver/        # host-neutral completion scheduling
 ├── tinyhivemind-tools/   # native TinyTools specs and episode call record
 ├── tinyhivemind-exec/    # runs a package's executable tools and script hooks
+├── tinyhivemind-host/      # hive tool belt, policies, package plans, harness processes
+├── tinyhivemind-mcp/       # hive and package tools served to harness processes over loopback MCP
 ├── tinyhivemind-openhuman/ # package deployment, seat runners, host integration
+├── tinyhivemind-openhuman-process/ # OpenHuman seats as supervised processes
 ├── tinyhivemind-hives/    # durable cross-hive coordinator
 └── tinyhivemind-lang/     # pure hive packages: structure, integrations, edits, lineage
 wiki/                    # GitHub wiki submodule
@@ -94,8 +99,19 @@ with — providers, models, MCP servers, skills, executable tools, toolpacks,
 permissions, profiles, hooks, session, Jev, features and workflows — as data,
 and lowering resolves it per seat; it names no harness type and starts no
 process. `tinyhivemind-exec` runs those executable tools and hooks
-(`docs/specs/executable-tools.md`) and is not one of the pure crates. The
-OpenHuman adapter depends on core, hives, lang and exec, and deploys packages
+(`docs/specs/executable-tools.md`) and is not one of the pure crates.
+`tinyhivemind-openhuman-process` implements the host's harness port for the
+`openhuman` kind over a pinned `openhuman-core` binary (`harnesses.lock`); it
+links no harness either.
+`tinyhivemind-host` depends on core, hives and lang, and owns what every harness
+shares: the hive tools and their dispatch, the send and management policy ports,
+turn scope and prompt, package loading, the deployment plan, and supervised
+harness processes. It links no harness, and `assert-pure.sh` checks that.
+`tinyhivemind-mcp` depends on host, hives, lang and exec, and serves those
+tools, a package's executable tools and its hooks over Streamable HTTP on
+127.0.0.1, one bearer per seat (ADR 0036); it links no harness either. The
+OpenHuman adapter depends on core, hives, lang, exec and host, re-exports the
+host's types under its own paths, and deploys packages
 with `HiveDeployment::from_packages`; its former `HiveConfig` manifest format is
 retired (ADR 0034). The host owns agent sessions, the transcript, durable
 appends, and scheduling.

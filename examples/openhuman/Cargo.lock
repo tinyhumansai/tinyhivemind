@@ -308,6 +308,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc0b364ead1874514c8c2855ab558056ebfeb775653e7ae45ff72f28f8f3166c"
 
 [[package]]
+name = "bstr"
+version = "1.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6bb31b46c14244e20ee9984b11bf5c992b91fb6939fea616e3512c8baecdbe5f"
+dependencies = [
+ "memchr",
+ "regex-automata",
+ "serde_core",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -349,7 +360,7 @@ dependencies = [
  "io-lifetimes 3.0.1",
  "ipnet",
  "maybe-owned",
- "rustix 1.1.5",
+ "rustix 1.1.6",
  "rustix-linux-procfs",
  "windows-sys 0.61.2",
  "winx",
@@ -364,7 +375,7 @@ dependencies = [
  "cap-primitives",
  "io-extras",
  "io-lifetimes 3.0.1",
- "rustix 1.1.5",
+ "rustix 1.1.6",
 ]
 
 [[package]]
@@ -930,6 +941,12 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
 name = "foldhash"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
+
+[[package]]
+name = "foldhash"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
@@ -975,7 +992,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94e7099f6313ecacbe1256e8ff9d617b75d1bcb16a6fddef94866d225a01a14a"
 dependencies = [
  "io-lifetimes 2.0.4",
- "rustix 1.1.5",
+ "rustix 1.1.6",
  "windows-sys 0.59.0",
 ]
 
@@ -995,7 +1012,7 @@ version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e72ed92b67c146290f88e9c89d60ca163ea417a446f61ffd7b72df3e7f1dfd5"
 dependencies = [
- "rustix 1.1.5",
+ "rustix 1.1.6",
  "windows-sys 0.61.2",
 ]
 
@@ -1069,6 +1086,12 @@ name = "futures-task"
 version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cd417de3d1d015fc3bfd2b1ea46dfc7bab72ef86f1cc7cc9c78e728b34a6d1fd"
+
+[[package]]
+name = "futures-timer"
+version = "3.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af43fadb8a98512d547e37b4e92e0ced13e205c061b87b4623eff01d918d6968"
 
 [[package]]
 name = "futures-util"
@@ -1179,7 +1202,7 @@ version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
 dependencies = [
- "foldhash",
+ "foldhash 0.2.0",
 ]
 
 [[package]]
@@ -1190,7 +1213,7 @@ checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 dependencies = [
  "allocator-api2",
  "equivalent",
- "foldhash",
+ "foldhash 0.2.0",
 ]
 
 [[package]]
@@ -1219,6 +1242,12 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+
+[[package]]
+name = "hifijson"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "242402749acf71e6f32f5857598b7002c4058a4e3c3b22b4c7d51cab9aea754e"
 
 [[package]]
 name = "hkdf"
@@ -1357,7 +1386,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tower-service",
- "webpki-roots 1.0.9",
+ "webpki-roots 1.0.10",
 ]
 
 [[package]]
@@ -1595,6 +1624,47 @@ name = "itoa"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
+
+[[package]]
+name = "jaq-core"
+version = "3.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "723ad9253808e95daa2d10ad5b258ac4e65c07003e223e08d1d8734c2942d606"
+dependencies = [
+ "dyn-clone",
+ "once_cell",
+ "typed-arena",
+]
+
+[[package]]
+name = "jaq-json"
+version = "2.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4be2f53207ffb1313a2d2ad819cfa8bfaa7936cb85a110eda10fd5da822cec94"
+dependencies = [
+ "bstr",
+ "bytes",
+ "foldhash 0.1.5",
+ "hifijson",
+ "indexmap",
+ "jaq-core",
+ "jaq-std",
+ "num-bigint",
+ "num-traits",
+ "ryu",
+ "self_cell",
+ "serde_core",
+]
+
+[[package]]
+name = "jaq-std"
+version = "3.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56b378d4f7587d332111a92608348db6d6b9b8f7cb5ee1d2bd162ec715d7c5bf"
+dependencies = [
+ "bstr",
+ "jaq-core",
+]
 
 [[package]]
 name = "jiff"
@@ -2042,7 +2112,6 @@ dependencies = [
  "thiserror",
  "tiny-artifacts",
  "tinyagents-definition",
- "tinyagents-graph",
  "tinyagents-harness",
  "tinyagents-harness-tools",
  "tinyagents-hooks",
@@ -2059,6 +2128,7 @@ dependencies = [
  "tinycomputer-bus",
  "tinyconnectors-bus",
  "tinydocs-bus",
+ "tinyflows",
  "tinyflows-bus",
  "tinyhosts-bus",
  "tinyinference-core",
@@ -2086,7 +2156,6 @@ dependencies = [
  "tinystoragedrivers-types",
  "tinytools",
  "tinytools-agent",
- "tinytools-std",
  "tinyvoice-bus",
  "tinywallet-bus",
  "tokio",
@@ -2122,7 +2191,6 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tinyagents-definition",
- "tinyagents-graph",
  "tinyagents-harness",
  "tinyagents-harness-tools",
  "tinyagents-hooks",
@@ -2134,7 +2202,6 @@ dependencies = [
  "tinymemory-api",
  "tinymemory-tools",
  "tinytools",
- "tinytools-std",
  "tokio",
  "tokio-stream",
  "url",
@@ -2669,7 +2736,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-streams",
  "web-sys",
- "webpki-roots 1.0.9",
+ "webpki-roots 1.0.10",
 ]
 
 [[package]]
@@ -2741,9 +2808,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "1.1.5"
+version = "1.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "891efababe418670775f199f0d233d84843c227a0949a883ce15b37c78d6629d"
+checksum = "e5e76742e5294153d4dde1207dbec5bdd81eef6fabdc0d2118babadabfd858aa"
 dependencies = [
  "bitflags 2.13.2",
  "errno",
@@ -2759,14 +2826,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2fc84bf7e9aa16c4f2c758f27412dc9841341e16aa682d9c7ac308fe3ee12056"
 dependencies = [
  "once_cell",
- "rustix 1.1.5",
+ "rustix 1.1.6",
 ]
 
 [[package]]
 name = "rustls"
-version = "0.23.45"
+version = "0.23.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"
+checksum = "48e13bd8c0e9365c43cfa5c9e8f9ad49d3c8444926c9aac819e0e4dc503c8fdf"
 dependencies = [
  "log",
  "once_cell",
@@ -2893,6 +2960,12 @@ dependencies = [
  "core-foundation-sys",
  "libc",
 ]
+
+[[package]]
+name = "self_cell"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ab42ca02749e120097e328d91d415325bdf43b1c72c4c8badf37375fe40a813"
 
 [[package]]
 name = "semver"
@@ -3228,9 +3301,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
- "rustix 1.1.5",
+ "rustix 1.1.6",
  "windows-sys 0.61.2",
 ]
 
@@ -3269,6 +3342,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "cap-std",
  "serde",
  "serde_json",
  "thiserror",
@@ -3282,7 +3356,7 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-definition"
-version = "2.11.0"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3294,25 +3368,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "tinyagents-graph"
-version = "2.11.0"
-dependencies = [
- "async-trait",
- "futures",
- "serde",
- "serde_json",
- "tinyagents-harness",
- "tinyagents-storage-kit",
- "tinyagents-tasks",
- "tinyinference-llm",
- "tinytools",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "tinyagents-harness"
-version = "2.11.0"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3325,7 +3382,7 @@ dependencies = [
  "libc",
  "regex",
  "reqwest",
- "rustix 1.1.5",
+ "rustix 1.1.6",
  "serde",
  "serde_json",
  "sha2 0.11.0",
@@ -3342,7 +3399,6 @@ dependencies = [
  "tinystoragedrivers-types",
  "tinytools",
  "tinytools-agent",
- "tinytools-std",
  "tokio",
  "tracing",
  "uuid",
@@ -3352,14 +3408,25 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-harness-tools"
-version = "2.11.0"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base64 0.23.1",
  "chrono",
  "chrono-tz",
+ "fs2",
+ "futures-util",
+ "glob",
+ "libc",
+ "log",
+ "parking_lot",
+ "regex",
+ "reqwest",
+ "rustix 1.1.6",
  "serde",
  "serde_json",
+ "sha2 0.11.0",
  "tinyagents-harness",
  "tinyagents-orchestration",
  "tinyagents-tasks",
@@ -3367,11 +3434,13 @@ dependencies = [
  "tinytools",
  "tokio",
  "tracing",
+ "uuid",
+ "walkdir",
 ]
 
 [[package]]
 name = "tinyagents-hooks"
-version = "2.11.0"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3389,9 +3458,8 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-orchestration"
-version = "2.11.0"
+version = "3.0.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "chrono",
  "parking_lot",
@@ -3400,7 +3468,6 @@ dependencies = [
  "sha2 0.11.0",
  "thiserror",
  "tinyagents-definition",
- "tinyagents-graph",
  "tinyagents-harness",
  "tinyagents-session",
  "tinyagents-storage-kit",
@@ -3414,7 +3481,7 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-registry"
-version = "2.11.0"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3429,12 +3496,13 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-runtime"
-version = "2.11.0"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
  "serde_json",
+ "sha2 0.11.0",
  "thiserror",
  "tinyagents-harness",
  "tinyagents-hooks",
@@ -3448,7 +3516,7 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-session"
-version = "2.11.0"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3472,7 +3540,7 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-storage-kit"
-version = "2.11.0"
+version = "3.0.0"
 dependencies = [
  "data-encoding",
  "serde",
@@ -3486,7 +3554,7 @@ dependencies = [
 
 [[package]]
 name = "tinyagents-tasks"
-version = "2.11.0"
+version = "3.0.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -3495,11 +3563,12 @@ dependencies = [
  "tinyinference-llm",
  "tokio",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
 name = "tinybox-bus"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -3550,7 +3619,7 @@ dependencies = [
 
 [[package]]
 name = "tinychannels-bus"
-version = "0.1.39"
+version = "0.1.42"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3565,8 +3634,9 @@ dependencies = [
 
 [[package]]
 name = "tinycomputer-bus"
-version = "0.15.0"
+version = "0.15.1"
 dependencies = [
+ "base64 0.22.1",
  "serde",
  "serde_json",
  "thiserror",
@@ -3574,7 +3644,7 @@ dependencies = [
 
 [[package]]
 name = "tinyconnectors-bus"
-version = "0.21.0"
+version = "0.22.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -3582,10 +3652,30 @@ dependencies = [
 
 [[package]]
 name = "tinydocs-bus"
-version = "0.2.5"
+version = "0.2.6"
 dependencies = [
  "serde",
  "thiserror",
+]
+
+[[package]]
+name = "tinyflows"
+version = "0.9.0"
+dependencies = [
+ "async-trait",
+ "base64 0.23.1",
+ "futures-timer",
+ "futures-util",
+ "getrandom 0.4.3",
+ "hex",
+ "jaq-core",
+ "jaq-json",
+ "jaq-std",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -3649,6 +3739,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "tinyhivemind-host"
+version = "0.2.1"
+dependencies = [
+ "rustix 1.1.6",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tinyhivemind-core",
+ "tinyhivemind-hives",
+ "tinyhivemind-lang",
+ "tinytools",
+ "tokio",
+]
+
+[[package]]
 name = "tinyhivemind-lang"
 version = "0.2.1"
 dependencies = [
@@ -3675,6 +3780,7 @@ dependencies = [
  "tinyhivemind-core",
  "tinyhivemind-exec",
  "tinyhivemind-hives",
+ "tinyhivemind-host",
  "tinyhivemind-lang",
  "tinymemory-api",
  "tinymemory-tools",
@@ -3722,7 +3828,7 @@ dependencies = [
 
 [[package]]
 name = "tinyhosts-bus"
-version = "0.4.1"
+version = "0.4.3"
 dependencies = [
  "serde",
  "serde_json",
@@ -3874,7 +3980,7 @@ dependencies = [
 
 [[package]]
 name = "tinymcp-bus"
-version = "0.20.1"
+version = "0.20.2"
 dependencies = [
  "base64 0.23.1",
  "schemars",
@@ -3953,7 +4059,7 @@ dependencies = [
 
 [[package]]
 name = "tinysearch-bus"
-version = "0.5.1"
+version = "0.5.3"
 dependencies = [
  "schemars",
  "serde",
@@ -3966,7 +4072,7 @@ version = "0.5.1"
 dependencies = [
  "cap-fs-ext",
  "cap-std",
- "rustix 1.1.5",
+ "rustix 1.1.6",
  "serde",
  "serde_json",
  "serde_norway",
@@ -4127,7 +4233,7 @@ dependencies = [
  "fs4",
  "getrandom 0.4.3",
  "hkdf 0.13.0",
- "rustix 1.1.5",
+ "rustix 1.1.6",
  "serde",
  "serde_json",
  "sha2 0.11.0",
@@ -4180,30 +4286,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tinytools-std"
-version = "0.6.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "base64 0.23.1",
- "fs2",
- "futures-util",
- "glob",
- "libc",
- "log",
- "parking_lot",
- "regex",
- "reqwest",
- "rustix 1.1.5",
- "serde_json",
- "sha2 0.11.0",
- "tinytools",
- "tokio",
- "tracing",
- "walkdir",
-]
-
-[[package]]
 name = "tinyvec"
 version = "1.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4211,7 +4293,7 @@ checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 
 [[package]]
 name = "tinyvoice-bus"
-version = "0.1.4"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -4220,7 +4302,7 @@ dependencies = [
 
 [[package]]
 name = "tinywallet-bus"
-version = "0.24.1"
+version = "0.26.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -4519,6 +4601,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "typed-arena"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6af6ae20167a9ece4bcb41af5b80f8a1f1df981f6391189ce00fd257af04126a"
+
+[[package]]
 name = "typed-path"
 version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4592,9 +4680,9 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "ureq"
-version = "3.4.2"
+version = "3.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a7ac20be9b7726e0bbdbf974c059676d9acb1cd414961f570a4e8231cacd7fc"
+checksum = "cde93ff05758a36a851a398a772b0b79a82fbe3c186a46f2696baaeaf84c966b"
 dependencies = [
  "base64 0.23.1",
  "flate2",
@@ -4604,14 +4692,14 @@ dependencies = [
  "rustls-pki-types",
  "ureq-proto",
  "utf8-zero",
- "webpki-roots 1.0.9",
+ "webpki-roots 1.0.10",
 ]
 
 [[package]]
 name = "ureq-proto"
-version = "0.6.4"
+version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f86fd172ccca569e458f61b6bdd6220965a9ef36e672a6852953b51a0e1583be"
+checksum = "841583fc36089d7d59419568ae157f43a5a03a2e5a81ba87c77d1596ef46e922"
 dependencies = [
  "base64 0.23.1",
  "http",
@@ -4833,14 +4921,14 @@ version = "0.26.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "521bc38abb08001b01866da9f51eb7c5d647a19260e00054a8c7fd5f9e57f7a9"
 dependencies = [
- "webpki-roots 1.0.9",
+ "webpki-roots 1.0.10",
 ]
 
 [[package]]
 name = "webpki-roots"
-version = "1.0.9"
+version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7dcd9d09a39985f5344844e66b0c530a33843579125f23e21e9f0f220850f22a"
+checksum = "1c1c8e20c8a38fc7d65abfe74eb7280e4aa667e8eec8bc84996d2874810748d9"
 dependencies = [
  "rustls-pki-types",
 ]
@@ -5248,7 +5336,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32e45ad4206f6d2479085147f02bc2ef834ac85886624a23575ae137c8aa8156"
 dependencies = [
  "libc",
- "rustix 1.1.5",
+ "rustix 1.1.6",
 ]
 
 [[package]]
@@ -5453,15 +5541,11 @@ dependencies = [
 
 [[patch.unused]]
 name = "tinyagents-live"
-version = "2.11.0"
+version = "3.0.0"
 
 [[patch.unused]]
 name = "tinychannels"
-version = "0.1.39"
-
-[[patch.unused]]
-name = "tinyflows"
-version = "0.8.29"
+version = "0.1.42"
 
 [[patch.unused]]
 name = "tinystoragedrivers-testkit"
@@ -5474,3 +5558,7 @@ version = "0.5.0"
 [[patch.unused]]
 name = "tinystoragedrivers-testkit"
 version = "2.1.0"
+
+[[patch.unused]]
+name = "tinytools-std"
+version = "0.6.0"

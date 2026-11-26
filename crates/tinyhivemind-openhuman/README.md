@@ -1,5 +1,9 @@
 # TinyHivemind OpenHuman adapter
 
+The harness-neutral half — tool dispatch, policies, turn scope, packages and the
+deployment plan — is [`tinyhivemind-host`](../tinyhivemind-host/README.md), whose
+types are re-exported here.
+
 The host constructs configured `Agent` instances on one OpenHuman `Runtime`.
 `OpenHumanHost` receives those handles, attaches permanent hive tools, and hands
 continuing turns to the durable `tinyhivemind-hives` coordinator.
@@ -126,8 +130,8 @@ let deployment = HiveDeployment::from_packages(
 
 The [`run_package` example](examples/run_package/README.md) checks a package,
 calls its tools without a model, or deploys it. The
-[deployment plan](src/config/README.md) the packages lower into is
-crate-internal.
+[deployment plan](src/config/README.md) the packages lower into is not an input
+format.
 
 For a model-backed package registration check, see the
 [live language example](examples/README.md).

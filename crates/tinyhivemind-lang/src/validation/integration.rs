@@ -589,7 +589,7 @@ fn tool_shape(tool: &ExecTool, i: usize, found: &mut Findings) {
 
 /// A profile another profile delegates to runs inside its parent's agent, so
 /// it cannot bring an agent's own model, connections, skills, hooks,
-/// delegates, timeout or budget.
+/// delegates, timeout, budget or harness.
 fn delegates(m: &Manifest, found: &mut Findings) {
     let delegated: BTreeSet<&str> = m
         .profiles
@@ -609,6 +609,7 @@ fn delegates(m: &Manifest, found: &mut Findings) {
             (!p.subagents.is_empty(), "subagents"),
             (p.limits.timeout_ms.is_some(), "limits"),
             (p.limits.budget_usd.is_some(), "limits"),
+            (p.harness.is_some(), "harness"),
         ] {
             if set {
                 invalid(

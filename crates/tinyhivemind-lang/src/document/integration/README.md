@@ -4,7 +4,8 @@ The wire types for what a hive's agents run with. `hive.json` carries these as
 the sections `runtime`, `providers`, `models`, `mcp`, `skills`, `tools`,
 `toolpacks`, `permissions`, `profiles`, `hooks`, `session`, `jev`, `features`
 and `workflows`, plus the integration fields of a seat (`profile`, `agent_id`,
-`toolpacks`, `hooks`, `permissions`, `limits`, `context`). The vocabulary is
+`toolpacks`, `hooks`, `permissions`, `limits`, `context`, `harness`). The
+`harnesses` section's entries are `crate::Harness`, in `src/harness/`. The vocabulary is
 OpenHuman's, since every setting must lower to something OpenHuman can run,
 but no type here names a harness type.
 

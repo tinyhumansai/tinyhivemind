@@ -254,6 +254,7 @@ fn retention_keeps_a_settled_episode_a_running_turn_still_reports_to() {
             turn: None,
             actions: Vec::new(),
             delivery_sequence: None,
+            calls: std::collections::BTreeMap::new(),
         },
     );
     RetentionPolicy {
@@ -275,4 +276,55 @@ fn retention_policy_wire_form_and_omitted_defaults_are_stable() {
         serde_json::to_value(value).unwrap(),
         serde_json::json!({"settled_episodes":null,"delivered":null,"interrupted":null,"pending_per_agent":null})
     );
+}
+
+/// A running turn as a snapshot written before call records existed.
+const OLDER_RUNNING_TURN: &str = r#"{
+    "request": {
+        "turn_id": "1:4:a", "agent_id": "a", "session_id": null,
+        "messages": [], "memberships": [], "episode": null
+    },
+    "turn": null,
+    "actions": [{"Post": {"body": "hi"}}],
+    "delivery_sequence": 3
+}"#;
+
+#[test]
+fn a_running_turn_from_before_call_records_loads_with_no_calls() {
+    let turn: RunningTurn = serde_json::from_str(OLDER_RUNNING_TURN).unwrap();
+    assert!(turn.calls.is_empty());
+    assert_eq!(turn.delivery_sequence, Some(3));
+}
+
+#[test]
+fn a_running_turn_without_calls_serializes_as_before() {
+    let turn: RunningTurn = serde_json::from_str(OLDER_RUNNING_TURN).unwrap();
+    let value = serde_json::to_value(&turn).unwrap();
+    assert!(value.get("calls").is_none());
+}
+
+#[test]
+fn call_records_have_a_pinned_wire_form() {
+    let mut turn: RunningTurn = serde_json::from_str(OLDER_RUNNING_TURN).unwrap();
+    turn.calls.insert(
+        "post-1".into(),
+        CallRecord {
+            tool: "hivemind_post".into(),
+            arguments: serde_json::json!({"episode_id": "episode:1", "body": "hi"}),
+            result: serde_json::Value::Null,
+        },
+    );
+    let value = serde_json::to_value(&turn).unwrap();
+    assert_eq!(
+        value["calls"],
+        serde_json::json!({
+            "post-1": {
+                "tool": "hivemind_post",
+                "arguments": {"episode_id": "episode:1", "body": "hi"},
+                "result": null
+            }
+        })
+    );
+    let back: RunningTurn = serde_json::from_value(value).unwrap();
+    assert_eq!(back.calls, turn.calls);
 }

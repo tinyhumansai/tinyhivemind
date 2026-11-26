@@ -16,7 +16,7 @@ pub(super) fn run<T: Send + 'static>(
     executor()?.block_on(async move { tokio::spawn(future).await? })
 }
 pub(super) fn manifest() -> anyhow::Result<HiveConfig> {
-    Ok(HiveConfig::from_json(
+    Ok(serde_json::from_str(
         r#"{
  "runtime":{"autonomy":"autonomous","model":{"name":"fixture"}},
  "profiles":[{"id":"worker","system_prompt":"Act only using the current episode"}],

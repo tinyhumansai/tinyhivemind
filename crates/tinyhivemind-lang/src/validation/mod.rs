@@ -8,6 +8,8 @@
 //! the frontmatter of a document that is missing, is skipped rather than
 //! reported twice.
 mod bounds;
+mod capability;
+mod harness;
 mod integration;
 mod memory;
 use crate::{
@@ -94,6 +96,7 @@ pub(crate) fn rules(package: &Package, found: &mut Findings) {
     bounds::bounds(package, found);
     memory::memory(package, &seats, found);
     integration::integration(package, &seats, found);
+    harness::harnesses(package, found);
 }
 
 /// Roles, seats and desk membership.
@@ -412,4 +415,4 @@ fn frontmatter(package: &Package, seat: &crate::Seat) -> Result<()> {
 #[cfg(test)]
 mod test;
 #[cfg(test)]
-pub(crate) use test::integration::documents as test_documents;
+pub(crate) use test::integration::{documents as test_documents, example as test_example};

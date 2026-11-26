@@ -1,0 +1,68 @@
+[package]
+name = "tinyhivemind-host"
+description = "Harness-neutral hosting: the hive tool belt, its policies, package plans, and supervised harness processes."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+publish = false
+# This crate names no harness type and links none (ADR 0035). It spawns
+# processes, so it is outside the pure crates; `.github/scripts/assert-pure.sh`
+# asserts only that no harness is in its graph.
+
+[features]
+# The suite every harness client must pass, for a client crate's own tests.
+conformance = []
+
+# The scripted fake harness the suite is itself tested on. It has to be a real
+# process, so it is a binary, built only with the suite.
+[[bin]]
+name = "tinyhivemind-fake-harness"
+path = "tests/fake/child.rs"
+required-features = ["conformance"]
+test = false
+doc = false
+
+[[test]]
+name = "conformance"
+required-features = ["conformance"]
+
+[dependencies]
+# Durable coordination: the `AgentRunner` seam, actions and turn payloads.
+tinyhivemind-hives.workspace = true
+# Conduct, routing and approval policies a deployment plan carries.
+tinyhivemind-core.workspace = true
+# Hive packages, checked and lowered into a deployment plan.
+tinyhivemind-lang.workspace = true
+# `ToolRules`, the argument rules of a plan's permission profiles. It names no
+# harness; its `async-trait` and `anyhow` stay behind its own `Tool` trait.
+tinytools.workspace = true
+# Wire forms of policy requests and plans.
+serde.workspace = true
+# Tool schemas, arguments and results.
+serde_json.workspace = true
+# Typed errors.
+thiserror.workspace = true
+# Child processes, their deadlines and pipes.
+tokio = { workspace = true, features = ["process", "io-util", "time", "rt", "sync", "macros"] }
+
+[target.'cfg(unix)'.dependencies]
+# Signals, pidfds and `waitid` without reaping, for `process`. The workspace
+# forbids `unsafe`, so the raw calls have to live behind a safe wrapper, and
+# `std` offers neither a signal other than SIGKILL nor a pidfd. rustix is
+# already in this lockfile through `tempfile`, licensed
+# `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT`, and builds on 1.65.
+rustix = { version = "1.1", default-features = false, features = ["std", "process"] }
+
+[dev-dependencies]
+# Fallible tests over several error types.
+anyhow.workspace = true
+# Async tests on a multi-threaded runtime.
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+# Temporary instance directories.
+tempfile.workspace = true
+
+[lints]
+workspace = true

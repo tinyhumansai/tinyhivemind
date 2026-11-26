@@ -26,3 +26,32 @@ fn a_star_matches_any_run_of_characters() {
     assert!(!matches(Some("a*b*c"), "a__c__b"));
     assert!(matches(Some("**"), "x"));
 }
+
+#[test]
+fn a_runner_says_whether_a_tool_hook_names_a_tool() {
+    use super::support::{hook, runner};
+    use serde_json::json;
+    let dir = std::env::temp_dir();
+    let hooks = runner(
+        vec![
+            hook(
+                "guard",
+                "pre_tool_use",
+                "allow",
+                json!({"matcher": "git_*"}),
+            ),
+            hook(
+                "audit",
+                "post_tool_use",
+                "record",
+                json!({"matcher": "deploy"}),
+            ),
+            hook("end", "stop", "record", json!({})),
+        ],
+        &dir,
+    );
+    assert!(hooks.matches_tool("git_push"));
+    assert!(hooks.matches_tool("deploy"));
+    // A stop hook is bound to no tool.
+    assert!(!hooks.matches_tool("read_file"));
+}

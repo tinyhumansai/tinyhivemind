@@ -2,7 +2,7 @@
 use super::{DeployError, DeployResult, Permissions, SecretResolver, profile, runtime};
 use crate::{
     AgentFactory, AgentFuture,
-    config::{Seat, SeatOverrides},
+    config::{Seat, SeatOverrides, Validate as _},
 };
 use std::sync::{Arc, PoisonError};
 /// Instantiates typed manifest profiles on the deployment's existing runtime.
