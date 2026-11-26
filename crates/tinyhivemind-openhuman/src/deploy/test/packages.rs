@@ -331,13 +331,14 @@ fn a_judged_openhuman_seat_deploys_with_no_built_in_tool_group() -> anyhow::Resu
         .lock()
         .unwrap_or_else(PoisonError::into_inner);
     run(async {
-        let (mut options, _backend, model) = build_options().await;
-        // The package names its own provider, as a judged package must.
-        options.provider = None;
+        let (options, _backend, model) = build_options().await;
         mount(&model, Script::default()).await;
         let source = openhuman_only()?;
         let mut package = source.package().clone();
-        package.manifest.providers[0].endpoint = Some(format!("{}/v1", model.uri()));
+        // The check judges the provider each seat's model names; the linked
+        // adapter uses the runtime's, so leaving that one to the fixture's
+        // injected provider deploys the same judged seats offline.
+        package.manifest.runtime.provider = None;
         let deployment = Box::pin(HiveDeployment::from_packages(
             vec![PackageSource::new(source.root(), &package)?],
             Arc::new(Secrets),
@@ -358,9 +359,7 @@ fn a_judged_openhuman_seat_deploys_with_no_built_in_tool_group() -> anyhow::Resu
             })
             .await?;
         let report = deployment.host().coordinator().run_until_idle().await?;
-        let seen = model.received_requests().await.unwrap_or_default();
-        assert_eq!(report.failed, 0, "{report:?} after {} requests: {:?}", seen.len(),
-            seen.first().map(|r| (r.url.to_string(), String::from_utf8_lossy(&r.body).chars().take(300).collect::<String>(), r.headers.get("authorization").cloned())));
+        assert_eq!(report.failed, 0, "{report:?}");
         let mut offered = std::collections::BTreeSet::new();
         for request in model.received_requests().await.unwrap_or_default() {
             let body: Value = serde_json::from_slice(&request.body).unwrap_or_default();
