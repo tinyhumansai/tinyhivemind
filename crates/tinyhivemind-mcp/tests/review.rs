@@ -28,7 +28,7 @@ fn identified(hive: &Hive, call: &str, mut args: Value) -> Value {
     args["call"] = json!(call);
     args
 }
-fn call_message(name: &str, arguments: Value) -> Value {
+fn call_message(name: &str, arguments: &Value) -> Value {
     json!({"jsonrpc": "2.0", "id": 9, "method": "tools/call", "params": {"name": name, "arguments": arguments}})
 }
 
@@ -134,7 +134,7 @@ async fn a_client_hanging_up_mid_call_leaves_one_run_and_the_retry_gets_its_resu
     let socket = raw_post(
         addr,
         &hive.a.bearer,
-        &call_message("slow", identified(&hive, "s1", json!({}))),
+        &call_message("slow", &identified(&hive, "s1", json!({}))),
     )
     .await;
     started(&hive, "slow.log").await;
@@ -177,7 +177,7 @@ async fn calls_in_flight_are_bounded_per_seat_even_after_a_hang_up() {
     let socket = raw_post(
         addr,
         &hive.a.bearer,
-        &call_message("slow", identified(&hive, "s1", json!({}))),
+        &call_message("slow", &identified(&hive, "s1", json!({}))),
     )
     .await;
     started(&hive, "slow.log").await;
