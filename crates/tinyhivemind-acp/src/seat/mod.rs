@@ -19,7 +19,7 @@ use std::fs;
 use std::os::unix::fs::DirBuilderExt as _;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
-use tinyhivemind_hives::{AgentRunner, TurnFuture, TurnOutcome, TurnRequest};
+use tinyhivemind_hives::{AgentRunner, TurnDisposition, TurnFuture, TurnOutcome, TurnRequest};
 use tinyhivemind_host::harness::{
     self, CancelFuture, CancellableRunner, Event, Expected, Observed, SeatPlan, Started,
     ToolEndpoint,
@@ -347,8 +347,9 @@ impl Seat {
         let ended = turn.run(&text).await;
         lock(&self.active).take();
         let ended = ended?;
-        // Only a turn that succeeded is known to have reached the agent.
-        if instruct {
+        // Only a turn that completed is known to have reached the agent: a
+        // turn it ended for another reason is retried with the prompt.
+        if instruct && matches!(ended.disposition, TurnDisposition::Completed) {
             lock(&live.instructed).insert(session.clone());
         }
         if let Some(usage) = ended.usage {
