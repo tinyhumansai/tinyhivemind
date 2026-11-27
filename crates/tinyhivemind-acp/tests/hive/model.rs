@@ -114,12 +114,16 @@ fn text(content: &Value) -> String {
     }
 }
 
-/// A tool result without the timing Codex puts before it
-/// (`Wall time: … seconds\nOutput:…`), which differs between two runs of
-/// the same call.
+/// A tool result without the timing a harness adds, which differs between
+/// two runs of the same call: Codex's before it (`Wall time: … seconds\n
+/// Output:…`) and `OpenHuman`'s after it (`…\n\n[took 0.1s]`).
 fn tool_output(text: &str) -> String {
-    match (text.starts_with("Wall time:"), text.split_once("Output:")) {
-        (true, Some((_, output))) => output.to_owned(),
+    let text = match (text.starts_with("Wall time:"), text.split_once("Output:")) {
+        (true, Some((_, output))) => output,
+        _ => text,
+    };
+    match text.rsplit_once("\n\n[took ") {
+        Some((output, timing)) if timing.ends_with("s]") => output.to_owned(),
         _ => text.to_owned(),
     }
 }
@@ -163,7 +167,7 @@ fn read(api: Api, body: &Value) -> Read {
         Api::Chat => after
             .iter()
             .filter(|item| item["role"] == "tool")
-            .map(|item| text(&item["content"]))
+            .map(|item| tool_output(&text(&item["content"])))
             .collect(),
         Api::Responses => after
             .iter()
@@ -174,7 +178,7 @@ fn read(api: Api, body: &Value) -> Read {
             .iter()
             .flat_map(|item| item["content"].as_array().cloned().unwrap_or_default())
             .filter(|block| block["type"] == "tool_result")
-            .map(|block| text(&block["content"]))
+            .map(|block| tool_output(&text(&block["content"])))
             .collect(),
     };
     let offered = body["tools"]
