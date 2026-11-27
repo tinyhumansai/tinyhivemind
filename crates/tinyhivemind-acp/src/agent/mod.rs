@@ -1,9 +1,9 @@
 //! What differs between ACP agents, as data.
 //!
 //! An [`Agent`] says how to start one agent process for a seat and how to
-//! open its session. Strings in [`Agent::env`], [`Agent::files`] and
-//! [`Agent::session_meta`] are templates; each `{name}` below is replaced
-//! when a seat starts:
+//! open its session. Strings in [`Agent::args`], [`Agent::env`],
+//! [`Agent::files`] and [`Agent::session_meta`] are templates; each `{name}`
+//! below is replaced when a seat starts:
 //!
 //! | Name | Value |
 //! | --- | --- |
@@ -13,6 +13,7 @@
 //! | `{model}` | the seat's model name |
 //! | `{server}` | the host's MCP server name |
 //! | `{program_dir}` | the directory of [`Agent::program`] |
+//! | `{seat}` | the seat's id |
 //! | any key of [`Agent::vars`] | its value |
 //!
 //! In `session_meta`, a string that is exactly `{allowed_tools}` becomes the
@@ -35,7 +36,7 @@ pub struct Agent {
     pub kind: HarnessKind,
     /// The program, an absolute path: the agent, or the runtime of a script.
     pub program: PathBuf,
-    /// Its arguments.
+    /// Its arguments, templated.
     pub args: Vec<String>,
     /// The version `initialize` must report as `agentInfo.version`.
     pub version: String,
@@ -49,8 +50,12 @@ pub struct Agent {
     pub session_meta: Option<Value>,
     /// The session mode set after `session/new` and `session/load`.
     pub mode: Option<String>,
+    /// Whether `session/new` and `session/load` pass the host's tool server.
+    /// An agent that refuses servers per session, such as `OpenClaw`, is
+    /// configured with it elsewhere and opens its sessions with none.
+    pub session_mcp: bool,
     /// The name the agent's model sees for one of the host's tools, from
-    /// `{server}` and `{tool}`.
+    /// `{server}`, `{seat}` and `{tool}`.
     pub tool_name: String,
     /// Further template values, such as a file the host generated.
     pub vars: BTreeMap<String, String>,
@@ -61,7 +66,7 @@ pub struct Agent {
 pub const NO_KEY: &str = "thm-no-key";
 
 /// The environment every agent gets: a private home and a minimal path.
-fn base_env() -> Vec<(String, String)> {
+pub(crate) fn base_env() -> Vec<(String, String)> {
     vec![
         ("HOME".into(), "{home}".into()),
         ("PATH".into(), "{program_dir}:/usr/bin:/bin".into()),
@@ -112,6 +117,7 @@ impl Agent {
             files: Vec::new(),
             session_meta: Some(meta),
             mode: None,
+            session_mcp: true,
             tool_name: "mcp__{server}__{tool}".into(),
             vars: BTreeMap::new(),
         }
@@ -147,6 +153,7 @@ impl Agent {
             files: vec![("codex/config.toml".into(), CODEX_CONFIG.into())],
             session_meta: None,
             mode: Some("read-only".into()),
+            session_mcp: true,
             tool_name: "mcp__{server}/{tool}".into(),
             vars: BTreeMap::from([("catalog".to_owned(), catalog)]),
         }

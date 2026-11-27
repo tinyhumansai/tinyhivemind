@@ -37,9 +37,10 @@ pub(crate) struct Accepted {
 }
 
 /// Accept an `initialize` result, or say why a seat cannot use the agent:
-/// it must speak protocol version 1 and connect to an HTTP MCP server,
-/// which is how the host's tools reach it.
-pub(crate) fn accept(result: &Value) -> Result<Accepted, String> {
+/// it must speak protocol version 1 and, when the host's tools reach it per
+/// session (`session_mcp`), connect to an HTTP MCP server. An agent given
+/// them elsewhere, as `OpenClaw` is through its Gateway, need not.
+pub(crate) fn accept(result: &Value, session_mcp: bool) -> Result<Accepted, String> {
     let version = &result["protocolVersion"];
     if version.as_u64() != Some(VERSION) {
         return Err(format!(
@@ -47,7 +48,7 @@ pub(crate) fn accept(result: &Value) -> Result<Accepted, String> {
         ));
     }
     let capabilities = &result["agentCapabilities"];
-    if capabilities["mcpCapabilities"]["http"] != true {
+    if session_mcp && capabilities["mcpCapabilities"]["http"] != true {
         return Err("the agent cannot connect to an HTTP MCP server".to_owned());
     }
     Ok(Accepted {

@@ -132,27 +132,34 @@ fn permission_answers_pick_the_options_by_kind() {
 }
 
 #[test]
-fn an_agent_is_accepted_only_on_version_1_with_http_mcp() {
+fn an_agent_is_accepted_only_on_version_1_with_http_mcp_when_its_sessions_need_it() {
     let init = |version: Value, http: Value, load: Value| {
         json!({"protocolVersion": version, "agentCapabilities": {
             "mcpCapabilities": {"http": http}, "loadSession": load}})
     };
     assert_eq!(
-        accept(&init(json!(1), json!(true), json!(true))),
+        accept(&init(json!(1), json!(true), json!(true)), true),
         Ok(Accepted { load_session: true })
     );
     assert_eq!(
-        accept(&init(json!(1), json!(true), Value::Null)),
+        accept(&init(json!(1), json!(true), Value::Null), true),
         Ok(Accepted {
             load_session: false
         })
     );
-    let old = accept(&init(json!(2), json!(true), json!(true))).unwrap_err();
+    let old = accept(&init(json!(2), json!(true), json!(true)), true).unwrap_err();
     assert!(old.contains("version 2"), "{old}");
-    let missing = accept(&json!({"agentCapabilities": {}})).unwrap_err();
+    let missing = accept(&json!({"agentCapabilities": {}}), true).unwrap_err();
     assert!(missing.contains("version null"), "{missing}");
-    let no_http = accept(&init(json!(1), json!(false), json!(true))).unwrap_err();
+    let no_http = accept(&init(json!(1), json!(false), json!(true)), true).unwrap_err();
     assert!(no_http.contains("HTTP MCP"), "{no_http}");
+    // An agent given the host's tools elsewhere needs no HTTP MCP of its own.
+    assert_eq!(
+        accept(&init(json!(1), Value::Null, json!(true)), false),
+        Ok(Accepted { load_session: true })
+    );
+    let old = accept(&init(json!(2), Value::Null, json!(true)), false).unwrap_err();
+    assert!(old.contains("version 2"), "{old}");
 }
 
 #[test]

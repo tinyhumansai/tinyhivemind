@@ -28,8 +28,10 @@ and Codex out of its model-reviewed mode.
   speaks ACP version 1 over stdio. It links no agent.
 - What differs between agents is an `Agent` descriptor of data: the command,
   environment and files, the `session/new` metadata, and the session mode.
-  Claude Code and Codex have descriptors; OpenClaw's follows, with its shared
-  Gateway supervised beside the bridge.
+  Claude Code, Codex and OpenClaw have descriptors. OpenClaw's bridge takes
+  the host's tools from a shared Gateway, which the crate configures with
+  every seat's server and supervises beside the bridges, and opens its
+  sessions with none.
 - A permission request for a tool of the host's own MCP server is allowed by
   the client, since the tool server already judges hive tools. Any other goes
   to the seat's approver.
