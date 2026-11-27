@@ -128,9 +128,15 @@ impl Agent {
     /// (see [`write_codex_catalog`]).
     ///
     /// Its model is the seat's `openai` endpoint, spoken to with the
-    /// Responses API. The session runs in the adapter's `read-only` mode: the
-    /// default mode has a model review every tool call, which would run
-    /// unseen and could refuse the host's tools.
+    /// Responses API. Codex offers MCP tools as one `namespace` tool per
+    /// server, so the endpoint must accept those: `OpenAI`'s does, and
+    /// `OpenRouter`'s (as of 2026-11-27) drops them, leaving the model none
+    /// of the host's tools; a host routing Codex there translates them into
+    /// plain functions in its gateway.
+    ///
+    /// The session runs in the adapter's `read-only` mode: the default mode
+    /// has a model review every tool call, which would run unseen and could
+    /// refuse the host's tools.
     #[must_use]
     pub fn codex(
         node: impl Into<PathBuf>,
@@ -259,9 +265,13 @@ pub enum CatalogError {
 
 /// Write the model catalog Codex needs to `out`, from `codex`'s own bundled
 /// one: every model calls tools directly, with no shell, patch tool, tool
-/// search or sub-agents, and `model` is added with the first model's
-/// metadata if the catalog lacks it. Without this, models hid MCP tools or
-/// routed them through code mode (`docs/experiments/2026-11-25-process-harnesses`).
+/// search or sub-agents. Without this, models hid MCP tools or routed them
+/// through code mode (`docs/experiments/2026-11-25-process-harnesses`).
+///
+/// A `model` the catalog lacks is added: a name with a router's vendor
+/// prefix (`openai/gpt-5.6-luna`) takes the routed model's entry, and any
+/// other the first entry's tool settings with no reasoning and no
+/// verbosity, which a model without them refuses as request fields.
 ///
 /// # Errors
 /// A [`CatalogError`]: `codex` could not be run or failed, its catalog was
@@ -311,16 +321,42 @@ pub fn write_codex_catalog(codex: &Path, out: &Path, model: &str) -> Result<(), 
             }
         }
     }
-    if !models.iter().any(|entry| entry["slug"] == model)
-        && let Some(first) = models.first().cloned()
-    {
-        let mut added = first;
-        added["slug"] = model.into();
-        added["display_name"] = model.into();
-        models.insert(0, added);
+    if !models.iter().any(|entry| entry["slug"] == model) {
+        let added = catalog_entry(models, model);
+        if let Some(added) = added {
+            models.insert(0, added);
+        }
     }
     let bytes = serde_json::to_vec(&catalog).map_err(CatalogError::Json)?;
     std::fs::write(out, bytes).map_err(CatalogError::Write)
+}
+
+/// The entry for `model`, which the catalog lacks under that name. A model a
+/// router names with a vendor prefix (`openai/gpt-5.6-luna`) takes the entry
+/// of the model it routes to. Any other takes the first entry's tool settings
+/// with no verbosity and no reasoning: the first entry's are a GPT-5 model's,
+/// which a model without them refuses (`text.verbosity` and `reasoning` are
+/// request fields). `None` for an empty catalog.
+fn catalog_entry(models: &[Value], model: &str) -> Option<Value> {
+    let routed = model.rsplit_once('/').map(|(_, name)| name);
+    let known = routed.and_then(|name| models.iter().find(|entry| entry["slug"] == name));
+    let mut entry = known.or_else(|| models.first())?.clone();
+    if known.is_none()
+        && let Some(fields) = entry.as_object_mut()
+    {
+        fields.insert("support_verbosity".into(), false.into());
+        fields.insert("default_verbosity".into(), Value::Null);
+        fields.insert(
+            "supported_reasoning_levels".into(),
+            Value::Array(Vec::new()),
+        );
+        fields.insert("default_reasoning_level".into(), Value::Null);
+        fields.insert("default_reasoning_summary".into(), "none".into());
+        fields.insert("supports_reasoning_effort_updates".into(), false.into());
+    }
+    entry["slug"] = model.into();
+    entry["display_name"] = model.into();
+    Some(entry)
 }
 
 /// The values one seat's templates are filled from.
