@@ -19,7 +19,7 @@ use std::fs;
 use std::os::unix::fs::DirBuilderExt as _;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
-use tinyhivemind_hives::{AgentRunner, TurnFuture, TurnOutcome, TurnRequest};
+use tinyhivemind_hives::{AgentRunner, TurnDisposition, TurnFuture, TurnOutcome, TurnRequest};
 use tinyhivemind_host::harness::{
     self, CancelFuture, CancellableRunner, Event, Expected, Observed, SeatPlan, Started,
     ToolEndpoint,
@@ -43,6 +43,9 @@ pub(crate) struct Live {
     sessions: Mutex<HashSet<String>>,
     /// Of those, the ones in the descriptor's mode.
     moded: Mutex<HashSet<String>>,
+    /// Of those, the ones this process has shown the seat's prompt, on a
+    /// turn that succeeded.
+    instructed: Mutex<HashSet<String>>,
 }
 
 /// The turn running now: its session, and the signal that it is cancelled.
@@ -230,6 +233,7 @@ impl Seat {
                 load_session: accepted.load_session,
                 sessions: Mutex::default(),
                 moded: Mutex::default(),
+                instructed: Mutex::default(),
             }),
             Err(mismatch) => {
                 let _ = instance.stop(async {}, self.options.stop).await;
@@ -314,8 +318,17 @@ impl Seat {
         }
         let live = self.start().await?;
         let session = self.session(&live, request.session_id.clone()).await?;
-        let text = tinyhivemind_host::turn::render(&request)
+        let rendered = tinyhivemind_host::turn::render(&request)
             .map_err(|error| Error::Render(error.to_string()))?;
+        // ACP has no system prompt: the first turn this process runs in a
+        // session carries it. A loaded session is shown it again: one opened
+        // before seats were shown their prompt never was.
+        let instruct = !lock(&live.instructed).contains(&session);
+        let text = if instruct {
+            with_instructions(&self.plan.seat.prompt, &rendered)
+        } else {
+            rendered
+        };
         let (cancelled, cancel) = watch::channel(false);
         *lock(&self.active) = Some(Active {
             session: session.clone(),
@@ -334,6 +347,11 @@ impl Seat {
         let ended = turn.run(&text).await;
         lock(&self.active).take();
         let ended = ended?;
+        // Only a turn that completed is known to have reached the agent: a
+        // turn it ended for another reason is retried with the prompt.
+        if instruct && matches!(ended.disposition, TurnDisposition::Completed) {
+            lock(&live.instructed).insert(session.clone());
+        }
         if let Some(usage) = ended.usage {
             let event = Event::Usage {
                 turn_id: request.turn_id.clone(),
@@ -413,3 +431,17 @@ impl CancellableRunner for Runner {
         Box::pin(async move { Ok(seat.cancel().await?) })
     }
 }
+
+/// Opens a turn with the seat's standing instructions.
+const INSTRUCTIONS: &str = "Your standing instructions as this seat, for the whole session:";
+
+/// `turn` preceded by the seat's `prompt`, unless the seat has none.
+fn with_instructions(prompt: &str, turn: &str) -> String {
+    if prompt.trim().is_empty() {
+        return turn.to_owned();
+    }
+    format!("{INSTRUCTIONS}\n\n{}\n\n{turn}", prompt.trim())
+}
+
+#[cfg(test)]
+mod test;

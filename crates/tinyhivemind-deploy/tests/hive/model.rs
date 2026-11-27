@@ -94,6 +94,9 @@ pub(crate) struct Seen {
     pub(crate) context: String,
     pub(crate) offered: Vec<String>,
     pub(crate) results: Vec<String>,
+    /// Whether the request carried the seat's own prompt (`You are <id>.`),
+    /// as a system prompt or ahead of the turn.
+    pub(crate) instructed: bool,
 }
 
 /// The model, serving until dropped.
@@ -328,6 +331,7 @@ fn answer(state: &State, request: &Request) -> Reply {
         context: turn.to_string(),
         offered: read.offered.iter().map(|(_, name)| name.clone()).collect(),
         results: read.results.clone(),
+        instructed: body.to_string().contains(&format!("You are {agent}.")),
     });
     let step = match &state.script.delegation {
         Some(delegation) => delegating(delegation, &state.asked_in, &agent, &turn, &read),
