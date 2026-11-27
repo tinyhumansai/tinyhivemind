@@ -116,8 +116,7 @@ impl ProcessSeats {
         for seat in &seats {
             installs.check(&seat.seat)?;
         }
-        std::fs::create_dir_all(&deployment.root)
-            .map_err(Error::io(deployment.root.display().to_string()))?;
+        private_dir(&deployment.root)?;
         let server = HiveToolServer::start(services, deployment.server.clone()).await?;
         let mut running = Self {
             server: Some(server),
@@ -169,8 +168,7 @@ impl ProcessSeats {
         }
         for (seat, tools) in seats.into_iter().zip(endpoints) {
             let id = seat.seat.id.clone();
-            std::fs::create_dir_all(&seat.directory)
-                .map_err(Error::io(seat.directory.display().to_string()))?;
+            private_dir(&seat.directory)?;
             let catalog = deployment.root.join(format!("{id}-codex-catalog.json"));
             let gateway = gateway::gateway_of(&seat.seat).and_then(|name| plans.get(&name));
             let harness = installs.harness(&seat.seat, deployment, &catalog, gateway)?;
@@ -228,6 +226,18 @@ impl ProcessSeats {
         }
         first.map_or(Ok(()), Err)
     }
+}
+
+/// Make `path` and any missing parent with mode 0700, whatever the umask:
+/// `OpenClaw` refuses a temporary directory under a group- or
+/// world-writable one, and the agents' state is the seat's own.
+fn private_dir(path: &std::path::Path) -> Result<()> {
+    use std::os::unix::fs::DirBuilderExt as _;
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(path)
+        .map_err(Error::io(path.display().to_string()))
 }
 
 #[cfg(test)]

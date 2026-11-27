@@ -12,6 +12,10 @@ new Gateway. The bridge reports no per-turn usage. About 2 GB and a cold start
 of tens of seconds, the Gateway is shared by a deployment's seats
 (`docs/experiments/2026-11-26-acp-harnesses.md`).
 
+The Gateway's directories are made private (0700) whatever the umask: OpenClaw
+refuses a temporary directory under a group- or world-writable one, and its
+seats then never reach the model.
+
 | File | Purpose |
 | --- | --- |
 | `mod.rs` | `GatewayPlan` and its config, `Gateway` (a supervised `Instance`, ready once `GET /readyz` answers 200, not merely once it listens), `Agent::openclaw` |

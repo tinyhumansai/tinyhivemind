@@ -15,6 +15,8 @@ use crate::agent::{Agent, NO_KEY, base_env};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::fmt;
+use std::fs::Permissions;
+use std::os::unix::fs::{DirBuilderExt as _, PermissionsExt as _};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tinyhivemind_host::harness::{self, ToolEndpoint};
@@ -202,16 +204,22 @@ impl Gateway {
             std::fs::write(&path, content)
                 .map_err(|error| harness::Error::Harness(format!("{}: {error}", path.display())))
         };
-        std::fs::create_dir_all(state.join("openclaw"))
-            .and_then(|()| std::fs::create_dir_all(state.join("home")))
-            .map_err(|error| {
-                harness::Error::Harness(format!("the gateway's directories: {error}"))
-            })?;
-        for seat in &plan.seats {
-            let workspace = state.join("workspaces").join(&seat.id);
-            std::fs::create_dir_all(&workspace).map_err(|error| {
-                harness::Error::Harness(format!("{}: {error}", workspace.display()))
-            })?;
+        // Private whatever the umask: OpenClaw refuses a temporary directory
+        // under a group- or world-writable one, and never starts a turn.
+        let mut builder = std::fs::DirBuilder::new();
+        builder.recursive(true).mode(0o700);
+        let workspaces = plan
+            .seats
+            .iter()
+            .map(|seat| state.join("workspaces").join(&seat.id));
+        for path in [state.join("openclaw"), state.join("home")]
+            .into_iter()
+            .chain(workspaces)
+        {
+            builder
+                .create(&path)
+                .and_then(|()| std::fs::set_permissions(&path, Permissions::from_mode(0o700)))
+                .map_err(|error| harness::Error::Harness(format!("{}: {error}", path.display())))?;
         }
         write(plan.token_file(), plan.token.clone())?;
         write(state.join("openclaw.json"), plan.config().to_string())?;

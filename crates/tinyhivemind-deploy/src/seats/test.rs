@@ -80,6 +80,16 @@ async fn a_seat_that_fails_to_start_is_reported_and_nothing_is_left() {
         "{error}"
     );
     assert!(root.path().join("seats/a").is_dir());
+    // Every directory the deployment made is private, whatever the umask.
+    for made in ["deployment", "seats", "seats/a"] {
+        assert_eq!(mode(&root.path().join(made)), 0o700, "{made}");
+    }
+}
+
+/// `path`'s permission bits.
+fn mode(path: &std::path::Path) -> u32 {
+    use std::os::unix::fs::PermissionsExt as _;
+    std::fs::metadata(path).unwrap().permissions().mode() & 0o777
 }
 
 #[tokio::test]
@@ -117,6 +127,12 @@ async fn a_gateway_that_does_not_start_is_reported_by_name() {
         matches!(error, Error::Gateway { ref gateway, .. } if gateway == "gateway"),
         "{error}"
     );
+    // OpenClaw refuses a temporary directory under a group- or
+    // world-writable one, so the Gateway's are private.
+    let state = root.path().join("deployment/gateway/state");
+    for made in ["openclaw", "home", "workspaces", "workspaces/claw"] {
+        assert_eq!(mode(&state.join(made)), 0o700, "{made}");
+    }
 }
 
 #[test]
