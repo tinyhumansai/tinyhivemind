@@ -76,11 +76,13 @@ impl Deployment {
 }
 
 /// A hive's seats running on their harnesses, registered with one
-/// coordinator. Stop them with [`ProcessSeats::stop`]; dropping them kills
-/// every process instead, without waiting.
+/// coordinator. [`ProcessSeats::stop`] is how they stop: dropping this value
+/// does not stop a seat the coordinator still holds, whose registered runner
+/// keeps it alive.
 pub struct ProcessSeats {
     server: Option<HiveToolServer>,
     gateways: BTreeMap<String, Gateway>,
+    /// Started seats not yet stopped, in the order they started.
     seats: Vec<(String, Arc<dyn Harness>)>,
 }
 
@@ -100,12 +102,15 @@ impl ProcessSeats {
     /// supervised seats' effectful calls; `OpenClaw` seats get their
     /// Gateways; and each seat starts on the harness its kind maps to in
     /// `installs`. Every seat is checked first, so a seat that cannot run
-    /// here starts nothing; a failure after that stops whatever had started.
+    /// here starts nothing. A failure after that stops whatever had started
+    /// and unregisters every seat it registered, so the same seats can be
+    /// started again on the same coordinator.
     ///
     /// # Errors
-    /// An [`Error`]: a seat's kind has no install or its model no endpoint,
-    /// `OpenClaw` seats sharing a Gateway differ in model, the tool server,
-    /// a Gateway or a seat did not start, or a seat could not be registered.
+    /// An [`Error`]: a seat's kind has no install, its model no endpoint or
+    /// its harness refuses it as declared, `OpenClaw` seats sharing a
+    /// Gateway differ in model, the tool server, a Gateway or a seat did not
+    /// start, or a seat could not be registered.
     pub async fn start(
         coordinator: &Coordinator,
         services: Services,
@@ -123,25 +128,33 @@ impl ProcessSeats {
             gateways: BTreeMap::new(),
             seats: Vec::new(),
         };
+        let mut registered = Vec::new();
         match running
-            .launch(coordinator, seats, installs, deployment)
+            .launch(coordinator, seats, installs, deployment, &mut registered)
             .await
         {
             Ok(()) => Ok(running),
             Err(error) => {
                 let _ = running.stop().await;
+                // A stopped seat's runner would stay registered, and a retry's
+                // new runner for the same id would conflict with it.
+                for id in registered {
+                    let _ = coordinator.unregister_agent(&id).await;
+                }
                 Err(error)
             }
         }
     }
 
-    /// Serve, then start the Gateways, then each seat.
+    /// Serve, then start the Gateways, then each seat, adding each seat
+    /// registered with `coordinator` to `registered`.
     async fn launch(
         &mut self,
         coordinator: &Coordinator,
         seats: Vec<ProcessSeat>,
         installs: &Installs,
         deployment: &Deployment,
+        registered: &mut Vec<String>,
     ) -> Result<()> {
         let server = self
             .server
@@ -188,7 +201,11 @@ impl ProcessSeats {
                     runner,
                 })
                 .await
-                .map_err(|source| Error::Register { seat: id, source })?;
+                .map_err(|source| Error::Register {
+                    seat: id.clone(),
+                    source,
+                })?;
+            registered.push(id);
         }
         Ok(())
     }
@@ -201,14 +218,23 @@ impl ProcessSeats {
 
     /// Stop every seat, then the Gateways, then the tool server. Every one is
     /// stopped even when an earlier one fails; the first failure is returned.
+    /// A seat is forgotten only once it has stopped, so a seat whose stop
+    /// failed, or was cut short, is stopped again by the next call.
     ///
     /// # Errors
     /// The first [`Error::Stop`], [`Error::Gateway`] or [`Error::Server`].
     pub async fn stop(&mut self) -> Result<()> {
         let mut first: Option<Error> = None;
-        for (id, harness) in self.seats.drain(..) {
-            if let Err(source) = harness.stop(&id).await {
-                first.get_or_insert(Error::Stop { seat: id, source });
+        let mut at = 0;
+        while let Some((id, harness)) = self.seats.get(at).cloned() {
+            match harness.stop(&id).await {
+                Ok(()) => {
+                    self.seats.remove(at);
+                }
+                Err(source) => {
+                    first.get_or_insert(Error::Stop { seat: id, source });
+                    at += 1;
+                }
             }
         }
         for (name, gateway) in std::mem::take(&mut self.gateways) {
@@ -231,12 +257,15 @@ impl ProcessSeats {
 /// Make `path` and any missing parent with mode 0700, whatever the umask:
 /// `OpenClaw` refuses a temporary directory under a group- or
 /// world-writable one, and the agents' state is the seat's own.
+/// A directory that already exists is made 0700 too; its parents are left
+/// as they are.
 fn private_dir(path: &std::path::Path) -> Result<()> {
-    use std::os::unix::fs::DirBuilderExt as _;
+    use std::os::unix::fs::{DirBuilderExt as _, PermissionsExt as _};
     std::fs::DirBuilder::new()
         .recursive(true)
         .mode(0o700)
         .create(path)
+        .and_then(|()| std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700)))
         .map_err(Error::io(path.display().to_string()))
 }
 

@@ -1,6 +1,7 @@
 //! `live_*`: hives whose seats run on every harness, started by
 //! [`ProcessSeats`]: alone, beside each other, editing through the host
-//! (`hive/edit.rs`) and in lead-only episodes (`hive/delegation.rs`).
+//! (`hive/edit.rs`), in lead-only episodes (`hive/delegation.rs`), and
+//! started again on the same coordinator after a start that failed.
 //!
 //! Each seat names its harness kind; `ProcessSeats` starts it on the pinned
 //! agent that kind maps to, registers it with a real coordinator, and serves
@@ -439,4 +440,60 @@ async fn live_a_hive_of_all_four_harnesses_settles() -> Result<()> {
     let root = tempfile::tempdir()?;
     let members = vec![openhuman, claude, codex, openclaw];
     hive(members, &model, root.path()).await
+}
+
+/// A start that fails after a seat registered unregisters it, so the same
+/// seat starts again on the same coordinator. The `OpenHuman` seat starts and
+/// registers; the Codex seat's adapter is not there, so its start fails.
+#[tokio::test(flavor = "multi_thread")]
+async fn live_a_failed_start_can_be_retried_on_the_same_coordinator() -> Result<()> {
+    let model = HiveModel::start().await?;
+    let (Some(first), Some(broken)) = (openhuman(model.port), codex("codex", model.port)) else {
+        eprintln!("skipped: set THM_OPENHUMAN_CORE, THM_NODE, THM_ACP_CODEX and THM_CODEX");
+        return Ok(());
+    };
+    let root = tempfile::tempdir()?;
+    let root = root.path();
+    let coordinator = Coordinator::new(
+        "runtime".into(),
+        Arc::new(MemoryStorage::new()),
+        CoordinatorOptions::default(),
+    )
+    .await?;
+    let mut installs = installs();
+    if let Some(codex) = installs.codex.as_mut() {
+        codex.adapter.path = root.join("no-codex-acp.js");
+    }
+    let mut deployment = Deployment::new(root.join("deployment"));
+    deployment.openhuman.ready = Duration::from_secs(60);
+    let seat = |member: &Member| ProcessSeat::new(member.seat.clone(), root.join(member.id));
+    let failed = ProcessSeats::start(
+        &coordinator,
+        Services::new(coordinator.clone()),
+        vec![seat(&first), seat(&broken)],
+        &installs,
+        &deployment,
+    )
+    .await;
+    ensure!(
+        matches!(failed, Err(tinyhivemind_deploy::Error::Start { ref seat, .. }) if seat == "codex"),
+        "the broken start: {failed:?}"
+    );
+    ensure!(
+        coordinator.list_agents()?.is_empty(),
+        "a failed start left seats registered: {:?}",
+        coordinator.list_agents()?
+    );
+    let mut running = ProcessSeats::start(
+        &coordinator,
+        Services::new(coordinator.clone()),
+        vec![seat(&first)],
+        &installs,
+        &deployment,
+    )
+    .await?;
+    ensure!(running.seats() == vec!["openhuman"], "{running:?}");
+    ensure!(coordinator.list_agents()? == vec!["openhuman".to_owned()]);
+    running.stop().await?;
+    Ok(())
 }

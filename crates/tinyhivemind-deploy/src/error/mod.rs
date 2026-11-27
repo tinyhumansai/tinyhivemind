@@ -25,6 +25,22 @@ pub enum Error {
         /// The seat.
         seat: String,
     },
+    /// An ACP agent cannot run the seat as declared: its model's route.
+    #[error("seat {seat} cannot run on its agent: {source}")]
+    AcpRefused {
+        /// The seat.
+        seat: String,
+        /// Why not.
+        source: tinyhivemind_acp::capability::Refusal,
+    },
+    /// `OpenHuman` cannot run the seat as declared.
+    #[error("seat {seat} cannot run on openhuman: {source}")]
+    OpenHumanRefused {
+        /// The seat.
+        seat: String,
+        /// Why not.
+        source: tinyhivemind_openhuman_process::capability::Refusal,
+    },
     /// Two `OpenClaw` seats share a Gateway but not a model: a Gateway has one
     /// provider.
     #[error(

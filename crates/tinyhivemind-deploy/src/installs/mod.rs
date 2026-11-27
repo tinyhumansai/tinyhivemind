@@ -12,6 +12,7 @@ use tinyhivemind_acp::openclaw::GatewayPlan;
 use tinyhivemind_acp::{AcpHarness, Agent, agent::write_codex_catalog};
 use tinyhivemind_host::harness::Harness;
 use tinyhivemind_lang::{HarnessKind, LoweredSeat};
+use tinyhivemind_openhuman_process::capability::check as openhuman_check;
 use tinyhivemind_openhuman_process::{OpenHumanHarness, Program};
 
 /// A pinned install: what to run, and the version it must report.
@@ -59,6 +60,17 @@ pub struct Installs {
     pub openclaw: Option<Pinned>,
 }
 
+/// Whether an ACP agent of `kind` can run `seat` as declared: the same check
+/// the ACP client makes when the seat starts, made before anything starts.
+fn acp_check(seat: &LoweredSeat, kind: HarnessKind) -> Result<()> {
+    tinyhivemind_acp::capability::check(seat, kind)
+        .map(drop)
+        .map_err(|source| Error::AcpRefused {
+            seat: seat.id.clone(),
+            source,
+        })
+}
+
 /// The model name `seat` runs, or why it has none.
 pub(crate) fn model_name(seat: &LoweredSeat) -> Result<String> {
     seat.integration
@@ -85,26 +97,34 @@ impl Installs {
         })
     }
 
-    /// Check that `seat`'s kind can run here, before anything starts.
+    /// Check that `seat`'s kind can run here, and that its harness takes the
+    /// seat as declared, before anything starts.
     pub(crate) fn check(&self, seat: &LoweredSeat) -> Result<()> {
         let kind = seat.integration.harness_kind();
         match kind {
             HarnessKind::OpenHuman => {
                 Self::need(seat, kind, self.openhuman.as_ref(), "openhuman-core")?;
+                openhuman_check(seat).map_err(|source| Error::OpenHumanRefused {
+                    seat: seat.id.clone(),
+                    source,
+                })?;
             }
             HarnessKind::ClaudeCode => {
                 Self::need(seat, kind, self.node.as_ref(), "node")?;
                 Self::need(seat, kind, self.claude_code.as_ref(), "claude-agent-acp")?;
+                acp_check(seat, kind)?;
             }
             HarnessKind::Codex => {
                 Self::need(seat, kind, self.node.as_ref(), "node")?;
                 Self::need(seat, kind, self.codex.as_ref(), "codex-acp")?;
                 model_name(seat)?;
+                acp_check(seat, kind)?;
             }
             HarnessKind::OpenClaw => {
                 Self::need(seat, kind, self.node.as_ref(), "node")?;
                 Self::need(seat, kind, self.openclaw.as_ref(), "openclaw")?;
                 model_name(seat)?;
+                acp_check(seat, kind)?;
             }
         }
         Ok(())

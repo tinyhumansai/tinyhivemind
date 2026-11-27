@@ -86,6 +86,77 @@ async fn a_seat_that_fails_to_start_is_reported_and_nothing_is_left() {
     }
 }
 
+#[tokio::test]
+async fn an_existing_deployment_directory_is_made_private() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let root = tempfile::tempdir().unwrap();
+    let deployment = root.path().join("deployment");
+    std::fs::create_dir(&deployment).unwrap();
+    std::fs::set_permissions(&deployment, std::fs::Permissions::from_mode(0o777)).unwrap();
+    let mut running = start(Vec::new(), &Installs::default(), root.path())
+        .await
+        .unwrap();
+    assert_eq!(mode(&deployment), 0o700);
+    running.stop().await.unwrap();
+}
+
+/// A harness whose first `stops` stops fail.
+struct Stubborn {
+    stops: std::sync::Mutex<usize>,
+}
+
+impl Harness for Stubborn {
+    fn kind(&self) -> HarnessKind {
+        HarnessKind::OpenHuman
+    }
+
+    fn start(&self, _: SeatPlan, _: ToolEndpoint) -> tinyhivemind_host::harness::StartFuture {
+        Box::pin(async { Err(tinyhivemind_host::harness::Error::Harness("no".into())) })
+    }
+
+    fn stop(&self, _: &str) -> tinyhivemind_host::harness::StopFuture {
+        let mut stops = self.stops.lock().unwrap();
+        let failing = *stops > 0;
+        *stops = stops.saturating_sub(1);
+        Box::pin(async move {
+            if failing {
+                Err(tinyhivemind_host::harness::Error::Harness(
+                    "still running".into(),
+                ))
+            } else {
+                Ok(())
+            }
+        })
+    }
+}
+
+#[tokio::test]
+async fn a_seat_whose_stop_fails_is_kept_and_stopped_again() {
+    let stubborn = |stops| -> Arc<dyn Harness> {
+        Arc::new(Stubborn {
+            stops: std::sync::Mutex::new(stops),
+        })
+    };
+    let mut running = ProcessSeats {
+        server: None,
+        gateways: BTreeMap::new(),
+        seats: vec![
+            ("a".into(), stubborn(1)),
+            ("b".into(), stubborn(0)),
+            ("c".into(), stubborn(1)),
+        ],
+    };
+    let error = running.stop().await.unwrap_err();
+    assert!(
+        matches!(error, Error::Stop { ref seat, .. } if seat == "a"),
+        "{error}"
+    );
+    // `b` stopped; the two that failed are still tracked, in order.
+    assert_eq!(running.seats(), vec!["a", "c"]);
+    running.stop().await.unwrap();
+    assert_eq!(running.seats(), Vec::<&str>::new());
+}
+
 /// `path`'s permission bits.
 fn mode(path: &std::path::Path) -> u32 {
     use std::os::unix::fs::PermissionsExt as _;

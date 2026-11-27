@@ -15,6 +15,14 @@ fn every_message_is_lowercase_and_unpunctuated() {
             missing: "codex-acp",
         },
         Error::NoModel { seat: "a".into() },
+        Error::AcpRefused {
+            seat: "a".into(),
+            source: tinyhivemind_acp::capability::Refusal::NoModel("a".into()),
+        },
+        Error::OpenHumanRefused {
+            seat: "a".into(),
+            source: tinyhivemind_openhuman_process::capability::Refusal::NoModel,
+        },
         Error::SharedGateway {
             first: "a".into(),
             seat: "b".into(),

@@ -6,7 +6,7 @@ use tinyhivemind_lang::{
 };
 
 /// Seat `id` on `kind`, of `isolation` when given, running model `model` at
-/// `endpoint`.
+/// `endpoint`, of the provider kind the harness speaks.
 pub(crate) fn seat(
     id: &str,
     kind: HarnessKind,
@@ -16,7 +16,10 @@ pub(crate) fn seat(
 ) -> LoweredSeat {
     let provider = Provider {
         id: "local".into(),
-        kind: ProviderKind::Openai,
+        kind: match kind {
+            HarnessKind::ClaudeCode => ProviderKind::Anthropic,
+            _ => ProviderKind::Openai,
+        },
         endpoint: Some(endpoint.into()),
         credential: None,
     };

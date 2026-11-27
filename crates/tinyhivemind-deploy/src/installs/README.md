@@ -6,7 +6,12 @@ kind. OpenHuman needs `openhuman-core`; Claude Code `node` and
 catalog is written per seat for its model; OpenClaw `node`, `openclaw.mjs` and
 the seat's Gateway.
 
+The check also runs the capability check of the seat's harness client, the
+one it would make when the seat starts, so a seat its harness refuses as
+declared (no model, or a provider of the wrong kind) is refused before
+anything starts.
+
 | File | Purpose |
 | --- | --- |
 | `mod.rs` | `Installs`, `Pinned`, `CodexInstall`; the check and the harness per seat |
-| `test.rs` | Each kind's missing installs, and a Codex catalog that cannot be written |
+| `test.rs` | Each kind's missing installs, a seat its harness refuses as declared, and a Codex catalog that cannot be written |

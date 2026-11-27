@@ -4,6 +4,8 @@
 use super::*;
 use crate::Deployment;
 use crate::fixture::{seat, without_model};
+use tinyhivemind_acp::capability::Refusal as AcpRefusal;
+use tinyhivemind_openhuman_process::capability::Refusal as OpenHumanRefusal;
 
 fn on(kind: HarnessKind) -> LoweredSeat {
     seat("a", kind, None, "http://127.0.0.1:9/v1", "mock")
@@ -87,5 +89,33 @@ fn a_seat_gets_the_harness_its_kind_maps_to() {
     assert!(matches!(
         none.harness(&on(HarnessKind::OpenHuman), &deployment, &catalog, None),
         Err(Error::MissingInstall { .. })
+    ));
+}
+
+#[test]
+fn a_seat_its_harness_refuses_is_refused_before_anything_starts() {
+    let all = everything();
+    // Claude Code needs a model, like every ACP agent.
+    assert!(matches!(
+        all.check(&without_model(on(HarnessKind::ClaudeCode))),
+        Err(Error::AcpRefused { ref seat, source: AcpRefusal::NoModel(_) }) if seat == "a"
+    ));
+    // Each agent speaks one provider kind: Claude Code's is Anthropic's.
+    let mut openai = on(HarnessKind::ClaudeCode);
+    let codex = on(HarnessKind::Codex);
+    openai.integration.model = codex.integration.model;
+    assert!(matches!(
+        all.check(&openai),
+        Err(Error::AcpRefused {
+            source: AcpRefusal::ProviderKind { .. },
+            ..
+        })
+    ));
+    // OpenHuman takes only an OpenAI-compatible endpoint.
+    let mut anthropic = on(HarnessKind::OpenHuman);
+    anthropic.integration.model = on(HarnessKind::ClaudeCode).integration.model;
+    assert!(matches!(
+        all.check(&anthropic),
+        Err(Error::OpenHumanRefused { ref seat, source: OpenHumanRefusal::ProviderKind { .. } }) if seat == "a"
     ));
 }
