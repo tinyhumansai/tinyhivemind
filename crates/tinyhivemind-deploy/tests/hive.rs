@@ -211,6 +211,10 @@ fn seat_took_its_turn(id: &str, edits: bool, transcript: &[Message], seen: &[See
     ensure!(posts == 1, "{id} posted {posts} times: {transcript:#?}");
     let turns: Vec<_> = seen.iter().filter(|request| request.agent == id).collect();
     ensure!(!turns.is_empty(), "the model never saw a turn of {id}");
+    ensure!(
+        turns[0].instructed,
+        "{id}'s first turn reached the model without its prompt"
+    );
     for request in &turns {
         ensure!(
             !request.turn.is_empty(),

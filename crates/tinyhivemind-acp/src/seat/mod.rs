@@ -43,6 +43,9 @@ pub(crate) struct Live {
     sessions: Mutex<HashSet<String>>,
     /// Of those, the ones in the descriptor's mode.
     moded: Mutex<HashSet<String>>,
+    /// Of those, the ones that hold the seat's prompt: shown it on their
+    /// first turn, or loaded with a history that does.
+    instructed: Mutex<HashSet<String>>,
 }
 
 /// The turn running now: its session, and the signal that it is cancelled.
@@ -230,6 +233,7 @@ impl Seat {
                 load_session: accepted.load_session,
                 sessions: Mutex::default(),
                 moded: Mutex::default(),
+                instructed: Mutex::default(),
             }),
             Err(mismatch) => {
                 let _ = instance.stop(async {}, self.options.stop).await;
@@ -305,6 +309,8 @@ impl Seat {
             session: session.clone(),
             reason: error.to_string(),
         })?;
+        // A session this seat opened was shown its prompt on its first turn.
+        lock(&live.instructed).insert(session.clone());
         Ok(session)
     }
 
@@ -314,8 +320,15 @@ impl Seat {
         }
         let live = self.start().await?;
         let session = self.session(&live, request.session_id.clone()).await?;
-        let text = tinyhivemind_host::turn::render(&request)
+        let rendered = tinyhivemind_host::turn::render(&request)
             .map_err(|error| Error::Render(error.to_string()))?;
+        // ACP has no system prompt: a new session's first turn carries it.
+        let instruct = !lock(&live.instructed).contains(&session);
+        let text = if instruct {
+            with_instructions(&self.plan.seat.prompt, &rendered)
+        } else {
+            rendered
+        };
         let (cancelled, cancel) = watch::channel(false);
         *lock(&self.active) = Some(Active {
             session: session.clone(),
@@ -333,6 +346,9 @@ impl Seat {
         };
         let ended = turn.run(&text).await;
         lock(&self.active).take();
+        if instruct {
+            lock(&live.instructed).insert(session.clone());
+        }
         let ended = ended?;
         if let Some(usage) = ended.usage {
             let event = Event::Usage {
@@ -413,3 +429,17 @@ impl CancellableRunner for Runner {
         Box::pin(async move { Ok(seat.cancel().await?) })
     }
 }
+
+/// Opens a turn with the seat's standing instructions.
+const INSTRUCTIONS: &str = "Your standing instructions as this seat, for the whole session:";
+
+/// `turn` preceded by the seat's `prompt`, unless the seat has none.
+fn with_instructions(prompt: &str, turn: &str) -> String {
+    if prompt.trim().is_empty() {
+        return turn.to_owned();
+    }
+    format!("{INSTRUCTIONS}\n\n{}\n\n{turn}", prompt.trim())
+}
+
+#[cfg(test)]
+mod test;

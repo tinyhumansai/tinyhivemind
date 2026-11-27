@@ -91,6 +91,13 @@ fn check(
     let ran: BTreeSet<&str> = seen.iter().map(|request| request.agent.as_str()).collect();
     let spanned: BTreeSet<&str> = harnesses.iter().map(|(id, _)| *id).collect();
     ensure!(ran == spanned, "the seats that ran: {ran:?}");
+    for &(id, _) in harnesses {
+        let first = seen.iter().find(|request| request.agent == id);
+        ensure!(
+            first.is_some_and(|request| request.instructed),
+            "{id}'s first turn reached the model without its prompt"
+        );
+    }
     for &(id, api) in harnesses {
         let wrong: Vec<_> = seen
             .iter()
