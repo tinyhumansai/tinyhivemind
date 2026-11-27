@@ -101,6 +101,23 @@ fn a_toml_file_gets_its_values_escaped() {
 }
 
 #[cfg(unix)]
+/// [`write_codex_catalog`] of `codex`, tried again while `codex` is busy: a
+/// script this test has just written can still be open for writing in a
+/// child that another test forked meanwhile, and running it fails with
+/// `ETXTBSY` until that child execs.
+fn catalog(codex: &Path, out: &Path) -> Result<(), CatalogError> {
+    loop {
+        match write_codex_catalog(codex, out, "mock") {
+            Err(CatalogError::Launch(error))
+                if error.kind() == std::io::ErrorKind::ExecutableFileBusy =>
+            {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            result => return result,
+        }
+    }
+}
+
 #[test]
 fn each_catalog_failure_says_which_it_was() {
     use std::os::unix::fs::PermissionsExt;
@@ -114,31 +131,25 @@ fn each_catalog_failure_says_which_it_was() {
     };
     let missing = dir.path().join("no-codex");
     assert!(matches!(
-        write_codex_catalog(&missing, &out, "mock"),
+        catalog(&missing, &out),
         Err(CatalogError::Launch(_))
     ));
     let failing = script("failing", "echo broken >&2; exit 3");
-    match write_codex_catalog(&failing, &out, "mock") {
+    match catalog(&failing, &out) {
         Err(CatalogError::Exit { stderr, .. }) => assert_eq!(stderr, "broken"),
         other => panic!("{other:?}"),
     }
     let text = script("text", "echo not json");
-    assert!(matches!(
-        write_codex_catalog(&text, &out, "mock"),
-        Err(CatalogError::Json(_))
-    ));
+    assert!(matches!(catalog(&text, &out), Err(CatalogError::Json(_))));
     let empty = script("empty", "echo '{}'");
-    assert!(matches!(
-        write_codex_catalog(&empty, &out, "mock"),
-        Err(CatalogError::NoModels)
-    ));
+    assert!(matches!(catalog(&empty, &out), Err(CatalogError::NoModels)));
     let models = script("models", r#"echo '{"models": [{"slug": "other"}]}'"#);
     let unwritable = dir.path().join("missing-dir").join("c.json");
     assert!(matches!(
-        write_codex_catalog(&models, &unwritable, "mock"),
+        catalog(&models, &unwritable),
         Err(CatalogError::Write(_))
     ));
-    write_codex_catalog(&models, &out, "mock").unwrap();
+    catalog(&models, &out).unwrap();
     let catalog: Value = serde_json::from_slice(&std::fs::read(&out).unwrap()).unwrap();
     assert_eq!(catalog["models"][0]["slug"], "mock");
     assert_eq!(catalog["models"][1]["tool_mode"], "direct");
