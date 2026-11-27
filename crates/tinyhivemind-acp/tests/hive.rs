@@ -6,7 +6,8 @@
 //! scripted: `hive/model.rs` speaks the three model APIs, reads each
 //! rendered turn and calls `hivemind_post`, the same call again (once, then
 //! the host's `write_file`, for a seat that edits), then
-//! `hivemind_complete`.
+//! `hivemind_complete`; or, for a lead-only episode, has the lead ask the
+//! other harnesses' seats and complete once they have answered.
 //!
 //! Opt in with `THM_NODE` (a Node 22+ binary) and, per agent,
 //! `THM_ACP_CLAUDE` (the `claude-agent-acp` script), `THM_ACP_CODEX` (the
@@ -17,6 +18,9 @@
 
 #[path = "hive/model.rs"]
 mod model;
+
+#[path = "hive/delegation.rs"]
+mod delegation;
 
 use anyhow::{Context as _, Result, ensure};
 use model::{EDIT_TOOL, EDITS, HiveModel, Seen, edited};
@@ -267,19 +271,35 @@ async fn hive_with(
     root: &Path,
     approver: Option<Arc<dyn Approver>>,
 ) -> Result<()> {
-    let coordinator = Coordinator::new(
-        "runtime".into(),
-        Arc::new(MemoryStorage::new()),
-        CoordinatorOptions::default(),
-    )
-    .await?;
+    let options = CoordinatorOptions::default();
+    let (coordinator, server) = start_hive(&members, root, options, approver).await?;
+    let ids = members.iter().map(|member| member.id.to_owned()).collect();
+    settle(&coordinator, ids).await?;
+    let transcript = coordinator.read_transcript(None)?;
+    let seen = model.seen();
+    for member in &members {
+        seat_took_its_turn(member.id, member.edit.is_some(), &transcript, &seen)?;
+    }
+    stop_hive(&members, server).await
+}
+
+/// A coordinator under `options` and a hive tool server, with every member
+/// started, registered and in hive `work`, `approver` asked about supervised
+/// seats' edits.
+async fn start_hive(
+    members: &[Member],
+    root: &Path,
+    options: CoordinatorOptions,
+    approver: Option<Arc<dyn Approver>>,
+) -> Result<(Coordinator, HiveToolServer)> {
+    let coordinator =
+        Coordinator::new("runtime".into(), Arc::new(MemoryStorage::new()), options).await?;
     let mut services = Services::new(coordinator.clone());
     if let Some(approver) = approver {
         services = services.with_approver(approver);
     }
     let server = HiveToolServer::start(services, ServerOptions::default()).await?;
-    let ids: Vec<String> = members.iter().map(|member| member.id.to_owned()).collect();
-    for member in &members {
+    for member in members {
         let mut tools = SeatTools::new(member.id);
         if let Some(access) = member.edit {
             let workspace = workspace(root, member.id);
@@ -316,9 +336,15 @@ async fn hive_with(
             hive_id: "work".into(),
             name: "Work".into(),
             description: None,
-            members: ids.clone(),
+            members: members.iter().map(|member| member.id.into()).collect(),
         })
         .await?;
+    Ok((coordinator, server))
+}
+
+/// Send the task to hive `work`, opened by `starters`, and wait for the one
+/// episode it opens to settle.
+async fn settle(coordinator: &Coordinator, starters: Vec<String>) -> Result<()> {
     coordinator
         .send_as_host(SendMessage {
             message_id: "task".into(),
@@ -327,23 +353,23 @@ async fn hive_with(
             body: "Report, then complete.".into(),
             thread: None,
             only_for: Vec::new(),
-            starters: ids.clone(),
+            starters,
         })
         .await?;
     tokio::time::timeout(SETTLE, coordinator.run_until_idle())
         .await
         .context("the hive did not settle in time")??;
-    let transcript = coordinator.read_transcript(None)?;
-    let seen = model.seen();
-    for member in &members {
-        seat_took_its_turn(member.id, member.edit.is_some(), &transcript, &seen)?;
-    }
     let episodes = coordinator.episodes()?;
     ensure!(
         episodes.len() == 1 && episodes[0].phase == EpisodePhase::Settled,
         "the episode did not settle: {episodes:#?}"
     );
-    for member in &members {
+    Ok(())
+}
+
+/// Stop every member's seat, then the tool server.
+async fn stop_hive(members: &[Member], server: HiveToolServer) -> Result<()> {
+    for member in members {
         member.harness.stop(member.id).await?;
     }
     server.shutdown().await?;
