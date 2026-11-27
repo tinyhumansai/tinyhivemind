@@ -27,8 +27,8 @@ serde_json.workspace = true
 # The crate's error type.
 thiserror.workspace = true
 # The reader task, channels and deadlines, and the OpenClaw Gateway's
-# readiness probe.
-tokio = { workspace = true, features = ["time", "sync", "macros", "rt", "net"] }
+# readiness probe, one plain HTTP request over a TCP stream.
+tokio = { workspace = true, features = ["time", "sync", "macros", "rt", "net", "io-util"] }
 
 [dev-dependencies]
 # The hive tests: a real coordinator and hive tool server.

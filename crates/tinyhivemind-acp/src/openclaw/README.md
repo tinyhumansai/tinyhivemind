@@ -14,5 +14,5 @@ of tens of seconds, the Gateway is shared by a deployment's seats
 
 | File | Purpose |
 | --- | --- |
-| `mod.rs` | `GatewayPlan` and its config, `Gateway` (a supervised `Instance`, ready once it listens), `Agent::openclaw` |
-| `test.rs` | The config per seat, the hidden token, the bridge's arguments, and a Gateway that never listens |
+| `mod.rs` | `GatewayPlan` and its config, `Gateway` (a supervised `Instance`, ready once `GET /readyz` answers 200, not merely once it listens), `Agent::openclaw` |
+| `test.rs` | The config per seat, the hidden token, the bridge's arguments, the readiness probe, and a Gateway that never listens |

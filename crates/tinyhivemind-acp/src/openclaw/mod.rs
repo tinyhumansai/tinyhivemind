@@ -166,6 +166,22 @@ impl GatewayPlan {
     }
 }
 
+/// Whether the Gateway on `port` answers `GET /readyz` with 200: usable,
+/// its startup work settled. Listening is not enough: a bridge that connects
+/// before then can be turned away and exit.
+async fn is_ready(port: u16) -> bool {
+    use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+    let Ok(mut stream) = tokio::net::TcpStream::connect(("127.0.0.1", port)).await else {
+        return false;
+    };
+    let request = "GET /readyz HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
+    if stream.write_all(request.as_bytes()).await.is_err() {
+        return false;
+    }
+    let mut status = [0_u8; 12];
+    stream.read_exact(&mut status).await.is_ok() && status.ends_with(b" 200")
+}
+
 /// A running Gateway, stopped with its whole process tree when dropped.
 #[derive(Debug)]
 pub struct Gateway {
@@ -174,11 +190,11 @@ pub struct Gateway {
 
 impl Gateway {
     /// Write `plan`'s config and token, start the Gateway, and wait at most
-    /// `ready` for it to listen.
+    /// `ready` for it to be usable: `GET /readyz` answered with 200.
     ///
     /// # Errors
     /// A [`harness::Error`]: a file could not be written, the process could
-    /// not be started, or it exited or was not listening within `ready`.
+    /// not be started, or it exited or was not usable within `ready`.
     pub async fn start(plan: &GatewayPlan, ready: Duration) -> Result<Self, harness::Error> {
         let dir = InstanceDir::create(&plan.directory).map_err(harness::Error::Process)?;
         let state = dir.state().to_path_buf();
@@ -220,18 +236,13 @@ impl Gateway {
             .await
             .map_err(harness::Error::Process)?;
         let port = plan.port;
-        let listening = async move {
-            loop {
-                if tokio::net::TcpStream::connect(("127.0.0.1", port))
-                    .await
-                    .is_ok()
-                {
-                    return Ok::<(), String>(());
-                }
+        let usable = async move {
+            while !is_ready(port).await {
                 tokio::time::sleep(Duration::from_millis(100)).await;
             }
+            Ok::<(), String>(())
         };
-        if let Err(error) = instance.ready(listening, ready).await {
+        if let Err(error) = instance.ready(usable, ready).await {
             let _ = instance.stop(async {}, StopPolicy::default()).await;
             return Err(harness::Error::Process(error));
         }

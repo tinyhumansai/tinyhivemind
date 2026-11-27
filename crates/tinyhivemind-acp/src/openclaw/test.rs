@@ -1,5 +1,5 @@
-//! The `OpenClaw` descriptor, its Gateway's config, and a Gateway that never
-//! listens.
+//! The `OpenClaw` descriptor, its Gateway's config, the readiness probe,
+//! and a Gateway that never listens.
 #![allow(clippy::unwrap_used, clippy::panic)] // Tests fail loudly on unexpected results.
 use super::*;
 
@@ -137,4 +137,29 @@ async fn a_gateway_in_a_relative_directory_is_refused() {
         .await
         .unwrap_err();
     assert!(matches!(error, harness::Error::Process(_)), "{error}");
+}
+
+/// A server on loopback that answers one request with `status`, and its port.
+async fn answering(status: &'static str) -> u16 {
+    use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let mut request = [0_u8; 256];
+        let _ = stream.read(&mut request).await;
+        let response = format!("HTTP/1.1 {status}\r\nContent-Length: 0\r\n\r\n");
+        stream.write_all(response.as_bytes()).await.unwrap();
+    });
+    port
+}
+
+#[tokio::test]
+async fn a_gateway_is_ready_only_when_readyz_answers_200() {
+    assert!(is_ready(answering("200 OK").await).await);
+    assert!(!is_ready(answering("503 Service Unavailable").await).await);
+    let closed = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = closed.local_addr().unwrap().port();
+    drop(closed);
+    assert!(!is_ready(port).await);
 }
