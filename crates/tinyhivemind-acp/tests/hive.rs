@@ -1,4 +1,6 @@
 //! `live_*`: ACP seats, alone and beside an `OpenHuman` seat, in a real hive.
+//! The edit tests are in `hive/edit.rs` and the lead-only episodes in
+//! `hive/delegation.rs`.
 //!
 //! Each seat runs a pinned agent through its runner, is registered with a
 //! real coordinator and reaches its hive tools through a real
@@ -12,8 +14,9 @@
 //! Opt in with `THM_NODE` (a Node 22+ binary) and, per agent,
 //! `THM_ACP_CLAUDE` (the `claude-agent-acp` script), `THM_ACP_CODEX` (the
 //! `codex-acp` script) with `THM_CODEX` (its Codex binary, for the model
-//! catalog), and `THM_OPENHUMAN_CORE` for the mixed hive. A test whose
-//! agents are missing says so on stderr and passes.
+//! catalog), `THM_OPENCLAW` (`OpenClaw`'s `openclaw.mjs`, whose seats share
+//! a Gateway the test starts), and `THM_OPENHUMAN_CORE` for the mixed hives.
+//! A test whose agents are missing says so on stderr and passes.
 #![cfg(target_os = "linux")]
 
 #[path = "hive/model.rs"]
@@ -22,22 +25,23 @@ mod model;
 #[path = "hive/delegation.rs"]
 mod delegation;
 
+#[path = "hive/edit.rs"]
+mod edit;
+
 use anyhow::{Context as _, Result, ensure};
-use model::{EDIT_TOOL, EDITS, HiveModel, Seen, edited};
-use std::collections::BTreeSet;
+use model::{EDIT_TOOL, HiveModel, Seen};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::Arc;
 use std::time::Duration;
 use tinyhivemind_acp::agent::write_codex_catalog;
+use tinyhivemind_acp::openclaw::{Gateway, GatewayPlan, GatewaySeat};
 use tinyhivemind_acp::{AcpHarness, Agent};
 use tinyhivemind_exec::ExecContext;
 use tinyhivemind_hives::{
     AgentRegistration, Coordinator, CoordinatorOptions, Destination, EpisodePhase, HiveInfo,
     MemoryStorage, Message, SendMessage,
 };
-use tinyhivemind_host::harness::{
-    ApprovalFuture, Approver, Harness, SeatPlan, ToolApproval, ToolDecision,
-};
+use tinyhivemind_host::harness::{Approver, Harness, SeatPlan};
 use tinyhivemind_lang::{
     Access, ExecTool, LoweredModel, LoweredSeat, LoweredSeatIntegration, Model, Provider,
     ProviderKind,
@@ -48,20 +52,25 @@ use tinyhivemind_mcp::{HiveToolServer, SeatTools, ServerOptions, Services};
 const CLAUDE_ACP: &str = "0.112.0";
 const CODEX_ACP: &str = "2.12.1";
 const OPENHUMAN: &str = "0.64.15";
+const OPENCLAW: &str = "2026.10.33";
 /// Long enough for every seat to start and finish its turns.
 const SETTLE: Duration = Duration::from_secs(300);
+/// Long enough for an `OpenClaw` Gateway's cold start on a loaded machine.
+const GATEWAY_READY: Duration = Duration::from_secs(180);
 
 fn var(name: &str) -> Option<PathBuf> {
     std::env::var_os(name).map(PathBuf::from)
 }
 
-/// One seat of the hive: its harness, its lowered seat and, when it may
-/// edit, the access the host's edit tool runs under.
+/// One seat of the hive: its harness, its lowered seat, when it may edit,
+/// the access the host's edit tool runs under, and whether its tools go to
+/// the hive's `OpenClaw` Gateway.
 struct Member {
     id: &'static str,
     harness: Arc<dyn Harness>,
     seat: LoweredSeat,
     edit: Option<Access>,
+    gateway: bool,
 }
 
 impl Member {
@@ -79,44 +88,6 @@ impl Member {
 /// gate judges each call.
 const WRITE_FILE: &str = r#"case "$1" in /*|..|../*|*/..|*/../*) echo "outside the workspace: $1" >&2; exit 2;; esac
 printf '%s' "$2" > "$1" && printf '%s %s\n' "$THM_SEAT" "$1" >> "$THM_PACKAGE_ROOT/writes.log" && echo "wrote $1""#;
-
-/// What the host's approver tells a seat it denies.
-const DENIED: &str = "this host denies seat refused";
-
-/// The host's approver for supervised seats: it records every request and
-/// allows all but seat `refused`'s.
-#[derive(Default)]
-struct Approvals {
-    asked: Mutex<Vec<ToolApproval>>,
-}
-
-impl Approvals {
-    fn asked(&self) -> Vec<ToolApproval> {
-        self.asked
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clone()
-    }
-}
-
-impl Approver for Approvals {
-    fn decide(&self, request: ToolApproval) -> ApprovalFuture {
-        let denied = request.seat == "refused";
-        self.asked
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .push(request);
-        Box::pin(async move {
-            if denied {
-                ToolDecision::Deny {
-                    reason: DENIED.into(),
-                }
-            } else {
-                ToolDecision::Allow
-            }
-        })
-    }
-}
 
 /// The host's edit tool.
 fn write_file() -> Result<ExecTool> {
@@ -181,6 +152,7 @@ fn claude(id: &'static str, port: u16) -> Option<Member> {
         harness: Arc::new(AcpHarness::new(agent)),
         seat: seat(id, ProviderKind::Anthropic, &endpoint),
         edit: None,
+        gateway: false,
     })
 }
 
@@ -199,6 +171,7 @@ fn codex(id: &'static str, port: u16, root: &Path) -> Result<Option<Member>> {
         harness: Arc::new(AcpHarness::new(agent)),
         seat: seat(id, ProviderKind::Openai, &endpoint),
         edit: None,
+        gateway: false,
     }))
 }
 
@@ -216,7 +189,47 @@ fn openhuman(port: u16) -> Option<Member> {
         harness: Arc::new(harness),
         seat: seat("openhuman", ProviderKind::Openai, &endpoint),
         edit: None,
+        gateway: false,
     })
+}
+
+/// The Gateway a hive's `OpenClaw` seats share, in `root`, on the model at
+/// `port`; its seats are added when the hive starts.
+fn gateway(port: u16, root: &Path) -> Result<Option<GatewayPlan>> {
+    let (Some(node), Some(openclaw)) = (var("THM_NODE"), var("THM_OPENCLAW")) else {
+        return Ok(None);
+    };
+    let free = std::net::TcpListener::bind("127.0.0.1:0")?;
+    let gateway_port = free.local_addr()?.port();
+    drop(free);
+    Ok(Some(GatewayPlan {
+        node,
+        openclaw,
+        directory: root.join("gateway"),
+        port: gateway_port,
+        token: format!("thm-gateway-{gateway_port}"),
+        endpoint: format!("http://127.0.0.1:{port}/v1"),
+        model: "mock".into(),
+        seats: Vec::new(),
+    }))
+}
+
+/// Seat `id` on `OpenClaw`, through the Gateway `gateway` plans.
+fn openclaw(id: &'static str, port: u16, gateway: &GatewayPlan) -> Member {
+    let agent = Agent::openclaw(
+        gateway.node.clone(),
+        gateway.openclaw.clone(),
+        OPENCLAW,
+        gateway,
+    );
+    let endpoint = format!("http://127.0.0.1:{port}/v1");
+    Member {
+        id,
+        harness: Arc::new(AcpHarness::new(agent)),
+        seat: seat(id, ProviderKind::Openai, &endpoint),
+        edit: None,
+        gateway: true,
+    }
 }
 
 /// What seat `id` must have done: posted once under its own name, seen its
@@ -258,47 +271,63 @@ fn seat_took_its_turn(id: &str, edits: bool, transcript: &[Message], seen: &[See
     Ok(())
 }
 
+/// How a hive runs: its coordinator's options, the host's approver for
+/// supervised seats' edits, and the Gateway its `OpenClaw` seats share.
+#[derive(Default)]
+struct Setup {
+    options: CoordinatorOptions,
+    approver: Option<Arc<dyn Approver>>,
+    gateway: Option<GatewayPlan>,
+}
+
+/// A started hive.
+struct Running {
+    coordinator: Coordinator,
+    server: HiveToolServer,
+    gateway: Option<Gateway>,
+}
+
 /// Run one episode with every member as a starter, and check each seat and
 /// the episode; then stop every seat.
 async fn hive(members: Vec<Member>, model: &HiveModel, root: &Path) -> Result<()> {
-    hive_with(members, model, root, None).await
+    hive_with(members, model, root, Setup::default()).await
 }
 
-/// [`hive`], with `approver` asked about supervised seats' edits.
+/// [`hive`], set up as `setup` says.
 async fn hive_with(
     members: Vec<Member>,
     model: &HiveModel,
     root: &Path,
-    approver: Option<Arc<dyn Approver>>,
+    setup: Setup,
 ) -> Result<()> {
-    let options = CoordinatorOptions::default();
-    let (coordinator, server) = start_hive(&members, root, options, approver).await?;
+    let running = start_hive(&members, root, setup).await?;
     let ids = members.iter().map(|member| member.id.to_owned()).collect();
-    settle(&coordinator, ids).await?;
-    let transcript = coordinator.read_transcript(None)?;
+    settle(&running.coordinator, ids).await?;
+    let transcript = running.coordinator.read_transcript(None)?;
     let seen = model.seen();
     for member in &members {
         seat_took_its_turn(member.id, member.edit.is_some(), &transcript, &seen)?;
     }
-    stop_hive(&members, server).await
+    stop_hive(&members, running).await
 }
 
-/// A coordinator under `options` and a hive tool server, with every member
-/// started, registered and in hive `work`, `approver` asked about supervised
-/// seats' edits.
-async fn start_hive(
-    members: &[Member],
-    root: &Path,
-    options: CoordinatorOptions,
-    approver: Option<Arc<dyn Approver>>,
-) -> Result<(Coordinator, HiveToolServer)> {
-    let coordinator =
-        Coordinator::new("runtime".into(), Arc::new(MemoryStorage::new()), options).await?;
+/// A coordinator and hive tool server set up as `setup` says, with every
+/// member's tools served; then the `OpenClaw` Gateway, given the tools of
+/// the seats on it; then every member started, registered and in hive
+/// `work`.
+async fn start_hive(members: &[Member], root: &Path, setup: Setup) -> Result<Running> {
+    let coordinator = Coordinator::new(
+        "runtime".into(),
+        Arc::new(MemoryStorage::new()),
+        setup.options,
+    )
+    .await?;
     let mut services = Services::new(coordinator.clone());
-    if let Some(approver) = approver {
+    if let Some(approver) = setup.approver {
         services = services.with_approver(approver);
     }
     let server = HiveToolServer::start(services, ServerOptions::default()).await?;
+    let mut endpoints = Vec::new();
     for member in members {
         let mut tools = SeatTools::new(member.id);
         if let Some(access) = member.edit {
@@ -316,7 +345,25 @@ async fn start_hive(
                 .with_context(context)
                 .with_access(access);
         }
-        let tools = server.serve_seat(tools)?;
+        endpoints.push(server.serve_seat(tools)?);
+    }
+    let gateway = match setup.gateway {
+        Some(mut plan) => {
+            plan.seats = members
+                .iter()
+                .zip(&endpoints)
+                .filter(|(member, _)| member.gateway)
+                .map(|(member, tools)| GatewaySeat {
+                    id: member.id.into(),
+                    tools: tools.clone(),
+                })
+                .collect();
+            let gateway = Gateway::start(&plan, GATEWAY_READY).await;
+            Some(gateway.context("starting the OpenClaw gateway")?)
+        }
+        None => None,
+    };
+    for (member, tools) in members.iter().zip(endpoints) {
         let plan = SeatPlan::new(member.seat.clone(), root.join(member.id));
         let runner = member
             .harness
@@ -339,7 +386,11 @@ async fn start_hive(
             members: members.iter().map(|member| member.id.into()).collect(),
         })
         .await?;
-    Ok((coordinator, server))
+    Ok(Running {
+        coordinator,
+        server,
+        gateway,
+    })
 }
 
 /// Send the task to hive `work`, opened by `starters`, and wait for the one
@@ -367,12 +418,15 @@ async fn settle(coordinator: &Coordinator, starters: Vec<String>) -> Result<()> 
     Ok(())
 }
 
-/// Stop every member's seat, then the tool server.
-async fn stop_hive(members: &[Member], server: HiveToolServer) -> Result<()> {
+/// Stop every member's seat, then the Gateway, then the tool server.
+async fn stop_hive(members: &[Member], running: Running) -> Result<()> {
     for member in members {
         member.harness.stop(member.id).await?;
     }
-    server.shutdown().await?;
+    if let Some(gateway) = &running.gateway {
+        gateway.stop().await?;
+    }
+    running.server.shutdown().await?;
     Ok(())
 }
 
@@ -427,136 +481,44 @@ async fn live_a_mixed_hive_of_openhuman_claude_code_and_codex_settles() -> Resul
     Ok(())
 }
 
-/// The results of seat `id`'s edits, in [`EDITS`] order: those its last
-/// model call carried.
-fn edit_results(model: &HiveModel, id: &str) -> Result<Vec<String>> {
-    let last = model
-        .seen()
-        .into_iter()
-        .filter(|seen| seen.agent == id)
-        .max_by_key(|seen| seen.results.len())
-        .with_context(|| format!("the model never saw a turn of {id}"))?;
-    let edits = last.results.get(1..=EDITS.len()).map(<[String]>::to_vec);
-    edits.with_context(|| format!("{id} did not make every edit: {:?}", last.results))
+#[tokio::test(flavor = "multi_thread")]
+async fn live_an_openclaw_seat_posts_once_and_settles() -> Result<()> {
+    let model = HiveModel::start().await?;
+    let root = tempfile::tempdir()?;
+    let Some(gateway) = gateway(model.port, root.path())? else {
+        eprintln!("skipped: set THM_NODE and THM_OPENCLAW");
+        return Ok(());
+    };
+    let member = openclaw("openclaw", model.port, &gateway);
+    let setup = Setup {
+        gateway: Some(gateway),
+        ..Setup::default()
+    };
+    hive_with(vec![member], &model, root.path(), setup).await
 }
 
-/// Every harness edits only through the host's tool, and the host judges
-/// each edit. An autonomous `OpenHuman` seat and supervised Claude Code and
-/// Codex seats, which the host's approver allows, each write their own file;
-/// a read-only Claude Code seat and a supervised Codex seat the approver
-/// denies write nothing. Every editing seat also retries its write, which
-/// the host answers with the first result without running it again, and
-/// tries a path that climbs out of its workspace and an absolute one, which
-/// the tool refuses.
+/// One episode, four harnesses: `OpenHuman` over its own API, and Claude
+/// Code, Codex and `OpenClaw` over ACP, each seat posting once as itself.
 #[tokio::test(flavor = "multi_thread")]
-async fn live_seats_on_every_harness_edit_only_through_the_host() -> Result<()> {
+async fn live_a_hive_of_all_four_harnesses_settles() -> Result<()> {
+    let model = HiveModel::start().await?;
     let root = tempfile::tempdir()?;
-    let root = root.path();
-    let outside = root.join("outside");
-    std::fs::create_dir_all(&outside)?;
-    let model = HiveModel::start_with(&outside.to_string_lossy()).await?;
-    let (Some(openhuman), Some(claude), Some(codex), Some(reader), Some(refused)) = (
+    let (Some(openhuman), Some(claude), Some(codex), Some(gateway)) = (
         openhuman(model.port),
         claude("claude", model.port),
-        codex("codex", model.port, root)?,
-        claude("reader", model.port),
-        codex("refused", model.port, root)?,
+        codex("codex", model.port, root.path())?,
+        gateway(model.port, root.path())?,
     ) else {
         eprintln!(
-            "skipped: set THM_OPENHUMAN_CORE, THM_NODE, THM_ACP_CLAUDE, THM_ACP_CODEX and THM_CODEX"
+            "skipped: set THM_OPENHUMAN_CORE, THM_NODE, THM_ACP_CLAUDE, THM_ACP_CODEX, THM_CODEX and THM_OPENCLAW"
         );
         return Ok(());
     };
-    let members = vec![
-        openhuman.editing(Access::Autonomous),
-        claude.editing(Access::Supervised),
-        codex.editing(Access::Supervised),
-        reader.editing(Access::ReadOnly),
-        refused.editing(Access::Supervised),
-    ];
-    let approvals = Arc::new(Approvals::default());
-    hive_with(members, &model, root, Some(approvals.clone())).await?;
-    let log = std::fs::read_to_string(root.join("writes.log")).unwrap_or_default();
-    let runs = |id: &str| {
-        log.lines()
-            .filter(|line| line.split(' ').next() == Some(id))
-            .count()
+    let openclaw = openclaw("openclaw", model.port, &gateway);
+    let setup = Setup {
+        gateway: Some(gateway),
+        ..Setup::default()
     };
-
-    for id in ["openhuman", "claude", "codex"] {
-        let file = workspace(root, id).join(format!("{id}.md"));
-        let written = std::fs::read_to_string(&file)
-            .with_context(|| format!("{id} did not write {}", file.display()))?;
-        ensure!(written == edited(id), "{id} wrote {written:?}");
-        let entries = std::fs::read_dir(workspace(root, id))?.count();
-        ensure!(entries == 1, "{id}'s workspace holds {entries} entries");
-        // The host ran the program once, for the edit, and nothing else.
-        ensure!(
-            runs(id) == 1,
-            "the host wrote {} times for {id}: {log:?}",
-            runs(id)
-        );
-        let results = edit_results(&model, id)?;
-        ensure!(
-            results[0].contains(&format!("wrote {id}.md")),
-            "{id}'s edit did not come back from the host's tool: {:?}",
-            results[0]
-        );
-        ensure!(
-            results[1] == results[0],
-            "{id}'s retry was not answered with the first result: {results:?}"
-        );
-        for (edit, result) in EDITS.iter().zip(&results).skip(2) {
-            ensure!(
-                result.contains("outside the workspace"),
-                "{id}'s {edit} write was not refused: {result:?}"
-            );
-        }
-    }
-
-    for (id, reason) in [("reader", "read_only"), ("refused", DENIED)] {
-        let entries = std::fs::read_dir(workspace(root, id))?.count();
-        ensure!(entries == 0, "{id} wrote {entries} entries");
-        ensure!(runs(id) == 0, "the host ran {id}'s write: {log:?}");
-        let results = edit_results(&model, id)?;
-        ensure!(
-            results.iter().all(|result| result.contains(reason)),
-            "{id} was not told every write was refused ({reason}): {results:?}"
-        );
-    }
-
-    // Nothing landed outside a workspace: no escape file beside them, and
-    // nothing in the directory the absolute writes aimed at.
-    let beside: BTreeSet<String> = std::fs::read_dir(root.join("workspaces"))?
-        .map(|entry| Ok(entry?.file_name().to_string_lossy().into_owned()))
-        .collect::<std::io::Result<_>>()?;
-    let seats: BTreeSet<String> = ["openhuman", "claude", "codex", "reader", "refused"]
-        .map(str::to_owned)
-        .into();
-    ensure!(beside == seats, "the workspaces directory holds {beside:?}");
-    let outside_entries = std::fs::read_dir(&outside)?.count();
-    ensure!(
-        outside_entries == 0,
-        "{outside_entries} files landed outside"
-    );
-
-    // The approver judged exactly the supervised seats, and the edit's
-    // retry was answered from the host's record without asking it again.
-    let asked = approvals.asked();
-    let judged: BTreeSet<&str> = asked.iter().map(|request| request.seat.as_str()).collect();
-    ensure!(
-        judged == BTreeSet::from(["claude", "codex", "refused"]),
-        "the approver judged {judged:?}"
-    );
-    for id in ["claude", "codex"] {
-        let edits = asked
-            .iter()
-            .filter(|request| request.seat == id && request.call_id == "edit")
-            .count();
-        ensure!(
-            edits == 1,
-            "the approver was asked {edits} times about {id}'s edit"
-        );
-    }
-    Ok(())
+    let members = vec![openhuman, claude, codex, openclaw];
+    hive_with(members, &model, root.path(), setup).await
 }

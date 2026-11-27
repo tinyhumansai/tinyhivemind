@@ -79,7 +79,7 @@ crates/
 ├── tinyhivemind-mcp/       # hive and package tools served to harness processes over loopback MCP
 ├── tinyhivemind-openhuman/ # package deployment, seat runners, host integration
 ├── tinyhivemind-openhuman-process/ # OpenHuman seats as supervised processes
-├── tinyhivemind-acp/       # seats on any Agent Client Protocol agent (Claude Code, Codex)
+├── tinyhivemind-acp/       # seats on any Agent Client Protocol agent (Claude Code, Codex, OpenClaw)
 ├── tinyhivemind-hives/    # durable cross-hive coordinator
 └── tinyhivemind-lang/     # pure hive packages: structure, integrations, edits, lineage
 wiki/                    # GitHub wiki submodule

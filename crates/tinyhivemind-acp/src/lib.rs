@@ -5,12 +5,15 @@
 //! agent that speaks the [Agent Client Protocol](https://agentclientprotocol.com)
 //! over stdio. What differs between agents is an [`Agent`]: the command, its
 //! environment and files, the `session/new` metadata that turns its built-in
-//! tools off, and the session mode. [`Agent::claude_code`] and
-//! [`Agent::codex`] are the two measured in
-//! `docs/experiments/2026-11-26-acp-harnesses.md`.
+//! tools off, and the session mode. [`Agent::claude_code`],
+//! [`Agent::codex`] and [`Agent::openclaw`] are the three measured in
+//! `docs/experiments/2026-11-26-acp-harnesses.md`. `OpenClaw`'s bridge takes its
+//! tools from a shared Gateway rather than per session; [`openclaw`] plans and
+//! supervises that Gateway.
 //!
 //! A seat is one agent process in its own private directory. Its first turn
-//! opens an ACP session with the host's tool server as its one MCP server;
+//! opens an ACP session with the host's tool server as its one MCP server
+//! (or none, for an agent given it elsewhere, as `OpenClaw`'s Gateway is);
 //! every turn is a `session/prompt` on that session, and a restarted process
 //! resumes it with `session/load`. A permission request for one of the host's
 //! tools is allowed here, since the tool server already judges hive tools;
@@ -44,6 +47,7 @@ pub mod capability;
 mod connection;
 mod error;
 mod harness;
+pub mod openclaw;
 mod protocol;
 mod seat;
 

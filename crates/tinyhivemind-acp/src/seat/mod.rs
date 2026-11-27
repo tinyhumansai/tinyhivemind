@@ -93,6 +93,7 @@ fn values(agent: &Agent, plan: &SeatPlan, tools: &ToolEndpoint, model: &SeatMode
         ("model".to_owned(), model.model.clone()),
         ("server".to_owned(), tools.server.clone()),
         ("program_dir".to_owned(), program_dir),
+        ("seat".to_owned(), plan.seat.id.clone()),
     ]);
     values.extend(agent.vars.clone());
     let allowed_tools = tools
@@ -102,6 +103,7 @@ fn values(agent: &Agent, plan: &SeatPlan, tools: &ToolEndpoint, model: &SeatMode
             agent
                 .tool_name
                 .replace("{server}", &tools.server)
+                .replace("{seat}", &plan.seat.id)
                 .replace("{tool}", tool)
         })
         .collect();
@@ -207,7 +209,7 @@ impl Seat {
                 return Err(error.into());
             }
         };
-        let accepted = match protocol::accept(&init) {
+        let accepted = match protocol::accept(&init, self.agent.session_mcp) {
             Ok(accepted) => accepted,
             Err(reason) => {
                 let _ = instance.stop(async {}, self.options.stop).await;
@@ -238,10 +240,12 @@ impl Seat {
 
     /// The `session/new` and `session/load` parameters.
     fn session_params(&self) -> Value {
-        let mut params = json!({
-            "cwd": self.cwd(),
-            "mcpServers": [protocol::mcp_server(&self.tools)],
-        });
+        let servers = if self.agent.session_mcp {
+            vec![protocol::mcp_server(&self.tools)]
+        } else {
+            Vec::new()
+        };
+        let mut params = json!({"cwd": self.cwd(), "mcpServers": servers});
         if let Some(meta) = &self.agent.session_meta {
             params["_meta"] = self.values.fill_json(meta);
         }

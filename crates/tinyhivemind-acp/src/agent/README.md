@@ -4,5 +4,5 @@ What differs between ACP agents, as data, with `{name}` templates filled per sea
 
 | File | Purpose |
 | --- | --- |
-| `mod.rs` | `Agent`, `Agent::claude_code`, `Agent::codex`, `write_codex_catalog`, template values |
+| `mod.rs` | `Agent`, `Agent::claude_code`, `Agent::codex`, `write_codex_catalog`, template values (`Agent::openclaw` is in [`../openclaw/`](../openclaw/README.md)) |
 | `test.rs` | Templates, TOML escaping, the two descriptors and each catalog failure |
