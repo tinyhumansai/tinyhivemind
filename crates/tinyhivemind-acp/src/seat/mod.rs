@@ -43,8 +43,8 @@ pub(crate) struct Live {
     sessions: Mutex<HashSet<String>>,
     /// Of those, the ones in the descriptor's mode.
     moded: Mutex<HashSet<String>>,
-    /// Of those, the ones that hold the seat's prompt: shown it on their
-    /// first turn, or loaded with a history that does.
+    /// Of those, the ones this process has shown the seat's prompt, on a
+    /// turn that succeeded.
     instructed: Mutex<HashSet<String>>,
 }
 
@@ -309,8 +309,6 @@ impl Seat {
             session: session.clone(),
             reason: error.to_string(),
         })?;
-        // A session this seat opened was shown its prompt on its first turn.
-        lock(&live.instructed).insert(session.clone());
         Ok(session)
     }
 
@@ -322,7 +320,9 @@ impl Seat {
         let session = self.session(&live, request.session_id.clone()).await?;
         let rendered = tinyhivemind_host::turn::render(&request)
             .map_err(|error| Error::Render(error.to_string()))?;
-        // ACP has no system prompt: a new session's first turn carries it.
+        // ACP has no system prompt: the first turn this process runs in a
+        // session carries it. A loaded session is shown it again: one opened
+        // before seats were shown their prompt never was.
         let instruct = !lock(&live.instructed).contains(&session);
         let text = if instruct {
             with_instructions(&self.plan.seat.prompt, &rendered)
@@ -346,10 +346,11 @@ impl Seat {
         };
         let ended = turn.run(&text).await;
         lock(&self.active).take();
+        let ended = ended?;
+        // Only a turn that succeeded is known to have reached the agent.
         if instruct {
             lock(&live.instructed).insert(session.clone());
         }
-        let ended = ended?;
         if let Some(usage) = ended.usage {
             let event = Event::Usage {
                 turn_id: request.turn_id.clone(),
