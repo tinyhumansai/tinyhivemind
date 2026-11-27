@@ -2,14 +2,10 @@
 //! the seats on the other harnesses take part because the lead asks them,
 //! and a member nobody asks never runs.
 
-use super::{
-    Member, Setup, claude, codex, gateway, openclaw, openhuman, settle, start_hive, stop_hive,
-};
+use super::{Member, Setup, claude, codex, openclaw, openhuman, settle, start_hive, stop_hive};
 use crate::model::{Api, Delegation, HiveModel, Seen, answered};
 use anyhow::{Result, ensure};
 use std::collections::BTreeSet;
-use std::path::Path;
-use tinyhivemind_acp::openclaw::GatewayPlan;
 use tinyhivemind_hives::{CoordinatorOptions, Message};
 
 /// The three harnesses every lead-only episode spans, by seat id, and the
@@ -44,8 +40,7 @@ async fn lead_delegates(lead: &str, harnesses: &[(&'static str, Api)]) -> Result
         asked: asked.clone(),
     };
     let model = HiveModel::start_delegating(delegation).await?;
-    let gateway = gateway(model.port, root)?;
-    let Some(members) = members(harnesses, model.port, root, gateway.as_ref())? else {
+    let Some(members) = members(harnesses, model.port) else {
         eprintln!(
             "skipped: set THM_OPENHUMAN_CORE, THM_NODE, THM_ACP_CLAUDE, THM_ACP_CODEX, THM_CODEX and, for OpenClaw, THM_OPENCLAW"
         );
@@ -56,42 +51,30 @@ async fn lead_delegates(lead: &str, harnesses: &[(&'static str, Api)]) -> Result
             round_width: asked.len(),
             ..CoordinatorOptions::default()
         },
-        gateway: gateway.filter(|_| members.iter().any(|member| member.gateway)),
         ..Setup::default()
     };
     let running = start_hive(&members, root, setup).await?;
     settle(&running.coordinator, vec![lead.into()]).await?;
     let transcript = running.coordinator.read_transcript(None)?;
-    stop_hive(&members, running).await?;
+    stop_hive(running).await?;
     check(lead, &asked, harnesses, &transcript, &model.seen())
 }
 
 /// A seat on each of `harnesses`, then `idle`, a Claude Code seat nobody
 /// asks; `None` if an agent is missing.
-fn members(
-    harnesses: &[(&'static str, Api)],
-    port: u16,
-    root: &Path,
-    gateway: Option<&GatewayPlan>,
-) -> Result<Option<Vec<Member>>> {
+fn members(harnesses: &[(&'static str, Api)], port: u16) -> Option<Vec<Member>> {
     let mut members = Vec::new();
     for (id, _) in harnesses {
         let member = match *id {
             "openhuman" => openhuman(port),
             "claude" => claude("claude", port),
-            "codex" => codex("codex", port, root)?,
-            _ => gateway.map(|gateway| openclaw("openclaw", port, gateway)),
+            "codex" => codex("codex", port),
+            _ => openclaw("openclaw", port),
         };
-        let Some(member) = member else {
-            return Ok(None);
-        };
-        members.push(member);
+        members.push(member?);
     }
-    let Some(idle) = claude("idle", port) else {
-        return Ok(None);
-    };
-    members.push(idle);
-    Ok(Some(members))
+    members.push(claude("idle", port)?);
+    Some(members)
 }
 
 /// What a lead-only episode must show: who ran and how, the one ask, the

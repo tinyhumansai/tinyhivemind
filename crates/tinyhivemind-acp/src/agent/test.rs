@@ -101,13 +101,19 @@ fn a_toml_file_gets_its_values_escaped() {
 }
 
 #[cfg(unix)]
-/// [`write_codex_catalog`] of `codex`, tried again while `codex` is busy: a
-/// script this test has just written can still be open for writing in a
-/// child that another test forked meanwhile, and running it fails with
-/// `ETXTBSY` until that child execs.
+/// [`catalog_for`] model `mock`.
 fn catalog(codex: &Path, out: &Path) -> Result<(), CatalogError> {
+    catalog_for(codex, out, "mock")
+}
+
+#[cfg(unix)]
+/// [`write_codex_catalog`] of `codex` for `model`, tried again while `codex`
+/// is busy: a script this test has just written can still be open for
+/// writing in a child that another test forked meanwhile, and running it
+/// fails with `ETXTBSY` until that child execs.
+fn catalog_for(codex: &Path, out: &Path, model: &str) -> Result<(), CatalogError> {
     loop {
-        match write_codex_catalog(codex, out, "mock") {
+        match write_codex_catalog(codex, out, model) {
             Err(CatalogError::Launch(error))
                 if error.kind() == std::io::ErrorKind::ExecutableFileBusy =>
             {
@@ -153,4 +159,53 @@ fn each_catalog_failure_says_which_it_was() {
     let catalog: Value = serde_json::from_slice(&std::fs::read(&out).unwrap()).unwrap();
     assert_eq!(catalog["models"][0]["slug"], "mock");
     assert_eq!(catalog["models"][1]["tool_mode"], "direct");
+}
+
+#[test]
+fn each_model_gets_its_own_catalog_entry() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let codex = dir.path().join("codex");
+    let bundled = json!({"models": [
+        {"slug": "gpt-6", "base_instructions": "six", "support_verbosity": true,
+         "default_verbosity": "low", "default_reasoning_level": "medium",
+         "supported_reasoning_levels": [{"effort": "medium"}], "default_reasoning_summary": "auto"},
+        {"slug": "gpt-5.6-luna", "base_instructions": "luna", "support_verbosity": true,
+         "default_verbosity": "low", "default_reasoning_level": "low",
+         "supported_reasoning_levels": [{"effort": "low"}]},
+    ]});
+    std::fs::write(&codex, format!("#!/bin/sh\necho '{bundled}'\n")).unwrap();
+    std::fs::set_permissions(&codex, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let entry = |model: &str| {
+        let out = dir.path().join("c.json");
+        catalog_for(&codex, &out, model).unwrap();
+        let catalog: Value = serde_json::from_slice(&std::fs::read(&out).unwrap()).unwrap();
+        assert_eq!(catalog["models"].as_array().unwrap().len(), 3, "{model}");
+        catalog["models"][0].clone()
+    };
+
+    // A model a router names with its vendor takes that model's own entry,
+    // reasoning and verbosity included.
+    let routed = entry("openai/gpt-5.6-luna");
+    assert_eq!(routed["slug"], "openai/gpt-5.6-luna");
+    assert_eq!(routed["display_name"], "openai/gpt-5.6-luna");
+    assert_eq!(routed["base_instructions"], "luna");
+    assert_eq!(routed["default_verbosity"], "low");
+    assert_eq!(routed["default_reasoning_level"], "low");
+    assert_eq!(routed["tool_mode"], "direct");
+
+    // Any other takes the first entry without the fields a model that has
+    // no reasoning or verbosity refuses.
+    for model in ["openai/gpt-4.1-mini", "mock"] {
+        let other = entry(model);
+        assert_eq!(other["slug"], model);
+        assert_eq!(other["base_instructions"], "six");
+        assert_eq!(other["support_verbosity"], false);
+        assert_eq!(other["default_verbosity"], Value::Null);
+        assert_eq!(other["default_reasoning_level"], Value::Null);
+        assert_eq!(other["supported_reasoning_levels"], json!([]));
+        assert_eq!(other["default_reasoning_summary"], "none");
+        assert_eq!(other["supports_reasoning_effort_updates"], false);
+        assert_eq!(other["tool_mode"], "direct");
+    }
 }

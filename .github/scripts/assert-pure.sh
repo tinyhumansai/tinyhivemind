@@ -18,14 +18,18 @@ set -euo pipefail
 pure_crates=("tinyhivemind-core" "tinyhivemind-lang")
 tool_crates=("tinyhivemind-tools")
 # Host and the process harness clients (OpenHuman's and the ACP one) run
-# harnesses as processes (ADR 0035),
+# harnesses as processes (ADR 0035), deploy starts a hive's seats on them,
 # and the MCP server serves them hive tools over loopback (ADR 0036), so they may
 # hold a runtime, a listener and an HTTP client, but none may link a harness.
-host_crates=("tinyhivemind-host" "tinyhivemind-mcp" "tinyhivemind-openhuman-process" "tinyhivemind-acp")
+host_crates=("tinyhivemind-host" "tinyhivemind-mcp" "tinyhivemind-openhuman-process" "tinyhivemind-acp" "tinyhivemind-deploy")
 
 forbidden_pure='tokio|futures|async-trait|axum|hyper|reqwest|ureq|curl|anyhow|rusqlite|git2|openhuman|tinyagents|tinytools'
-# Whole families: `openhuman-embed`, `tinyagents-harness` and so on.
-forbidden_host='(openhuman|tinyagents|tinyflows|tinymemory|tinyhivemind-openhuman)(-[a-z0-9-]+)?'
+# Whole families: `openhuman-embed`, `tinyagents-harness` and so on, and the
+# linked adapter `tinyhivemind-openhuman` itself. The adapter is matched
+# exactly, not as a family: `tinyhivemind-openhuman-process` shares its name
+# but is a process client that links no harness, checked above as a host
+# crate, and `tinyhivemind-deploy` depends on it.
+forbidden_host='(openhuman|tinyagents|tinyflows|tinymemory)(-[a-z0-9-]+)?|tinyhivemind-openhuman'
 forbidden_tools='tokio|futures|axum|hyper|reqwest|ureq|curl|rusqlite|git2|openhuman|tinyagents'
 
 status=0

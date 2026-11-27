@@ -31,15 +31,7 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["time", "sync", "macros", "rt", "net", "io-util"] }
 
 [dev-dependencies]
-# The hive tests: a real coordinator and hive tool server.
-tinyhivemind-mcp.workspace = true
-# The edit test's workspace for the host's edit tool.
-tinyhivemind-exec.workspace = true
-# The mixed hive test runs an OpenHuman seat beside the ACP ones.
-tinyhivemind-openhuman-process = { path = "../tinyhivemind-openhuman-process" }
-# Fallible tests over several error types.
-anyhow.workspace = true
-# Async tests and the scripted model's listener.
+# Async tests.
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "io-util", "time", "sync", "process"] }
 # Seat directories.
 tempfile.workspace = true

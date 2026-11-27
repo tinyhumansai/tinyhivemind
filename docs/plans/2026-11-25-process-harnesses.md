@@ -92,6 +92,12 @@ passes, `credential` stays rejected and no hosted model is usable. `openrouter`,
 One coordinator, a harness per seat, agreement across packages, an example hive
 with all three kinds, and coordinator-run workflows.
 
+Started: `tinyhivemind-deploy` starts lowered seats on one coordinator, each on
+the client its kind maps to (OpenHuman, Claude Code, Codex, OpenClaw), with one
+tool server and the `OpenClaw` Gateways their isolation asks for; the live hive
+tests run through it. Still open: building those seats from packages (plan
+agreement across packages) and coordinator-run workflows.
+
 ## 6. Remove the link
 
 Gate: every field of the integration spec is working or rejected per kind, no

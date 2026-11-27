@@ -1,0 +1,45 @@
+[package]
+name = "tinyhivemind-deploy"
+description = "Starts a hive's seats on their harness processes: one tool server, the OpenClaw Gateways, and a harness per seat by its kind."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+publish = false
+# Like the clients it composes, this crate links no harness (ADR 0035):
+# `.github/scripts/assert-pure.sh` asserts it.
+
+[dependencies]
+# The harness port: seat plans, tool endpoints and runners.
+tinyhivemind-host.workspace = true
+# The coordinator each seat registers with.
+tinyhivemind-hives.workspace = true
+# Lowered seats, their harness kinds and models.
+tinyhivemind-lang.workspace = true
+# The hive tool server every seat reaches its tools through.
+tinyhivemind-mcp.workspace = true
+# Claude Code, Codex and OpenClaw seats, and OpenClaw's Gateway.
+tinyhivemind-acp.workspace = true
+# OpenHuman seats.
+tinyhivemind-openhuman-process.workspace = true
+# The OpenClaw Gateway's token.
+getrandom.workspace = true
+# The crate's error type.
+thiserror.workspace = true
+
+[dev-dependencies]
+# Executable tools in the unit tests and the live edit test.
+tinyhivemind-exec.workspace = true
+# Fallible tests over several error types.
+anyhow.workspace = true
+# Async tests, and the scripted model's listener in the live tests.
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "io-util", "time", "sync", "process"] }
+# Seat and deployment directories.
+tempfile.workspace = true
+# The scripted model's payloads.
+serde_json.workspace = true
+
+[lints]
+workspace = true
