@@ -41,7 +41,8 @@
 //! host passes the paths of pinned installs); it serves no tools (the host's
 //! MCP server does); and it cannot observe the tool list an agent shows its
 //! model, which ACP does not expose, so that is held by each descriptor's
-//! settings and proven by the live tests rather than checked at start.
+//! settings and proven by the live hive tests in `tinyhivemind-deploy` rather
+//! than checked at start.
 pub mod agent;
 pub mod capability;
 mod connection;

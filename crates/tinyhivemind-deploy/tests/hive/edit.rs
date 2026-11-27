@@ -1,7 +1,7 @@
 //! `live_*`: every harness edits only through the host's `write_file`
 //! tool, each seat in its own workspace, and the host judges each edit.
 
-use super::{Setup, claude, codex, gateway, hive_with, openclaw, openhuman, workspace};
+use super::{Setup, claude, codex, hive_with, openclaw, openhuman, workspace};
 use crate::model::{EDITS, HiveModel, edited};
 use anyhow::{Context as _, Result, ensure};
 use std::collections::BTreeSet;
@@ -88,27 +88,27 @@ async fn edits(with_openclaw: bool) -> Result<()> {
     let outside = root.join("outside");
     std::fs::create_dir_all(&outside)?;
     let model = HiveModel::start_with(&outside.to_string_lossy()).await?;
-    let gateway = if with_openclaw {
-        gateway(model.port, root)?
-    } else {
-        None
-    };
     let (Some(openhuman), Some(claude), Some(codex), Some(reader), Some(refused)) = (
         openhuman(model.port),
         claude("claude", model.port),
-        codex("codex", model.port, root)?,
+        codex("codex", model.port),
         claude("reader", model.port),
-        codex("refused", model.port, root)?,
+        codex("refused", model.port),
     ) else {
         eprintln!(
             "skipped: set THM_OPENHUMAN_CORE, THM_NODE, THM_ACP_CLAUDE, THM_ACP_CODEX and THM_CODEX"
         );
         return Ok(());
     };
-    if with_openclaw && gateway.is_none() {
-        eprintln!("skipped: set THM_OPENCLAW too");
-        return Ok(());
-    }
+    let claw = if with_openclaw {
+        let Some(claw) = openclaw("openclaw", model.port) else {
+            eprintln!("skipped: set THM_OPENCLAW too");
+            return Ok(());
+        };
+        Some(claw)
+    } else {
+        None
+    };
     let mut members = vec![
         openhuman.editing(Access::Autonomous),
         claude.editing(Access::Supervised),
@@ -118,15 +118,14 @@ async fn edits(with_openclaw: bool) -> Result<()> {
     ];
     let mut writers = vec!["openhuman", "claude", "codex"];
     let mut supervised = vec!["claude", "codex"];
-    if let Some(gateway) = &gateway {
-        members.push(openclaw("openclaw", model.port, gateway).editing(Access::Supervised));
+    if let Some(claw) = claw {
+        members.push(claw.editing(Access::Supervised));
         writers.push("openclaw");
         supervised.push("openclaw");
     }
     let approvals = Arc::new(Approvals::default());
     let setup = Setup {
         approver: Some(approvals.clone()),
-        gateway,
         ..Setup::default()
     };
     hive_with(members, &model, root, setup).await?;

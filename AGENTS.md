@@ -53,11 +53,12 @@ is not advisory — do not add an exception to it to land a change.
 
 ## Project Structure
 
-This is a Rust 2024 virtual Cargo workspace with ten packages. Core owns all
+This is a Rust 2024 virtual Cargo workspace with eleven packages. Core owns all
 host-neutral behavior; lang is where a hive mind is defined, integrations
 included; tools renders native tool definitions and records calls; exec runs a
 package's executable tools and hooks; host is the harness-neutral
 half of running seats; mcp serves hive tools to seats that run as processes;
+deploy starts a hive's seats on those processes;
 OpenHuman is the only crate that links an agent harness,
 and it deploys hive packages.
 
@@ -80,6 +81,7 @@ crates/
 ├── tinyhivemind-openhuman/ # package deployment, seat runners, host integration
 ├── tinyhivemind-openhuman-process/ # OpenHuman seats as supervised processes
 ├── tinyhivemind-acp/       # seats on any Agent Client Protocol agent (Claude Code, Codex, OpenClaw)
+├── tinyhivemind-deploy/    # a hive's seats started on their harness processes under one coordinator
 ├── tinyhivemind-hives/    # durable cross-hive coordinator
 └── tinyhivemind-lang/     # pure hive packages: structure, integrations, edits, lineage
 wiki/                    # GitHub wiki submodule
@@ -107,6 +109,10 @@ links no harness either.
 `tinyhivemind-acp` implements the same port once for every agent that speaks
 the Agent Client Protocol over stdio; what differs between agents is an
 `Agent` descriptor of data, and it links no harness either.
+`tinyhivemind-deploy` starts a hive's seats on those clients under one
+coordinator: one tool server, the `OpenClaw` Gateways, and each seat on the
+harness its package declares, from the pinned installs the host passes in. It
+links no harness either.
 `tinyhivemind-host` depends on core, hives and lang, and owns what every harness
 shares: the hive tools and their dispatch, the send and management policy ports,
 turn scope and prompt, package loading, the deployment plan, and supervised
