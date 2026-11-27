@@ -1,0 +1,47 @@
+[package]
+name = "tinyhivemind-acp"
+description = "Hive seats on any Agent Client Protocol agent, each a supervised child process spoken to over stdio."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+publish = false
+# This crate links no harness (ADR 0035): it speaks the Agent Client Protocol
+# over a supervised child's stdin and stdout, and what differs between agents
+# is a descriptor of data. `.github/scripts/assert-pure.sh` asserts that no
+# harness enters its graph.
+
+[dependencies]
+# The harness port, seat runner, verification and process supervision, whose
+# JSON lines pipes carry the protocol.
+tinyhivemind-host.workspace = true
+# The coordinator's turn request and outcome.
+tinyhivemind-hives.workspace = true
+# The lowered seat and the harness kinds.
+tinyhivemind-lang.workspace = true
+# Protocol messages, read tolerantly: the usage fields agents send are still
+# unstable in the protocol's own schema crate, so this crate does not take it.
+serde_json.workspace = true
+# The crate's error type.
+thiserror.workspace = true
+# The reader task, channels and deadlines.
+tokio = { workspace = true, features = ["time", "sync", "macros", "rt"] }
+
+[dev-dependencies]
+# The hive tests: a real coordinator and hive tool server.
+tinyhivemind-mcp.workspace = true
+# The edit test's workspace for the host's edit tool.
+tinyhivemind-exec.workspace = true
+# The mixed hive test runs an OpenHuman seat beside the ACP ones.
+tinyhivemind-openhuman-process = { path = "../tinyhivemind-openhuman-process" }
+# Fallible tests over several error types.
+anyhow.workspace = true
+# Async tests and the scripted model's listener.
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "io-util", "time", "sync", "process"] }
+# Seat directories.
+tempfile.workspace = true
+
+[lints]
+workspace = true

@@ -21,11 +21,19 @@ pub enum HarnessKind {
     OpenClaw,
     /// `codex`.
     Codex,
+    /// `claude-code`.
+    #[serde(rename = "claude-code")]
+    ClaudeCode,
 }
 
 impl HarnessKind {
     /// Every kind, in the order the capability table lists them.
-    pub const ALL: [Self; 3] = [Self::OpenHuman, Self::OpenClaw, Self::Codex];
+    pub const ALL: [Self; 4] = [
+        Self::OpenHuman,
+        Self::OpenClaw,
+        Self::Codex,
+        Self::ClaudeCode,
+    ];
 
     /// How instances of this kind are shared when a harness entry does not
     /// say: one per deployment for `openclaw`, whose instance costs
@@ -34,7 +42,7 @@ impl HarnessKind {
     pub const fn default_isolation(self) -> Isolation {
         match self {
             Self::OpenClaw => Isolation::Deployment,
-            Self::OpenHuman | Self::Codex => Isolation::Seat,
+            Self::OpenHuman | Self::Codex | Self::ClaudeCode => Isolation::Seat,
         }
     }
 }
@@ -45,6 +53,7 @@ impl fmt::Display for HarnessKind {
             Self::OpenHuman => "openhuman",
             Self::OpenClaw => "openclaw",
             Self::Codex => "codex",
+            Self::ClaudeCode => "claude-code",
         })
     }
 }

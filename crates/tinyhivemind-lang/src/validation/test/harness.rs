@@ -162,6 +162,41 @@ fn every_rejected_provider_row_is_reported_at_the_provider() {
     }
 }
 
+/// `mixed-harnesses` with every seat on one `claude-code` harness.
+fn all_on_claude_code(m: &mut Value) {
+    m["harnesses"] = json!([{"id": "claude", "kind": "claude-code"}]);
+    m["runtime"]["harness"] = json!("claude");
+    for list in ["seats", "profiles"] {
+        for entry in m[list].as_array_mut().unwrap() {
+            entry.as_object_mut().unwrap().remove("harness");
+        }
+    }
+}
+
+#[test]
+fn claude_code_speaks_only_to_an_anthropic_endpoint() {
+    let found = mixed(all_on_claude_code);
+    assert_eq!(integration_pointers(&found), ["/providers/0/kind"]);
+    assert!(
+        found.iter().any(|d| d
+            .message
+            .contains("provider openai with an endpoint and no credential")),
+        "{found:?}"
+    );
+    let found = mixed(|m| {
+        all_on_claude_code(m);
+        m["providers"][0]["kind"] = json!("anthropic");
+    });
+    assert_eq!(found, vec![]);
+    // Without an endpoint it would reach Anthropic itself, which needs a key.
+    let found = mixed(|m| {
+        all_on_claude_code(m);
+        m["providers"][0]["kind"] = json!("anthropic");
+        m["providers"][0]["endpoint"] = json!(null);
+    });
+    assert_eq!(integration_pointers(&found), ["/providers/0/kind"]);
+}
+
 #[test]
 fn a_seat_that_resolves_to_no_provider_is_rejected() {
     let found = mixed(|m| {

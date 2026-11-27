@@ -22,8 +22,10 @@ pub enum Capability {
     OpenaiDefaultEndpoint,
     /// Provider `openrouter`.
     Openrouter,
-    /// Provider `anthropic`.
+    /// Provider `anthropic` without an `endpoint`.
     Anthropic,
+    /// Provider `anthropic` with an explicit `endpoint` and no `credential`.
+    AnthropicEndpoint,
     /// Provider `inherit`, or no provider at all: a child process has none
     /// to inherit.
     InheritedProvider,
@@ -128,13 +130,16 @@ pub enum Unlock {
     Spec,
 }
 
-/// The model API a kind speaks to an `openai` provider's endpoint.
+/// The model API a kind speaks to its provider's endpoint: an `openai`
+/// provider's for every kind but `claude-code`, an `anthropic` one's for it.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum ModelApi {
     /// `POST /chat/completions`.
     ChatCompletions,
     /// `POST /responses`.
     Responses,
+    /// `POST /v1/messages`, Anthropic's.
+    Messages,
 }
 
 impl Support {
@@ -147,12 +152,13 @@ impl Support {
 
 impl Capability {
     /// Every capability, in the order of the spec's table.
-    pub const ALL: [Self; 41] = [
+    pub const ALL: [Self; 42] = [
         Self::Essentials,
         Self::OpenaiEndpoint,
         Self::OpenaiDefaultEndpoint,
         Self::Openrouter,
         Self::Anthropic,
+        Self::AnthropicEndpoint,
         Self::InheritedProvider,
         Self::ProviderCredential,
         Self::ServedToolPolicy,
@@ -191,17 +197,21 @@ impl Capability {
         Self::Undecided,
     ];
 
-    /// The row: support for `openhuman`, `openclaw` and `codex`, in that
-    /// order ([`HarnessKind::ALL`]).
-    const fn row(self) -> [Support; 3] {
+    /// The row: support for `openhuman`, `openclaw`, `codex` and
+    /// `claude-code`, in that order ([`HarnessKind::ALL`]).
+    const fn row(self) -> [Support; 4] {
         use Support::{Harness as H, Host};
         const T: Support = Support::Rejected(Unlock::Conformance);
         const R: Support = Support::Rejected(Unlock::Release);
         const D: Support = Support::Rejected(Unlock::Spec);
         match self {
-            Self::Essentials | Self::OpenaiEndpoint | Self::NoSandbox => [H, H, H],
+            Self::Essentials | Self::NoSandbox => [H, H, H, H],
+            // Claude Code speaks only Anthropic's Messages API.
+            Self::OpenaiEndpoint => [H, H, H, D],
+            // And the other kinds speak no Anthropic API.
+            Self::AnthropicEndpoint => [D, D, D, H],
             Self::ServedToolPolicy | Self::Autonomy | Self::McpServers | Self::Workflows => {
-                [Host, Host, Host]
+                [Host, Host, Host, Host]
             }
             // The spike ran one provider shape per kind; every other one
             // waits for a conformance test, `credential` for one whose
@@ -209,7 +219,7 @@ impl Capability {
             Self::OpenaiDefaultEndpoint
             | Self::Openrouter
             | Self::Anthropic
-            | Self::ProviderCredential => [T, T, T],
+            | Self::ProviderCredential => [T, T, T, T],
             // No fallback: a process harness never uses its own default.
             Self::InheritedProvider
             // Executable tools run from the host's MCP server, where nothing
@@ -242,11 +252,11 @@ impl Capability {
             | Self::MaxAgents
             | Self::SqliteSessions
             | Self::InProcessMemory
-            | Self::Undecided => [D, D, D],
-            Self::BuiltinToolRules => [R, D, D],
+            | Self::Undecided => [D, D, D, D],
+            Self::BuiltinToolRules => [R, D, D, D],
             // OpenHuman honours a limit up to its fixed cap.
-            Self::IterationLimit => [H, D, D],
-            Self::Subagents | Self::DefinitionBase | Self::Jev | Self::SessionTuning => [T, D, D],
+            Self::IterationLimit => [H, D, D, D],
+            Self::Subagents | Self::DefinitionBase | Self::Jev | Self::SessionTuning => [T, D, D, D],
         }
     }
 }
@@ -260,10 +270,11 @@ impl HarnessKind {
             Self::OpenHuman => row[0],
             Self::OpenClaw => row[1],
             Self::Codex => row[2],
+            Self::ClaudeCode => row[3],
         }
     }
 
-    /// The API this kind speaks to an `openai` provider. The language cannot
+    /// The API this kind speaks to its provider. The language cannot
     /// tell which one an endpoint serves, so `check` cannot see a mismatch;
     /// the turn fails instead.
     #[must_use]
@@ -271,6 +282,7 @@ impl HarnessKind {
         match self {
             Self::OpenHuman | Self::OpenClaw => ModelApi::ChatCompletions,
             Self::Codex => ModelApi::Responses,
+            Self::ClaudeCode => ModelApi::Messages,
         }
     }
 
@@ -282,7 +294,7 @@ impl HarnessKind {
     pub const fn iteration_cap(self) -> Option<usize> {
         match self {
             Self::OpenHuman => Some(8),
-            Self::OpenClaw | Self::Codex => None,
+            Self::OpenClaw | Self::Codex | Self::ClaudeCode => None,
         }
     }
 }
@@ -294,7 +306,8 @@ impl fmt::Display for Capability {
             Self::OpenaiEndpoint => "provider openai with an endpoint and no credential",
             Self::OpenaiDefaultEndpoint => "provider openai without an endpoint",
             Self::Openrouter => "provider openrouter",
-            Self::Anthropic => "provider anthropic",
+            Self::Anthropic => "provider anthropic without an endpoint",
+            Self::AnthropicEndpoint => "provider anthropic with an endpoint and no credential",
             Self::InheritedProvider => "an inherited provider, or none",
             Self::ProviderCredential => "a provider credential",
             Self::ServedToolPolicy => "hooks and permissions on hive and executable tools",

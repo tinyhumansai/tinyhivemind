@@ -11,12 +11,20 @@ fn each_kind_has_the_name_a_package_uses() -> Result<(), serde_json::Error> {
         (HarnessKind::OpenHuman, "openhuman"),
         (HarnessKind::OpenClaw, "openclaw"),
         (HarnessKind::Codex, "codex"),
+        (HarnessKind::ClaudeCode, "claude-code"),
     ] {
         assert_eq!(serde_json::to_value(kind)?, json!(name));
         assert_eq!(serde_json::from_value::<HarnessKind>(json!(name))?, kind);
         assert_eq!(kind.to_string(), name);
     }
-    for unknown in ["open_human", "OpenClaw", "claude", ""] {
+    for unknown in [
+        "open_human",
+        "OpenClaw",
+        "claude",
+        "claude_code",
+        "claudecode",
+        "",
+    ] {
         assert!(serde_json::from_value::<HarnessKind>(json!(unknown)).is_err());
     }
     Ok(())
@@ -166,47 +174,48 @@ fn the_capability_table_is_the_spec_table() {
     const R: Support = Rejected(Unlock::Release);
     const D: Support = Rejected(Unlock::Spec);
     let table = [
-        (C::Essentials, [H, H, H]),
-        (C::OpenaiEndpoint, [H, H, H]),
-        (C::OpenaiDefaultEndpoint, [T, T, T]),
-        (C::Openrouter, [T, T, T]),
-        (C::Anthropic, [T, T, T]),
-        (C::InheritedProvider, [D, D, D]),
-        (C::ProviderCredential, [T, T, T]),
-        (C::ServedToolPolicy, [Host, Host, Host]),
-        (C::NoSandbox, [H, H, H]),
-        (C::Sandbox, [D, D, D]),
-        (C::Autonomy, [Host, Host, Host]),
-        (C::BuiltinToolGroups, [D, D, D]),
-        (C::BuiltinToolRules, [R, D, D]),
-        (C::BuiltinToolHooks, [D, D, D]),
-        (C::McpServers, [Host, Host, Host]),
-        (C::HostSessionStore, [D, D, D]),
-        (C::HostMemoryEngine, [D, D, D]),
-        (C::Subagents, [T, D, D]),
-        (C::DefinitionBase, [T, D, D]),
-        (C::Jev, [T, D, D]),
-        (C::SessionTuning, [T, D, D]),
-        (C::Workflows, [Host, Host, Host]),
-        (C::Skills, [D, D, D]),
-        (C::UserSkills, [D, D, D]),
-        (C::Budget, [D, D, D]),
-        (C::IterationLimit, [H, D, D]),
-        (C::Temperature, [D, D, D]),
-        (C::MaxTokens, [D, D, D]),
-        (C::BarePrompt, [D, D, D]),
-        (C::ToolLists, [D, D, D]),
-        (C::SendPolicy, [D, D, D]),
-        (C::StopHooks, [D, D, D]),
-        (C::FactoryConfig, [D, D, D]),
-        (C::AgentId, [D, D, D]),
-        (C::Workspace, [D, D, D]),
-        (C::DeploymentId, [D, D, D]),
-        (C::Concurrency, [D, D, D]),
-        (C::MaxAgents, [D, D, D]),
-        (C::SqliteSessions, [D, D, D]),
-        (C::InProcessMemory, [D, D, D]),
-        (C::Undecided, [D, D, D]),
+        (C::Essentials, [H, H, H, H]),
+        (C::OpenaiEndpoint, [H, H, H, D]),
+        (C::OpenaiDefaultEndpoint, [T, T, T, T]),
+        (C::Openrouter, [T, T, T, T]),
+        (C::Anthropic, [T, T, T, T]),
+        (C::AnthropicEndpoint, [D, D, D, H]),
+        (C::InheritedProvider, [D, D, D, D]),
+        (C::ProviderCredential, [T, T, T, T]),
+        (C::ServedToolPolicy, [Host, Host, Host, Host]),
+        (C::NoSandbox, [H, H, H, H]),
+        (C::Sandbox, [D, D, D, D]),
+        (C::Autonomy, [Host, Host, Host, Host]),
+        (C::BuiltinToolGroups, [D, D, D, D]),
+        (C::BuiltinToolRules, [R, D, D, D]),
+        (C::BuiltinToolHooks, [D, D, D, D]),
+        (C::McpServers, [Host, Host, Host, Host]),
+        (C::HostSessionStore, [D, D, D, D]),
+        (C::HostMemoryEngine, [D, D, D, D]),
+        (C::Subagents, [T, D, D, D]),
+        (C::DefinitionBase, [T, D, D, D]),
+        (C::Jev, [T, D, D, D]),
+        (C::SessionTuning, [T, D, D, D]),
+        (C::Workflows, [Host, Host, Host, Host]),
+        (C::Skills, [D, D, D, D]),
+        (C::UserSkills, [D, D, D, D]),
+        (C::Budget, [D, D, D, D]),
+        (C::IterationLimit, [H, D, D, D]),
+        (C::Temperature, [D, D, D, D]),
+        (C::MaxTokens, [D, D, D, D]),
+        (C::BarePrompt, [D, D, D, D]),
+        (C::ToolLists, [D, D, D, D]),
+        (C::SendPolicy, [D, D, D, D]),
+        (C::StopHooks, [D, D, D, D]),
+        (C::FactoryConfig, [D, D, D, D]),
+        (C::AgentId, [D, D, D, D]),
+        (C::Workspace, [D, D, D, D]),
+        (C::DeploymentId, [D, D, D, D]),
+        (C::Concurrency, [D, D, D, D]),
+        (C::MaxAgents, [D, D, D, D]),
+        (C::SqliteSessions, [D, D, D, D]),
+        (C::InProcessMemory, [D, D, D, D]),
+        (C::Undecided, [D, D, D, D]),
     ];
     assert_eq!(
         table.iter().map(|(c, _)| *c).collect::<Vec<_>>(),
@@ -249,14 +258,17 @@ fn each_kind_names_its_model_api_and_iteration_cap() {
     );
     assert_eq!(HarnessKind::OpenClaw.model_api(), ModelApi::ChatCompletions);
     assert_eq!(HarnessKind::Codex.model_api(), ModelApi::Responses);
+    assert_eq!(HarnessKind::ClaudeCode.model_api(), ModelApi::Messages);
     assert_eq!(HarnessKind::OpenHuman.iteration_cap(), Some(8));
     assert_eq!(HarnessKind::OpenClaw.iteration_cap(), None);
     assert_eq!(HarnessKind::Codex.iteration_cap(), None);
+    assert_eq!(HarnessKind::ClaudeCode.iteration_cap(), None);
     assert_eq!(
         HarnessKind::OpenClaw.default_isolation(),
         Isolation::Deployment
     );
     assert_eq!(HarnessKind::Codex.default_isolation(), Isolation::Seat);
+    assert_eq!(HarnessKind::ClaudeCode.default_isolation(), Isolation::Seat);
 }
 
 /// Every field `T` declares, read from the decoder rather than from a
